@@ -32,6 +32,7 @@ export default function OperatorPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedBlocksId, setCopiedBlocksId] = useState<string | null>(null);
   const [urlDrafts, setUrlDrafts] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<Record<string, string>>({});
@@ -118,6 +119,20 @@ export default function OperatorPage() {
     }
   };
 
+  const copyBlocks = async (mission: Mission) => {
+    if (!mission.blocklyState) return;
+    try {
+      await navigator.clipboard.writeText(mission.blocklyState);
+      setCopiedBlocksId(mission.id);
+      setTimeout(
+        () => setCopiedBlocksId((current) => (current === mission.id ? null : current)),
+        2000
+      );
+    } catch {
+      setActionError((prev) => ({ ...prev, [mission.id]: 'Could not copy to clipboard.' }));
+    }
+  };
+
   if (authLoading) {
     return (
       <main className="flex min-h-screen items-center justify-center">
@@ -195,12 +210,22 @@ export default function OperatorPage() {
                       {mission.yardId} · {new Date(mission.submittedAt).toLocaleString()}
                     </p>
                   </div>
-                  <button
-                    onClick={() => copyPython(mission)}
-                    className="shrink-0 rounded-full bg-gradient-mars px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
-                  >
-                    {copiedId === mission.id ? 'Copied ✓' : 'Copy Python'}
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {mission.blocklyState && (
+                      <button
+                        onClick={() => copyBlocks(mission)}
+                        className="rounded-full border border-border bg-card/50 px-4 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+                      >
+                        {copiedBlocksId === mission.id ? 'Copied ✓' : 'Copy blocks'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => copyPython(mission)}
+                      className="rounded-full bg-gradient-mars px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-transform hover:-translate-y-0.5"
+                    >
+                      {copiedId === mission.id ? 'Copied ✓' : 'Copy Python'}
+                    </button>
+                  </div>
                 </div>
 
                 <pre className="max-h-72 overflow-auto bg-background/80 p-4 text-xs leading-relaxed text-foreground">
