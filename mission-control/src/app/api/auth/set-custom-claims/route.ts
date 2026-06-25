@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { setUserCustomClaims } from '@/infrastructure/auth/set-custom-claims';
+import { setUserCustomClaims, type CustomClaims } from '@/infrastructure/auth/set-custom-claims';
 
 interface SetClaimsRequest {
   uid: string;
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build the claims object
-    const claims: { role?: string; yardIds?: string[] } = {};
+    const claims: CustomClaims = {};
     if (role) {
       if (!['learner', 'operator', 'admin'].includes(role)) {
         return NextResponse.json(

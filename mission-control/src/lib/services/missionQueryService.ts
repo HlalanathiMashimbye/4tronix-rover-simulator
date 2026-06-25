@@ -137,8 +137,9 @@ export async function getMissionsByLearnerId(
  * Firestore sometimes returns Timestamp objects instead of strings.
  * This helper ensures consistent date formatting.
  */
-function convertTimestamps(data: Record<string, unknown>, docId: string): Mission {
-  const mission: Record<string, unknown> = { ...data, id: docId };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore returns Timestamp|string for date fields; this bridges both shapes
+function convertTimestamps(data: any, docId: string): Mission {
+  const mission = { ...data, id: docId };
 
   if (mission.submittedAt instanceof Timestamp) {
     mission.submittedAt = mission.submittedAt.toDate().toISOString();
