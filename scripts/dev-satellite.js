@@ -88,7 +88,6 @@ const python = fs.existsSync(venvPython)
   if (!(await freePorts([port], '[satellite]'))) process.exit(1);
 
   console.log(`[satellite] port ${port}`);
-  console.log(`[satellite] firebase project ${env.FIREBASE_PROJECT_ID || 'missing'}`);
 
   const child = spawn(python, ['web_server.py'], {
     cwd: path.join(repoRoot, 'yard', 'satellite'),
