@@ -194,8 +194,9 @@ def api_login():
         )
         return jsonify({
             'error': (
-                'Could not verify the sign-in token. Check that this satellite uses the '
-                'same Firebase project and service account as the login API, then try again.'
+                'Could not verify the sign-in token. Check that this satellite is using '
+                'the same Firebase project and service account as the operator login '
+                'backend, then try again.'
             )
         }), 401
 
