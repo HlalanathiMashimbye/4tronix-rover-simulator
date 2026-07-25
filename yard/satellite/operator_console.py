@@ -401,44 +401,62 @@ def api_rover_health():
     return jsonify(result)
 
 # YouTube video fetching implementation
-YOUTUBE_API_KEY = os.environ.get('YOUTUBE_API_KEY')
-YOUTUBE_CHANNEL_ID = os.environ.get('YOUTUBE_CHANNEL_ID')
+
+def _youtube_api_key():
+    return os.environ.get('YOUTUBE_API_KEY')
+
+
+def _youtube_channel_id():
+    return os.environ.get('YOUTUBE_CHANNEL_ID')
 
 
 def check_for_new_videos():
-    # Runs every 5 minutes to check for newly uploaded mission videos.
+    """Poll the YouTube channel for uploads matching a completed mission's ID.
+
+    A mission never has a `youtubeUrl` field at all until one is attached
+    (mission-control omits it entirely on write; only api_rerun explicitly
+    nulls it out), so this cannot filter on `youtubeUrl == None` in the
+    Firestore query itself - that only matches documents where the field is
+    present and null, not documents where it's absent. Fetch completed
+    missions and filter for a missing/falsy youtubeUrl in Python instead.
+    """
     print('[youtube-poll] Checking for new videos...')
 
-    if not YOUTUBE_API_KEY or not YOUTUBE_CHANNEL_ID:
+    api_key = _youtube_api_key()
+    channel_id = _youtube_channel_id()
+    if not api_key or not channel_id:
         print('[youtube-poll] Missing YOUTUBE_API_KEY or YOUTUBE_CHANNEL_ID; skipping poll')
         return
 
-    # Get missions that are completed but do not yet have a YouTube link.
-    missions_ref = _firestore().collection(MISSIONS_COLLECTION)
-    unlinked = (
-        missions_ref
-        .where('status', '==', 'completed')
-        .where('youtubeUrl', '==', None)
-        .stream()
-    )
-    unlinked = list(unlinked)
+    try:
+        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
+        completed = list(missions_ref.where('status', '==', 'completed').stream())
+    except Exception as e:
+        print(f'[youtube-poll] Failed to read Firestore: {e}')
+        return
 
+    unlinked = [doc for doc in completed if not doc.to_dict().get('youtubeUrl')]
     if not unlinked:
         return
 
     # The uploads playlist id is the channel id with UC -> UU.
-    uploads_playlist = YOUTUBE_CHANNEL_ID.replace('UC', 'UU', 1)
+    uploads_playlist = channel_id.replace('UC', 'UU', 1)
 
-    response = requests.get(
-        'https://www.googleapis.com/youtube/v3/playlistItems',
-        params={
-            'part': 'snippet',
-            'playlistId': uploads_playlist,
-            'maxResults': 50,
-            'key': YOUTUBE_API_KEY,
-        },
-        timeout=10.0,
-    )
+    try:
+        response = requests.get(
+            'https://www.googleapis.com/youtube/v3/playlistItems',
+            params={
+                'part': 'snippet',
+                'playlistId': uploads_playlist,
+                'maxResults': 50,
+                'key': api_key,
+            },
+            timeout=10.0,
+        )
+    except requests.exceptions.RequestException as e:
+        print(f'[youtube-poll] Could not reach the YouTube API: {e}')
+        return
+
     if response.status_code != 200:
         print(f'[youtube-poll] YouTube API error: HTTP {response.status_code}')
         return
@@ -459,12 +477,23 @@ def check_for_new_videos():
                 youtube_url = f'https://www.youtube.com/watch?v={video_id}'
 
                 missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
-                print(f'Linked mission {mission_id} to video {video_id}')
+                print(f'[youtube-poll] Linked mission {mission_id} to video {video_id}')
                 break
 
-# Run this every 5 minutes
+
 def start_polling():
-    check_for_new_videos()
-    # Schedule next check in 5 minutes (300 seconds)
-    threading.Timer(300, start_polling).start()  
+    """Run check_for_new_videos every 5 minutes.
+
+    A bad poll (Firestore hiccup, YouTube API down, anything unexpected)
+    must never stop the loop - the reschedule always has to run, or the
+    feature silently dies until the satellite is restarted.
+    """
+    try:
+        check_for_new_videos()
+    except Exception as e:
+        print(f'[youtube-poll] Unexpected error during poll: {e}')
+
+    timer = threading.Timer(300, start_polling)
+    timer.daemon = True
+    timer.start()
 
