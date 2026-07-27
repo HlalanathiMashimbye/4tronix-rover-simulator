@@ -30,8 +30,8 @@ terraform apply
 # 4. Copy outputs into GitHub repo variables
 terraform output
 # Settings -> Secrets and variables -> Actions -> Variables:
-#   GCP_WIF_PROVIDER, GCP_DEPLOY_SA, GCP_PROJECT_ID, GCP_REGION,
-#   GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE
+#   GCP_WIF_PROVIDER, GCP_DEPLOY_SA, GCP_TF_PLAN_SA, GCP_PROJECT_ID,
+#   GCP_REGION, GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE
 # plus the NEXT_PUBLIC_FIREBASE_* values from the NEW Firebase web app
 # (Part B below).
 
@@ -94,8 +94,13 @@ The app moves to Impact's Firebase world. In the Firebase console
 - Naming: current names are simple (`mission-control-staging` etc.). Werner
   confirmed conventions can be refactored later; `terraform state mv` +
   rename is the path when Impact's conventions arrive.
-- Werner's guide item 5 (Terraform plan on PRs touching infra/) needs WIF to
-  exist first; add that workflow after Part A proves out.
+- Werner's guide item 5 (Terraform plan on PRs touching infra/) is implemented
+  by `.github/workflows/terraform-plan.yml`. It runs plan-only and posts the
+  result as a PR comment; it never applies. It authenticates as the
+  **read-only** `terraform-plan` service account, NOT the deploy SA, which
+  holds only push-image and update-Cloud-Run and cannot refresh state. The
+  workflow stays red until `GCP_WIF_PROVIDER` and `GCP_TF_PLAN_SA` exist as
+  repo variables, i.e. until the first apply completes (step 4 above).
 - GCS bucket names are globally unique: if `bt-impact-academy-tfstate` is
   taken, pick another and change it in both the create command and
   `backend.tf`.
