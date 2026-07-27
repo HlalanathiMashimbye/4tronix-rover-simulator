@@ -618,6 +618,7 @@
         function handleAction(btn) {
             const action = btn.dataset.act;
             const missionId = btn.dataset.id;
+            if (btn.dataset.processing === 'true') return;
             if (btn.dataset.confirm === 'true') {
                 const copy = CONFIRM_COPY[action] || { title: 'Are you sure?', body: 'This action cannot be undone.', confirmLabel: 'Confirm' };
                 openConfirm(copy, () => act(action, missionId, btn));
@@ -678,6 +679,8 @@
         };
 
         async function act(action, missionId, btn) {
+            if (btn.dataset.processing === 'true') return;
+            btn.dataset.processing = 'true';
             if (action === 'copy' || action === 'copyblocks') {
                 const m = missions.find(x => x.id === missionId);
                 const text = action === 'copyblocks' ? (m.blocklyState || '') : (m.code || '');
@@ -688,6 +691,8 @@
                     setTimeout(() => { btn.textContent = label; }, 1500);
                 } catch {
                     showError(missionId, 'Could not copy to clipboard');
+                } finally {
+                    btn.dataset.processing = 'false';
                 }
                 return;
             }
@@ -712,6 +717,8 @@
             } catch (err) {
                 btn.disabled = false;
                 showError(missionId, missionErrorMessage(err, resp, data));
+            } finally {
+                btn.dataset.processing = 'false';
             }
         }
 
