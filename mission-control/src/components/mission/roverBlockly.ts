@@ -244,6 +244,14 @@ export function defineRoverBlocks(Blockly: any): void {
   };
 }
 
+/**
+ * Passed to Blockly.inject()'s `maxInstances` option - the only place Blockly
+ * actually reads this from. A mission is one uplink; a second is meaningless
+ * (there's nothing else to attach it to) and its execution order would
+ * depend on where it happened to sit on the canvas, which nobody could see.
+ */
+export const ROVER_MAX_INSTANCES = { rover_on_receive: 1 };
+
 /** Category toolbox - mirrors the yard's. */
 export const ROVER_TOOLBOX = {
   kind: 'categoryToolbox',
@@ -252,6 +260,11 @@ export const ROVER_TOOLBOX = {
       kind: 'category',
       name: '🛰️ Uplink',
       colour: '#FF6D00',
+      // The instance cap for this block lives on the workspace's inject
+      // options (see ROVER_MAX_INSTANCES below), not here - Blockly only
+      // reads maxInstances from Blockly.inject()'s options object, never
+      // from a toolbox content entry. A cap placed here is silently ignored:
+      // no error, the block just isn't actually capped.
       contents: [{ kind: 'block', type: 'rover_on_receive' }],
     },
     {
@@ -299,6 +312,59 @@ export const ROVER_TOOLBOX = {
     },
   ],
 };
+
+function getOrderedUplinkHats(workspace: any): any[] {
+  return workspace
+    .getTopBlocks(true)
+    .filter((block: any) => block.type === 'rover_on_receive');
+}
+
+function getStatementTail(block: any): any {
+  let tail = block;
+  while (tail?.getNextBlock()) {
+    tail = tail.getNextBlock();
+  }
+  return tail;
+}
+
+/**
+ * Merge any legacy duplicate uplink hats into the first one in canvas order.
+ * This keeps older saved workspaces working while blocking new duplicates.
+ *
+ * Returns whether the workspace was mutated - callers use this to decide
+ * whether to re-save. That must mean "did I dispose a hat", not "did I
+ * relocate a body": an empty spare hat (dragged out, never used) still gets
+ * disposed below regardless of whether it had anything inside it. Tying the
+ * return value to body-relocation instead meant that exact case - the most
+ * likely real one - got silently re-disposed from the live workspace on
+ * every single load without the cleanup ever reaching storage.
+ */
+export function mergeUplinkHats(workspace: any): boolean {
+  const hats = getOrderedUplinkHats(workspace);
+  if (hats.length <= 1) return false;
+
+  const primaryHat = hats[0];
+  const primaryInput = primaryHat.getInput('DO');
+  let primaryBody = primaryHat.getInputTargetBlock('DO');
+
+  for (const hat of hats.slice(1)) {
+    const body = hat.getInputTargetBlock('DO');
+
+    if (body) {
+      if (!primaryBody) {
+        primaryInput?.connection?.connect(body.previousConnection);
+        primaryBody = body;
+      } else {
+        getStatementTail(primaryBody)?.nextConnection?.connect(body.previousConnection);
+        primaryBody = getStatementTail(body);
+      }
+    }
+
+    hat.dispose(false, false);
+  }
+
+  return true;
+}
 
 /**
  * Generate rover Python from the workspace. Only blocks inside an
