@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { Play, CheckCircle2 } from 'lucide-react';
 import {
   defineRoverBlocks,
   ROVER_TOOLBOX,
+  ROVER_MAX_INSTANCES,
+  mergeUplinkHats,
   workspaceToPython,
   workspaceToCommands,
   type SimulationCommand,
@@ -35,8 +37,14 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const workspaceRef = useRef<any>(null);
   const flyoutObserverRef = useRef<MutationObserver | null>(null);
+  const mergedNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [blocklyLoaded, setBlocklyLoaded] = useState(false);
+  // Tells the learner their workspace just changed for a reason they didn't
+  // cause - a leftover duplicate uplink from before the cap existed got
+  // merged away on load. Without this, blocks they'd placed just vanish
+  // from under them with no explanation, on a page that never even asked.
+  const [mergedNotice, setMergedNotice] = useState(false);
   const scriptLoadedRef = useRef(false);
 
   // Load Blockly from CDN
@@ -82,6 +90,9 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       // Initialize workspace with the shared category toolbox.
       const workspace = Blockly.inject(blocklyDivRef.current, {
         toolbox: ROVER_TOOLBOX,
+        // The actual cap - Blockly reads maxInstances only from here, never
+        // from a toolbox content entry, so this must live on inject() itself.
+        maxInstances: ROVER_MAX_INSTANCES,
         renderer: 'zelos',
         zoom: {
           controls: true,
@@ -126,6 +137,14 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       if (saved) {
         try {
           Blockly.serialization.workspaces.load(JSON.parse(saved), workspace);
+          if (mergeUplinkHats(workspace)) {
+            localStorage.setItem(
+              STORAGE_KEY,
+              JSON.stringify(Blockly.serialization.workspaces.save(workspace))
+            );
+            setMergedNotice(true);
+            mergedNoticeTimerRef.current = setTimeout(() => setMergedNotice(false), 5000);
+          }
         } catch (e) {
           console.warn('Failed to load saved workspace, starting fresh', e);
           workspace.clear();
@@ -181,6 +200,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       clearTimeout(timer);
       flyoutObserverRef.current?.disconnect();
       flyoutObserverRef.current = null;
+      if (mergedNoticeTimerRef.current) clearTimeout(mergedNoticeTimerRef.current);
     };
   }, [blocklyLoaded]);
 
@@ -276,6 +296,13 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           Run blocks
         </button>
       </div>
+
+      {mergedNotice && (
+        <div className="flex flex-shrink-0 items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2 text-xs">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
+          <p className="text-buzz">Merged an extra uplink into one mission.</p>
+        </div>
+      )}
 
       <div
         ref={blocklyDivRef}

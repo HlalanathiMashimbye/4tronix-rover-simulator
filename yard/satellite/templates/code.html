@@ -660,6 +660,10 @@
                     kind: 'category',
                     name: '\uD83D\uDEF0\uFE0F Uplink',
                     colour: '#FF6D00',
+                    // The instance cap lives on Blockly.inject()'s maxInstances
+                    // option below, not here - Blockly never reads maxInstances
+                    // from a toolbox content entry, so one placed here is
+                    // silently ignored: no error, the block just isn't capped.
                     contents: [
                         {kind: 'block', type: 'rover_on_receive'}
                     ]
@@ -716,6 +720,9 @@
 
         const workspace = Blockly.inject('blocklyDiv', {
             toolbox: toolbox,
+            // The actual cap - Blockly reads maxInstances only from here,
+            // never from a toolbox content entry.
+            maxInstances: {rover_on_receive: 1},
             zoom: {
                 controls: true,
                 wheel: true,
@@ -911,6 +918,53 @@
             return lines.join('\n') + '\n';
         }
 
+        // Returns whether the workspace was mutated - callers use this to
+        // decide whether to re-save. That has to mean "did I dispose a hat",
+        // not "did I relocate a body": an empty spare hat (dragged out,
+        // never used) still gets disposed below regardless of whether it had
+        // anything inside it. Tying the return value to body-relocation
+        // instead meant that exact case - the most likely real one - got
+        // silently re-disposed from the live workspace on every load without
+        // the cleanup ever reaching storage.
+        function mergeUplinkHats(workspace) {
+            const hats = workspace
+                .getTopBlocks(true)
+                .filter(b => b.type === 'rover_on_receive');
+
+            if (hats.length <= 1) return false;
+
+            const primaryHat = hats[0];
+            const primaryInput = primaryHat.getInput('DO');
+            let primaryBody = primaryHat.getInputTargetBlock('DO');
+
+            function statementTail(block) {
+                let tail = block;
+                while (tail && tail.getNextBlock()) {
+                    tail = tail.getNextBlock();
+                }
+                return tail;
+            }
+
+            hats.slice(1).forEach(function(hat) {
+                const body = hat.getInputTargetBlock('DO');
+
+                if (body) {
+                    if (!primaryBody) {
+                        primaryInput && primaryInput.connection && primaryInput.connection.connect(body.previousConnection);
+                        primaryBody = body;
+                    } else {
+                        const tail = statementTail(primaryBody);
+                        tail && tail.nextConnection && tail.nextConnection.connect(body.previousConnection);
+                        primaryBody = statementTail(body);
+                    }
+                }
+
+                hat.dispose(false, false);
+            });
+
+            return true;
+        }
+
         // ============================================================
         // Tab Switching
         // ============================================================
@@ -1048,8 +1102,13 @@
                     const state = JSON.parse(text);
                     if (state && (state.blocks || state.variables)) {
                         Blockly.serialization.workspaces.load(state, workspace);
+                        let merged = false;
+                        if (mergeUplinkHats(workspace)) {
+                            merged = true;
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(Blockly.serialization.workspaces.save(workspace)));
+                        }
                         document.getElementById('tabBlockly').click();
-                        showToast('Blocks pasted', 'success');
+                        showToast(merged ? 'Blocks pasted; extra uplinks merged' : 'Blocks pasted', 'success');
                         return true;
                     }
                 } catch (e) { /* not JSON - try as Python below */ }
@@ -1105,6 +1164,10 @@
                 try {
                     const state = JSON.parse(saved);
                     Blockly.serialization.workspaces.load(state, workspace);
+                    if (mergeUplinkHats(workspace)) {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(Blockly.serialization.workspaces.save(workspace)));
+                        showToast('Merged extra uplinks into one mission', 'success');
+                    }
                     return;
                 } catch (e) {
                     console.warn('Failed to load workspace:', e);
