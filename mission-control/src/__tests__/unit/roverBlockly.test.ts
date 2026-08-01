@@ -43,8 +43,35 @@ function onReceive(body: MockBlock): MockBlock {
   return block('rover_on_receive', {}, { DO: body });
 }
 
-function mergeBlock(type: string): any {
-  const merge: any = {
+/**
+ * A richer mock than MockBlock above: mergeUplinkHats actually rewires
+ * connections and disposes blocks, where the codegen tests only ever walk a
+ * read-only chain. previousConnection/nextConnection model just enough of
+ * Blockly's real connection objects (an `_owner` back to the block, and a
+ * `connect` that records the link) for mergeUplinkHats's reconnect logic to
+ * exercise the same call shape it uses against a real workspace.
+ */
+interface MergeConnection {
+  _owner: MergeMockBlock;
+  connect?: (other: MergeConnection) => void;
+}
+
+interface MergeMockBlock {
+  type: string;
+  _next: MergeMockBlock | null;
+  _body: MergeMockBlock | null;
+  _disposed: boolean;
+  previousConnection: MergeConnection | null;
+  nextConnection: MergeConnection | null;
+  getFieldValue: () => undefined;
+  getInputTargetBlock: (name: string) => MergeMockBlock | null;
+  getNextBlock: () => MergeMockBlock | null;
+  getInput: (name: string) => { connection: MergeConnection } | null;
+  dispose: () => void;
+}
+
+function mergeBlock(type: string): MergeMockBlock {
+  const merge: MergeMockBlock = {
     type,
     _next: null,
     _body: null,
@@ -52,30 +79,28 @@ function mergeBlock(type: string): any {
     previousConnection: null,
     nextConnection: null,
     getFieldValue: () => undefined,
-    getInputTargetBlock: (name: string) => (name === 'DO' ? merge._body : null),
+    getInputTargetBlock: (name) => (name === 'DO' ? merge._body : null),
     getNextBlock: () => merge._next,
-    getInput: (name: string) => {
+    getInput: (name) => {
       if (name !== 'DO') return null;
       return {
         connection: {
           _owner: merge,
-          connect(other: any) {
+          connect(other) {
             merge._body = other?._owner ?? null;
           },
         },
       };
     },
-    dispose: (..._args: any[]) => {
+    dispose: () => {
       merge._disposed = true;
     },
   };
 
-  merge.previousConnection = {
-    _owner: merge,
-  };
+  merge.previousConnection = { _owner: merge };
   merge.nextConnection = {
     _owner: merge,
-    connect(other: any) {
+    connect(other) {
       merge._next = other?._owner ?? null;
     },
   };
@@ -83,7 +108,7 @@ function mergeBlock(type: string): any {
   return merge;
 }
 
-function mergeWorkspace(...top: any[]): { getTopBlocks: () => any[] } {
+function mergeWorkspace(...top: MergeMockBlock[]): { getTopBlocks: () => MergeMockBlock[] } {
   return { getTopBlocks: () => top };
 }
 
