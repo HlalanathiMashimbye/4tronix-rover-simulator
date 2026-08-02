@@ -2,20 +2,41 @@
  * Firebase Admin SDK Initialization
  *
  * Singleton pattern to ensure Firebase Admin is initialized once.
- * Uses service account credentials from environment variables.
+ *
+ * Two credential sources, chosen by what the environment provides:
+ *
+ * - **Service account** (FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY).
+ *   Used for local development and anywhere outside the Firestore project.
+ *
+ * - **Application Default Credentials** (neither of the above set).
+ *   On Cloud Run the runtime service account already holds
+ *   roles/datastore.user in the same project Firestore lives in, so no
+ *   credentials need to exist at all: no key to store in Secret Manager,
+ *   none to rotate, none to leak.
+ *
+ * FIREBASE_PROJECT_ID is required either way. ADC can technically infer the
+ * project from the metadata server, but requiring it keeps "no config at all"
+ * a loud error instead of silently authenticating against whatever project a
+ * developer's gcloud happens to point at.
  */
 
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 
 let app: App | undefined;
 let firestoreInstance: Firestore | undefined;
 
-type FirebaseAdminConfig = {
-  projectId: string;
-  clientEmail: string;
-  privateKey: string;
-};
+type FirebaseAdminConfig =
+  | {
+      credentialSource: 'service-account';
+      projectId: string;
+      clientEmail: string;
+      privateKey: string;
+    }
+  | {
+      credentialSource: 'application-default';
+      projectId: string;
+    };
 
 function normalizeEnvValue(value?: string): string | undefined {
   if (!value) {
@@ -43,36 +64,38 @@ function getFirebaseAdminConfig(): FirebaseAdminConfig {
   const clientEmail = normalizeEnvValue(process.env.FIREBASE_CLIENT_EMAIL);
   const privateKey = normalizeEnvValue(process.env.FIREBASE_PRIVATE_KEY);
 
-  const missingVariables: string[] = [];
-
   if (!projectId) {
-    missingVariables.push('FIREBASE_PROJECT_ID');
-  }
-
-  if (!clientEmail) {
-    missingVariables.push('FIREBASE_CLIENT_EMAIL');
-  }
-
-  if (!privateKey) {
-    missingVariables.push('FIREBASE_PRIVATE_KEY');
-  }
-
-  if (missingVariables.length > 0) {
     throw new Error(
       [
-        `Missing Firebase Admin environment variables: ${missingVariables.join(', ')}.`,
+        'Missing Firebase Admin environment variables: FIREBASE_PROJECT_ID.',
         'The /api/missions route uses the Firebase Admin SDK.',
         'Client-side Firebase config such as NEXT_PUBLIC_FIREBASE_* or REACT_APP_FIREBASE_* is not enough on its own.',
-        'Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY in your server environment.',
+        'Set FIREBASE_PROJECT_ID, and either both of FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY,',
+        'or neither of them to use Application Default Credentials (the runtime service account on Cloud Run).',
       ].join(' ')
     );
   }
 
-  return {
-    projectId: projectId!,
-    clientEmail: clientEmail!,
-    privateKey: privateKey!,
-  };
+  if (clientEmail && privateKey) {
+    return { credentialSource: 'service-account', projectId, clientEmail, privateKey };
+  }
+
+  // Exactly one half of the pair is set. That is nearly always a broken .env
+  // rather than a deliberate choice, and silently falling back to ADC here
+  // would authenticate as a DIFFERENT identity than the one intended. Fail loudly.
+  if (clientEmail || privateKey) {
+    const missing = clientEmail ? 'FIREBASE_PRIVATE_KEY' : 'FIREBASE_CLIENT_EMAIL';
+    const present = clientEmail ? 'FIREBASE_CLIENT_EMAIL' : 'FIREBASE_PRIVATE_KEY';
+    throw new Error(
+      [
+        `Incomplete Firebase Admin service account config: ${present} is set but ${missing} is not.`,
+        'Set both to authenticate with a service account, or unset both to use',
+        'Application Default Credentials.',
+      ].join(' ')
+    );
+  }
+
+  return { credentialSource: 'application-default', projectId };
 }
 
 /**
@@ -90,15 +113,23 @@ export function initializeFirebaseAdmin(): App {
     return app;
   }
 
-  const { projectId, clientEmail, privateKey } = getFirebaseAdminConfig();
+  const config = getFirebaseAdminConfig();
 
-  app = initializeApp({
-    credential: cert({
-      projectId,
-      clientEmail,
-      privateKey: privateKey.replace(/\\n/g, '\n'),
-    }),
-  });
+  app = initializeApp(
+    config.credentialSource === 'service-account'
+      ? {
+          credential: cert({
+            projectId: config.projectId,
+            clientEmail: config.clientEmail,
+            // \n survives .env files as the two characters backslash-n.
+            privateKey: config.privateKey.replace(/\\n/g, '\n'),
+          }),
+        }
+      : {
+          credential: applicationDefault(),
+          projectId: config.projectId,
+        }
+  );
 
   return app;
 }
