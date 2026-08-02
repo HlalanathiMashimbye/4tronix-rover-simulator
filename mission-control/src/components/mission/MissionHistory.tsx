@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useReducedMotion } from 'motion/react';
 import { Rocket, Plus } from 'lucide-react';
 import { getLearnerID } from '@/lib/getLearnerID';
 import {
@@ -10,10 +11,12 @@ import {
 } from '@/lib/services/missionQueryService';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
+import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useLearner } from '@/contexts/LearnerContext';
 
 export function MissionHistory() {
   const { learnerEmail, openEmailPrompt } = useLearner();
+  const reduceMotion = useReducedMotion();
 
   // Missions for this browser (by learner id) and, if an email is set, missions
   // submitted under that email on any device. We keep them separate and merge
@@ -150,9 +153,11 @@ export function MissionHistory() {
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto scroll-panel pb-1">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
-            {missions.map((mission) => (
-              <MissionCard key={mission.id} mission={mission} />
+          <div className="grid gap-5 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]">
+            {missions.map((mission, index) => (
+              <StaggeredEntrance key={mission.id} index={index} reduceMotion={reduceMotion}>
+                <MissionCard mission={mission} />
+              </StaggeredEntrance>
             ))}
           </div>
         </div>

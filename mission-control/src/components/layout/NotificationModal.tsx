@@ -11,7 +11,25 @@
 
 'use client';
 
-import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { X, Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+
+// Kept in sync with the transition durations below - see EmailPrompt for
+// why the exit needs this rather than an instant unmount.
+//
+// This is deliberately plain CSS, not Motion's AnimatePresence: tried it
+// (three different structures - a keyed array of siblings, a nested
+// motion.div wrapper, two independent AnimatePresence blocks) and all three
+// exhibited the same bug in this exact React 19 / Next 16 / motion@12.43.0
+// combination, verified in a clean production build with real clicks: the
+// exit animation completes correctly (opacity/scale reach their exact target
+// values), but the component never actually unmounts - leaving an invisible,
+// still-interactive layer sitting over the page, capable of eating clicks
+// meant for whatever's underneath. Shipping that would be worse than the
+// plain conditional render this replaced. Revisit if a newer `motion`
+// release fixes it.
+const EXIT_MS = 200;
 
 interface CompletedNotification {
   type: 'completed';
@@ -38,28 +56,67 @@ export function NotificationModal({
   onClose,
   notifications = []
 }: NotificationModalProps) {
-  if (!isOpen) return null;
+  const [mounted, setMounted] = useState(isOpen);
+  const [visible, setVisible] = useState(false);
+  const { theme, toggleTheme } = useTheme();
+
+  // Mount immediately, flip visible a frame later so the transition has a
+  // "before" state to run from, and hold the unmount until the exit
+  // animation has actually played.
+  useEffect(() => {
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- opening the panel
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setVisible(false);
+    const timer = setTimeout(() => setMounted(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [isOpen]);
+
+  if (!mounted) return null;
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
+        className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-200 ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
 
-      {/* Modal */}
-      <div className="fixed top-20 right-4 z-50 w-[350px] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl clay">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      {/* Modal - anchored to the bell in the top-right, so it scales in from
+          that corner rather than its own centre (the default origin is
+          wrong for anything anchored to a trigger; a centered scale would
+          read as materializing out of nowhere instead of opening from the
+          bell). */}
+      <div
+        className={`fixed top-20 right-4 z-50 w-[350px] origin-top-right overflow-hidden rounded-2xl border border-border bg-card shadow-2xl clay transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+          visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+        }`}
+      >
+        {/* Header. The theme toggle lives here (not just in the desktop
+            navbar) because this panel is reachable identically from the
+            mobile bottom bar's "Alerts" tab - the tab bar itself is a tight
+            4-slot layout with no room for a 5th icon. */}
+        <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold text-foreground">Notifications</h2>
-          <button
-            onClick={onClose}
-            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            aria-label="Close notifications"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleTheme}
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              aria-label="Close notifications"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Notifications List */}

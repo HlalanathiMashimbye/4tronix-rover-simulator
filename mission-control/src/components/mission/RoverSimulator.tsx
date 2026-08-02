@@ -94,9 +94,25 @@ export function RoverSimulator({
     resize();
     const wrap = wrapRef.current;
     if (!wrap || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(resize);
+    // Coalesced to at most once per animation frame - the panel-split slider
+    // (MissionWorkspace.tsx) animates its CSS grid track with a transition,
+    // which fires this ResizeObserver on every intermediate frame of that
+    // transition. Without this, the full canvas resize + scene redraw ran on
+    // every one of those frames for the whole drag, not just once per step.
+    let rafId: number | null = null;
+    const throttledResize = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        resize();
+      });
+    };
+    const ro = new ResizeObserver(throttledResize);
     ro.observe(wrap);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [resize]);
 
   // --- HUD + playback ------------------------------------------------------

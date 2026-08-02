@@ -1,9 +1,11 @@
 'use client';
 
+import { useReducedMotion } from 'motion/react';
 import { Gamepad2, Blocks, Code2, AlertTriangle } from 'lucide-react';
 import { ManualControlRealtime } from '@/components/mission/ManualControlRealtime';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
+import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { RoverState } from '@/lib/rover-physics';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
@@ -24,9 +26,6 @@ const MODES: { mode: EditorMode; label: string; Icon: typeof Gamepad2 }[] = [
 ];
 
 interface EditorPanelProps {
-  panelSplit: number;
-  onPanelSplitChange: (value: number) => void;
-
   editorMode: EditorMode;
   onEditorModeChange: (mode: EditorMode) => void;
   error: string | null;
@@ -40,8 +39,6 @@ interface EditorPanelProps {
 }
 
 export function EditorPanel({
-  panelSplit,
-  onPanelSplitChange,
   editorMode,
   onEditorModeChange,
   error,
@@ -52,25 +49,10 @@ export function EditorPanel({
   onCodeChange,
   onBlocklyStateChange,
 }: EditorPanelProps) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <div className="flex h-full flex-col gap-1.5 overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-2.5 clay">
-      {/* Panel split control */}
-      <div className="flex items-center justify-end">
-        <label className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground">
-          <span className="tabular-nums">Build {panelSplit}% · Sim {100 - panelSplit}%</span>
-          <input
-            type="range"
-            min={35}
-            max={75}
-            step={1}
-            value={panelSplit}
-            onChange={(event) => onPanelSplitChange(Number(event.target.value))}
-            className="h-1.5 w-20 cursor-pointer appearance-none rounded-full bg-secondary accent-primary"
-            aria-label="Adjust build and simulator panel size"
-          />
-        </label>
-      </div>
-
       {/* Editor mode tabs */}
       <div className="flex flex-shrink-0 gap-1.5">
         {MODES.map(({ mode, label, Icon }) => {
@@ -80,14 +62,19 @@ export function EditorPanel({
               key={mode}
               onClick={() => onEditorModeChange(mode)}
               aria-pressed={active}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-bold transition-colors ${
+              className={`relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl px-2 py-2 text-sm font-bold transition-colors ${
                 active
-                  ? 'bg-gradient-mars text-primary-foreground clay'
+                  ? 'text-primary-foreground'
                   : 'border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground'
               }`}
             >
-              <Icon className="h-4 w-4" />
-              {label}
+              {active && (
+                <ActivePillBackground layoutId="editor-mode-pill" className="rounded-xl bg-gradient-mars clay" reduceMotion={reduceMotion} />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Icon className="h-4 w-4" />
+                {label}
+              </span>
             </button>
           );
         })}

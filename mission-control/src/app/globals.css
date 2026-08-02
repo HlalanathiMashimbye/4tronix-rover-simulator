@@ -1,11 +1,19 @@
 @import "tailwindcss";
 
-:root,
-.light,
-[data-theme="light"] {
+/*
+ * Theme tokens, dark and light.
+ *
+ * Historically this whole block was named ".light"/[data-theme="light"] but
+ * held dark-space colours - there was no light theme, just a misleadingly
+ * named default and html{color-scheme:dark} forcing it everywhere. Now
+ * :root is the pre-hydration fallback (used only for the instant before the
+ * theme-init script in layout.tsx sets data-theme), and [data-theme="dark"]
+ * / [data-theme="light"] are each complete, independent token sets - nothing
+ * in the light block is inherited by omission from the dark one.
+ */
+:root {
   --radius: 1rem;
 
-  /* Deep space background */
   --background: oklch(0.16 0.04 270);
   --foreground: oklch(0.97 0.02 260);
 
@@ -14,7 +22,6 @@
   --popover: oklch(0.21 0.05 270);
   --popover-foreground: oklch(0.97 0.02 260);
 
-  /* NASA mission orange */
   --primary: oklch(0.72 0.19 45);
   --primary-foreground: oklch(0.16 0.04 270);
 
@@ -31,7 +38,9 @@
   --input: oklch(0.32 0.05 270);
   --ring: oklch(0.72 0.19 45);
 
-  /* Mission tokens */
+  /* Mission tokens - vivid gradient/glow colours, same in both themes.
+     They read as accent chips and gradients (bg-gradient-mars etc.), not
+     bare text on the page background, so they don't need a light variant. */
   --mars: oklch(0.68 0.21 35);
   --mars-glow: oklch(0.78 0.18 55);
   --buzz: oklch(0.72 0.21 145);          /* Buzz Lightyear green */
@@ -46,17 +55,86 @@
   --shadow-glow-mars: 0 20px 60px -15px color-mix(in oklab, var(--mars) 55%, transparent);
   --shadow-glow-buzz: 0 20px 60px -15px color-mix(in oklab, var(--buzz) 55%, transparent);
   --shadow-card: 0 30px 80px -30px color-mix(in oklab, var(--cosmic) 60%, transparent);
+
+  /* Named easings, theme-independent (neither [data-theme] block overrides
+     these). The built-in CSS easings read as weak/generic - not using one
+     literal value in .clay-press and a different one everywhere else that
+     wants a "confident settle" curve. Motion can't read a CSS custom
+     property at runtime, so src/lib/easings.ts exports the same curve as a
+     plain array - keep the two in sync if this value ever changes. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* reserved for a future sheet/drawer */
 }
 
-.dark,
 [data-theme="dark"] {
   --background: oklch(0.13 0.04 270);
   --foreground: oklch(0.97 0.02 260);
+
+  --card: oklch(0.21 0.05 270);
+  --card-foreground: oklch(0.97 0.02 260);
+  --popover: oklch(0.21 0.05 270);
+  --popover-foreground: oklch(0.97 0.02 260);
+
+  --primary: oklch(0.72 0.19 45);
+  --primary-foreground: oklch(0.16 0.04 270);
+
+  --secondary: oklch(0.28 0.06 270);
+  --secondary-foreground: oklch(0.97 0.02 260);
+  --muted: oklch(0.26 0.04 270);
+  --muted-foreground: oklch(0.75 0.04 260);
+  --accent: oklch(0.74 0.18 175);
+  --accent-foreground: oklch(0.16 0.04 270);
+
+  --destructive: oklch(0.65 0.24 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.32 0.05 270);
+  --input: oklch(0.32 0.05 270);
+  --ring: oklch(0.72 0.19 45);
 }
 
-/* Force dark theme always */
-html {
-  color-scheme: dark;
+[data-theme="light"] {
+  /* Same 270 hue family as dark, lightness inverted - and this time
+     actually reading as light blue rather than a barely-tinted white.
+     The original chroma here (0.004-0.015) was so low it looked flat white;
+     these values are closer in magnitude to dark mode's own chroma (0.04-0.05)
+     so the "space" identity survives the switch instead of being wiped out. */
+  --background: oklch(0.93 0.035 270);
+  --foreground: oklch(0.22 0.045 270);
+
+  /* Card is brighter than background, mirroring dark mode's relationship
+     (there, card is lighter than background - a raised surface reads as
+     brighter either direction), but still visibly blue rather than white. */
+  --card: oklch(0.975 0.02 270);
+  --card-foreground: oklch(0.22 0.045 270);
+  --popover: oklch(0.975 0.02 270);
+  --popover-foreground: oklch(0.22 0.045 270);
+
+  /* Darkened from the dark theme's 0.72. Verified, not eyeballed: computed
+     the actual WCAG contrast ratio against --background in a real browser
+     (oklch -> linear sRGB -> relative luminance) rather than guessing. This
+     token is used as bare text (Navbar's active nav-label, the
+     highest-traffic instance), so it needs real margin over the 4.5 AA
+     minimum, not just clear it. 0.53 cleared 5.06:1 against the original
+     near-white background (chroma 0.01), but bumping the background's
+     chroma to 0.035 for the "too white" fix above darkened it enough to
+     drop that same 0.53 to 4.62:1 - thin. 0.50 restores real margin: 5.17:1
+     against the new background, still recognizably the same mission orange. */
+  --primary: oklch(0.50 0.19 45);
+  --primary-foreground: oklch(0.16 0.04 270);
+
+  --secondary: oklch(0.85 0.04 270);
+  --secondary-foreground: oklch(0.22 0.045 270);
+  --muted: oklch(0.89 0.035 270);
+  --muted-foreground: oklch(0.46 0.045 265);
+  --accent: oklch(0.74 0.18 175);
+  --accent-foreground: oklch(0.16 0.04 270);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.80 0.04 270);
+  --input: oklch(0.80 0.04 270);
+  --ring: oklch(0.50 0.19 45);
 }
 
 @theme inline {
@@ -104,6 +182,11 @@ html {
   --color-block-stop: #f44336;   /* stop */
   --color-block-hat: #ff6d00;    /* uplink / hat */
 
+  /* Page-content ceiling. One token instead of max-w-6xl/7xl repeated
+     across five files - a monitor wider than 1280px was leaving dead
+     margins on every page with no way to retune it in one place. */
+  --container-page: 112.5rem; /* 1800px */
+
   --font-display: "Fredoka", "Baloo 2", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --font-sans: "Inter", system-ui, sans-serif;
@@ -136,6 +219,12 @@ html {
     background-image:
       radial-gradient(ellipse 80% 50% at 50% -10%, color-mix(in oklab, var(--cosmic) 40%, transparent), transparent 60%),
       radial-gradient(ellipse 60% 40% at 100% 100%, color-mix(in oklab, var(--mars) 35%, transparent), transparent 60%);
+  }
+
+  /* Same wash, dimmed - full strength was tuned against a near-black page and
+     reads as a heavy tint rather than a hint once the background is near-white. */
+  [data-theme="light"] body::before {
+    opacity: 0.35;
   }
 
   h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
@@ -186,6 +275,14 @@ html {
     background-repeat: repeat;
   }
 
+  /* Point-of-light stars are drawn for a near-black backdrop and either
+     vanish or turn into a muddy smear against a near-white one - there's no
+     sensible light-mode equivalent within this pass, so it's suppressed
+     rather than retuned. */
+  [data-theme="light"] .starfield {
+    display: none;
+  }
+
   .nebula {
     background-image:
       radial-gradient(ellipse 50% 35% at 22% 28%, color-mix(in oklab, var(--cosmic) 55%, transparent), transparent 70%),
@@ -229,7 +326,13 @@ html {
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
   .clay-press {
-    transition: transform 120ms ease, filter 150ms ease, box-shadow 150ms ease;
+    /* The pressed-state transform gets a custom curve - the built-in
+       easings are too weak to read as an intentional press. Hover/filter
+       stays on plain ease, which is the right curve for a colour change. */
+    transition:
+      transform 120ms var(--ease-out),
+      filter 150ms ease,
+      box-shadow 150ms ease;
   }
   .clay-press:hover { filter: brightness(1.06); }
   .clay-press:active { transform: translateY(1px); }
@@ -329,15 +432,79 @@ html {
   grid-template-columns: 1fr;
   max-height: calc(100vh - 122px);
   height: calc(100vh - 122px);
-  transition: grid-template-columns 0.3s ease-out;
+  /* No transition on grid-template-columns, deliberately, and this has now
+     been established the hard way twice:
+       1. It is a layout property on a container that both Blockly and the
+          simulator canvas watch with a ResizeObserver, so interpolating it
+          fires a full svgResize + canvas redraw on every frame of the ease.
+       2. Worse, and the reason it cannot simply be tuned: retargeting the
+          value rapidly (which a drag does, via the --workspace-* variables)
+          leaves Chrome's interpolation stuck. Measured directly - vars set
+          to 47fr/53fr rendered as 655.9px/573.1px and STAYED there after
+          settling, instead of the correct 577.6px/651.4px. The panels end up
+          at the wrong sizes, permanently, until the next change.
+     The split is dragged, and a drag wants the layout pinned to the cursor
+     anyway - there is no easing to miss here. */
+}
+
+/*
+ * The draggable divider between the build and simulator panels.
+ *
+ * This exists because a divider is the right mouse control for this job: it
+ * sits under the cursor and moves exactly with it, 1:1, at any container
+ * width. The keyboard path lives on the divider itself for precise stepping.
+ */
+.workspaceSplitDivider {
+  display: none;
+}
+
+.workspaceSplitDivider::before {
+  content: "";
+  width: 3px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background-color 120ms var(--ease-out);
+}
+
+.workspaceSplitDivider:hover::before,
+.workspaceSplitDivider[data-dragging="true"]::before {
+  background: var(--primary);
+}
+
+.workspaceSplitDivider:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 999px;
 }
 
 @media (min-width: 1024px) {
   .workspaceSplitGrid {
     align-items: stretch;
+    /* The middle track is the drag divider. Below this breakpoint the grid
+       collapses to one column and the divider is display:none, so there is
+       nothing to split and no third track to reserve. */
     grid-template-columns:
       minmax(0, var(--workspace-left, 60fr))
+      auto
       minmax(320px, var(--workspace-right, 40fr));
+  }
+
+  .workspaceSplitDivider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Narrow visually (the 3px pill in ::before) but a comfortably wide
+       target - a 3px-wide grab area would be a precision test, not a
+       control. */
+    width: 11px;
+    cursor: col-resize;
+    /* The pointer belongs to the divider for the whole drag, including the
+       frames where the cursor outruns the layout and leaves the element. */
+    touch-action: none;
+    background: none;
+    border: none;
+    padding: 0;
   }
 }
 
