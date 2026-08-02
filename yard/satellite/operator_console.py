@@ -79,6 +79,12 @@ _active_leases = {}
 # can monkeypatch _firestore / _verify_id_token without firebase-admin or
 # real credentials.
 _firebase_app = None
+# start_polling and start_sync_worker are both spawned as daemon threads at
+# server startup (web_server.py) and each call into _init_firebase() as their
+# very first action - without this lock, both can pass the `is not None`
+# check before either finishes building credentials, and the second
+# firebase_admin.initialize_app() call raises "app already exists".
+_firebase_lock = threading.Lock()
 
 
 def _web_api_key():
@@ -108,22 +114,36 @@ def _init_firebase():
     import firebase_admin
     from firebase_admin import credentials
 
-    if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
-        cred = credentials.ApplicationDefault()
-    else:
-        # \n in the private key survives .env files as the two characters
-        # backslash-n; decode them back to newlines (mission-control does the
-        # same in its firebase-admin bootstrap).
-        private_key = os.environ['FIREBASE_PRIVATE_KEY'].strip().strip('"').replace('\\n', '\n')
-        cred = credentials.Certificate({
-            'type': 'service_account',
-            'project_id': os.environ['FIREBASE_PROJECT_ID'],
-            'client_email': os.environ['FIREBASE_CLIENT_EMAIL'],
-            'private_key': private_key,
-            'token_uri': 'https://oauth2.googleapis.com/token',
-        })
+    with _firebase_lock:
+        # Re-check inside the lock: whichever thread lost the race to
+        # acquire it has almost certainly arrived here because the winner
+        # already finished initialising.
+        if _firebase_app is not None:
+            return _firebase_app
 
-    _firebase_app = firebase_admin.initialize_app(cred, name='operator-console')
+        if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
+            cred = credentials.ApplicationDefault()
+        else:
+            # \n in the private key survives .env files as the two characters
+            # backslash-n; decode them back to newlines (mission-control does
+            # the same in its firebase-admin bootstrap).
+            private_key = os.environ['FIREBASE_PRIVATE_KEY'].strip().strip('"').replace('\\n', '\n')
+            cred = credentials.Certificate({
+                'type': 'service_account',
+                'project_id': os.environ['FIREBASE_PROJECT_ID'],
+                'client_email': os.environ['FIREBASE_CLIENT_EMAIL'],
+                'private_key': private_key,
+                'token_uri': 'https://oauth2.googleapis.com/token',
+            })
+
+        try:
+            _firebase_app = firebase_admin.initialize_app(cred, name='operator-console')
+        except ValueError:
+            # Already registered by something this lock didn't cover (e.g. a
+            # prior dev-server run that left firebase_admin's process-wide
+            # app registry populated) - reuse it instead of crashing.
+            _firebase_app = firebase_admin.get_app(name='operator-console')
+
     return _firebase_app
 
 
