@@ -47,6 +47,7 @@
  *   --only <name>   migrate a single collection (missions | learners | rover-configs)
  */
 
+import { createHash } from 'node:crypto';
 import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -61,6 +62,11 @@ const PRIVATE_COLLECTION = 'private';
 const CONTACT_DOC = 'contact';
 
 const COLLECTIONS = ['missions', 'learners', 'rover-configs'];
+
+// Must produce byte-identical output to hashLearnerId() in
+// core/domain/services/learnerRef.ts. Pinned by a test there; a mismatch would
+// not throw, it would quietly write refs the app never queries for.
+const hashLearnerId = (id) => createHash('sha256').update(id.trim()).digest('hex');
 
 if (ONLY && !COLLECTIONS.includes(ONLY)) {
   console.error(`--only must be one of: ${COLLECTIONS.join(', ')}`);
@@ -150,6 +156,7 @@ let totalDocs = 0;
 let totalWrites = 0;
 let addressesRelocated = 0;
 let missionAddressesStripped = 0;
+let learnerRefsDerived = 0;
 
 for (const name of ONLY ? [ONLY] : COLLECTIONS) {
   const snap = await source.collection(name).get();
@@ -188,11 +195,31 @@ for (const name of ONLY ? [ONLY] : COLLECTIONS) {
       }
     }
 
-    if (name === 'missions' && 'learnerEmail' in data) {
-      // Should already be gone; enforced so a stale record cannot seed a
-      // plaintext address onto a world-readable document in a clean database.
-      delete data.learnerEmail;
-      missionAddressesStripped += 1;
+    if (name === 'missions') {
+      if ('learnerEmail' in data) {
+        // Should already be gone; enforced so a stale record cannot seed a
+        // plaintext address onto a world-readable document in a clean database.
+        delete data.learnerEmail;
+        missionAddressesStripped += 1;
+      }
+
+      // The raw learner id must never reach the target. Publishing it is what
+      // made possession of an id meaningless; only the hash belongs on a
+      // world-readable document. Older records fall back to sessionId, the
+      // same generous rule the other learner scripts use.
+      const rawLearnerId = data.learnerId || data.sessionId;
+      if (rawLearnerId && !data.learnerRef) {
+        data.learnerRef = hashLearnerId(rawLearnerId);
+        learnerRefsDerived += 1;
+      }
+      delete data.learnerId;
+    }
+
+    if (name === 'learners' && !data.learnerRef) {
+      // The document id IS the learner id, and the notification service finds
+      // the record by this field rather than by id.
+      data.learnerRef = hashLearnerId(docSnap.id);
+      learnerRefsDerived += 1;
     }
 
     totalWrites += 1;
@@ -206,6 +233,7 @@ console.log('');
 console.log(`documents read from source:        ${totalDocs}`);
 console.log(`addresses written to private/:     ${addressesRelocated}`);
 console.log(`plaintext addresses stripped off missions: ${missionAddressesStripped}`);
+console.log(`learnerRef hashes derived:         ${learnerRefsDerived}`);
 console.log(`writes ${APPLY ? 'performed' : 'that would be performed'}: ${totalWrites}`);
 
 if (!APPLY) {
@@ -215,6 +243,7 @@ if (!APPLY) {
     '\nDone. Before calling this finished:\n' +
     '  - open the feed against the target and confirm missions render\n' +
     '  - confirm NO learner document has a learnerEmail field\n' +
+    '  - confirm NO mission document has a learnerId field\n' +
     '  - confirm history by learner id and by email hash both return results\n' +
     '    (these need the composite indexes deployed on the target)',
   );
