@@ -47,7 +47,7 @@
  *   --only <name>   migrate a single collection (missions | learners | rover-configs)
  */
 
-import { initializeApp, cert } from 'firebase-admin/app';
+import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const args = process.argv.slice(2);
@@ -99,13 +99,24 @@ const sourceApp = initializeApp(
   'source',
 );
 
+// A service account for the target is preferred, but falls back to
+// Application Default Credentials so a human who already has access to the
+// target project (gcloud auth application-default login) can run this without
+// anyone minting and passing around a key file.
+const targetClientEmail = envValue('TARGET_FIREBASE_CLIENT_EMAIL', { required: false });
+const targetPrivateKey = envValue('TARGET_FIREBASE_PRIVATE_KEY', { required: false });
+const usingADC = !targetClientEmail || !targetPrivateKey;
+
 const targetApp = initializeApp(
   {
-    credential: cert({
-      projectId: targetProjectId,
-      clientEmail: envValue('TARGET_FIREBASE_CLIENT_EMAIL'),
-      privateKey: envValue('TARGET_FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n'),
-    }),
+    credential: usingADC
+      ? applicationDefault()
+      : cert({
+          projectId: targetProjectId,
+          clientEmail: targetClientEmail,
+          privateKey: targetPrivateKey.replace(/\\n/g, '\n'),
+        }),
+    projectId: targetProjectId,
   },
   'target',
 );
@@ -114,7 +125,7 @@ const source = getFirestore(sourceApp);
 const target = getFirestore(targetApp);
 
 console.log(`source:  ${sourceProjectId}`);
-console.log(`target:  ${targetProjectId}`);
+console.log(`target:  ${targetProjectId}${usingADC ? '  (via application default credentials)' : '  (via service account)'}`);
 console.log(APPLY ? 'MODE:    APPLY (will write to the target)' : 'MODE:    DRY RUN (no writes)');
 if (ONLY) console.log(`only:    ${ONLY}`);
 console.log('');
