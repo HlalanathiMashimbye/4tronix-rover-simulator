@@ -1,7 +1,14 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Rocket, CheckCircle2 } from 'lucide-react';
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
+
+// Deliberately plain CSS, not Motion's AnimatePresence - see NotificationModal
+// for why: verified in a clean production build that AnimatePresence's exit
+// animation completes correctly here but the component never actually
+// unmounts, in this exact library/framework combination. Not shipping that.
+const EXIT_MS = 200;
 
 /**
  * Name-and-launch controls, rendered as the footer of the simulator column.
@@ -47,6 +54,24 @@ export function MissionSubmitBar({
   currentCode,
   isMissionNameValid,
 }: MissionSubmitBarProps) {
+  const [mounted, setMounted] = useState(submitSuccess);
+  const [visible, setVisible] = useState(false);
+
+  // Mount immediately, flip visible a frame later so the transition has a
+  // "before" state to run from, and hold the unmount until the exit
+  // animation has actually played. Mirrors NotificationModal/EmailPrompt.
+  useEffect(() => {
+    if (submitSuccess) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the banner is appearing
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setVisible(false);
+    const timer = setTimeout(() => setMounted(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [submitSuccess]);
+
   return (
     <div className="@container shrink-0 border-t border-border/60 pt-2">
       <div className="flex flex-wrap items-start gap-2">
@@ -82,9 +107,16 @@ export function MissionSubmitBar({
       </div>
 
       {/* Confirmation belongs next to the button that earned it, not back in
-          the editor column the controls just left. */}
-      {submitSuccess && (
-        <div className="mt-2 flex items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2">
+          the editor column the controls just left.
+          A submit is rare and high-emotion (the delight tier, not just
+          feedback) - it earns a real entrance rather than the plain
+          conditional render this used to be. */}
+      {mounted && (
+        <div
+          className={`mt-2 flex items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            visible ? 'scale-100 opacity-100' : 'translate-y-1 scale-[0.97] opacity-0'
+          }`}
+        >
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
           <div className="flex-1">
             <p className="text-xs font-bold text-buzz">Mission sent!</p>

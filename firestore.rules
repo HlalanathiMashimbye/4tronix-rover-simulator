@@ -72,15 +72,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Learner records hold an email address and an optional display name.
+    // Learner records hold profile fields and an optional display name.
     //
-    // `get` is allowed so a returning browser can restore its own profile, but
-    // `list` is denied so the collection cannot be enumerated - a reader has to
-    // already hold the exact 21-character nanoid document id.
+    // They deliberately DO NOT hold the email address any more. `list` was
+    // denied here so the collection could not be enumerated, but that was not
+    // enough on its own: learner ids are published on world-readable mission
+    // documents, so anyone could read the feed, collect ids from it, fetch
+    // each learner document by exact id and read the address in plaintext.
+    // That is bulk harvesting of children's email addresses from public data.
     //
-    // Writes are restricted to the profile fields the app actually sets, so a
-    // learner document cannot become arbitrary storage, and can never be
-    // deleted from a browser.
+    // Rules cannot hide a single field on read, so the address moved to the
+    // `private` subcollection below, which browsers are denied entirely and
+    // only the Admin SDK reaches (POST /api/learners/[id]/email writes it,
+    // MissionNotificationService reads it).
+    //
+    // `learnerEmail` is therefore no longer an accepted key on create, and on
+    // update it may only be written as null - that is the API route clearing
+    // a legacy address off an existing document, never setting one.
+    //
+    // NOTE: possession of a learner id still proves nothing, because those ids
+    // are public. These rules stop the bulk READ; they cannot stop a forged
+    // write. Closing that needs learner ids to stop being published at all.
     match /learners/{learnerId} {
       allow get: if true;
       allow list: if false;
@@ -88,13 +100,13 @@ service cloud.firestore {
 
       allow create: if request.resource.data.keys().hasOnly([
                       'id', 'sessionId', 'avatarColor', 'displayName',
-                      'learnerEmail', 'missionCount', 'completedMissions',
+                      'missionCount', 'completedMissions',
                       'createdAt', 'lastActiveAt', 'devices',
                       'learnerId', 'missionsCompleted', 'progress'
                     ]);
 
       allow update: if touchedKeys().hasOnly([
-                      'learnerEmail', 'displayName', 'avatarColor',
+                      'displayName', 'avatarColor',
                       'lastActiveAt', 'missionCount', 'completedMissions',
                       'missionsCompleted', 'progress', 'devices'
                     ]);

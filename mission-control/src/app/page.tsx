@@ -2,41 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Search, X, Plus, Play, Rocket, Star } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import { Search, X, Plus, Rocket, Star } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import {
-  getDiscoveryStatus,
-  DISCOVERY_BADGE_CLASS,
-  type DiscoveryStatus,
-} from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
-
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const patterns = [
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtu\.be\/([^?]+)/,
-    /youtube\.com\/embed\/([^?]+)/,
-  ];
-  for (const p of patterns) {
-    const match = url.match(p);
-    if (match?.[1]) return match[1];
-  }
-  return null;
-}
-
-/** Human-friendly run time: "8s" or "1:23". */
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  if (total < 60) return `${total}s`;
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+import { MissionCard } from '@/components/MissionCard/MissionCard';
+import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 
 type StatusFilter = 'all' | 'favorites' | DiscoveryStatus;
 
@@ -56,6 +32,13 @@ export default function LandingPage() {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const { favorites, isFavorite } = useFavorites();
+  const reduceMotion = useReducedMotion();
+  // Cards remounting purely because a live search narrowed/widened the list
+  // should not replay the entrance stagger - that recomputes on every
+  // keystroke, well past the "occasional" tier the effect is meant for. Set
+  // alongside setQuery/setStatusFilter in the same handler so React batches
+  // both into the one re-render the stagger actually reads.
+  const [skipEntrance, setSkipEntrance] = useState(false);
 
   useEffect(() => {
     const loadMissions = async () => {
@@ -152,7 +135,7 @@ export default function LandingPage() {
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
       {/* Header (the Create Mission action lives in the navbar) */}
-      <header className="mx-auto w-full max-w-6xl shrink-0 pt-4 pb-3">
+      <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
         <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
           Mission <span className="text-gradient-mars">Feed</span>
         </h1>
@@ -162,20 +145,26 @@ export default function LandingPage() {
       </header>
 
       {/* Toolbar: search + status filters */}
-      <div className="mx-auto flex w-full max-w-6xl shrink-0 flex-col gap-2.5 pb-3 md:flex-row md:items-center">
+      <div className="mx-auto flex w-full max-w-page shrink-0 flex-col gap-2.5 pb-3 md:flex-row md:items-center">
         <div className="relative md:max-w-xs md:flex-1">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setSkipEntrance(true);
+              setQuery(e.target.value);
+            }}
             placeholder="Search missions"
             aria-label="Search missions by name or code"
             className="w-full rounded-full border border-border/60 bg-card/60 py-2.5 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
           />
           {query && (
             <button
-              onClick={() => setQuery('')}
+              onClick={() => {
+                setSkipEntrance(true);
+                setQuery('');
+              }}
               aria-label="Clear search"
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
             >
@@ -191,22 +180,30 @@ export default function LandingPage() {
             return (
               <button
                 key={f.key}
-                onClick={() => setStatusFilter(f.key)}
+                onClick={() => {
+                  setSkipEntrance(false);
+                  setStatusFilter(f.key);
+                }}
                 aria-pressed={active}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition-colors ${
+                className={`relative isolate inline-flex items-center gap-1.5 overflow-hidden rounded-full px-3.5 py-2 text-sm font-bold transition-colors ${
                   active
-                    ? 'bg-gradient-mars text-primary-foreground'
+                    ? 'text-primary-foreground'
                     : 'border border-border/70 bg-card/50 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {Icon && <Icon className="h-3.5 w-3.5" />}
-                {f.label}
-                <span
-                  className={`rounded-full px-1.5 text-xs tabular-nums ${
-                    active ? 'bg-black/20 text-primary-foreground' : 'bg-background/60 text-muted-foreground'
-                  }`}
-                >
-                  {f.count}
+                {active && (
+                  <ActivePillBackground layoutId="feed-filter-pill" className="rounded-full bg-gradient-mars" reduceMotion={reduceMotion} />
+                )}
+                <span className="relative z-10 flex items-center gap-1.5">
+                  {Icon && <Icon className="h-3.5 w-3.5" />}
+                  {f.label}
+                  <span
+                    className={`rounded-full px-1.5 text-xs tabular-nums ${
+                      active ? 'bg-black/20 text-primary-foreground' : 'bg-background/60 text-muted-foreground'
+                    }`}
+                  >
+                    {f.count}
+                  </span>
                 </span>
               </button>
             );
@@ -215,7 +212,7 @@ export default function LandingPage() {
       </div>
 
       {/* Feed: the only thing that scrolls */}
-      <section className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto scroll-panel pb-5">
+      <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pb-5">
         {loading ? (
           <div className="flex justify-center py-24">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
@@ -242,109 +239,23 @@ export default function LandingPage() {
             title="No missions match"
             subtitle="Try a different name, code, or filter."
             onClear={() => {
+              setSkipEntrance(false);
               setQuery('');
               setStatusFilter('all');
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-5 pt-1 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((mission) => {
-              const videoUrl = mission.youtubeUrl || mission.videoUrl;
-              const youtubeId = getYouTubeId(videoUrl);
-              const thumbnailUrl = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
-              const discoveryStatus = getDiscoveryStatus(mission.status);
-              const durationMs = mission.executionMetadata?.duration_ms;
-
-              return (
-                <Link
-                  key={mission.id}
-                  href={`/missions/${mission.id}`}
-                  className="group flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-card/50 transition-[transform,border-color] duration-200 hover:-translate-y-1 hover:border-primary/50 hover:clay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  {/* Thumbnail */}
-                  <div className="relative aspect-video w-full overflow-hidden bg-black">
-                    {thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- thumbnail hosts vary per mission record; next/image would need remotePatterns per host
-                      <img
-                        src={thumbnailUrl}
-                        alt={`${mission.name || 'Mission'} thumbnail`}
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary to-background text-muted-foreground/50">
-                        <Rocket className="h-10 w-10" />
-                        <p className="mt-2 text-xs font-semibold">Run on its way</p>
-                      </div>
-                    )}
-
-                    {/* Scrim for badge legibility */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
-
-                    {/* Status */}
-                    <span
-                      className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
-                    >
-                      {discoveryStatus}
-                    </span>
-
-                    {/* Run time */}
-                    {durationMs ? (
-                      <span className="absolute bottom-3 right-3 z-10 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white tabular-nums">
-                        {formatDuration(durationMs)}
-                      </span>
-                    ) : null}
-
-                    {/* Play affordance on hover */}
-                    {thumbnailUrl ? (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/95 shadow-lg ring-4 ring-white/15">
-                          <Play className="ml-0.5 h-6 w-6 text-primary-foreground" fill="currentColor" />
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Title + meta */}
-                  <div className="flex items-start gap-3 px-4 py-3">
-                    <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-border/60">
-                      <Image
-                        src="/rover-hero.jpg"
-                        alt=""
-                        width={72}
-                        height={72}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="truncate font-display text-base font-bold text-foreground transition-colors group-hover:text-primary">
-                        {mission.name || `Mission-${mission.id.slice(0, 8)}`}
-                      </h2>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="truncate font-mono">{mission.yardId}</span>
-                        <span aria-hidden>·</span>
-                        <span className="shrink-0">{new Date(mission.submittedAt).toLocaleDateString()}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Code peek */}
-                  <div className="relative mx-4 mb-4 overflow-hidden rounded-xl border border-border/50 bg-background/60">
-                    <div className="flex items-center gap-1.5 border-b border-border/40 px-3 py-1.5">
-                      <span className="h-2 w-2 rounded-full bg-block-stop/70" />
-                      <span className="h-2 w-2 rounded-full bg-block-hat/70" />
-                      <span className="h-2 w-2 rounded-full bg-buzz/70" />
-                      <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        mission.py
-                      </span>
-                    </div>
-                    <pre className="max-h-20 overflow-hidden px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                      <code>{mission.code.trim() || '# No code'}</code>
-                    </pre>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card/95 to-transparent" />
-                  </div>
-                </Link>
-              );
-            })}
+          <div className="grid gap-5 pt-1 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]">
+            {filtered.map((mission, index) => (
+              <StaggeredEntrance
+                key={mission.id}
+                index={index}
+                skipEntrance={skipEntrance}
+                reduceMotion={reduceMotion}
+              >
+                <MissionCard mission={mission} />
+              </StaggeredEntrance>
+            ))}
           </div>
         )}
 

@@ -113,7 +113,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
   return (
     <main className="h-[calc(100vh-64px)] overflow-hidden px-3 py-2">
-      <div className="mx-auto flex h-full max-w-7xl flex-col gap-2">
+      <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">

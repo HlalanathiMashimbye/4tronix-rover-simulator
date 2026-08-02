@@ -131,24 +131,29 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setLearnerEmailState(email);
     setShowEmailPrompt(false);
 
-    // Order matters. The learner record is now the ONLY place the address
-    // lives, and backfillLatestMissionEmail triggers a notify that reads it
-    // back server-side - so persist here first or that email finds no address
-    // and silently skips.
+    // Written server-side, not from here. The learner document is readable by
+    // exact id and those ids are published on public mission documents, so an
+    // address stored on it could be harvested in bulk from the feed. The route
+    // puts it in a subcollection browsers cannot read at all - see
+    // core/domain/services/learnerContact.ts.
     //
-    // Deliberately not gated on `sessionId`: the document id comes from
-    // learnerDocId(), not session state, and skipping this write would leave
-    // the learner reachable by nothing at all.
+    // Order still matters: backfillLatestMissionEmail triggers a notify that
+    // reads this back server-side, so it has to land first or that first email
+    // finds no address and silently skips.
     try {
-      const db = getFirestoreClient();
-      const learnerRef = doc(db, 'learners', learnerDocId());
-      await setDoc(
-        learnerRef,
-        { learnerEmail: email, lastActiveAt: new Date().toISOString() },
-        { merge: true },
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(learnerDocId())}/email`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        },
       );
+      if (!response.ok) {
+        console.warn('Failed to persist learner email:', await response.text());
+      }
     } catch (error) {
-      console.warn('Failed to persist learner email to Firestore:', error);
+      console.warn('Failed to persist learner email:', error);
     }
 
     if (email) await backfillLatestMissionEmail(email);
@@ -174,7 +179,11 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       if (learnerSnap.exists()) {
         // Existing learner - update last active timestamp
         const existingLearner = learnerSnap.data() as Learner;
-        if (existingLearner.learnerEmail) setLearnerEmailState(existingLearner.learnerEmail);
+        // The address is deliberately no longer readable from here (it would
+        // be readable by anyone holding this id, which is public). localStorage
+        // above is the client's source of truth for display; this document is
+        // keyed by the same device-local id, so it never knew anything the
+        // browser did not already have.
 
         // Update last active timestamp
         await updateDoc(learnerRef, {

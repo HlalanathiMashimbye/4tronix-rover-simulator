@@ -17,10 +17,13 @@ import {
   Home,
   Clock,
   Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -35,6 +38,7 @@ const NAV_ITEMS = [
 export function Navbar() {
   const pathname = usePathname();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   // Real notifications will be wired to the backend later - no placeholder data.
   const sampleNotifications: ComponentProps<typeof NotificationModal>['notifications'] = [];
@@ -62,10 +66,10 @@ export function Navbar() {
       {/* Divider is an inset shadow (not border-b) so the bar stays exactly 64px
           tall, matching the h-[calc(100vh-64px)] page mains (no 1px overflow). */}
       <nav className="sticky top-0 z-50 bg-background/70 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border)]">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
+        <div className="mx-auto flex h-16 max-w-page items-center justify-between gap-3 px-4">
           {/* Logo / Brand (also links home) */}
           <Link href="/" className="group flex items-center gap-2.5">
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-white/10 clay transition-transform duration-200 group-hover:-translate-y-0.5">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-white/10 clay transition-transform duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-0.5">
               <Image
                 src="/rover-hero.jpg"
                 alt="Mars Rover"
@@ -107,6 +111,17 @@ export function Navbar() {
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create Mission
             </Link>
+
+            {/* Theme toggle (desktop; mobile reaches it from the Notifications
+                panel header - the bottom tab bar is a tight 4-slot layout
+                that shouldn't grow a 5th icon). */}
+            <button
+              onClick={toggleTheme}
+              className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
 
             {/* Notification bell (desktop; mobile uses the bottom "Alerts" tab) */}
             <button

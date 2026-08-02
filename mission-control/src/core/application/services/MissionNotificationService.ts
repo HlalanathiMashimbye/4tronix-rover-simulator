@@ -11,6 +11,10 @@ import { Firestore } from 'firebase-admin/firestore';
 import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTemplates';
+import {
+  LEARNER_PRIVATE_COLLECTION,
+  LEARNER_CONTACT_DOC,
+} from '@/core/domain/services/learnerContact';
 
 const LEARNERS_COLLECTION = 'learners';
 
@@ -93,7 +97,8 @@ export class MissionNotificationService {
    * side effect.
    */
   private async resolveLearner(learnerId: string): Promise<LearnerContact> {
-    const snapshot = await this.firestore.collection(LEARNERS_COLLECTION).doc(learnerId).get();
+    const learnerRef = this.firestore.collection(LEARNERS_COLLECTION).doc(learnerId);
+    const snapshot = await learnerRef.get();
 
     if (!snapshot.exists) {
       return {};
@@ -101,8 +106,28 @@ export class MissionNotificationService {
 
     const data = snapshot.data();
 
+    // The address lives in a browser-unreadable subcollection - see
+    // learnerContact.ts for why it is not on the learner document.
+    let email: string | undefined;
+    try {
+      const contactSnap = await learnerRef
+        .collection(LEARNER_PRIVATE_COLLECTION)
+        .doc(LEARNER_CONTACT_DOC)
+        .get();
+      email = (contactSnap.data()?.learnerEmail as string) || undefined;
+    } catch (error) {
+      console.warn('[notify] Could not read learner contact record:', error);
+    }
+
+    // Fall back to the legacy field for learners who set an address before it
+    // moved, and have not set one since. Those documents are cleaned up as
+    // each learner next saves an address; drop this once none remain.
+    if (!email) {
+      email = (data?.learnerEmail as string) || undefined;
+    }
+
     return {
-      email: (data?.learnerEmail as string) || undefined,
+      email,
       displayName: (data?.displayName as string) || undefined,
     };
   }
