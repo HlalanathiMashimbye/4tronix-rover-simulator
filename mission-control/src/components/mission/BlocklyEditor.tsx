@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Play, CheckCircle2, AlertTriangle, Locate } from 'lucide-react';
+import { loadBlockly } from '@/lib/loadBlockly';
 import {
   defineRoverBlocks,
   ROVER_TOOLBOX,
@@ -18,23 +19,9 @@ interface BlocklyEditorProps {
   onBlocklyStateChange?: (state: string) => void;
 }
 
-declare global {
-  interface Window {
-    // Blockly is loaded from a CDN <script> and ships no type definitions.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Blockly: any;
-  }
-}
-
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
 // so the key name need not match - but the JSON format does (Blockly.serialization).
 const STORAGE_KEY = 'roverWorkspace';
-
-// Pinned, not `blockly/blockly.min.js` - that resolves to whatever unpkg
-// currently tags latest, so an upstream release can break every page load
-// with zero local changes and zero warning. Bump deliberately; keep in sync
-// with BlocklyViewer.tsx's copy of this same URL.
-const BLOCKLY_CDN_URL = 'https://unpkg.com/blockly@13.2.0/blockly.min.js';
 
 export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
@@ -55,41 +42,22 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   // merged away on load. Without this, blocks they'd placed just vanish
   // from under them with no explanation, on a page that never even asked.
   const [mergedNotice, setMergedNotice] = useState(false);
-  const scriptLoadedRef = useRef(false);
   const [retryToken, setRetryToken] = useState(0);
 
-  // Load Blockly from CDN
+  // Loading (and the Monaco/AMD conflict that used to make this silently
+  // render an empty canvas) is handled in lib/loadBlockly.
   useEffect(() => {
-    if (typeof window === 'undefined' || scriptLoadedRef.current) return;
-
-    // Check if already loaded
-    if (window.Blockly) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync that the CDN script is already present
-      setBlocklyLoaded(true);
-      scriptLoadedRef.current = true;
-      return;
-    }
-
-    setLoadError(false);
-
-    const script1 = document.createElement('script');
-    script1.src = BLOCKLY_CDN_URL;
-    script1.async = true;
-
-    script1.onload = () => {
-      scriptLoadedRef.current = true;
-      setBlocklyLoaded(true);
-    };
-
-    script1.onerror = () => {
-      script1.remove();
-      setLoadError(true);
-    };
-
-    document.body.appendChild(script1);
-
+    let cancelled = false;
+    loadBlockly()
+      .then(() => {
+        if (!cancelled) setBlocklyLoaded(true);
+      })
+      .catch((err) => {
+        console.error('[BlocklyEditor] Blockly failed to load:', err);
+        if (!cancelled) setLoadError(true);
+      });
     return () => {
-      // Don't remove script on unmount
+      cancelled = true;
     };
   }, [retryToken]);
 

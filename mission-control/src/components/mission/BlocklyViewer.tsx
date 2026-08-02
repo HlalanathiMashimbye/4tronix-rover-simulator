@@ -2,50 +2,35 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
+import { loadBlockly } from '@/lib/loadBlockly';
 import { defineRoverBlocks } from './roverBlockly';
-
-// Pinned - keep in sync with BlocklyEditor.tsx's copy of this same URL. See
-// that file for why: an unversioned unpkg URL can break every page load the
-// moment a new Blockly release ships, with no local change and no warning.
-const BLOCKLY_CDN_URL = 'https://unpkg.com/blockly@13.2.0/blockly.min.js';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
  *
- * Loads Blockly from the same CDN as the editor and renders the program without
- * a toolbox, so learners can see the blocks they will remix. Pan/zoom stay on
- * (scrollbars + wheel) but editing is off. window.Blockly is typed by the
- * editor's global declaration.
+ * Shares lib/loadBlockly with the editor - one script, one cache - and renders
+ * the program without a toolbox, so learners can see the blocks they will
+ * remix. Pan/zoom stay on (scrollbars + wheel) but editing is off.
  */
 export function BlocklyViewer({ state }: { state: string }) {
   const divRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const scriptLoadedRef = useRef(false);
   const [retryToken, setRetryToken] = useState(0);
 
-  // Load Blockly from CDN (mirrors BlocklyEditor).
   useEffect(() => {
-    if (typeof window === 'undefined' || scriptLoadedRef.current) return;
-    if (window.Blockly) {
-      scriptLoadedRef.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync that the CDN script is already present
-      setLoaded(true);
-      return;
-    }
-    setLoadError(false);
-    const script = document.createElement('script');
-    script.src = BLOCKLY_CDN_URL;
-    script.async = true;
-    script.onload = () => {
-      scriptLoadedRef.current = true;
-      setLoaded(true);
+    let cancelled = false;
+    loadBlockly()
+      .then(() => {
+        if (!cancelled) setLoaded(true);
+      })
+      .catch((err) => {
+        console.error('[BlocklyViewer] Blockly failed to load:', err);
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
     };
-    script.onerror = () => {
-      script.remove();
-      setLoadError(true);
-    };
-    document.body.appendChild(script);
   }, [retryToken]);
 
   useEffect(() => {
