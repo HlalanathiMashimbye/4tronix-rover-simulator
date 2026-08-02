@@ -154,6 +154,11 @@ export class FirestoreMissionRepository implements IMissionRepository {
     // it silently.
     delete (persistedFields as Record<string, unknown>).learnerEmail;
 
+    // Same backstop for the raw learner id. Publishing it is what made
+    // possession of one meaningless, so only learnerRef (its hash) belongs on
+    // a world-readable document. See core/domain/services/learnerRef.ts
+    delete (persistedFields as Record<string, unknown>).learnerId;
+
     return this.removeUndefinedValues(persistedFields) as Record<string, unknown>;
   }
 
@@ -269,7 +274,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
     return {
       id,
       yardId: data.yardId as string,
-      learnerId: (data.learnerId as string) || (data.sessionId as string),
+      learnerRef: data.learnerRef as string,
       sessionId: data.sessionId as string,
       learnerEmailHash: data.learnerEmailHash as string | undefined,
       learnerUid: data.learnerUid as string | undefined,

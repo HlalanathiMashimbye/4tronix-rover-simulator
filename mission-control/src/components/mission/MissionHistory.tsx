@@ -28,18 +28,33 @@ export function MissionHistory() {
   const [emailLoaded, setEmailLoaded] = useState(false);
 
   useEffect(() => {
-    try {
-      const id = getLearnerID();
-      const unsubscribe = subscribeMissionsByLearnerId(id, (missions) => {
-        setById(missions);
+    // Async now: the id is hashed before querying, because missions carry only
+    // learnerRef. Same teardown guard as the email subscription below - the
+    // effect can be torn down before the hash resolves, which would otherwise
+    // leak a live listener.
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+
+    subscribeMissionsByLearnerId(getLearnerID(), (missions) => {
+      setById(missions);
+      setIdLoaded(true);
+    })
+      .then((unsub) => {
+        if (cancelled) {
+          unsub();
+          return;
+        }
+        unsubscribe = unsub;
+      })
+      .catch((error) => {
+        console.error('Failed to initialize mission history:', error);
         setIdLoaded(true);
       });
-      return () => unsubscribe();
-    } catch (error) {
-      console.error('Failed to initialize mission history:', error);
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- subscription setup failed; mark this source as settled so the page renders
-      setIdLoaded(true);
-    }
+
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {

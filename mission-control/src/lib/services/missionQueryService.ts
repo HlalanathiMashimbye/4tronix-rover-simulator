@@ -24,6 +24,7 @@ import {
 import { getFirestoreClient } from '@/lib/firebase';
 import { Mission } from '@/core/domain/entities/Mission';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
+import { hashLearnerId } from '@/core/domain/services/learnerRef';
 
 /**
  * Upper bound on a learner's history subscription.
@@ -44,19 +45,27 @@ export const HISTORY_LIMIT = 50;
  * This enables instant UI updates when an operator completes execution
  * and adds video links or execution notes.
  *
- * @param learnerId - Unique learner identifier
+ * The id is hashed here and the query matches on the hash: mission documents
+ * are world-readable, so they carry only learnerRef. The raw id never leaves
+ * this browser. See core/domain/services/learnerRef.ts
+ *
+ * Async because hashing is - the caller gets the unsubscribe via promise,
+ * mirroring subscribeMissionsByLearnerEmail below.
+ *
+ * @param learnerId - Unique learner identifier (hashed before querying)
  * @param callback - Function called when missions update
  * @returns Unsubscribe function to stop listening
  */
-export function subscribeMissionsByLearnerId(
+export async function subscribeMissionsByLearnerId(
   learnerId: string,
   callback: (missions: Mission[]) => void
-): Unsubscribe {
+): Promise<Unsubscribe> {
+  const learnerRef = await hashLearnerId(learnerId);
   const db = getFirestoreClient();
   const missionsRef = collection(db, 'missions');
   const q = query(
     missionsRef,
-    where('learnerId', '==', learnerId),
+    where('learnerRef', '==', learnerRef),
     orderBy('submittedAt', 'desc'),
     limit(HISTORY_LIMIT)
   );
@@ -128,18 +137,19 @@ export async function subscribeMissionsByLearnerEmail(
 /**
  * Get all missions for a learner (one-time fetch)
  *
- * @param learnerId - Unique learner identifier
+ * @param learnerId - Unique learner identifier (hashed before querying)
  * @returns Array of missions sorted by submission time (newest first)
  */
 export async function getMissionsByLearnerId(
   learnerId: string
 ): Promise<Mission[]> {
   try {
+    const learnerRef = await hashLearnerId(learnerId);
     const db = getFirestoreClient();
     const missionsRef = collection(db, 'missions');
     const q = query(
       missionsRef,
-      where('learnerId', '==', learnerId),
+      where('learnerRef', '==', learnerRef),
       orderBy('submittedAt', 'desc'),
       limit(HISTORY_LIMIT)
     );

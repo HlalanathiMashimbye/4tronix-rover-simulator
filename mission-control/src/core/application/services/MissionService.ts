@@ -15,6 +15,7 @@
 import { Mission } from '@/core/domain/entities/Mission';
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
+import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { CreateMissionDto } from '@/infrastructure/validation/schemas';
 
 export interface SubmitMissionResult {
@@ -42,9 +43,14 @@ export class MissionService {
         ? await hashLearnerEmail(dto.learnerEmail)
         : undefined;
 
+      // Same reasoning as the address above, for the same reason: the raw
+      // learner id arrives over HTTPS but is never persisted on a
+      // world-readable document. Only the hash is.
+      const learnerRef = await hashLearnerId(dto.learnerId);
+
       const mission = await this.missionRepository.create({
         yardId: dto.yardId,
-        learnerId: dto.learnerId,
+        learnerRef,
         sessionId: dto.sessionId,
         learnerEmailHash,
         name: dto.name,

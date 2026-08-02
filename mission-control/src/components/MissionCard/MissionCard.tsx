@@ -120,9 +120,11 @@ export function MissionCard({ mission, showLearnerId = false }: MissionCardProps
             <span className="shrink-0">{new Date(mission.submittedAt).toLocaleDateString()}</span>
           </p>
         </div>
-        {showLearnerId && (
-          <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{mission.learnerId}</span>
-        )}
+        {/* The learner id used to be printed here, on every card in a public
+            feed. It is not on the mission any more (only its hash is), and
+            showing an opaque 64-character digest to a learner would mean
+            nothing, so nothing is rendered. The prop is kept so callers do not
+            break; see core/domain/services/learnerRef.ts */}
       </div>
 
       {/* Code peek */}
