@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { defineRoverBlocks } from './roverBlockly';
+
+// Pinned - keep in sync with BlocklyEditor.tsx's copy of this same URL. See
+// that file for why: an unversioned unpkg URL can break every page load the
+// moment a new Blockly release ships, with no local change and no warning.
+const BLOCKLY_CDN_URL = 'https://unpkg.com/blockly@13.2.0/blockly.min.js';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
@@ -14,7 +20,9 @@ import { defineRoverBlocks } from './roverBlockly';
 export function BlocklyViewer({ state }: { state: string }) {
   const divRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const scriptLoadedRef = useRef(false);
+  const [retryToken, setRetryToken] = useState(0);
 
   // Load Blockly from CDN (mirrors BlocklyEditor).
   useEffect(() => {
@@ -25,15 +33,20 @@ export function BlocklyViewer({ state }: { state: string }) {
       setLoaded(true);
       return;
     }
+    setLoadError(false);
     const script = document.createElement('script');
-    script.src = 'https://unpkg.com/blockly/blockly.min.js';
+    script.src = BLOCKLY_CDN_URL;
     script.async = true;
     script.onload = () => {
       scriptLoadedRef.current = true;
       setLoaded(true);
     };
+    script.onerror = () => {
+      script.remove();
+      setLoadError(true);
+    };
     document.body.appendChild(script);
-  }, []);
+  }, [retryToken]);
 
   useEffect(() => {
     if (!loaded || !divRef.current || !window.Blockly) return;
@@ -58,6 +71,24 @@ export function BlocklyViewer({ state }: { state: string }) {
 
     return () => workspace.dispose();
   }, [loaded, state]);
+
+  if (loadError) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+        <AlertTriangle className="h-5 w-5 text-destructive" />
+        <p>Couldn&apos;t load the block viewer.</p>
+        <button
+          onClick={() => {
+            setLoadError(false);
+            setRetryToken((n) => n + 1);
+          }}
+          className="clay-press rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (!loaded) {
     return (

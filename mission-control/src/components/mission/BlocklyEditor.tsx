@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, CheckCircle2 } from 'lucide-react';
+import { Play, CheckCircle2, AlertTriangle, Locate } from 'lucide-react';
 import {
   defineRoverBlocks,
   ROVER_TOOLBOX,
@@ -30,6 +30,12 @@ declare global {
 // so the key name need not match - but the JSON format does (Blockly.serialization).
 const STORAGE_KEY = 'roverWorkspace';
 
+// Pinned, not `blockly/blockly.min.js` - that resolves to whatever unpkg
+// currently tags latest, so an upstream release can break every page load
+// with zero local changes and zero warning. Bump deliberately; keep in sync
+// with BlocklyViewer.tsx's copy of this same URL.
+const BLOCKLY_CDN_URL = 'https://unpkg.com/blockly@13.2.0/blockly.min.js';
+
 export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,12 +46,17 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   const mergedNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [blocklyLoaded, setBlocklyLoaded] = useState(false);
+  // Unset means still loading; the CDN fetch previously had no failure path
+  // at all, so a network hiccup or ad-blocker left this stuck on the loading
+  // spinner forever with no way out and nothing in the console to explain it.
+  const [loadError, setLoadError] = useState(false);
   // Tells the learner their workspace just changed for a reason they didn't
   // cause - a leftover duplicate uplink from before the cap existed got
   // merged away on load. Without this, blocks they'd placed just vanish
   // from under them with no explanation, on a page that never even asked.
   const [mergedNotice, setMergedNotice] = useState(false);
   const scriptLoadedRef = useRef(false);
+  const [retryToken, setRetryToken] = useState(0);
 
   // Load Blockly from CDN
   useEffect(() => {
@@ -59,8 +70,10 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       return;
     }
 
+    setLoadError(false);
+
     const script1 = document.createElement('script');
-    script1.src = 'https://unpkg.com/blockly/blockly.min.js';
+    script1.src = BLOCKLY_CDN_URL;
     script1.async = true;
 
     script1.onload = () => {
@@ -68,12 +81,17 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       setBlocklyLoaded(true);
     };
 
+    script1.onerror = () => {
+      script1.remove();
+      setLoadError(true);
+    };
+
     document.body.appendChild(script1);
 
     return () => {
       // Don't remove script on unmount
     };
-  }, []);
+  }, [retryToken]);
 
   useEffect(() => {
     if (!blocklyLoaded || !blocklyDivRef.current || !window.Blockly) return;
@@ -208,10 +226,21 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     if (!isInitialized || !workspaceRef.current || !window.Blockly) return;
 
     const workspace = workspaceRef.current;
+    // Coalesced to at most once per animation frame - the panel-split slider
+    // (MissionWorkspace.tsx) now animates its CSS grid track with a
+    // transition, which fires this ResizeObserver on every intermediate
+    // frame of that transition, not just once per onChange. Without this,
+    // a full Blockly svgResize (workspace metrics + toolbox/flyout layout)
+    // ran on every one of those frames for the whole drag.
+    let rafId: number | null = null;
     const handleResize = () => {
-      if (workspaceRef.current) {
-        window.Blockly.svgResize(workspaceRef.current);
-      }
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (workspaceRef.current) {
+          window.Blockly.svgResize(workspaceRef.current);
+        }
+      });
     };
 
     window.addEventListener('resize', handleResize);
@@ -227,6 +256,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     return () => {
       window.removeEventListener('resize', handleResize);
       resizeObserver?.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
 
       if (workspaceRef.current === workspace) {
         workspace.dispose();
@@ -246,6 +276,15 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     }
 
     onGenerateCommands(commands);
+  };
+
+  // Blockly's own built-in zoom controls include a reset-zoom button, but it
+  // resets to the workspace's default scale/origin rather than fitting
+  // whatever's actually been dragged around - easy to "lose" your blocks off
+  // to one side after panning or zooming in. zoomToFit() re-scales and
+  // re-centers on the actual current content instead.
+  const handleRecenter = () => {
+    workspaceRef.current?.zoomToFit();
   };
 
   // Listen for workspace changes and push the generated Python (and the
@@ -273,6 +312,24 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     };
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
 
+  if (loadError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center text-sm text-muted-foreground">
+        <AlertTriangle className="h-6 w-6 text-destructive" />
+        <p>Couldn&apos;t load the block editor. Check your connection and try again.</p>
+        <button
+          onClick={() => {
+            setLoadError(false);
+            setRetryToken((n) => n + 1);
+          }}
+          className="clay clay-press rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (!blocklyLoaded) {
     return (
       <div className="flex h-full items-center justify-center gap-3 p-8 text-sm text-muted-foreground">
@@ -288,13 +345,23 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         <p className="min-w-0 text-xs text-muted-foreground">
           Stack blocks inside “On uplink”, tune the numbers, then run it.
         </p>
-        <button
-          onClick={handleRun}
-          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
-        >
-          <Play className="h-3.5 w-3.5" fill="currentColor" />
-          Run blocks
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            onClick={handleRecenter}
+            title="Recenter blocks"
+            aria-label="Recenter blocks in view"
+            className="clay-press flex items-center justify-center rounded-xl border border-border/60 bg-card/50 p-2 text-muted-foreground hover:text-foreground"
+          >
+            <Locate className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={handleRun}
+            className="clay clay-press flex items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+          >
+            <Play className="h-3.5 w-3.5" fill="currentColor" />
+            Run blocks
+          </button>
+        </div>
       </div>
 
       {mergedNotice && (
