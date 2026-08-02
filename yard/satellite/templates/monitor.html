@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rover Monitor</title>
-    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly@13.2.0/blockly.min.js"></script>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
         * {
@@ -67,6 +67,7 @@
             height: 8px;
             border-radius: 50%;
             background: var(--border);
+            transition: background-color 200ms var(--ease-out);
         }
 
         .connection-dot.connected {
@@ -218,6 +219,7 @@
             height: 8px;
             border-radius: 50%;
             background: var(--border);
+            transition: background-color 200ms var(--ease-out);
         }
 
         .rover-dot.connected {
@@ -330,6 +332,25 @@
             border-left-color: var(--accent);
             opacity: 0.75;
         }
+
+        /* Pending grows at the bottom (queue is FIFO), History grows at the
+           top (rendered newest-first) - a new row in each arrives from the
+           direction it actually appended from. Only instructions the poller
+           has never rendered before get one of these (see seenInstructionIds
+           in QueuePoller) - replaying it for the whole list on every poll
+           would fire far too often to read as anything but noise. */
+        @keyframes instruction-enter-bottom {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes instruction-enter-top {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .instruction.enter-bottom { animation: instruction-enter-bottom 240ms var(--ease-out); }
+        .instruction.enter-top { animation: instruction-enter-top 240ms var(--ease-out); }
 
         .instruction-icon {
             width: 32px;
@@ -829,6 +850,7 @@
                 this.renderCounter = 0;
                 this.lastDataJson = null;
                 this.seenOutputIds = new Set();
+                this.seenInstructionIds = new Set();
                 this.latestPhotoId = null;
                 this.firstUpdate = true;
             }
@@ -869,7 +891,6 @@
                         if (!this.firstUpdate) showOutputToast(i.output);
                     }
                 });
-                this.firstUpdate = false;
 
                 // Current instruction
                 if (data.current) {
@@ -878,21 +899,24 @@
                     this.currentEl.innerHTML = '<div class="empty-message">Idle</div>';
                 }
 
-                // Pending instructions
+                // Pending instructions - queue is FIFO (service.py appends to
+                // the end), so a genuinely new row is always the newest one
+                // arriving at the bottom of this list.
                 this.pendingCountEl.textContent = data.pending_count || 0;
                 if (data.pending && data.pending.length > 0) {
                     this.pendingEl.innerHTML = data.pending
-                        .map(i => this.renderInstruction(i, 'pending'))
+                        .map(i => this.renderInstruction(i, 'pending', 'bottom'))
                         .join('');
                 } else {
                     this.pendingEl.innerHTML = '<div class="empty-message">No pending instructions</div>';
                 }
 
-                // History (reversed, most recent first)
+                // History (reversed, most recent first) - a genuinely new row
+                // is always the newest one, which lands at the top here.
                 if (data.history && data.history.length > 0) {
                     this.historyEl.innerHTML = data.history
                         .slice().reverse()
-                        .map(i => this.renderInstruction(i, 'completed'))
+                        .map(i => this.renderInstruction(i, 'completed', 'top'))
                         .join('');
                 } else {
                     this.historyEl.innerHTML = '<div class="empty-message">No history</div>';
@@ -902,9 +926,21 @@
                 if (this.pendingWorkspaces.size > 0) {
                     setTimeout(() => this.injectBlocklyWorkspaces(), 0);
                 }
+
+                // Only after every section above has read it - the pending/
+                // history entrance check needs this call's own value, same as
+                // the output-toast check above.
+                this.firstUpdate = false;
             }
 
-            renderInstruction(instr, status) {
+            renderInstruction(instr, status, direction) {
+                // Only an instruction this poller has never rendered before
+                // (and never on the very first load, which would otherwise
+                // replay the whole backlog) gets an entrance animation.
+                const isNew = direction && !this.seenInstructionIds.has(instr.id) && !this.firstUpdate;
+                this.seenInstructionIds.add(instr.id);
+                const enterClass = isNew ? ` enter-${direction}` : '';
+
                 const cmd = instr.cmd || 'unknown';
                 const params = instr.params || {};
 
@@ -945,7 +981,7 @@
                 }
 
                 return `
-                    <div class="instruction ${status}">
+                    <div class="instruction ${status}${enterClass}">
                         <div class="instruction-icon cmd-${cmd}"></div>
                         <div class="instruction-details">
                             <div class="instruction-cmd">${label}</div>

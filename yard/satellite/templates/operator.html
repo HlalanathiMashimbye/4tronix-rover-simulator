@@ -296,6 +296,8 @@
         }
         .toast-close:hover { color: var(--text, #ccc); }
         @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toast-out { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(6px); } }
+        .toast.leaving { animation: toast-out 150ms ease-in forwards; }
 
         @media (max-width: 640px) {
             .toast-stack { left: 1rem; right: 1rem; bottom: 1rem; max-width: none; }
@@ -782,7 +784,15 @@
             el.setAttribute('role', tone === 'error' ? 'alert' : 'status');
             el.innerHTML = `${TOAST_ICON[tone]}<div class="toast-msg"></div><button class="toast-close" aria-label="Dismiss notification">&times;</button>`;
             el.querySelector('.toast-msg').textContent = message;
-            const remove = () => { if (el.parentNode) el.remove(); };
+            // Play the exit animation before actually detaching - an instant
+            // .remove() would cut the fade off mid-flight.
+            const remove = () => {
+                if (!el.parentNode || el.classList.contains('leaving')) return;
+                el.classList.add('leaving');
+                const detach = () => { if (el.parentNode) el.remove(); };
+                el.addEventListener('animationend', detach, { once: true });
+                setTimeout(detach, 200); // fallback if animationend never fires
+            };
             el.querySelector('.toast-close').onclick = remove;
             toastStack.appendChild(el);
             while (toastStack.children.length > 4) toastStack.removeChild(toastStack.firstChild); // avoid an unbounded stack
