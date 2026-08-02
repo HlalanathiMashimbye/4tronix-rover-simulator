@@ -26,13 +26,29 @@ class MockEmailSender implements IEmailSender {
   }
 }
 
-function makeFirestoreStub(learnerDoc: Record<string, unknown> | undefined) {
+/**
+ * `contactDoc` models learners/{id}/private/contact - the browser-unreadable
+ * subcollection the address actually lives in. `learnerDoc.learnerEmail` models
+ * the legacy field left on records written before it moved there.
+ */
+function makeFirestoreStub(
+  learnerDoc: Record<string, unknown> | undefined,
+  contactDoc?: Record<string, unknown>,
+) {
   return {
     collection: jest.fn(() => ({
       doc: jest.fn(() => ({
         get: jest.fn(async () => ({
           exists: !!learnerDoc,
           data: () => learnerDoc,
+        })),
+        collection: jest.fn(() => ({
+          doc: jest.fn(() => ({
+            get: jest.fn(async () => ({
+              exists: !!contactDoc,
+              data: () => contactDoc,
+            })),
+          })),
         })),
       })),
     })),
@@ -91,7 +107,41 @@ describe('MissionNotificationService', () => {
     warn.mockRestore();
   });
 
-  it('sends a templated email to the address on the learner record', async () => {
+  it('reads the address from the private contact record, not the learner document', async () => {
+    // The learner document is readable by anyone holding the learner id, and
+    // those ids are published on world-readable missions - so the address is
+    // kept in a subcollection browsers are denied. This is the primary path.
+    const sender = new MockEmailSender();
+    const firestore = makeFirestoreStub(
+      { displayName: 'Ada' },
+      { learnerEmail: 'ada@school.edu' },
+    );
+    const service = new MissionNotificationService(sender, firestore as never, HISTORY_URL);
+
+    await expect(service.notifyStatusChange(makeMission(), 'completed')).resolves.toEqual({
+      sent: true,
+    });
+
+    expect(sender.calls[0].to).toBe('ada@school.edu');
+    expect(sender.calls[0].html).toContain('Hi Ada,');
+  });
+
+  it('prefers the private contact record over a legacy address', async () => {
+    // A learner who has re-saved their address has it in both places while the
+    // old field is being cleaned up. The current one must win.
+    const sender = new MockEmailSender();
+    const firestore = makeFirestoreStub(
+      { learnerEmail: 'stale@school.edu', displayName: 'Ada' },
+      { learnerEmail: 'current@school.edu' },
+    );
+    const service = new MissionNotificationService(sender, firestore as never, HISTORY_URL);
+
+    await service.notifyStatusChange(makeMission(), 'completed');
+
+    expect(sender.calls[0].to).toBe('current@school.edu');
+  });
+
+  it('still finds a legacy address for learners who have not re-saved one', async () => {
     const sender = new MockEmailSender();
     const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
     const service = new MissionNotificationService(sender, firestore as never, HISTORY_URL);
