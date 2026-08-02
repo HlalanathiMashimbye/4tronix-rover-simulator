@@ -13,6 +13,7 @@ import { getFirestoreClient } from '@/lib/firebase';
 import { getOrCreateSession, clearSession } from '@/lib/anonymous-auth';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
+import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner, sanitizeDisplayName } from '@/core/domain/entities/Learner';
 
 interface LearnerContextType {
@@ -176,18 +177,25 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       const learnerRef = doc(db, 'learners', learnerDocId());
       const learnerSnap = await getDoc(learnerRef);
 
+      // Missions carry only a hash of the learner id, so the notification
+      // service can no longer fetch a learner by document id - it finds the
+      // record whose learnerRef matches the mission's. Stamped on both the
+      // create and the update path, so records written before this change
+      // become resolvable the next time their owner opens the app.
+      const learnerRefHash = await hashLearnerId(learnerDocId());
+
       if (learnerSnap.exists()) {
         // Existing learner - update last active timestamp
         const existingLearner = learnerSnap.data() as Learner;
         // The address is deliberately no longer readable from here (it would
-        // be readable by anyone holding this id, which is public). localStorage
-        // above is the client's source of truth for display; this document is
-        // keyed by the same device-local id, so it never knew anything the
-        // browser did not already have.
+        // be readable by anyone holding this id). localStorage above is the
+        // client's source of truth for display; this document is keyed by the
+        // same device-local id, so it never knew anything the browser did not
+        // already have.
 
-        // Update last active timestamp
         await updateDoc(learnerRef, {
           lastActiveAt: new Date().toISOString(),
+          learnerRef: learnerRefHash,
         });
 
         setLearner({ ...existingLearner, lastActiveAt: new Date().toISOString() });
@@ -197,6 +205,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
 
         await setDoc(learnerRef, {
           ...newLearner,
+          learnerRef: learnerRefHash,
           // Use Firestore server timestamp for consistency
           createdAt: serverTimestamp(),
           lastActiveAt: serverTimestamp(),

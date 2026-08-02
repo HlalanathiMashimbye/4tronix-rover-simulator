@@ -35,7 +35,14 @@ export interface Mission {
   yardId: string;                    // Which physical rover yard (e.g., "uct-rover-1")
 
   // Learner tracking
-  learnerId: string;                 // Direct link to learner (formerly sessionId)
+  //
+  // A one-way hash of the learner's id, NEVER the id itself. Mission documents
+  // are world-readable, and the feed used to print the raw id on every card, so
+  // publishing it meant possession of an id proved nothing - which is why
+  // anything accepting one could not authenticate its caller. The raw id stays
+  // in localStorage; a learner finds their own history by hashing it and
+  // querying this. See core/domain/services/learnerRef.ts
+  learnerRef: string;
   sessionId: string;                 // Browser fingerprint for history tracking (kept for backward compatibility)
   // One-way hash of the learner's email, NEVER the address itself: mission
   // documents are world-readable, so a plaintext address here is public. Lets a

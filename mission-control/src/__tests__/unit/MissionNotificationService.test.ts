@@ -35,19 +35,26 @@ function makeFirestoreStub(
   learnerDoc: Record<string, unknown> | undefined,
   contactDoc?: Record<string, unknown>,
 ) {
-  return {
+  // The learner is found by querying on learnerRef, not by document id: the
+  // mission only carries a hash of the id now, so there is no id to fetch by.
+  const docRef = {
     collection: jest.fn(() => ({
       doc: jest.fn(() => ({
         get: jest.fn(async () => ({
-          exists: !!learnerDoc,
-          data: () => learnerDoc,
+          exists: !!contactDoc,
+          data: () => contactDoc,
         })),
-        collection: jest.fn(() => ({
-          doc: jest.fn(() => ({
-            get: jest.fn(async () => ({
-              exists: !!contactDoc,
-              data: () => contactDoc,
-            })),
+      })),
+    })),
+  };
+
+  return {
+    collection: jest.fn(() => ({
+      where: jest.fn(() => ({
+        limit: jest.fn(() => ({
+          get: jest.fn(async () => ({
+            empty: !learnerDoc,
+            docs: learnerDoc ? [{ ref: docRef, data: () => learnerDoc }] : [],
           })),
         })),
       })),
@@ -59,7 +66,7 @@ function makeMission(overrides: Partial<Mission> = {}): Mission {
   return {
     id: 'mission-1',
     yardId: 'yard-1',
-    learnerId: 'learner-1',
+    learnerRef: 'learner-1',
     sessionId: 'session-1',
     name: 'Orbital Nomad',
     code: 'rover.forward(100)',
@@ -222,10 +229,12 @@ describe('MissionNotificationService', () => {
     const sender = new MockEmailSender();
     const firestore = {
       collection: jest.fn(() => ({
-        doc: jest.fn(() => ({
-          get: jest.fn(async () => {
-            throw new Error('Firestore unavailable');
-          }),
+        where: jest.fn(() => ({
+          limit: jest.fn(() => ({
+            get: jest.fn(async () => {
+              throw new Error('Firestore unavailable');
+            }),
+          })),
         })),
       })),
     };

@@ -24,7 +24,7 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "learnerId",
+          "fieldPath": "learnerRef",
           "order": "ASCENDING"
         },
         {

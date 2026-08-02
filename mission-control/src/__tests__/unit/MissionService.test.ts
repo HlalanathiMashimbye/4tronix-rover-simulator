@@ -32,9 +32,9 @@ class MockMissionRepository implements IMissionRepository {
     return this.missions.get(id) || null;
   }
 
-  async findByLearnerId(learnerId: string): Promise<Mission[]> {
+  async findByLearnerId(learnerRef: string): Promise<Mission[]> {
     return Array.from(this.missions.values())
-      .filter((m) => m.learnerId === learnerId)
+      .filter((m) => m.learnerRef === learnerRef)
       .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   }
 
@@ -128,7 +128,11 @@ describe('MissionService', () => {
       expect(result.success).toBe(true);
       expect(result.mission).toBeDefined();
       expect(result.mission?.yardId).toBe('yard-1');
-      expect(result.mission?.learnerId).toBe('learner-123');
+      // The raw id must NOT survive onto the mission - only its hash. Mission
+      // documents are world-readable, and publishing the id is what made
+      // possession of one meaningless.
+      expect(result.mission?.learnerRef).not.toBe('learner-123');
+      expect(result.mission?.learnerRef).toMatch(/^[0-9a-f]{64}$/);
       expect(result.mission?.code).toBe('rover.forward(100)');
       expect(result.mission?.status).toBe('queued');
       expect(result.mission?.id).toBeDefined();

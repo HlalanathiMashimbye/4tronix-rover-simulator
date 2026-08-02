@@ -47,11 +47,11 @@ export class MissionNotificationService {
     let learner: LearnerContact;
 
     try {
-      learner = await this.resolveLearner(mission.learnerId);
+      learner = await this.resolveLearner(mission.learnerRef);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(
-        `${LOG_TAG} FAILED mission=${mission.id} status=${status}: could not read learner ${mission.learnerId}: ${message}`
+        `${LOG_TAG} FAILED mission=${mission.id} status=${status}: could not read learner ${mission.learnerRef}: ${message}`
       );
       return { sent: false, reason: 'send-failed', error: message };
     }
@@ -60,7 +60,7 @@ export class MissionNotificationService {
     // world-readable - so no learner record means no way to reach them.
     if (!learner.email) {
       console.warn(
-        `${LOG_TAG} skipped mission=${mission.id} status=${status} reason=no-learner-email learner=${mission.learnerId}`
+        `${LOG_TAG} skipped mission=${mission.id} status=${status} reason=no-learner-email learner=${mission.learnerRef}`
       );
       return { sent: false, reason: 'no-learner-email' };
     }
@@ -86,25 +86,33 @@ export class MissionNotificationService {
   }
 
   /**
-   * Address and display name both come from learners/{learnerId}, keyed by the
-   * same id the mission carries.
+   * Address and display name both come from the learner record, found by the
+   * learnerRef the mission carries rather than by document id - the mission no
+   * longer holds the raw id to look one up with.
    *
    * Previously the name was read from here while the address came off the
    * mission, and the learner record was written under a DIFFERENT id
    * (getOrCreateSession's sessionId, not getLearnerID's learnerId) - so this
-   * lookup never hit and every email greeted "Space Explorer". Moving the
-   * address here forces the two ids to agree, which fixes the greeting as a
-   * side effect.
+   * lookup never hit and every email greeted "Space Explorer". Both now derive
+   * from the same learnerRef, so they cannot drift apart again.
    */
-  private async resolveLearner(learnerId: string): Promise<LearnerContact> {
-    const learnerRef = this.firestore.collection(LEARNERS_COLLECTION).doc(learnerId);
-    const snapshot = await learnerRef.get();
+  private async resolveLearner(missionLearnerRef: string): Promise<LearnerContact> {
+    // Missions carry only a hash of the learner id, so the learner cannot be
+    // fetched by document id any more - it is found by the matching learnerRef
+    // field, which LearnerContext stamps onto the record. Single-field
+    // equality, so Firestore's automatic index covers it.
+    const matches = await this.firestore
+      .collection(LEARNERS_COLLECTION)
+      .where('learnerRef', '==', missionLearnerRef)
+      .limit(1)
+      .get();
 
-    if (!snapshot.exists) {
+    if (matches.empty) {
       return {};
     }
 
-    const data = snapshot.data();
+    const learnerRef = matches.docs[0].ref;
+    const data = matches.docs[0].data();
 
     // The address lives in a browser-unreadable subcollection - see
     // learnerContact.ts for why it is not on the learner document.

@@ -100,13 +100,13 @@ service cloud.firestore {
 
       allow create: if request.resource.data.keys().hasOnly([
                       'id', 'sessionId', 'avatarColor', 'displayName',
-                      'missionCount', 'completedMissions',
+                      'learnerRef', 'missionCount', 'completedMissions',
                       'createdAt', 'lastActiveAt', 'devices',
                       'learnerId', 'missionsCompleted', 'progress'
                     ]);
 
       allow update: if touchedKeys().hasOnly([
-                      'displayName', 'avatarColor',
+                      'displayName', 'avatarColor', 'learnerRef',
                       'lastActiveAt', 'missionCount', 'completedMissions',
                       'missionsCompleted', 'progress', 'devices'
                     ]);

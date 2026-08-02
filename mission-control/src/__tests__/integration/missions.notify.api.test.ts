@@ -26,20 +26,45 @@ type DocData = Record<string, unknown>;
 const missions = new Map<string, DocData>();
 const learners = new Map<string, DocData>();
 
-function makeQueryChain() {
+function makeQueryChain(store?: Map<string, DocData>) {
+  // The notification service finds a learner by querying on learnerRef rather
+  // than fetching by document id, so this chain has to actually filter the
+  // store instead of always resolving empty.
+  const filters: Array<[string, unknown]> = [];
   const chain: Record<string, jest.Mock> = {};
-  chain.where = jest.fn(() => chain);
+  chain.where = jest.fn((field: string, _op: string, value: unknown) => {
+    filters.push([field, value]);
+    return chain;
+  });
   chain.orderBy = jest.fn(() => chain);
   chain.limit = jest.fn(() => chain);
   chain.count = jest.fn(() => ({
     get: jest.fn(async () => ({ data: () => ({ count: 0 }) })),
   }));
-  chain.get = jest.fn(async () => ({ docs: [] }));
+  chain.get = jest.fn(async () => {
+    if (!store) return { empty: true, docs: [] };
+    const docs = [...store.entries()]
+      .filter(([, data]) => filters.every(([field, value]) => data[field] === value))
+      .map(([id, data]) => ({
+        id,
+        data: () => data,
+        // The private contact subcollection is not modelled here; these tests
+        // exercise the legacy learnerEmail fallback on the parent document.
+        ref: {
+          collection: jest.fn(() => ({
+            doc: jest.fn(() => ({
+              get: jest.fn(async () => ({ exists: false, data: () => undefined })),
+            })),
+          })),
+        },
+      }));
+    return { empty: docs.length === 0, docs };
+  });
   return chain;
 }
 
 function makeCollection(store: Map<string, DocData>) {
-  const chain = makeQueryChain();
+  const chain = makeQueryChain(store);
 
   return {
     doc: jest.fn((id: string) => ({
@@ -76,14 +101,14 @@ describe('POST /api/missions/[id]/notify Integration Tests', () => {
 
     missions.set('mission-1', {
       yardId: 'yard-1',
-      learnerId: 'learner-1',
+      learnerRef: 'learner-1',
       sessionId: 'session-1',
       name: 'Orbital Nomad',
       code: 'rover.forward(100)',
       status: 'processing',
       submittedAt: '2026-01-01T00:00:00.000Z',
     });
-    learners.set('learner-1', { learnerEmail: 'ada@school.edu', displayName: 'Ada' });
+    learners.set('learner-1', { learnerRef: 'learner-1', learnerEmail: 'ada@school.edu', displayName: 'Ada' });
   });
 
   it('sends the status email without writing to the mission document', async () => {
@@ -126,7 +151,7 @@ describe('POST /api/missions/[id]/notify Integration Tests', () => {
   it('does not send an email when the learner record has no address', async () => {
     missions.set('mission-1', {
       yardId: 'yard-1',
-      learnerId: 'learner-1',
+      learnerRef: 'learner-1',
       sessionId: 'session-1',
       name: 'Orbital Nomad',
       code: 'rover.forward(100)',
