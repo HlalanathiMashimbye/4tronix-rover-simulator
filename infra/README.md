@@ -7,8 +7,15 @@ database, Auth, web app) happens alongside this, out of Terraform, see the
 migration checklist below.
 
 **This is NOT a from-zero apply.** A partial apply ran on 2026-07-17 and
-stopped part way. Part A below resumes it. State verified against the live
-project on 2026-07-27.
+stopped part way. Part A below resumes it. State re-verified against the live
+project on 2026-08-03.
+
+**Who runs this:** an owner on `bt-impact-academy` (Gavin, mfouche or Werner).
+The UCT team inherits `roles/editor` through
+`group:access.impact-academy-user@impact.com`, which does not include
+`iam.workloadIdentityPools.create` or `setIamPolicy`, so they cannot finish
+this apply themselves. Verified with `testIamPermissions`, not assumed from
+role names.
 
 ## Part A: finish the Terraform bootstrap (one person, ~20 min)
 
@@ -31,6 +38,14 @@ Not yet created: the Workload Identity pool, its provider and the
 impersonation binding (the previous apply stopped right here), both Cloud Run
 services, and every IAM binding.
 
+That last one is easy to under-read. The three service accounts exist but hold
+**zero project roles** - confirmed by reading the project IAM policy, and by
+the absence of any `google_project_iam_member` in state. So fixing only the
+WIF pool would not be enough: CI would authenticate and then fail on the first
+push to Artifact Registry, because the deploy SA cannot write to it yet. This
+is also why every `Deploy staging` run so far dies at the auth step with
+`invalid_target` - the pool it names does not exist.
+
 ```bash
 gcloud auth login
 gcloud config set project bt-impact-academy
@@ -41,14 +56,15 @@ terraform plan
 terraform apply
 ```
 
-**Expected plan: `23 to add, 0 to change, 1 to destroy`.**
+**Expected plan: `22 to add, 0 to change, 0 to destroy`.**
 
-The one destroy is the Artifact Registry repo. `location` is a force-new
-attribute and the region moves `africa-south1 -> europe-west1` to co-locate
-with Firestore, which Werner created in `europe-west1` (`africa-south1` is not
-offered for Firestore). **This is safe right now because the repo is empty -
-zero images have ever been pushed.** It stops being safe the moment the first
-image lands, so this apply should happen before anyone builds and pushes.
+If you see a **destroy**, stop and ask. It means `var.region` has drifted from
+`africa-south1` again: `location` is a force-new attribute on the Artifact
+Registry repo, so a region mismatch silently proposes destroying and
+recreating the registry that CI pushes to. This bit us once already - the
+default said `europe-west1` while the state, the GitHub Actions variables and
+the live repo all said `africa-south1`, and the plan came back
+`23 to add, 0 to change, 1 to destroy`. Fixed in the same PR as this doc.
 
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
@@ -68,8 +84,28 @@ terraform output
 # Also set NEXT_PUBLIC_APP_URL to the service's own URL (get it from
 # `terraform output service_urls`). It is inlined at `next build` time, so it
 # has to be a GitHub *variable* read by the build - a Cloud Run runtime env
-# var is too late. Unset means every email link points at localhost.
+# var is too late.
 ```
+
+**`NEXT_PUBLIC_APP_URL` is not set today** (13 variables are; this is not one
+of them). It is worth being precise about what that breaks, because the code
+looks like it has a safe fallback and does not:
+
+```ts
+`${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/history`
+```
+
+The workflow passes `--build-arg NEXT_PUBLIC_APP_URL='${{ vars.… }}'`, so an
+unset variable arrives as an **empty string**, not as undefined. `??` does not
+catch empty strings, so the localhost fallback never fires and mission emails
+render their link as a bare `/history`, which no mail client can resolve.
+
+Next's own docs are explicit that `NEXT_PUBLIC_` values are frozen at build
+time, so this cannot be corrected afterwards with a Cloud Run env var - it
+needs a rebuild. Set the variable before the first deploy that sends real
+mail. Chicken-and-egg: the URL only exists after the first apply, so this may
+take two passes (apply, read `terraform output service_urls`, set the
+variable, re-run CI).
 
 ### Not the apply operator's job: the real secret values
 
@@ -117,16 +153,31 @@ GitHub settings to flip once (repo Settings):
 - Branches -> main -> required status checks: both CI jobs
 - Environments -> `production` -> required reviewers: Werner / Gavin
 
+  **Do this BEFORE the first prod run, not after.** `deploy-prod.yml` declares
+  `environment: production`, but no GitHub environment exists yet. GitHub
+  auto-creates a missing environment on first use, **unprotected**, so the
+  approval gate the workflow appears to have would not exist and the first
+  promotion would ship straight to prod with no reviewer.
+
+- Decide what `var.github_repository` should be. It currently defaults to
+  `HlalanathiMashimbye/4tronix-rover-simulator`, a personal fork. Applying as
+  is grants that repo permission to deploy into `bt-impact-academy`. That is
+  fine for the pilot and wrong for the long run; an org-owned repo is the
+  usual answer. Change it before the apply - it is part of the WIF provider's
+  trust condition, so switching later means re-applying the provider.
+
 ## Part B: Firebase migration (old project -> bt-impact-academy)
 
 The app moves to Impact's Firebase world. In the Firebase console
 (https://console.firebase.google.com), "Add project" -> select the EXISTING
 `bt-impact-academy` GCP project, then:
 
-1. **Firestore**: DONE - Werner created the database in `europe-west1`
-   (`africa-south1` is not offered for Firestore). Location is permanent.
-   Confirm it is the `(default)` database, not a named one: the app passes no
-   database id anywhere, so a named database would need code changes.
+1. **Firestore**: DONE - Werner created the database in `europe-west1`.
+   Location is permanent (see the region note below; `africa-south1` IS
+   available for Firestore, contrary to what this doc used to say, but an
+   existing database cannot be moved). Confirm it is the `(default)` database,
+   not a named one: the app passes no database id anywhere, so a named
+   database would need code changes.
 2. **Authentication**: enable the Email/Password provider (operators only;
    learners never sign in).
 3. **Web app**: add one, copy its config. These are the new
@@ -152,12 +203,25 @@ The app moves to Impact's Firebase world. In the Firebase console
 
 ## Notes
 
-- Region default is `europe-west1`, co-located with the Firestore database
-  Werner created there. Johannesburg (`africa-south1`) would be closer to the
-  yard, but Firestore is not offered in it, and splitting Cloud Run from
-  Firestore puts a cross-continent hop on every read. Change `var.region`
-  before the first apply if Impact prefers another; it is painful to move
-  later (registry + services are regional).
+- **Regions are deliberately split.** Cloud Run and Artifact Registry are in
+  `africa-south1` (Johannesburg); Firestore is in `europe-west1`.
+
+  An earlier version of this note said `africa-south1` is not offered for
+  Firestore. That is **false** - `gcloud firestore locations list` includes
+  it. The real constraint is that a Firestore database's location is
+  immutable, and the prod database already exists in `europe-west1`. Moving it
+  would mean deleting and recreating it, which was considered on 2026-08-03
+  (the database is still empty, so it would have been nearly free) and
+  declined as not worth the churn.
+
+  The split costs less than it sounds like it should, because Cloud Run is not
+  in the read path: every page read in mission-control is client-side, so
+  browsers reach Firestore directly. Only the API routes pay a cross-continent
+  hop, and they are off the render path. Cloud Run being in Johannesburg is
+  what learners actually feel, on every page load.
+
+  Changing `var.region` after the first apply is painful (registry and
+  services are regional, and location is force-new), so settle it first.
 - Terraform deliberately does NOT manage the serving image (lifecycle
   ignore_changes): CD owns which digest runs, Terraform owns everything else.
 - Naming: current names are simple (`mission-control-staging` etc.). Werner
