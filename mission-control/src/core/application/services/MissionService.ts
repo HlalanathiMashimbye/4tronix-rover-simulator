@@ -14,6 +14,8 @@
 
 import { Mission } from '@/core/domain/entities/Mission';
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
+import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
+import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { CreateMissionDto } from '@/infrastructure/validation/schemas';
 
 export interface SubmitMissionResult {
@@ -34,11 +36,23 @@ export class MissionService {
    */
   async submitMission(dto: CreateMissionDto): Promise<SubmitMissionResult> {
     try {
+      // The address is accepted over HTTPS but never persisted on the mission:
+      // mission documents are world-readable, so only the hash is stored. The
+      // address itself lives on the learner record, written by the client.
+      const learnerEmailHash = dto.learnerEmail
+        ? await hashLearnerEmail(dto.learnerEmail)
+        : undefined;
+
+      // Same reasoning as the address above, for the same reason: the raw
+      // learner id arrives over HTTPS but is never persisted on a
+      // world-readable document. Only the hash is.
+      const learnerRef = await hashLearnerId(dto.learnerId);
+
       const mission = await this.missionRepository.create({
         yardId: dto.yardId,
-        learnerId: dto.learnerId,
+        learnerRef,
         sessionId: dto.sessionId,
-        learnerEmail: dto.learnerEmail,
+        learnerEmailHash,
         name: dto.name,
         code: dto.code,
         blocklyState: dto.blocklyState,
@@ -69,27 +83,6 @@ export class MissionService {
     return this.missionRepository.findById(id);
   }
 
-  /**
-   * Get mission history for a learner
-   * Used for /history page
-   *
-   * @param learnerId - Learner ID
-   * @returns Array of missions for this learner
-   */
-  async getMissionHistory(learnerId: string): Promise<Mission[]> {
-    return this.missionRepository.findByLearnerId(learnerId);
-  }
-
-  /**
-   * Get all queued missions for a yard
-   * Used by operator console
-   *
-   * @param yardId - Yard ID
-   * @returns Array of queued missions in FIFO order
-   */
-  async getQueueForYard(yardId: string): Promise<Mission[]> {
-    return this.missionRepository.getQueuedMissions(yardId);
-  }
 
   /**
    * Update mission status and results

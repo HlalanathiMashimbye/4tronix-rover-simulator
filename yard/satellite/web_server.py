@@ -45,6 +45,14 @@ def _save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
+def _notify_within_app(app, mission_id, status):
+    """_notify_mission_control reads current_app config, and Flask's app
+    context is thread-local, so push one inside the watcher's thread."""
+    from operator_console import _notify_mission_control
+    with app.app_context():
+        _notify_mission_control(mission_id, status)
+
+
 def _local_ip():
     # UDP connect never sends a packet — OS just picks the right source
     # interface from the routing table. Try private ranges then fall back.
@@ -147,8 +155,16 @@ def api_status():
 
 
 @app.route('/api/config/rover_url', methods=['POST'])
+@operator_console.require_operator
 def api_set_rover_url():
-    """Set the rover URL at runtime (from the /status page) and persist it"""
+    """Set the rover URL at runtime (from the /status page) and persist it.
+
+    Gated because repointing the rover is a control action: anyone on the venue
+    network could otherwise aim this satellite at a different machine, or at
+    nothing, and the console would carry on reporting success. It costs nothing
+    on event days - OPERATOR_AUTH=off makes require_operator a pass-through -
+    so this only bites someone who should not be here.
+    """
     global ROVER_URL
     data = request.get_json(silent=True) or {}
     url = (data.get('url') or '').strip().rstrip('/')
@@ -178,7 +194,8 @@ def monitor():
     """TV display interface"""
     return render_template('monitor.html',
                            server_hostname=socket.gethostname(),
-                           server_ip=_local_ip())
+                           server_ip=_local_ip(),
+                           camera_port=CAMERA_PORT)
 
 
 @app.route('/api/queue/add', methods=['POST'])
@@ -319,4 +336,45 @@ if __name__ == '__main__':
     # coming up - those are local and time-critical, this isn't.
     from operator_console import start_polling
     threading.Thread(target=start_polling, daemon=True).start()
+    from mission_store import init_db
+    from sync_worker import start_sync_worker
+
+    init_db()
+
+    # Recovery runs before the sync worker so an interrupted mission is flagged
+    # for review before any flush can push its stale 'processing' onward.
+    try:
+        from recovery import recover_interrupted_missions
+        from satellite_identity import satellite_id
+        recover_interrupted_missions(satellite_id(), rover_url=os.environ.get('ROVER_URL'))
+    except Exception as e:
+        print(f'[recovery] Skipped: {e}')
+
+    # Closes the loop the operator otherwise closes by hand: the rover already
+    # records that it finished, so a mission no longer sits in 'processing'
+    # (holding its lease) because someone turned to the next child.
+    from mission_watcher import start_mission_watcher
+    from operator_console import _notify_mission_control
+    threading.Thread(
+        target=start_mission_watcher,
+        args=(lambda: app.config.get('ROVER_URL_GETTER', lambda: os.environ.get(
+            'ROVER_URL', 'http://marspi.local:8523'))(),),
+        kwargs={'notify': lambda mid, st: _notify_within_app(app, mid, st)},
+        daemon=True,
+    ).start()
+
+    # Started unconditionally, with a FACTORY rather than a client. Building the
+    # client here and bailing on failure would mean a satellite powered on with
+    # no internet - the exact situation this whole feature exists for - never
+    # starts syncing at all, so missions run offline would sit in the outbox
+    # until someone restarted the process.
+    #
+    # Same reasoning as start_polling above: the first pull is a synchronous
+    # Firestore call, so it must not block server startup.
+    threading.Thread(
+        target=start_sync_worker, args=(operator_console._firestore,),
+        daemon=True,
+    ).start()
+
     app.run(host='0.0.0.0', port=port, threaded=True, use_reloader=False)
+

@@ -35,9 +35,21 @@ export interface Mission {
   yardId: string;                    // Which physical rover yard (e.g., "uct-rover-1")
 
   // Learner tracking
-  learnerId: string;                 // Direct link to learner (formerly sessionId)
+  //
+  // A one-way hash of the learner's id, NEVER the id itself. Mission documents
+  // are world-readable, and the feed used to print the raw id on every card, so
+  // publishing it meant possession of an id proved nothing - which is why
+  // anything accepting one could not authenticate its caller. The raw id stays
+  // in localStorage; a learner finds their own history by hashing it and
+  // querying this. See core/domain/services/learnerRef.ts
+  learnerRef: string;
   sessionId: string;                 // Browser fingerprint for history tracking (kept for backward compatibility)
-  learnerEmail?: string;             // Optional - lets a learner see history across devices by email
+  // One-way hash of the learner's email, NEVER the address itself: mission
+  // documents are world-readable, so a plaintext address here is public. Lets a
+  // learner find their missions from another device by hashing the address they
+  // already know. The real address lives on the learner record.
+  // See core/domain/services/learnerEmailHash.ts
+  learnerEmailHash?: string;
   learnerUid?: string;               // Optional - for when auth is added in future iterations
 
   // Payload
@@ -45,14 +57,30 @@ export interface Mission {
   code: string;                      // Python code submitted by learner
   blocklyState?: string;             // Serialized Blockly workspace JSON (block-built missions only)
 
-  // Queue management (inspired by yard/rover/service.py)
   status: MissionStatus;
-  queuePosition?: number;            // Dynamic position in queue (calculated on read)
-  estimatedWait?: number;            // Estimated wait time in seconds
+
+  // Soft delete. An operator removed this mission; it stays out of every
+  // learner-facing view. Soft rather than hard so a mis-tap on a child's work
+  // is recoverable by someone with database access - the operator console
+  // offers no undo and says so.
+  deleted?: boolean;
+  deletedAt?: string;
 
   // Execution results (populated after execution)
   executionResult?: ExecutionResult;
   executionMetadata?: ExecutionMetadata;
+
+  //Locking (offline-sync lease mechanisms)
+  lockOwner?: string | null;                 // Which rover is currently executing this mission (if any)
+  lockedAt?: string | null;                   // When the mission was locked for execution (if any)
+  leaseExpiresAt?: string | null;             // When the lock lease expires (if any)
+
+  //Review
+  needsReview?: boolean;              // Whether the mission needs review (e.g., for failed missions)
+  reviewReason?: string | null;              // Optional - reason for review (e.g., "syntax error", "failed test case")
+
+  //Confilct Resolution
+  statusUpdatedAt?: string | null;          // When the status was last updated (for conflict resolution)
 
   // Media artifacts
   videoUrl?: string;                 // Google Cloud Storage URL

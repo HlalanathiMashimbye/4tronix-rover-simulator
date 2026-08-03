@@ -17,11 +17,27 @@ import {
   orderBy,
   onSnapshot,
   getDocs,
+  limit,
   Unsubscribe,
   Timestamp,
 } from 'firebase/firestore';
 import { getFirestoreClient } from '@/lib/firebase';
 import { Mission } from '@/core/domain/entities/Mission';
+import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
+import { hashLearnerId } from '@/core/domain/services/learnerRef';
+
+/**
+ * Upper bound on a learner's history subscription.
+ *
+ * Both history queries were unbounded. A live listener reads every matching
+ * document when it attaches, and re-attaches on every mount - so a learner with
+ * 40 missions paid 40 reads each time they opened the page, doubled because the
+ * page runs two overlapping subscriptions (by id and by email hash).
+ *
+ * Nobody scrolls past their most recent 50 runs, so this caps the exposure
+ * without changing what anyone actually sees.
+ */
+export const HISTORY_LIMIT = 50;
 
 /**
  * Get all missions for a learner with real-time updates
@@ -29,20 +45,29 @@ import { Mission } from '@/core/domain/entities/Mission';
  * This enables instant UI updates when an operator completes execution
  * and adds video links or execution notes.
  *
- * @param learnerId - Unique learner identifier
+ * The id is hashed here and the query matches on the hash: mission documents
+ * are world-readable, so they carry only learnerRef. The raw id never leaves
+ * this browser. See core/domain/services/learnerRef.ts
+ *
+ * Async because hashing is - the caller gets the unsubscribe via promise,
+ * mirroring subscribeMissionsByLearnerEmail below.
+ *
+ * @param learnerId - Unique learner identifier (hashed before querying)
  * @param callback - Function called when missions update
  * @returns Unsubscribe function to stop listening
  */
-export function subscribeMissionsByLearnerId(
+export async function subscribeMissionsByLearnerId(
   learnerId: string,
   callback: (missions: Mission[]) => void
-): Unsubscribe {
+): Promise<Unsubscribe> {
+  const learnerRef = await hashLearnerId(learnerId);
   const db = getFirestoreClient();
   const missionsRef = collection(db, 'missions');
   const q = query(
     missionsRef,
-    where('learnerId', '==', learnerId),
-    orderBy('submittedAt', 'desc')
+    where('learnerRef', '==', learnerRef),
+    orderBy('submittedAt', 'desc'),
+    limit(HISTORY_LIMIT)
   );
 
   return onSnapshot(
@@ -50,7 +75,8 @@ export function subscribeMissionsByLearnerId(
     (snapshot) => {
       const missions: Mission[] = [];
       snapshot.forEach((doc) => {
-        missions.push(convertTimestamps(doc.data() as Mission, doc.id));
+        const mission = convertTimestamps(doc.data() as Mission, doc.id);
+        if (!mission.deleted) missions.push(mission);
       });
       callback(missions);
     },
@@ -67,20 +93,28 @@ export function subscribeMissionsByLearnerId(
  * Used by the history page so a learner can see every mission they have ever
  * submitted under the same email, across devices/browsers.
  *
+ * The address is hashed in the browser and the query matches on the hash:
+ * mission documents are world-readable, so they never carry the address itself.
+ * Hashing is async, so this returns the unsubscribe via a promise rather than
+ * synchronously.
+ *
  * @param learnerEmail - Email the learner identified with
  * @param callback - Function called when missions update
- * @returns Unsubscribe function to stop listening
+ * @returns Promise of an unsubscribe function
  */
-export function subscribeMissionsByLearnerEmail(
+export async function subscribeMissionsByLearnerEmail(
   learnerEmail: string,
   callback: (missions: Mission[]) => void
-): Unsubscribe {
+): Promise<Unsubscribe> {
+  const learnerEmailHash = await hashLearnerEmail(learnerEmail);
+
   const db = getFirestoreClient();
   const missionsRef = collection(db, 'missions');
   const q = query(
     missionsRef,
-    where('learnerEmail', '==', learnerEmail),
-    orderBy('submittedAt', 'desc')
+    where('learnerEmailHash', '==', learnerEmailHash),
+    orderBy('submittedAt', 'desc'),
+    limit(HISTORY_LIMIT)
   );
 
   return onSnapshot(
@@ -88,7 +122,8 @@ export function subscribeMissionsByLearnerEmail(
     (snapshot) => {
       const missions: Mission[] = [];
       snapshot.forEach((doc) => {
-        missions.push(convertTimestamps(doc.data() as Mission, doc.id));
+        const mission = convertTimestamps(doc.data() as Mission, doc.id);
+        if (!mission.deleted) missions.push(mission);
       });
       callback(missions);
     },
@@ -102,26 +137,29 @@ export function subscribeMissionsByLearnerEmail(
 /**
  * Get all missions for a learner (one-time fetch)
  *
- * @param learnerId - Unique learner identifier
+ * @param learnerId - Unique learner identifier (hashed before querying)
  * @returns Array of missions sorted by submission time (newest first)
  */
 export async function getMissionsByLearnerId(
   learnerId: string
 ): Promise<Mission[]> {
   try {
+    const learnerRef = await hashLearnerId(learnerId);
     const db = getFirestoreClient();
     const missionsRef = collection(db, 'missions');
     const q = query(
       missionsRef,
-      where('learnerId', '==', learnerId),
-      orderBy('submittedAt', 'desc')
+      where('learnerRef', '==', learnerRef),
+      orderBy('submittedAt', 'desc'),
+      limit(HISTORY_LIMIT)
     );
 
     const querySnapshot = await getDocs(q);
 
     const missions: Mission[] = [];
     querySnapshot.forEach((doc) => {
-      missions.push(convertTimestamps(doc.data() as Mission, doc.id));
+      const mission = convertTimestamps(doc.data() as Mission, doc.id);
+      if (!mission.deleted) missions.push(mission);
     });
 
     return missions;

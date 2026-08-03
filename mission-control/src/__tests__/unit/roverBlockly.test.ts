@@ -6,7 +6,7 @@
  * simulator. Uses lightweight mock blocks so no browser/Blockly is required.
  */
 
-import { workspaceToPython, workspaceToCommands } from '@/components/mission/roverBlockly';
+import { mergeUplinkHats, workspaceToPython, workspaceToCommands } from '@/components/mission/roverBlockly';
 
 type Fields = Record<string, string | number>;
 
@@ -41,6 +41,75 @@ function workspace(...top: MockBlock[]): { getTopBlocks: () => MockBlock[] } {
 
 function onReceive(body: MockBlock): MockBlock {
   return block('rover_on_receive', {}, { DO: body });
+}
+
+/**
+ * A richer mock than MockBlock above: mergeUplinkHats actually rewires
+ * connections and disposes blocks, where the codegen tests only ever walk a
+ * read-only chain. previousConnection/nextConnection model just enough of
+ * Blockly's real connection objects (an `_owner` back to the block, and a
+ * `connect` that records the link) for mergeUplinkHats's reconnect logic to
+ * exercise the same call shape it uses against a real workspace.
+ */
+interface MergeConnection {
+  _owner: MergeMockBlock;
+  connect?: (other: MergeConnection) => void;
+}
+
+interface MergeMockBlock {
+  type: string;
+  _next: MergeMockBlock | null;
+  _body: MergeMockBlock | null;
+  _disposed: boolean;
+  previousConnection: MergeConnection | null;
+  nextConnection: MergeConnection | null;
+  getFieldValue: () => undefined;
+  getInputTargetBlock: (name: string) => MergeMockBlock | null;
+  getNextBlock: () => MergeMockBlock | null;
+  getInput: (name: string) => { connection: MergeConnection } | null;
+  dispose: () => void;
+}
+
+function mergeBlock(type: string): MergeMockBlock {
+  const merge: MergeMockBlock = {
+    type,
+    _next: null,
+    _body: null,
+    _disposed: false,
+    previousConnection: null,
+    nextConnection: null,
+    getFieldValue: () => undefined,
+    getInputTargetBlock: (name) => (name === 'DO' ? merge._body : null),
+    getNextBlock: () => merge._next,
+    getInput: (name) => {
+      if (name !== 'DO') return null;
+      return {
+        connection: {
+          _owner: merge,
+          connect(other) {
+            merge._body = other?._owner ?? null;
+          },
+        },
+      };
+    },
+    dispose: () => {
+      merge._disposed = true;
+    },
+  };
+
+  merge.previousConnection = { _owner: merge };
+  merge.nextConnection = {
+    _owner: merge,
+    connect(other) {
+      merge._next = other?._owner ?? null;
+    },
+  };
+
+  return merge;
+}
+
+function mergeWorkspace(...top: MergeMockBlock[]): { getTopBlocks: () => MergeMockBlock[] } {
+  return { getTopBlocks: () => top };
 }
 
 describe('workspaceToPython', () => {
@@ -91,6 +160,49 @@ describe('workspaceToPython', () => {
   it('only generates code inside an On uplink hat (loose blocks ignored)', () => {
     const ws = workspace(block('rover_forward', { TIME: 1 })); // not inside on_receive
     expect(workspaceToPython(ws)).toBe('\n');
+  });
+});
+
+describe('mergeUplinkHats', () => {
+  it('merges extra uplink hats into the first one in canvas order', () => {
+    const firstBody = mergeBlock('rover_forward');
+    const secondBody = mergeBlock('rover_spin_left');
+    const firstHat = mergeBlock('rover_on_receive');
+    const secondHat = mergeBlock('rover_on_receive');
+    firstHat._body = firstBody;
+    secondHat._body = secondBody;
+
+    const ws = mergeWorkspace(firstHat, secondHat);
+
+    expect(mergeUplinkHats(ws)).toBe(true);
+    expect(firstHat._body).toBe(firstBody);
+    expect(firstBody._next).toBe(secondBody);
+    expect(secondHat._disposed).toBe(true);
+  });
+
+  it('reports a change and disposes an empty spare hat, even though nothing needed relocating', () => {
+    // The likely real case: a learner drags out a second uplink, never puts
+    // anything in it, and leaves. There is no body to move, but the spare
+    // hat still needs to disappear - and the caller still needs to know a
+    // save is due, or the disposal never survives past this session.
+    const firstBody = mergeBlock('rover_forward');
+    const firstHat = mergeBlock('rover_on_receive');
+    const emptyHat = mergeBlock('rover_on_receive');
+    firstHat._body = firstBody;
+
+    const ws = mergeWorkspace(firstHat, emptyHat);
+
+    expect(mergeUplinkHats(ws)).toBe(true);
+    expect(emptyHat._disposed).toBe(true);
+    expect(firstHat._body).toBe(firstBody);
+  });
+
+  it('does nothing to a workspace with a single uplink hat', () => {
+    const onlyHat = mergeBlock('rover_on_receive');
+    const ws = mergeWorkspace(onlyHat);
+
+    expect(mergeUplinkHats(ws)).toBe(false);
+    expect(onlyHat._disposed).toBe(false);
   });
 });
 

@@ -79,6 +79,24 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCod
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to hydrate from storage
   }, []);
 
+  // Monaco's own internal services (tokenization, model disposal, etc.) use
+  // a "Canceled" sentinel error for work that gets interrupted - normally
+  // swallowed internally, but disposing the editor externally (switching
+  // away from this tab, which unmounts it) races one of those in-flight
+  // operations often enough to leak an unhandled rejection. This is
+  // Monaco/vscode's own long-documented pattern, not application code we can
+  // add a try/catch around - narrowly matches on the exact message so it
+  // can't mask an unrelated real rejection.
+  useEffect(() => {
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      if (event.reason?.message === 'Canceled') {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('unhandledrejection', handleRejection);
+    return () => window.removeEventListener('unhandledrejection', handleRejection);
+  }, []);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor/namespace instances from @monaco-editor/react onMount
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;

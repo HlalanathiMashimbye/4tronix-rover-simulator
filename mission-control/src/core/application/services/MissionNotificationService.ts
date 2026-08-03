@@ -1,0 +1,142 @@
+/**
+ * Mission Notification Service
+ *
+ * Sends a status-change email to the learner when their mission's status
+ * updates. Best-effort: an email-provider failure or missing learner email
+ * must never fail the mission write it's reacting to, so every failure is
+ * caught and logged rather than propagated.
+ */
+
+import { Firestore } from 'firebase-admin/firestore';
+import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import { IEmailSender } from '@/core/domain/services/IEmailSender';
+import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTemplates';
+import {
+  LEARNER_PRIVATE_COLLECTION,
+  LEARNER_CONTACT_DOC,
+} from '@/core/domain/services/learnerContact';
+
+const LEARNERS_COLLECTION = 'learners';
+
+/** Log prefix so every notification attempt is greppable in server output. */
+const LOG_TAG = '[mission-email]';
+
+/**
+ * Why a send did or did not happen. Returned rather than thrown so callers keep
+ * their best-effort semantics, but the outcome is no longer invisible: a silent
+ * catch is how the whole feature sat broken without anyone noticing.
+ */
+export type NotifyOutcome =
+  | { sent: true }
+  | { sent: false; reason: 'no-learner-email' | 'send-failed'; error?: string };
+
+/** What the learner record contributes: where to send, and who to greet. */
+type LearnerContact = {
+  email?: string;
+  displayName?: string;
+};
+
+export class MissionNotificationService {
+  constructor(
+    private readonly emailSender: IEmailSender,
+    private readonly firestore: Firestore,
+    private readonly historyUrl: string
+  ) {}
+
+  async notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome> {
+    let learner: LearnerContact;
+
+    try {
+      learner = await this.resolveLearner(mission.learnerRef);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `${LOG_TAG} FAILED mission=${mission.id} status=${status}: could not read learner ${mission.learnerRef}: ${message}`
+      );
+      return { sent: false, reason: 'send-failed', error: message };
+    }
+
+    // The address is deliberately NOT on the mission document - mission docs are
+    // world-readable - so no learner record means no way to reach them.
+    if (!learner.email) {
+      console.warn(
+        `${LOG_TAG} skipped mission=${mission.id} status=${status} reason=no-learner-email learner=${mission.learnerRef}`
+      );
+      return { sent: false, reason: 'no-learner-email' };
+    }
+
+    try {
+      const { subject, html } = buildMissionStatusEmail(status, {
+        missionName: mission.name || mission.id,
+        learnerName: learner.displayName,
+        historyUrl: this.historyUrl,
+      });
+
+      await this.emailSender.send(learner.email, subject, html);
+
+      console.info(`${LOG_TAG} sent mission=${mission.id} status=${status} to=${learner.email}`);
+      return { sent: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `${LOG_TAG} FAILED mission=${mission.id} status=${status} to=${learner.email}: ${message}`
+      );
+      return { sent: false, reason: 'send-failed', error: message };
+    }
+  }
+
+  /**
+   * Address and display name both come from the learner record, found by the
+   * learnerRef the mission carries rather than by document id - the mission no
+   * longer holds the raw id to look one up with.
+   *
+   * Previously the name was read from here while the address came off the
+   * mission, and the learner record was written under a DIFFERENT id
+   * (getOrCreateSession's sessionId, not getLearnerID's learnerId) - so this
+   * lookup never hit and every email greeted "Space Explorer". Both now derive
+   * from the same learnerRef, so they cannot drift apart again.
+   */
+  private async resolveLearner(missionLearnerRef: string): Promise<LearnerContact> {
+    // Missions carry only a hash of the learner id, so the learner cannot be
+    // fetched by document id any more - it is found by the matching learnerRef
+    // field, which LearnerContext stamps onto the record. Single-field
+    // equality, so Firestore's automatic index covers it.
+    const matches = await this.firestore
+      .collection(LEARNERS_COLLECTION)
+      .where('learnerRef', '==', missionLearnerRef)
+      .limit(1)
+      .get();
+
+    if (matches.empty) {
+      return {};
+    }
+
+    const learnerRef = matches.docs[0].ref;
+    const data = matches.docs[0].data();
+
+    // The address lives in a browser-unreadable subcollection - see
+    // learnerContact.ts for why it is not on the learner document.
+    let email: string | undefined;
+    try {
+      const contactSnap = await learnerRef
+        .collection(LEARNER_PRIVATE_COLLECTION)
+        .doc(LEARNER_CONTACT_DOC)
+        .get();
+      email = (contactSnap.data()?.learnerEmail as string) || undefined;
+    } catch (error) {
+      console.warn('[notify] Could not read learner contact record:', error);
+    }
+
+    // Fall back to the legacy field for learners who set an address before it
+    // moved, and have not set one since. Those documents are cleaned up as
+    // each learner next saves an address; drop this once none remain.
+    if (!email) {
+      email = (data?.learnerEmail as string) || undefined;
+    }
+
+    return {
+      email,
+      displayName: (data?.displayName as string) || undefined,
+    };
+  }
+}

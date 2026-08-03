@@ -31,7 +31,7 @@ describe('FirestoreMissionRepository', () => {
 
     await repository.create({
       yardId: 'yard-1',
-      learnerId: 'learner-1',
+      learnerRef: 'learner-1',
       sessionId: 'session-1',
       learnerUid: undefined,
       code: 'rover.forward(100)',
@@ -96,7 +96,7 @@ describe('FirestoreMissionRepository', () => {
 
     await repository.create({
       yardId: 'yard-1',
-      learnerId: 'learner-1',
+      learnerRef: 'learner-1',
       sessionId: 'session-1',
       learnerUid: undefined,
       code: '# comment line\nrover.forward(100)  # move\n\n# another comment\nrover.stop()',

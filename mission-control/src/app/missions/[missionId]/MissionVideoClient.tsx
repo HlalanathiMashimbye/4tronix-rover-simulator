@@ -13,6 +13,7 @@ import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
+import { SplitPane } from '@/components/ui/SplitPane';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;
@@ -113,7 +114,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
   return (
     <main className="h-[calc(100vh-64px)] overflow-hidden px-3 py-2">
-      <div className="mx-auto flex h-full max-w-7xl flex-col gap-2">
+      <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -156,10 +157,18 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
           </label>
         </div>
 
-        {/* Body fills the remaining viewport height; nothing scrolls except the code */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-5">
-          {/* Footage (sized to fit) + stats */}
-          <div className="flex min-h-0 flex-col gap-2 lg:col-span-2">
+        {/* Body fills the remaining viewport height; nothing scrolls except the
+            code. Same draggable divider as Create Mission - a fixed 2/5 - 3/5
+            split meant a long mission's code and its footage both stayed
+            cramped with no way to trade space between them. height="100%"
+            because this sits inside an already-sized flex parent, unlike
+            Create Mission which owns the viewport. */}
+        <SplitPane
+          ariaLabel="Resize footage and code panels"
+          defaultSplit={40}
+          height="100%"
+          left={
+            <div className="flex min-h-0 flex-col gap-2">
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/30">
               {selectedRun.kind === 'real' && selectedRun.youtubeId ? (
                 <div className="flex h-full w-full items-center justify-center p-2">
@@ -180,10 +189,11 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
               <Stat label="Duration" value={durationLabel} mono />
               <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
             </div>
-          </div>
-
-          {/* Code (scrolls internally) + remix */}
-          <div className="flex min-h-0 flex-col gap-2 lg:col-span-3">
+            </div>
+          }
+          /* Code (scrolls internally) + remix */
+          right={
+            <div className="flex min-h-0 flex-col gap-2">
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
               <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
                 {hasBlocks ? (
@@ -252,8 +262,9 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 Try it
               </button>
             </div>
-          </div>
-        </div>
+            </div>
+          }
+        />
       </div>
     </main>
   );

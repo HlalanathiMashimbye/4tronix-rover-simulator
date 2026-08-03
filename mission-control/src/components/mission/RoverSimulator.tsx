@@ -1,11 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   computeLayout,
   drawSimFrame,
   interpolate,
   SIM_FPS,
+  DARK_SIM_PALETTE,
+  LIGHT_SIM_PALETTE,
   type SimLayout,
 } from '@/lib/roverSimRender';
 
@@ -24,6 +27,13 @@ interface RoverSimulatorProps {
   onReset?: () => void;
   editorMode?: 'manual' | 'blockly' | 'code';
   resetVersion?: number;
+  /**
+   * Rendered inside this card, below the playback controls. A slot rather than
+   * anything simulator-specific: the arena is drawn letterboxed with vertical
+   * slack, which makes this the cheapest place on the page to spend height.
+   * The simulator does not need to know what goes in it.
+   */
+  footer?: React.ReactNode;
 }
 
 export function RoverSimulator({
@@ -32,6 +42,7 @@ export function RoverSimulator({
   onReset,
   editorMode,
   resetVersion = 0,
+  footer,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -41,6 +52,7 @@ export function RoverSimulator({
   const lastTsRef = useRef<number | null>(null);
   const sizeRef = useRef<SimLayout & { dpr: number }>({ w: 0, h: 0, s: 1, ox: 0, oy: 0, dpr: 1 });
 
+  const { theme } = useTheme();
   const isManual = editorMode === 'manual';
   const [isPaused, setIsPaused] = useState(false);
   const [hud, setHud] = useState({ x: 0, y: 0, heading: 0, frame: 0, total: 0 });
@@ -50,6 +62,12 @@ export function RoverSimulator({
   useEffect(() => {
     trajRef.current = trajectory;
   });
+
+  // The canvas cannot read CSS custom properties, so the terrain palette is
+  // chosen here and passed in. Listed as a dependency so toggling the theme
+  // repaints the yard - without it the arena keeps the old ground until the
+  // next resize or playback frame happens to redraw it.
+  const simPalette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
 
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -61,8 +79,8 @@ export function RoverSimulator({
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, L, traj, playhead);
-  }, [isManual]);
+    drawSimFrame(ctx, L, traj, playhead, simPalette);
+  }, [isManual, simPalette]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 
@@ -86,9 +104,25 @@ export function RoverSimulator({
     resize();
     const wrap = wrapRef.current;
     if (!wrap || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(resize);
+    // Coalesced to at most once per animation frame - the panel-split slider
+    // (MissionWorkspace.tsx) animates its CSS grid track with a transition,
+    // which fires this ResizeObserver on every intermediate frame of that
+    // transition. Without this, the full canvas resize + scene redraw ran on
+    // every one of those frames for the whole drag, not just once per step.
+    let rafId: number | null = null;
+    const throttledResize = () => {
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        resize();
+      });
+    };
+    const ro = new ResizeObserver(throttledResize);
     ro.observe(wrap);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [resize]);
 
   // --- HUD + playback ------------------------------------------------------
@@ -220,12 +254,16 @@ export function RoverSimulator({
 
       <div
         ref={wrapRef}
-        className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-border bg-[#1a0f0a]"
+        className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-border"
+        // Same source as the canvas base, so the letterbox around the yard can
+        // never disagree with what is painted inside it. This used to be a
+        // hardcoded near-black, which stayed dark on the light theme.
+        style={{ background: simPalette.backdrop }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
         {!hasTrajectory && (
           <div className="pointer-events-none absolute inset-x-0 bottom-4 text-center">
-            <p className="text-xs font-semibold text-white/80">
+            <p className="text-xs font-semibold text-foreground/70">
               Tap a block or press Run to move your rover
             </p>
           </div>
@@ -275,6 +313,8 @@ export function RoverSimulator({
           </div>
         </div>
       )}
+
+      {footer}
     </div>
   );
 }

@@ -19,15 +19,19 @@ interface ManualControlRealtimeProps {
 type DriveBlock = { command: string; label: string; speed: number; ms: number; colour: string };
 
 // Labels and colours mirror the real Blockly movement blocks, so a learner sees
+// the same thing in both places. The colours are CSS VARIABLES rather than the
+// hex literals they used to be: these buttons are large filled surfaces, and
+// the dark-theme values are too vivid to carry white text on a light page.
+// globals.css deepens each one under [data-theme="light"].
 // the same Lego pieces here as in the editor (movement blue, spin purple,
 // steer cyan, stop red).
 const BLOCKS: DriveBlock[] = [
-  { command: 'forward', label: 'Move Forward', speed: 80, ms: 1000, colour: '#2196F3' },
-  { command: 'reverse', label: 'Move Backward', speed: 80, ms: 1000, colour: '#2196F3' },
-  { command: 'spinLeft', label: 'Spin Left', speed: 60, ms: 500, colour: '#9C27B0' },
-  { command: 'spinRight', label: 'Spin Right', speed: 60, ms: 500, colour: '#9C27B0' },
-  { command: 'steerLeft', label: 'Steer Left', speed: 60, ms: 1000, colour: '#00BCD4' },
-  { command: 'steerRight', label: 'Steer Right', speed: 60, ms: 1000, colour: '#00BCD4' },
+  { command: 'forward', label: 'Move Forward', speed: 80, ms: 1000, colour: 'var(--block-move)' },
+  { command: 'reverse', label: 'Move Backward', speed: 80, ms: 1000, colour: 'var(--block-move)' },
+  { command: 'spinLeft', label: 'Spin Left', speed: 60, ms: 500, colour: 'var(--block-spin)' },
+  { command: 'spinRight', label: 'Spin Right', speed: 60, ms: 500, colour: 'var(--block-spin)' },
+  { command: 'steerLeft', label: 'Steer Left', speed: 60, ms: 1000, colour: 'var(--block-steer)' },
+  { command: 'steerRight', label: 'Steer Right', speed: 60, ms: 1000, colour: 'var(--block-steer)' },
 ];
 
 const KEY_MAP: Record<string, DriveBlock> = {
@@ -173,7 +177,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
         <button
           onClick={stopNow}
           className={`${styles.block} col-span-2 justify-center`}
-          style={{ ['--c']: '#f44336' } as CSSProperties}
+          style={{ ['--c']: 'var(--block-stop)' } as CSSProperties}
         >
           Stop
         </button>

@@ -10,6 +10,7 @@ import base64
 import io
 import json
 import logging
+import os
 import signal
 import sys
 
@@ -21,6 +22,40 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class _ProbeNoiseFilter(logging.Filter):
+    """Drop the traceback a TCP health check provokes.
+
+    Readiness is checked by opening a socket and closing it - here, in
+    web_server and in camera_control. websockets sees a connection that closed
+    before sending a request line and logs a full traceback for each one, so a
+    console polling every few seconds buries every real message in noise. It
+    also actively hurts: camera_control scans this log to explain a failed
+    start, and the explanation has to be findable.
+
+    Narrow on purpose. Only a connection that sent nothing at all is dropped,
+    which is exactly a port probe; a genuine handshake that fails still logs.
+    """
+
+    _PROBE_SIGNS = (
+        'did not receive a valid HTTP request',
+        'connection closed while reading HTTP request line',
+    )
+
+    def filter(self, record):
+        text = record.getMessage()
+        if record.exc_info and record.exc_info[1]:
+            text += ' ' + str(record.exc_info[1])
+        return not any(sign in text for sign in self._PROBE_SIGNS)
+
+
+def _quiet_probe_logger():
+    ws_logger = logging.getLogger('websockets.server')
+    if not any(isinstance(f, _ProbeNoiseFilter) for f in ws_logger.filters):
+        ws_logger.addFilter(_ProbeNoiseFilter())
+    return ws_logger
+
 
 # Global state
 camera = None
@@ -46,9 +81,75 @@ COCO_LABELS = [
 ]
 
 
+# Which capture backend is live: 'imx500' (Pi AI camera), 'webcam' (any
+# OpenCV-visible camera, including a Mac's built-in one), or None.
+camera_backend = None
+webcam = None
+
+
+def setup_webcam(index=None):
+    """Fall back to any OpenCV-visible camera.
+
+    The point of this is development away from the yard. picamera2/IMX500 only
+    exist on the Pi, so on a laptop setup_camera() fails and the monitor page
+    has nothing to show - you cannot work on anything camera-shaped without
+    the hardware in front of you. On macOS cv2 opens the built-in camera
+    through AVFoundation, which is enough to exercise the whole stream path.
+
+    Object detection is skipped: that runs on the IMX500's own NPU, not on the
+    host. Frames come through unannotated rather than pretending to detect.
+    """
+    global webcam, camera_backend
+
+    try:
+        import cv2
+    except ImportError:
+        logger.warning("opencv-python not installed; no webcam fallback available")
+        return False
+
+    index = int(os.environ.get('CAMERA_INDEX', 0)) if index is None else index
+
+    try:
+        cap = cv2.VideoCapture(index)
+        if not cap.isOpened():
+            # On macOS this is almost always a permissions problem rather than
+            # a missing camera: AVFoundation refuses the device until the app
+            # running Python has been granted Camera access, and OpenCV reports
+            # it only as "failed to properly initialize".
+            if sys.platform == 'darwin':
+                logger.warning(
+                    f"No camera at index {index}. On macOS this is usually permission "
+                    "rather than hardware: whichever app launched the satellite needs "
+                    "Camera access. Set CAMERA_INDEX to try a different device."
+                )
+            else:
+                logger.warning(f"No camera at index {index}. Set CAMERA_INDEX to try another.")
+            cap.release()
+            return False
+
+        # Match the IMX500 configuration so downstream sizing is unchanged.
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        ok, _ = cap.read()
+        if not ok:
+            logger.warning(f"Camera at index {index} opened but returned no frame")
+            cap.release()
+            return False
+
+        webcam = cap
+        camera_backend = 'webcam'
+        logger.info(f"Webcam fallback active on index {index} (no object detection)")
+        return True
+
+    except Exception as e:
+        logger.warning(f"Webcam fallback failed: {e}")
+        return False
+
+
 def setup_camera():
-    """Initialize the Pi AI Camera with IMX500 object detection"""
-    global camera, imx500, intrinsics
+    """Initialize the Pi AI Camera, falling back to a plain webcam."""
+    global camera, imx500, intrinsics, camera_backend
     logger.info("Initializing Pi AI Camera with IMX500...")
 
     try:
@@ -86,17 +187,19 @@ def setup_camera():
         imx500.show_network_fw_progress_bar()
         camera.start()
 
+        camera_backend = 'imx500'
         logger.info("IMX500 AI Camera initialized successfully with object detection")
         return True
 
     except ImportError as e:
         logger.warning(f"IMX500/picamera2 not available: {e}")
-        logger.info("Camera server requires Pi AI Camera hardware")
-        return False
+        logger.info("Trying a plain webcam instead (development machines)")
+        return setup_webcam()
 
     except Exception as e:
-        logger.error(f"Failed to initialize camera: {e}")
-        return False
+        logger.error(f"Failed to initialize Pi camera: {e}")
+        logger.info("Trying a plain webcam instead")
+        return setup_webcam()
 
 
 def parse_detections(metadata, threshold=0.55):
@@ -163,9 +266,20 @@ def draw_detections(frame, detections):
 
 
 def capture_frame():
-    """Capture a frame with detections and encode as JPEG"""
+    """Capture a frame and encode as JPEG. Detections only on the IMX500."""
     import cv2
     import numpy as np
+
+    if camera_backend == 'webcam':
+        try:
+            ok, frame = webcam.read()
+            if not ok:
+                return None
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            return base64.b64encode(buffer).decode('utf-8')
+        except Exception as e:
+            logger.error(f"Error capturing webcam frame: {e}")
+            return None
 
     if not camera:
         return None
@@ -270,9 +384,14 @@ async def main():
     # Start frame producer task
     producer_task = asyncio.create_task(frame_producer())
 
-    # Start WebSocket server
-    logger.info("Starting WebSocket server on port 8890")
-    async with websockets.serve(handle_client, "0.0.0.0", 8890):
+    # Start WebSocket server. The port is read from the environment because
+    # every client of it already is - web_server, camera_control and the
+    # monitor page - so hardcoding it here would let CAMERA_PORT point all of
+    # them at a port nothing is serving.
+    port = int(os.environ.get('CAMERA_PORT', 8890))
+    logger.info(f"Starting WebSocket server on port {port}")
+    async with websockets.serve(handle_client, "0.0.0.0", port,
+                                logger=_quiet_probe_logger()):
         while running:
             await asyncio.sleep(0.1)
 

@@ -2,50 +2,45 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Search, X, Plus, Play, Rocket, Star } from 'lucide-react';
+import { useReducedMotion } from 'motion/react';
+import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
+import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import {
-  getDiscoveryStatus,
-  DISCOVERY_BADGE_CLASS,
-  type DiscoveryStatus,
-} from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
-
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const patterns = [
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtu\.be\/([^?]+)/,
-    /youtube\.com\/embed\/([^?]+)/,
-  ];
-  for (const p of patterns) {
-    const match = url.match(p);
-    if (match?.[1]) return match[1];
-  }
-  return null;
-}
-
-/** Human-friendly run time: "8s" or "1:23". */
-function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  if (total < 60) return `${total}s`;
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+import { MissionCard } from '@/components/MissionCard/MissionCard';
+import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
+import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
 
 type StatusFilter = 'all' | 'favorites' | DiscoveryStatus;
 
+/**
+ * Missions per page. Each page costs FEED_SIZE + 1 Firestore reads (the extra
+ * one detects whether another page exists without a separate count query), so
+ * this is pay-as-you-scroll rather than paying up front for rows nobody sees.
+ */
+const FEED_SIZE = 24;
+
 export default function LandingPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [cursor, setCursor] = useState<MissionCursor | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Search and filter state lives in SearchContext because the controls now
+  // live in the navbar; this page still owns the DATA they filter.
+  const { query, setQuery, activeFilter, setActiveFilter, lastChange } = useSearch();
+  const statusFilter = activeFilter as StatusFilter;
   const { favorites, isFavorite } = useFavorites();
+  const reduceMotion = useReducedMotion();
+  // Cards remounting purely because a live search narrowed the list should not
+  // replay the entrance stagger - that fires on every keystroke, well past the
+  // "occasional" tier the effect is meant for. A filter click SHOULD replay it.
+  // Derived from which control was last touched rather than set by hand, since
+  // the controls now live in the navbar and no longer share a handler here.
+  const skipEntrance = lastChange === 'query';
 
   useEffect(() => {
     const loadMissions = async () => {
@@ -55,13 +50,14 @@ export default function LandingPage() {
 
       try {
         const repository = new FirestoreMissionRepository(getFirestoreClient());
-        const loadedMissions = await repository.findAll();
+        // findRecent reads one page. findAll fetched 100 documents to render 24
+        // and then ran a COUNT aggregation per queued mission for positions
+        // this page never displays - roughly 125 reads per view, and why the
+        // feed sat on a spinner for ~30 seconds.
+        const page = await repository.findRecent(FEED_SIZE);
 
-        const recentMissions = loadedMissions
-          .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
-          .slice(0, 24);
-
-        setMissions(recentMissions);
+        setMissions(page.missions);
+        setCursor(page.nextCursor);
         setError(null);
       } catch (err) {
         console.error('[Landing] Failed to load missions:', err);
@@ -90,6 +86,29 @@ export default function LandingPage() {
     loadMissions();
   }, []);
 
+  const loadMore = async () => {
+    if (!cursor || loadingMore) return;
+
+    setLoadingMore(true);
+    try {
+      const repository = new FirestoreMissionRepository(getFirestoreClient());
+      const page = await repository.findRecent(FEED_SIZE, cursor);
+
+      // Guard against a mission appearing twice if one was inserted between
+      // pages: the cursor is stable, but a re-render could still double up.
+      setMissions((current) => {
+        const seen = new Set(current.map((m) => m.id));
+        return [...current, ...page.missions.filter((m) => !seen.has(m.id))];
+      });
+      setCursor(page.nextCursor);
+    } catch (err) {
+      console.error('[Landing] Failed to load more missions:', err);
+      setError('Could not load more missions. Check your connection and try again.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const counts = useMemo(() => {
     let completed = 0;
     for (const m of missions) {
@@ -108,80 +127,21 @@ export default function LandingPage() {
     });
   }, [missions, query, statusFilter, isFavorite]);
 
-  const filters: { key: StatusFilter; label: string; count: number; icon?: typeof Star }[] = [
-    { key: 'all', label: 'All', count: counts.all },
-    { key: 'favorites', label: 'Favorites', count: favorites.length, icon: Star },
-    { key: 'Completed', label: 'Completed', count: counts.Completed },
-    { key: 'Pending', label: 'Pending', count: counts.Pending },
+  const filters: { key: StatusFilter; label: string; count: number; icon: typeof Star }[] = [
+    { key: 'all', label: 'All missions', count: counts.all, icon: Grid2x2 },
+    { key: 'favorites', label: 'Favorite missions', count: favorites.length, icon: Star },
+    { key: 'Completed', label: 'Completed missions', count: counts.Completed, icon: CircleCheckBig },
+    { key: 'Pending', label: 'Pending missions', count: counts.Pending, icon: Hourglass },
   ];
+
+  // Published to the navbar, which renders the search field and these chips.
+  // Withdrawn on unmount, so the bar disappears on pages without a feed.
+  useRegisterSearchFilters(filters);
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
-      {/* Header (the Create Mission action lives in the navbar) */}
-      <header className="mx-auto w-full max-w-6xl shrink-0 pt-4 pb-3">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Mission <span className="text-gradient-mars">Feed</span>
-        </h1>
-        <p className="mt-0.5 hidden text-sm text-muted-foreground sm:block">
-          Watch real rovers run the code kids wrote on Mars.
-        </p>
-      </header>
-
-      {/* Toolbar: search + status filters */}
-      <div className="mx-auto flex w-full max-w-6xl shrink-0 flex-col gap-2.5 pb-3 md:flex-row md:items-center">
-        <div className="relative md:max-w-xs md:flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search missions"
-            aria-label="Search missions by name or code"
-            className="w-full rounded-full border border-border/60 bg-card/60 py-2.5 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery('')}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2" role="group" aria-label="Filter missions by status">
-          {filters.map((f) => {
-            const active = statusFilter === f.key;
-            const Icon = f.icon;
-            return (
-              <button
-                key={f.key}
-                onClick={() => setStatusFilter(f.key)}
-                aria-pressed={active}
-                className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-bold transition-colors ${
-                  active
-                    ? 'bg-gradient-mars text-primary-foreground'
-                    : 'border border-border/70 bg-card/50 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {Icon && <Icon className="h-3.5 w-3.5" />}
-                {f.label}
-                <span
-                  className={`rounded-full px-1.5 text-xs tabular-nums ${
-                    active ? 'bg-black/20 text-primary-foreground' : 'bg-background/60 text-muted-foreground'
-                  }`}
-                >
-                  {f.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Feed: the only thing that scrolls */}
-      <section className="mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto scroll-panel pb-5">
+      <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pt-4 pb-5">
         {loading ? (
           <div className="flex justify-center py-24">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
@@ -208,109 +168,40 @@ export default function LandingPage() {
             title="No missions match"
             subtitle="Try a different name, code, or filter."
             onClear={() => {
+              // Clears the navbar's controls; setActiveFilter marks this as a
+              // filter change, so the stagger replays on the restored list.
               setQuery('');
-              setStatusFilter('all');
+              setActiveFilter('all');
             }}
           />
         ) : (
-          <div className="grid grid-cols-1 gap-5 pt-1 sm:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((mission) => {
-              const videoUrl = mission.youtubeUrl || mission.videoUrl;
-              const youtubeId = getYouTubeId(videoUrl);
-              const thumbnailUrl = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
-              const discoveryStatus = getDiscoveryStatus(mission.status);
-              const durationMs = mission.executionMetadata?.duration_ms;
+          <div className="grid gap-3 pt-1 grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))]">
+            {filtered.map((mission, index) => (
+              <StaggeredEntrance
+                key={mission.id}
+                index={index}
+                skipEntrance={skipEntrance}
+                reduceMotion={reduceMotion}
+              >
+                <MissionCard mission={mission} />
+              </StaggeredEntrance>
+            ))}
+          </div>
+        )}
 
-              return (
-                <Link
-                  key={mission.id}
-                  href={`/missions/${mission.id}`}
-                  className="group flex flex-col overflow-hidden rounded-3xl border border-border/60 bg-card/50 transition-[transform,border-color] duration-200 hover:-translate-y-1 hover:border-primary/50 hover:clay focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  {/* Thumbnail */}
-                  <div className="relative aspect-video w-full overflow-hidden bg-black">
-                    {thumbnailUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- thumbnail hosts vary per mission record; next/image would need remotePatterns per host
-                      <img
-                        src={thumbnailUrl}
-                        alt={`${mission.name || 'Mission'} thumbnail`}
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-secondary to-background text-muted-foreground/50">
-                        <Rocket className="h-10 w-10" />
-                        <p className="mt-2 text-xs font-semibold">Run on its way</p>
-                      </div>
-                    )}
-
-                    {/* Scrim for badge legibility */}
-                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-black/10" />
-
-                    {/* Status */}
-                    <span
-                      className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
-                    >
-                      {discoveryStatus}
-                    </span>
-
-                    {/* Run time */}
-                    {durationMs ? (
-                      <span className="absolute bottom-3 right-3 z-10 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-white tabular-nums">
-                        {formatDuration(durationMs)}
-                      </span>
-                    ) : null}
-
-                    {/* Play affordance on hover */}
-                    {thumbnailUrl ? (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/95 shadow-lg ring-4 ring-white/15">
-                          <Play className="ml-0.5 h-6 w-6 text-primary-foreground" fill="currentColor" />
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {/* Title + meta */}
-                  <div className="flex items-start gap-3 px-4 py-3">
-                    <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-full ring-1 ring-border/60">
-                      <Image
-                        src="/rover-hero.jpg"
-                        alt=""
-                        width={72}
-                        height={72}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h2 className="truncate font-display text-base font-bold text-foreground transition-colors group-hover:text-primary">
-                        {mission.name || `Mission-${mission.id.slice(0, 8)}`}
-                      </h2>
-                      <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="truncate font-mono">{mission.yardId}</span>
-                        <span aria-hidden>·</span>
-                        <span className="shrink-0">{new Date(mission.submittedAt).toLocaleDateString()}</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Code peek */}
-                  <div className="relative mx-4 mb-4 overflow-hidden rounded-xl border border-border/50 bg-background/60">
-                    <div className="flex items-center gap-1.5 border-b border-border/40 px-3 py-1.5">
-                      <span className="h-2 w-2 rounded-full bg-block-stop/70" />
-                      <span className="h-2 w-2 rounded-full bg-block-hat/70" />
-                      <span className="h-2 w-2 rounded-full bg-buzz/70" />
-                      <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                        mission.py
-                      </span>
-                    </div>
-                    <pre className="max-h-20 overflow-hidden px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                      <code>{mission.code.trim() || '# No code'}</code>
-                    </pre>
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-card/95 to-transparent" />
-                  </div>
-                </Link>
-              );
-            })}
+        {/* Only when another page exists, and never while a filter or search is
+            narrowing the view - "load more" there would look like it failed,
+            since the next page may contain nothing matching. */}
+        {cursor && !query && statusFilter === 'all' && (
+          <div className="mt-8 flex justify-center">
+            <button
+              type="button"
+              onClick={loadMore}
+              disabled={loadingMore}
+              className="clay clay-press min-h-11 rounded-xl border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loadingMore ? 'Loading…' : 'Show more missions'}
+            </button>
           </div>
         )}
       </section>

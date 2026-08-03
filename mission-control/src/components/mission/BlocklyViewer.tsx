@@ -1,39 +1,37 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
+import { loadBlockly } from '@/lib/loadBlockly';
 import { defineRoverBlocks } from './roverBlockly';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
  *
- * Loads Blockly from the same CDN as the editor and renders the program without
- * a toolbox, so learners can see the blocks they will remix. Pan/zoom stay on
- * (scrollbars + wheel) but editing is off. window.Blockly is typed by the
- * editor's global declaration.
+ * Shares lib/loadBlockly with the editor - one script, one cache - and renders
+ * the program without a toolbox, so learners can see the blocks they will
+ * remix. Pan/zoom stay on (scrollbars + wheel) but editing is off.
  */
 export function BlocklyViewer({ state }: { state: string }) {
   const divRef = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
-  const scriptLoadedRef = useRef(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryToken, setRetryToken] = useState(0);
 
-  // Load Blockly from CDN (mirrors BlocklyEditor).
   useEffect(() => {
-    if (typeof window === 'undefined' || scriptLoadedRef.current) return;
-    if (window.Blockly) {
-      scriptLoadedRef.current = true;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time sync that the CDN script is already present
-      setLoaded(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/blockly/blockly.min.js';
-    script.async = true;
-    script.onload = () => {
-      scriptLoadedRef.current = true;
-      setLoaded(true);
+    let cancelled = false;
+    loadBlockly()
+      .then(() => {
+        if (!cancelled) setLoaded(true);
+      })
+      .catch((err) => {
+        console.error('[BlocklyViewer] Blockly failed to load:', err);
+        if (!cancelled) setLoadError(true);
+      });
+    return () => {
+      cancelled = true;
     };
-    document.body.appendChild(script);
-  }, []);
+  }, [retryToken]);
 
   useEffect(() => {
     if (!loaded || !divRef.current || !window.Blockly) return;
@@ -58,6 +56,24 @@ export function BlocklyViewer({ state }: { state: string }) {
 
     return () => workspace.dispose();
   }, [loaded, state]);
+
+  if (loadError) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+        <AlertTriangle className="h-5 w-5 text-destructive" />
+        <p>Couldn&apos;t load the block viewer.</p>
+        <button
+          onClick={() => {
+            setLoadError(false);
+            setRetryToken((n) => n + 1);
+          }}
+          className="clay-press rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   if (!loaded) {
     return (

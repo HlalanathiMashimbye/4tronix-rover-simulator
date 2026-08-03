@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { RoverState } from '@/lib/rover-physics';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
-import { getFirestoreClient } from '@/lib/firebase';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { MissionService } from '@/core/application/services/MissionService';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
+import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
+import { SplitPane } from '@/components/ui/SplitPane';
 import { simulateCommands } from '@/lib/simulateCommands';
 
 interface TrajectoryPoint {
@@ -29,6 +28,13 @@ type SimulationCommand = {
   degrees?: number;
 };
 
+// Bounds of the build/simulator split, as a percentage given to the build
+// side. Owned here rather than in EditorPanel so the divider clamps to the
+// same range as the values used to size the grid tracks.
+const SPLIT_MIN = 35;
+const SPLIT_MAX = 75;
+const SPLIT_DEFAULT = 60;
+
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
@@ -39,7 +45,6 @@ export function MissionWorkspace() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>(initialMode);
-  const [panelSplit, setPanelSplit] = useState(60);
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [blocklyState, setBlocklyState] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,15 +56,6 @@ export function MissionWorkspace() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
-
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  // Apply CSS variables to the container via DOM to avoid JSX inline styles
-  useEffect(() => {
-    if (!containerRef.current) return;
-    containerRef.current.style.setProperty('--workspace-left', `${panelSplit}fr`);
-    containerRef.current.style.setProperty('--workspace-right', `${100 - panelSplit}fr`);
-  }, [panelSplit]);
 
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
@@ -174,11 +170,14 @@ export function MissionWorkspace() {
         return;
       }
 
-      const repository = new FirestoreMissionRepository(getFirestoreClient());
-      const service = new MissionService(repository);
-      const result = await service.submitMission(validation.data!);
+      const response = await fetch('/api/missions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validation.data),
+      });
+      const result = await response.json();
 
-      if (!result.success || !result.mission) {
+      if (!response.ok || !result.success || !result.mission) {
         throw new Error(result.error || 'Failed to submit mission');
       }
 
@@ -200,40 +199,55 @@ export function MissionWorkspace() {
 
   return (
     <div className="space-y-1.5">
-      <div className="workspaceSplitGrid" ref={containerRef}>
-        <EditorPanel
-          panelSplit={panelSplit}
-          onPanelSplitChange={setPanelSplit}
-          editorMode={editorMode}
-          onEditorModeChange={handleEditorModeChange}
-          error={error}
-          onManualTrajectory={handleManualTrajectory}
-          onResetSimulation={handleResetSimulation}
-          manualResetVersion={manualResetVersion}
-          onGenerateCommands={runSimulation}
-          onCodeChange={setCurrentCode}
-          onBlocklyStateChange={setBlocklyState}
-          missionName={missionName}
-          onMissionNameChange={setMissionName}
-          missionNameError={missionNameError}
-          onMissionNameError={setMissionNameError}
-          showMissionNameValidation={showMissionNameValidation}
-          onMissionNameValidationChange={setIsMissionNameValid}
-          onSubmit={handleSubmitToQueue}
-          submitting={submitting}
-          submitSuccess={submitSuccess}
-          currentCode={currentCode}
-          isMissionNameValid={isMissionNameValid}
-        />
-
-        <SimulationPanel
-          trajectory={trajectory}
-          isPlaying={isPlaying}
-          onReset={handleResetSimulation}
-          editorMode={editorMode}
-          resetVersion={manualResetVersion}
-        />
-      </div>
+      <SplitPane
+        ariaLabel="Resize build and simulator panels"
+        defaultSplit={SPLIT_DEFAULT}
+        minSplit={SPLIT_MIN}
+        maxSplit={SPLIT_MAX}
+        left={
+          <EditorPanel
+            editorMode={editorMode}
+            onEditorModeChange={handleEditorModeChange}
+            error={error}
+            onManualTrajectory={handleManualTrajectory}
+            onResetSimulation={handleResetSimulation}
+            manualResetVersion={manualResetVersion}
+            onGenerateCommands={runSimulation}
+            onCodeChange={setCurrentCode}
+            onBlocklyStateChange={setBlocklyState}
+          />
+        }
+        right={
+          <SimulationPanel
+            trajectory={trajectory}
+            isPlaying={isPlaying}
+            onReset={handleResetSimulation}
+            editorMode={editorMode}
+            resetVersion={manualResetVersion}
+            // Name and launch live under the simulator so the block canvas
+            // keeps the full height of its own column. Drive mode is excluded:
+            // it has no code to send, and the simulator is on screen in every
+            // mode.
+            footer={
+              editorMode === 'manual' ? undefined : (
+                <MissionSubmitBar
+                  missionName={missionName}
+                  onMissionNameChange={setMissionName}
+                  missionNameError={missionNameError}
+                  onMissionNameError={setMissionNameError}
+                  showMissionNameValidation={showMissionNameValidation}
+                  onMissionNameValidationChange={setIsMissionNameValid}
+                  onSubmit={handleSubmitToQueue}
+                  submitting={submitting}
+                  submitSuccess={submitSuccess}
+                  currentCode={currentCode}
+                  isMissionNameValid={isMissionNameValid}
+                />
+              )
+            }
+          />
+        }
+      />
     </div>
   );
 }

@@ -15,12 +15,16 @@ import { usePathname } from 'next/navigation';
 import {
   Bell,
   Home,
-  Clock,
+  History as HistoryIcon,
   Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
+import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -28,13 +32,16 @@ const NAV_ITEMS = [
     href: '/history',
     label: 'My History',
     mobileLabel: 'History',
-    icon: Clock,
+    // Not a plain Clock: the Pending filter chip sits a few pixels away in the
+    // same bar and was using the same clock face.
+    icon: HistoryIcon,
   },
 ];
 
 export function Navbar() {
   const pathname = usePathname();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   // Real notifications will be wired to the backend later - no placeholder data.
   const sampleNotifications: ComponentProps<typeof NotificationModal>['notifications'] = [];
@@ -46,8 +53,10 @@ export function Navbar() {
 
   // Each destination is a segment inside a single pill-shaped nav group.
   const desktopLinkClass = (path: string): string => {
+    // Deliberately smaller than the Create Mission button beside them: these
+    // are wayfinding, that is the action, and at equal weight they competed.
     const base =
-      'flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors';
+      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors';
     const active = 'bg-gradient-mars text-primary-foreground clay';
     const inactive =
       'text-muted-foreground hover:text-foreground hover:bg-card/60';
@@ -61,11 +70,21 @@ export function Navbar() {
     <>
       {/* Divider is an inset shadow (not border-b) so the bar stays exactly 64px
           tall, matching the h-[calc(100vh-64px)] page mains (no 1px overflow). */}
-      <nav className="sticky top-0 z-50 bg-background/70 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border)]">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4">
+      {/* The fill alone cannot separate this from the page: in Paper & Ink the
+          card and the background are ~2% apart in lightness (0.99 vs 0.966),
+          which measured 1.13:1 - not a band, just a smudge. A hairline plus a
+          soft shadow underneath is what actually reads as a raised bar, and it
+          works in both themes without touching the palette. The shadow is an
+          OUTER one so the bar stays exactly 64px and the page mains below
+          (h-[calc(100vh-64px)]) do not overflow by a pixel. */}
+      <nav className="sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)]">
+        {/* Use a balanced three-column layout so the search sits in the true
+            visual center of the navbar, with the brand and action cluster
+            anchored to opposite edges. */}
+        <div className="mx-auto grid h-16 max-w-page grid-cols-[auto_1fr_auto] items-center gap-3 px-4">
           {/* Logo / Brand (also links home) */}
-          <Link href="/" className="group flex items-center gap-2.5">
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-white/10 clay transition-transform duration-200 group-hover:-translate-y-0.5">
+          <Link href="/" className="group flex shrink-0 items-center gap-2.5 justify-self-start">
+            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-white/10 clay transition-transform duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:-translate-y-0.5">
               <Image
                 src="/rover-hero.jpg"
                 alt="Mars Rover"
@@ -77,17 +96,21 @@ export function Navbar() {
               />
             </div>
             <div className="leading-tight">
-              <p className="font-display text-lg font-bold tracking-tight text-foreground">
+              <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight text-foreground">
                 Mission Control
               </p>
-              <p className="flex items-center gap-1 text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+              <p className="flex items-center gap-1 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
                 <span className="h-1 w-1 rounded-full bg-primary" />
                 Sapient.rocks
               </p>
             </div>
           </Link>
 
-          <div className="flex items-center gap-2">
+          {/* Search sits BETWEEN brand and actions so the three read as one
+              bar. Renders nothing when the current page registered no filters. */}
+          <NavbarSearch />
+
+          <div className="flex shrink-0 items-center justify-end gap-2 justify-self-end">
             {/* Desktop destinations - one segmented pill group */}
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -102,11 +125,34 @@ export function Navbar() {
             {/* Prominent primary action */}
             <Link
               href="/mission"
-              className="clay clay-press hidden items-center gap-1.5 rounded-full bg-gradient-mars px-4 py-2 text-sm font-bold text-primary-foreground md:flex"
+              className="clay clay-press hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-gradient-mars px-4 py-2 text-sm font-bold text-primary-foreground md:flex"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create Mission
             </Link>
+
+            {/* Theme toggle (desktop; mobile reaches it from the Notifications
+                panel header - the bottom tab bar is a tight 4-slot layout
+                that shouldn't grow a 5th icon). */}
+            <button
+              onClick={toggleTheme}
+              className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+
+            {/* Mobile theme toggle. Lives here because the mobile top bar has
+                nothing but the logo, so there is room - it used to be buried in
+                the notifications panel, where pressing the bell surprised you
+                with a theme switch. */}
+            <button
+              onClick={toggleTheme}
+              className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
 
             {/* Notification bell (desktop; mobile uses the bottom "Alerts" tab) */}
             <button
@@ -124,7 +170,7 @@ export function Navbar() {
       </nav>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-background/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
             href="/"
@@ -152,7 +198,7 @@ export function Navbar() {
               isActive('/history') ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
-            <Clock className="h-5 w-5" />
+            <HistoryIcon className="h-5 w-5" />
             History
           </Link>
 

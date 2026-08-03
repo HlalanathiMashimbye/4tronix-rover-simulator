@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1a1a2e">
+    <meta name="theme-color" content="#0f172a">
     <title>Rover Code</title>
     <link rel="manifest" href="/static/manifest.json">
     <link rel="stylesheet" href="/static/yard-base.css">
@@ -20,8 +20,9 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a2e;
+            font-family: var(--font-sans);
+            background-color: var(--background);
+            color: var(--foreground);
         }
 
         .container {
@@ -35,8 +36,8 @@
             align-items: center;
             justify-content: space-between;
             padding: 16px 24px;
-            background: #16213e;
-            border-bottom: 1px solid #0f3460;
+            background: var(--surface-2);
+            border-bottom: 1px solid var(--border);
         }
 
         .toolbar-left {
@@ -65,34 +66,34 @@
         }
 
         .btn:active {
-            transform: scale(0.95);
+            transform: scale(0.97);
         }
 
         .btn-run {
-            background: #4CAF50;
-            color: white;
+            background: var(--ok);
+            color: var(--background);
         }
 
         .btn-run:hover {
-            background: #45a049;
+            filter: brightness(0.95);
         }
 
         .btn-stop {
-            background: #f44336;
-            color: white;
+            background: var(--bad);
+            color: var(--background);
         }
 
         .btn-stop:hover {
-            background: #da190b;
+            filter: brightness(0.95);
         }
 
         .btn-clear {
-            background: #666;
-            color: white;
+            background: var(--surface-3);
+            color: var(--foreground);
         }
 
         .btn-clear:hover {
-            background: #555;
+            background: var(--surface-2);
         }
 
         .status-indicator {
@@ -102,37 +103,38 @@
             padding: 12px 22px;
             border-radius: 28px;
             font-size: 22px;
-            color: #aaa;
-            background: rgba(255,255,255,0.1);
+            color: var(--text-faint);
+            background: rgba(255,255,255,0.08);
         }
 
         .status-dot {
             width: 16px;
             height: 16px;
             border-radius: 50%;
-            background: #666;
+            background: var(--border);
+            transition: background-color 200ms var(--ease-out);
         }
 
         .status-dot.connected {
-            background: #4CAF50;
+            background: var(--ok);
         }
 
         .status-dot.spy {
-            background: #ff9800;
+            background: var(--warn);
         }
 
         /* Tab bar */
         .tab-bar {
             display: flex;
-            background: #16213e;
-            border-bottom: 2px solid #0f3460;
+            background: var(--surface-2);
+            border-bottom: 2px solid var(--border);
         }
 
         .tab-btn {
             padding: 18px 48px;
             border: none;
             background: transparent;
-            color: #888;
+            color: var(--text-faint);
             font-size: 26px;
             font-weight: 600;
             cursor: pointer;
@@ -142,12 +144,12 @@
         }
 
         .tab-btn.active {
-            color: #fff;
-            border-bottom-color: #4CAF50;
+            color: var(--foreground);
+            border-bottom-color: var(--ok);
         }
 
         .tab-btn:hover:not(.active) {
-            color: #ccc;
+            color: var(--text);
         }
 
         /* Panes */
@@ -196,8 +198,8 @@
             left: 0;
             right: 0;
             max-height: 200px;
-            background: rgba(0,0,0,0.9);
-            border-top: 2px solid #ff9800;
+            background: var(--surface);
+            border-top: 2px solid var(--warn);
             overflow-y: auto;
             z-index: 100;
         }
@@ -211,8 +213,8 @@
             justify-content: space-between;
             align-items: center;
             padding: 8px 12px;
-            background: #ff9800;
-            color: #000;
+            background: var(--warn);
+            color: var(--background);
             font-weight: 600;
             font-size: 12px;
         }
@@ -220,15 +222,15 @@
         .spy-close {
             cursor: pointer;
             padding: 2px 8px;
-            background: rgba(0,0,0,0.2);
+            background: rgba(255,255,255,0.08);
             border-radius: 4px;
         }
 
         .spy-content {
             padding: 8px 12px;
-            font-family: monospace;
+            font-family: var(--mono);
             font-size: 12px;
-            color: #fff;
+            color: var(--text);
         }
 
         .spy-content div {
@@ -242,8 +244,8 @@
             left: 50%;
             transform: translateX(-50%);
             padding: 20px 44px;
-            background: #333;
-            color: #fff;
+            background: var(--surface-3);
+            color: var(--foreground);
             border-radius: 14px;
             font-size: 26px;
             z-index: 1000;
@@ -256,14 +258,14 @@
         }
 
         .toast.success {
-            background: #4CAF50;
+            background: var(--ok);
         }
 
         .toast.error {
-            background: #f44336;
+            background: var(--bad);
         }
     </style>
-    <script src="https://unpkg.com/blockly/blockly.min.js"></script>
+    <script src="https://unpkg.com/blockly@13.2.0/blockly.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.52.0/min/vs/loader.js"></script>
 </head>
 <body>
@@ -659,6 +661,10 @@
                     kind: 'category',
                     name: '\uD83D\uDEF0\uFE0F Uplink',
                     colour: '#FF6D00',
+                    // The instance cap lives on Blockly.inject()'s maxInstances
+                    // option below, not here - Blockly never reads maxInstances
+                    // from a toolbox content entry, so one placed here is
+                    // silently ignored: no error, the block just isn't capped.
                     contents: [
                         {kind: 'block', type: 'rover_on_receive'}
                     ]
@@ -715,6 +721,9 @@
 
         const workspace = Blockly.inject('blocklyDiv', {
             toolbox: toolbox,
+            // The actual cap - Blockly reads maxInstances only from here,
+            // never from a toolbox content entry.
+            maxInstances: {rover_on_receive: 1},
             zoom: {
                 controls: true,
                 wheel: true,
@@ -910,6 +919,53 @@
             return lines.join('\n') + '\n';
         }
 
+        // Returns whether the workspace was mutated - callers use this to
+        // decide whether to re-save. That has to mean "did I dispose a hat",
+        // not "did I relocate a body": an empty spare hat (dragged out,
+        // never used) still gets disposed below regardless of whether it had
+        // anything inside it. Tying the return value to body-relocation
+        // instead meant that exact case - the most likely real one - got
+        // silently re-disposed from the live workspace on every load without
+        // the cleanup ever reaching storage.
+        function mergeUplinkHats(workspace) {
+            const hats = workspace
+                .getTopBlocks(true)
+                .filter(b => b.type === 'rover_on_receive');
+
+            if (hats.length <= 1) return false;
+
+            const primaryHat = hats[0];
+            const primaryInput = primaryHat.getInput('DO');
+            let primaryBody = primaryHat.getInputTargetBlock('DO');
+
+            function statementTail(block) {
+                let tail = block;
+                while (tail && tail.getNextBlock()) {
+                    tail = tail.getNextBlock();
+                }
+                return tail;
+            }
+
+            hats.slice(1).forEach(function(hat) {
+                const body = hat.getInputTargetBlock('DO');
+
+                if (body) {
+                    if (!primaryBody) {
+                        primaryInput && primaryInput.connection && primaryInput.connection.connect(body.previousConnection);
+                        primaryBody = body;
+                    } else {
+                        const tail = statementTail(primaryBody);
+                        tail && tail.nextConnection && tail.nextConnection.connect(body.previousConnection);
+                        primaryBody = statementTail(body);
+                    }
+                }
+
+                hat.dispose(false, false);
+            });
+
+            return true;
+        }
+
         // ============================================================
         // Tab Switching
         // ============================================================
@@ -1047,8 +1103,13 @@
                     const state = JSON.parse(text);
                     if (state && (state.blocks || state.variables)) {
                         Blockly.serialization.workspaces.load(state, workspace);
+                        let merged = false;
+                        if (mergeUplinkHats(workspace)) {
+                            merged = true;
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(Blockly.serialization.workspaces.save(workspace)));
+                        }
                         document.getElementById('tabBlockly').click();
-                        showToast('Blocks pasted', 'success');
+                        showToast(merged ? 'Blocks pasted; extra uplinks merged' : 'Blocks pasted', 'success');
                         return true;
                     }
                 } catch (e) { /* not JSON - try as Python below */ }
@@ -1104,6 +1165,10 @@
                 try {
                     const state = JSON.parse(saved);
                     Blockly.serialization.workspaces.load(state, workspace);
+                    if (mergeUplinkHats(workspace)) {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(Blockly.serialization.workspaces.save(workspace)));
+                        showToast('Merged extra uplinks into one mission', 'success');
+                    }
                     return;
                 } catch (e) {
                     console.warn('Failed to load workspace:', e);
