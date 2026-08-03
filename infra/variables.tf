@@ -5,10 +5,30 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Region for Cloud Run + Artifact Registry. Co-located with Firestore, which is in europe-west1 because africa-south1 is not offered for Firestore."
+  description = "Region for Cloud Run + Artifact Registry. Johannesburg, to serve South African learners without a trip to Europe."
   type        = string
-  default     = "europe-west1"
+  default     = "africa-south1"
 }
+
+# Deliberately NOT co-located with Firestore, which lives in europe-west1.
+#
+# The previous note here said africa-south1 was not offered for Firestore. That
+# is not true - `gcloud firestore locations list` includes it. Firestore stays
+# in europe-west1 because a database's location is immutable and the prod
+# database already exists there; moving it would mean deleting and recreating
+# it, which was judged not worth doing (2026-08-03).
+#
+# The split costs less than it looks like it should: every page read in
+# mission-control is client-side (see src/app/page.tsx and the mission detail
+# page, which fetch nothing during SSR), so the browser talks to Firestore
+# directly and Cloud Run is not in the read path at all. Only the API routes
+# pay a cross-continent hop, and they are off the render path.
+#
+# WARNING: africa-south1 is what the Terraform state, the GitHub Actions
+# variables, and the live Artifact Registry repo all use. This default was
+# europe-west1 while everything else said otherwise, so an apply with default
+# vars wanted to destroy and recreate the registry (location is immutable on
+# that resource). Keep these three in agreement.
 
 variable "resend_from_email" {
   description = "From address for learner mission emails."
