@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
-import { Rocket, Plus } from 'lucide-react';
+import { Rocket, Plus, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { getLearnerID } from '@/lib/getLearnerID';
 import {
   subscribeMissionsByLearnerId,
@@ -13,10 +13,18 @@ import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useLearner } from '@/contexts/LearnerContext';
+import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
+import { getDiscoveryStatus } from '@/lib/discoveryStatus';
+import { useFavorites } from '@/lib/useFavorites';
 
 export function MissionHistory() {
   const { learnerEmail, openEmailPrompt } = useLearner();
   const reduceMotion = useReducedMotion();
+  // Same navbar control as the feed, deliberately: identical chips in the same
+  // place doing the same thing beats a second, subtly different filter set.
+  const { query, activeFilter, lastChange } = useSearch();
+  const { favorites, isFavorite } = useFavorites();
+  const skipEntrance = lastChange === 'query';
 
   // Missions for this browser (by learner id) and, if an email is set, missions
   // submitted under that email on any device. We keep them separate and merge
@@ -105,6 +113,39 @@ export function MissionHistory() {
     );
   }, [byId, byEmail]);
 
+  const counts = useMemo(() => {
+    let completed = 0;
+    for (const m of missions) {
+      if (getDiscoveryStatus(m.status) === 'Completed') completed += 1;
+    }
+    return { all: missions.length, Completed: completed, Pending: missions.length - completed };
+  }, [missions]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return missions.filter((m) => {
+      if (activeFilter === 'favorites' && !isFavorite(m.id)) return false;
+      if (activeFilter !== 'all' && activeFilter !== 'favorites'
+          && getDiscoveryStatus(m.status) !== activeFilter) return false;
+      if (!q) return true;
+      return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
+    });
+  }, [missions, query, activeFilter, isFavorite]);
+
+  // Counts are this page's own, so the chips describe the learner's history
+  // rather than the public feed. Withdrawn on unmount by the hook.
+  useRegisterSearchFilters(
+    useMemo(
+      () => [
+        { key: 'all', label: 'All missions', count: counts.all, icon: Grid2x2 },
+        { key: 'favorites', label: 'Favorite missions', count: favorites.length, icon: Star },
+        { key: 'Completed', label: 'Completed missions', count: counts.Completed, icon: CircleCheckBig },
+        { key: 'Pending', label: 'Pending missions', count: counts.Pending, icon: Hourglass },
+      ],
+      [counts, favorites.length],
+    ),
+  );
+
   const isLoading = !idLoaded || !emailLoaded;
 
   // Banner: prompt for an email when none is set, or show which email is in use.
@@ -166,11 +207,27 @@ export function MissionHistory() {
             Create Mission
           </Link>
         </div>
+      ) : visible.length === 0 ? (
+        // Distinct from "No missions yet" above: the learner HAS missions, the
+        // navbar's search or filter just excluded all of them. Telling them to
+        // build their first mission here would be wrong and a bit insulting.
+        <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-8 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
+            <Rocket className="h-8 w-8 text-primary" />
+          </div>
+          <p className="mt-5 font-display text-xl font-bold text-foreground">No missions match</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">Try a different name, code, or filter.</p>
+        </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto scroll-panel pb-1">
           <div className="grid gap-5 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]">
-            {missions.map((mission, index) => (
-              <StaggeredEntrance key={mission.id} index={index} reduceMotion={reduceMotion}>
+            {visible.map((mission, index) => (
+              <StaggeredEntrance
+                key={mission.id}
+                index={index}
+                skipEntrance={skipEntrance}
+                reduceMotion={reduceMotion}
+              >
                 <MissionCard mission={mission} />
               </StaggeredEntrance>
             ))}
