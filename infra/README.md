@@ -159,12 +159,26 @@ GitHub settings to flip once (repo Settings):
   approval gate the workflow appears to have would not exist and the first
   promotion would ship straight to prod with no reviewer.
 
-- Decide what `var.github_repository` should be. It currently defaults to
-  `HlalanathiMashimbye/4tronix-rover-simulator`, a personal fork. Applying as
-  is grants that repo permission to deploy into `bt-impact-academy`. That is
-  fine for the pilot and wrong for the long run; an org-owned repo is the
-  usual answer. Change it before the apply - it is part of the WIF provider's
-  trust condition, so switching later means re-applying the provider.
+  This is a setting on whichever repo holds the workflow, so while that is the
+  fork it is the fork owner's to configure, and the reviewer can be someone on
+  this team. It does not need anyone at Impact, and it does not gate staging -
+  staging auto-deploys on a green CI run with no approval.
+
+- `var.github_repository` defaults to
+  `HlalanathiMashimbye/4tronix-rover-simulator`, a personal fork, and applying
+  as is grants that repo permission to deploy into `bt-impact-academy`. This
+  is deliberate for the pilot: the fork is where the work is, and the point
+  right now is to prove the pipeline end to end. The intended home is Impact's
+  org or David's main repo.
+
+  **Moving it later is cheap, which is why it is not worth blocking on.** The
+  variable feeds exactly two things: the provider's `attribute_condition`
+  string, and the `principalSet` on the impersonation binding. Changing it is
+  an in-place condition update plus one IAM member replacement, then copying
+  the GitHub Actions variables to the new repo. The pool, the service
+  accounts, the registry contents and the Cloud Run services are all
+  untouched, because none of them reference the repo. Nothing is redeployed
+  and no data moves.
 
 ## Part B: Firebase migration (old project -> bt-impact-academy)
 
