@@ -20,6 +20,71 @@ export interface SimLayout {
   oy: number; // y offset of the yard within the canvas
 }
 
+/**
+ * Terrain colours, so the yard can follow the page theme.
+ *
+ * These are passed in rather than read from CSS inside the renderer: this
+ * module draws to a canvas, and canvas takes colour strings, not custom
+ * properties - `var(--clay)` in a fillStyle is simply ignored and the shape
+ * paints transparent. Resolving them once per frame in the component (which
+ * can call getComputedStyle) keeps that lookup out of the draw path.
+ *
+ * Only the GROUND is themed. The rover keeps one set of colours in both
+ * themes: it is a physical object with a fixed identity, and its dark outline
+ * already separates it from either background.
+ */
+export interface SimPalette {
+  backdrop: string;    // behind the letterboxed yard
+  groundInner: string; // radial wash, centre
+  groundMid: string;
+  groundOuter: string;
+  craterCore: string;  // crater bowl, darkest at centre
+  craterMid: string;
+  craterRim: string;   // faint sunlit lip
+  grid: string;        // 50cm measurement lines
+  vignetteTop: string; // arena edge shadow
+  vignetteBottom: string;
+  border: string;      // frame around the play area
+  trail: string;       // the path the rover has driven
+}
+
+/** Mars at night: the original look, unchanged. */
+export const DARK_SIM_PALETTE: SimPalette = {
+  backdrop: '#1a0f0a',
+  groundInner: '#7c4a2b',
+  groundMid: '#5a3320',
+  groundOuter: '#34190d',
+  craterCore: 'rgba(0,0,0,0.28)',
+  craterMid: 'rgba(0,0,0,0.10)',
+  craterRim: 'rgba(255,210,170,0.05)',
+  grid: 'rgba(255,190,150,0.08)',
+  vignetteTop: 'rgba(0,0,0,0.30)',
+  vignetteBottom: 'rgba(0,0,0,0.35)',
+  border: 'rgba(255,109,0,0.55)',
+  trail: '#2196f3',
+};
+
+/**
+ * Paper & Ink: sunlit regolith rather than night. Tuned to sit inside the
+ * light theme's warm paper without becoming a bright hole in the page, and
+ * every overlay (craters, grid, vignette) flips from black-based to a warm
+ * brown so it darkens the sand instead of greying it.
+ */
+export const LIGHT_SIM_PALETTE: SimPalette = {
+  backdrop: '#efeae1',
+  groundInner: '#e3d5bf',
+  groundMid: '#cfbda2',
+  groundOuter: '#b6a086',
+  craterCore: 'rgba(88,66,42,0.20)',
+  craterMid: 'rgba(88,66,42,0.08)',
+  craterRim: 'rgba(255,252,245,0.55)',
+  grid: 'rgba(88,66,42,0.12)',
+  vignetteTop: 'rgba(88,66,42,0.16)',
+  vignetteBottom: 'rgba(88,66,42,0.20)',
+  border: 'rgba(45,38,30,0.28)',
+  trail: '#1668c9',
+};
+
 // The physical yard (matches the Qt simulator: 400 x 300 cm).
 export const YARD_W = 400;
 export const YARD_H = 300;
@@ -72,13 +137,13 @@ export function interpolate(traj: SimPoint[], p: number): SimPoint {
   };
 }
 
-function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
+function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette) {
   const { w, h, s, ox, oy } = L;
   const yardW = YARD_W * s;
   const yardH = YARD_H * s;
 
   // Opaque base behind the (possibly letterboxed) yard.
-  ctx.fillStyle = '#1a0f0a';
+  ctx.fillStyle = P.backdrop;
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();
@@ -91,9 +156,9 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
     ox + yardW / 2, oy + yardH * 0.42, yardW * 0.1,
     ox + yardW / 2, oy + yardH / 2, yardW * 0.75
   );
-  grad.addColorStop(0, '#7c4a2b');
-  grad.addColorStop(0.55, '#5a3320');
-  grad.addColorStop(1, '#34190d');
+  grad.addColorStop(0, P.groundInner);
+  grad.addColorStop(0.55, P.groundMid);
+  grad.addColorStop(1, P.groundOuter);
   ctx.fillStyle = grad;
   ctx.fillRect(ox, oy, yardW, yardH);
 
@@ -102,9 +167,9 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
     const [px, py] = worldToScreen(L, cx, cy);
     const r = cr * s;
     const cg = ctx.createRadialGradient(px, py - r * 0.2, r * 0.2, px, py, r);
-    cg.addColorStop(0, 'rgba(0,0,0,0.28)');
-    cg.addColorStop(0.8, 'rgba(0,0,0,0.10)');
-    cg.addColorStop(1, 'rgba(255,210,170,0.05)');
+    cg.addColorStop(0, P.craterCore);
+    cg.addColorStop(0.8, P.craterMid);
+    cg.addColorStop(1, P.craterRim);
     ctx.fillStyle = cg;
     ctx.beginPath();
     ctx.arc(px, py, r, 0, Math.PI * 2);
@@ -112,7 +177,7 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
   }
 
   // Faint measurement grid every 50 cm.
-  ctx.strokeStyle = 'rgba(255,190,150,0.08)';
+  ctx.strokeStyle = P.grid;
   ctx.lineWidth = 1;
   for (let gx = -YARD_W / 2; gx <= YARD_W / 2; gx += 50) {
     const [sx] = worldToScreen(L, gx, 0);
@@ -131,10 +196,10 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
 
   // Top/bottom edge shadow for a subtle "arena" depth.
   const vg = ctx.createLinearGradient(0, oy, 0, oy + yardH);
-  vg.addColorStop(0, 'rgba(0,0,0,0.30)');
+  vg.addColorStop(0, P.vignetteTop);
   vg.addColorStop(0.15, 'rgba(0,0,0,0)');
   vg.addColorStop(0.85, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.35)');
+  vg.addColorStop(1, P.vignetteBottom);
   ctx.fillStyle = vg;
   ctx.fillRect(ox, oy, yardW, yardH);
   ctx.restore();
@@ -149,20 +214,26 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout) {
   ctx.fillStyle = 'rgba(52,211,153,0.18)';
   ctx.fill();
 
-  // Yard border (Mars orange) to frame the play area.
-  ctx.strokeStyle = 'rgba(255,109,0,0.55)';
+  // Frame the play area.
+  ctx.strokeStyle = P.border;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.roundRect(ox, oy, yardW, yardH, 16);
   ctx.stroke();
 }
 
-function drawTrail(ctx: CanvasRenderingContext2D, L: SimLayout, traj: SimPoint[], endIdx: number) {
+function drawTrail(
+  ctx: CanvasRenderingContext2D,
+  L: SimLayout,
+  traj: SimPoint[],
+  endIdx: number,
+  P: SimPalette
+) {
   if (endIdx <= 0) return;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = 4;
-  ctx.strokeStyle = '#2196f3';
+  ctx.strokeStyle = P.trail;
   ctx.beginPath();
   for (let i = 0; i <= endIdx && i < traj.length; i++) {
     const [sx, sy] = worldToScreen(L, traj[i].x, traj[i].y);
@@ -268,16 +339,19 @@ export function drawSimFrame(
   ctx: CanvasRenderingContext2D,
   L: SimLayout,
   traj: SimPoint[],
-  playhead: number
+  playhead: number,
+  // Defaulted so any caller that has not been told about themes yet keeps the
+  // original night-time yard rather than rendering colourless.
+  P: SimPalette = DARK_SIM_PALETTE
 ) {
   // Skip degenerate layouts (container not laid out yet) to avoid drawing with
   // a zero/negative scale.
   if (L.w <= 0 || L.h <= 0 || L.s <= 0) return;
-  drawTerrain(ctx, L);
+  drawTerrain(ctx, L, P);
   if (traj.length === 0) {
     drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} });
     return;
   }
-  drawTrail(ctx, L, traj, Math.floor(playhead));
+  drawTrail(ctx, L, traj, Math.floor(playhead), P);
   drawRover(ctx, L, interpolate(traj, playhead));
 }

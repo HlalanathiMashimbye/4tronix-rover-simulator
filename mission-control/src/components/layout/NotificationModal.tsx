@@ -12,8 +12,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Sun, Moon } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
+import { X } from 'lucide-react';
 
 // Kept in sync with the transition durations below - see EmailPrompt for
 // why the exit needs this rather than an instant unmount.
@@ -58,7 +57,6 @@ export function NotificationModal({
 }: NotificationModalProps) {
   const [mounted, setMounted] = useState(isOpen);
   const [visible, setVisible] = useState(false);
-  const { theme, toggleTheme } = useTheme();
 
   // Mount immediately, flip visible a frame later so the transition has a
   // "before" state to run from, and hold the unmount until the exit
@@ -95,28 +93,22 @@ export function NotificationModal({
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >
-        {/* Header. The theme toggle lives here (not just in the desktop
-            navbar) because this panel is reachable identically from the
-            mobile bottom bar's "Alerts" tab - the tab bar itself is a tight
-            4-slot layout with no room for a 5th icon. */}
+        {/* Header.
+            A theme toggle used to sit here so mobile could reach one at all -
+            the bottom tab bar is a tight 4-slot layout. It was the wrong home:
+            opening notifications is not asking to change appearance, and a
+            control that switches the whole page's look has no business hiding
+            behind a bell. It now lives in the mobile top bar, which had space
+            all along. */}
         <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
           <h2 className="font-display text-lg font-bold text-foreground">Notifications</h2>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleTheme}
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'dark' ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              aria-label="Close notifications"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            aria-label="Close notifications"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         {/* Notifications List */}

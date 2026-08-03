@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
-import { Search, X, Plus, Rocket, Star } from 'lucide-react';
+import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
@@ -11,8 +11,8 @@ import { FirestoreMissionRepository } from '@/infrastructure/persistence/Firesto
 import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
-import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
+import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
 
 type StatusFilter = 'all' | 'favorites' | DiscoveryStatus;
 
@@ -29,16 +29,18 @@ export default function LandingPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  // Search and filter state lives in SearchContext because the controls now
+  // live in the navbar; this page still owns the DATA they filter.
+  const { query, setQuery, activeFilter, setActiveFilter, lastChange } = useSearch();
+  const statusFilter = activeFilter as StatusFilter;
   const { favorites, isFavorite } = useFavorites();
   const reduceMotion = useReducedMotion();
-  // Cards remounting purely because a live search narrowed/widened the list
-  // should not replay the entrance stagger - that recomputes on every
-  // keystroke, well past the "occasional" tier the effect is meant for. Set
-  // alongside setQuery/setStatusFilter in the same handler so React batches
-  // both into the one re-render the stagger actually reads.
-  const [skipEntrance, setSkipEntrance] = useState(false);
+  // Cards remounting purely because a live search narrowed the list should not
+  // replay the entrance stagger - that fires on every keystroke, well past the
+  // "occasional" tier the effect is meant for. A filter click SHOULD replay it.
+  // Derived from which control was last touched rather than set by hand, since
+  // the controls now live in the navbar and no longer share a handler here.
+  const skipEntrance = lastChange === 'query';
 
   useEffect(() => {
     const loadMissions = async () => {
@@ -125,94 +127,21 @@ export default function LandingPage() {
     });
   }, [missions, query, statusFilter, isFavorite]);
 
-  const filters: { key: StatusFilter; label: string; count: number; icon?: typeof Star }[] = [
-    { key: 'all', label: 'All', count: counts.all },
-    { key: 'favorites', label: 'Favorites', count: favorites.length, icon: Star },
-    { key: 'Completed', label: 'Completed', count: counts.Completed },
-    { key: 'Pending', label: 'Pending', count: counts.Pending },
+  const filters: { key: StatusFilter; label: string; count: number; icon: typeof Star }[] = [
+    { key: 'all', label: 'All missions', count: counts.all, icon: Grid2x2 },
+    { key: 'favorites', label: 'Favorite missions', count: favorites.length, icon: Star },
+    { key: 'Completed', label: 'Completed missions', count: counts.Completed, icon: CircleCheckBig },
+    { key: 'Pending', label: 'Pending missions', count: counts.Pending, icon: Hourglass },
   ];
+
+  // Published to the navbar, which renders the search field and these chips.
+  // Withdrawn on unmount, so the bar disappears on pages without a feed.
+  useRegisterSearchFilters(filters);
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
-      {/* Header (the Create Mission action lives in the navbar) */}
-      <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Mission <span className="text-gradient-mars">Feed</span>
-        </h1>
-        <p className="mt-0.5 hidden text-sm text-muted-foreground sm:block">
-          Watch real rovers run the code kids wrote on Mars.
-        </p>
-      </header>
-
-      {/* Toolbar: search + status filters */}
-      <div className="mx-auto flex w-full max-w-page shrink-0 flex-col gap-2.5 pb-3 md:flex-row md:items-center">
-        <div className="relative md:max-w-xs md:flex-1">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => {
-              setSkipEntrance(true);
-              setQuery(e.target.value);
-            }}
-            placeholder="Search missions"
-            aria-label="Search missions by name or code"
-            className="w-full rounded-full border border-border/60 bg-card/60 py-2.5 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-          />
-          {query && (
-            <button
-              onClick={() => {
-                setSkipEntrance(true);
-                setQuery('');
-              }}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2" role="group" aria-label="Filter missions by status">
-          {filters.map((f) => {
-            const active = statusFilter === f.key;
-            const Icon = f.icon;
-            return (
-              <button
-                key={f.key}
-                onClick={() => {
-                  setSkipEntrance(false);
-                  setStatusFilter(f.key);
-                }}
-                aria-pressed={active}
-                className={`relative isolate inline-flex items-center gap-1.5 overflow-hidden rounded-full px-3.5 py-2 text-sm font-bold transition-colors ${
-                  active
-                    ? 'text-primary-foreground'
-                    : 'border border-border/70 bg-card/50 text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {active && (
-                  <ActivePillBackground layoutId="feed-filter-pill" className="rounded-full bg-gradient-mars" reduceMotion={reduceMotion} />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  {Icon && <Icon className="h-3.5 w-3.5" />}
-                  {f.label}
-                  <span
-                    className={`rounded-full px-1.5 text-xs tabular-nums ${
-                      active ? 'bg-black/20 text-primary-foreground' : 'bg-background/60 text-muted-foreground'
-                    }`}
-                  >
-                    {f.count}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Feed: the only thing that scrolls */}
-      <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pb-5">
+      <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pt-4 pb-5">
         {loading ? (
           <div className="flex justify-center py-24">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
@@ -239,13 +168,14 @@ export default function LandingPage() {
             title="No missions match"
             subtitle="Try a different name, code, or filter."
             onClear={() => {
-              setSkipEntrance(false);
+              // Clears the navbar's controls; setActiveFilter marks this as a
+              // filter change, so the stagger replays on the restored list.
               setQuery('');
-              setStatusFilter('all');
+              setActiveFilter('all');
             }}
           />
         ) : (
-          <div className="grid gap-5 pt-1 grid-cols-[repeat(auto-fill,minmax(min(300px,100%),1fr))]">
+          <div className="grid gap-3 pt-1 grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))]">
             {filtered.map((mission, index) => (
               <StaggeredEntrance
                 key={mission.id}

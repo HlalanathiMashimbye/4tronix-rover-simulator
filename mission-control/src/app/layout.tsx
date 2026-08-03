@@ -5,6 +5,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { SearchProvider } from "@/contexts/SearchContext";
 import { PageTransition } from "@/components/layout/PageTransition";
 
 // Runs before hydration (next/script's beforeInteractive: "injected into the
@@ -74,16 +75,29 @@ export default function RootLayout({
             globals.css. */}
         <div className="pointer-events-none fixed -inset-[1200px] -z-10 starfield opacity-40 animate-drift" />
 
+        {/* Planets and shooting stars for a livelier backdrop */}
+        <div className="pointer-events-none fixed top-12 left-8 -z-5 planet planet--small animate-orbit" />
+        <div className="pointer-events-none fixed top-32 right-24 -z-5 planet planet--large" />
+        <div className="pointer-events-none fixed -z-5">
+          <div className="shooting-star animate-shoot" style={{ top: '14vh', left: '6vw', animationDelay: '0s' }} />
+          <div className="shooting-star animate-shoot" style={{ top: '28vh', left: '40vw', animationDelay: '2s' }} />
+          <div className="shooting-star animate-shoot" style={{ top: '8vh', left: '72vw', animationDelay: '4s' }} />
+        </div>
+
         {/* One restrained Mars glow anchored in a corner for warmth (no neon). */}
         <div className="pointer-events-none fixed -bottom-72 -right-52 h-[560px] w-[560px] rounded-full bg-gradient-mars opacity-[0.14] blur-3xl" />
 
         <ThemeProvider>
           <LearnerProvider>
+            {/* Wraps Navbar AND the page: the navbar renders the search UI
+                while each page publishes what is searchable. */}
+            <SearchProvider>
             <Navbar />
             {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
             <div className="pb-16 md:pb-0">
               <PageTransition>{children}</PageTransition>
             </div>
+            </SearchProvider>
           </LearnerProvider>
         </ThemeProvider>
       </body>

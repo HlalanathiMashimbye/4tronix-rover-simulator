@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, CheckCircle2, AlertTriangle, Locate } from 'lucide-react';
+import { Play, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { loadBlockly } from '@/lib/loadBlockly';
 import {
   defineRoverBlocks,
@@ -246,14 +246,14 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     onGenerateCommands(commands);
   };
 
-  // Blockly's own built-in zoom controls include a reset-zoom button, but it
-  // resets to the workspace's default scale/origin rather than fitting
-  // whatever's actually been dragged around - easy to "lose" your blocks off
-  // to one side after panning or zooming in. zoomToFit() re-scales and
-  // re-centers on the actual current content instead.
-  const handleRecenter = () => {
-    workspaceRef.current?.zoomToFit();
-  };
+  // There is deliberately no custom recenter button. Blockly's own zoom-reset
+  // control (the target icon above the +/- buttons, enabled by zoom.controls
+  // below) already does the job: measured, it returns the scale to 1.0 AND
+  // re-centers the blocks in the viewport. A second button that called
+  // zoomToFit() used to sit at the bottom of the canvas, which meant two
+  // recenter controls with different behaviour - zoomToFit re-scales to fit
+  // the content, so it could leave the blocks tiny or oversized rather than
+  // back at a normal size.
 
   // Listen for workspace changes and push the generated Python (and the
   // serialized Blockly state) up to the parent.
@@ -313,23 +313,13 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         <p className="min-w-0 text-xs text-muted-foreground">
           Stack blocks inside “On uplink”, tune the numbers, then run it.
         </p>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            onClick={handleRecenter}
-            title="Recenter blocks"
-            aria-label="Recenter blocks in view"
-            className="clay-press flex items-center justify-center rounded-xl border border-border/60 bg-card/50 p-2 text-muted-foreground hover:text-foreground"
-          >
-            <Locate className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={handleRun}
-            className="clay clay-press flex items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
-          >
-            <Play className="h-3.5 w-3.5" fill="currentColor" />
-            Run blocks
-          </button>
-        </div>
+        <button
+          onClick={handleRun}
+          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+        >
+          <Play className="h-3.5 w-3.5" fill="currentColor" />
+          Run blocks
+        </button>
       </div>
 
       {mergedNotice && (
@@ -339,11 +329,13 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         </div>
       )}
 
-      <div
-        ref={blocklyDivRef}
-        className="min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-border bg-white"
-        style={{ width: '100%' }}
-      />
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-border bg-white">
+        <div
+          ref={blocklyDivRef}
+          className="h-full w-full min-h-0 overflow-hidden"
+          style={{ width: '100%' }}
+        />
+      </div>
     </div>
   );
 }
