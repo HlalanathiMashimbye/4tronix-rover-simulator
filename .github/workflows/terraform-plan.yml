@@ -1,0 +1,138 @@
+name: Terraform plan
+
+# Werner's deploy guide item 5: infrastructure changes are reviewed as code.
+# Any PR touching infra/ gets a `terraform plan` posted as a comment, so the
+# reviewer sees exactly what would change before approving the merge. This is
+# what makes the 2026-07-23 standup decision ("infrastructure deployments via
+# pull requests") real rather than aspirational.
+#
+# PLAN ONLY. This workflow never applies. Applying stays a deliberate human
+# action until the team decides otherwise, because a bad auto-apply on merge
+# can take prod down with no approval gate in front of it.
+#
+# Auth is Workload Identity Federation (GitHub OIDC -> service account), same
+# as the deploy workflows: no downloaded JSON keys anywhere.
+#
+# Variables (Settings -> Secrets and variables -> Actions -> Variables), all
+# from `terraform output`:
+#   GCP_WIF_PROVIDER   projects/N/locations/global/workloadIdentityPools/github/providers/github
+#   GCP_TF_PLAN_SA     terraform-plan@<project>.iam.gserviceaccount.com  (READ-ONLY, not the deploy SA)
+#
+# GCP_TF_PLAN_SA is a different identity from GCP_DEPLOY_SA on purpose: the
+# deploy SA only holds push-image and update-Cloud-Run, which cannot refresh
+# state, and widening it would give CD permissions it should not have.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - '.github/workflows/terraform-plan.yml'
+
+permissions:
+  contents: read
+  id-token: write      # OIDC token for WIF
+  pull-requests: write # post the plan as a PR comment
+
+concurrency:
+  group: terraform-plan-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: fmt, validate, plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # Pinned rather than "latest" so a new Terraform release cannot
+          # change plan output under the team.
+          #
+          # Must be >= whatever version last wrote the remote state: Terraform
+          # upgrades state formats forward but refuses to read state created by
+          # a NEWER version. 1.15.8 is what the first apply was run with, so
+          # anything older here fails at init. Bump this when the team bumps
+          # their local CLI, not the other way around.
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      # Runs before auth: formatting needs no GCP access, and failing here
+      # gives a fast, obvious signal instead of an opaque credentials error.
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_TF_PLAN_SA }}
+
+      - name: Init
+        run: terraform init -input=false
+
+      - name: Validate
+        run: terraform validate -no-color
+
+      - name: Plan
+        id: plan
+        # Do not fail the step on a non-zero exit: we want the error text in
+        # the PR comment too, and the explicit check at the end of the job
+        # decides pass/fail.
+        continue-on-error: true
+        run: |
+          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Comment plan on the PR
+        uses: actions/github-script@v7
+        env:
+          PLAN_EXIT: ${{ steps.plan.outputs.exitcode }}
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('infra/plan.txt', 'utf8');
+            const ok = process.env.PLAN_EXIT === '0';
+
+            // GitHub caps comments at 65536 chars. Keep the TAIL, because the
+            // plan summary ("Plan: N to add...") and any error land there.
+            const LIMIT = 60000;
+            const body = raw.length > LIMIT
+              ? '_(truncated, see the workflow log for the full plan)_\n\n...' + raw.slice(-LIMIT)
+              : raw;
+
+            const marker = '<!-- terraform-plan -->';
+            const comment = [
+              marker,
+              `### Terraform plan ${ok ? 'succeeded' : 'FAILED'}`,
+              '',
+              '```terraform',
+              body,
+              '```',
+            ].join('\n');
+
+            // Sticky comment: update in place so a PR with several pushes does
+            // not accumulate a wall of stale plans.
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const existing = await github.paginate(
+              github.rest.issues.listComments, { owner, repo, issue_number }
+            );
+            const mine = existing.find(c => c.body && c.body.includes(marker));
+
+            if (mine) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body: comment });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body: comment });
+            }
+
+      - name: Fail the check if the plan failed
+        if: steps.plan.outputs.exitcode != '0'
+        run: |
+          echo "terraform plan exited ${{ steps.plan.outputs.exitcode }}"
+          exit 1

@@ -27,6 +27,7 @@ module "github_wif" {
   source            = "./modules/github-wif"
   project_id        = var.project_id
   github_repository = var.github_repository
+  tfstate_bucket    = var.tfstate_bucket
 
   depends_on = [google_project_service.apis]
 }

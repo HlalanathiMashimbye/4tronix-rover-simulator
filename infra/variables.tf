@@ -48,6 +48,12 @@ variable "github_repository" {
   default     = "HlalanathiMashimbye/4tronix-rover-simulator"
 }
 
+variable "tfstate_bucket" {
+  description = "GCS bucket holding remote state. Must match the bucket in backend.tf (backends cannot take variables, so this is kept in sync by hand)."
+  type        = string
+  default     = "bt-impact-academy-tfstate"
+}
+
 variable "environments" {
   description = "Cloud Run environments. min_instances = 1 during event days kills cold starts."
   type = map(object({

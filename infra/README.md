@@ -56,7 +56,13 @@ terraform plan
 terraform apply
 ```
 
-**Expected plan: `22 to add, 0 to change, 0 to destroy`.**
+**Expected plan: `27 to add, 0 to change, 0 to destroy`.**
+
+Measured against real state on 2026-08-03. It was 22 before the
+`terraform-plan` workflow landed; that added five resources (the read-only
+plan service account, its two project roles, its state-bucket binding and its
+WIF impersonation binding), which are created by this same apply rather than
+needing a second one.
 
 If you see a **destroy**, stop and ask. It means `var.region` has drifted from
 `africa-south1` again: `location` is a force-new attribute on the Artifact
@@ -64,7 +70,7 @@ Registry repo, so a region mismatch silently proposes destroying and
 recreating the registry that CI pushes to. This bit us once already - the
 default said `europe-west1` while the state, the GitHub Actions variables and
 the live repo all said `africa-south1`, and the plan came back
-`23 to add, 0 to change, 1 to destroy`. Fixed in the same PR as this doc.
+`23 to add, 0 to change, 1 to destroy`.
 
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
@@ -75,8 +81,8 @@ import caveat in the Notes below does not apply.
 # Copy outputs into GitHub repo variables
 terraform output
 # Settings -> Secrets and variables -> Actions -> Variables:
-#   GCP_WIF_PROVIDER, GCP_DEPLOY_SA, GCP_PROJECT_ID, GCP_REGION,
-#   GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE
+#   GCP_WIF_PROVIDER, GCP_DEPLOY_SA, GCP_TF_PLAN_SA, GCP_PROJECT_ID,
+#   GCP_REGION, GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE
 # plus the NEXT_PUBLIC_FIREBASE_* values from the NEW Firebase web app
 # (Part B). The deploy workflow reads all of these; it will fail without the
 # NEXT_PUBLIC_FIREBASE_* set, so they gate the first deploy, not the apply.
@@ -241,8 +247,25 @@ The app moves to Impact's Firebase world. In the Firebase console
 - Naming: current names are simple (`mission-control-staging` etc.). Werner
   confirmed conventions can be refactored later; `terraform state mv` +
   rename is the path when Impact's conventions arrive.
-- Werner's guide item 5 (Terraform plan on PRs touching infra/) needs WIF to
-  exist first; add that workflow after Part A proves out.
+- Werner's guide item 5 (Terraform plan on PRs touching infra/) is implemented
+  by `.github/workflows/terraform-plan.yml`. It runs plan-only and posts the
+  result as a PR comment; it never applies. It authenticates as the
+  **read-only** `terraform-plan` service account, NOT the deploy SA, which
+  holds only push-image and update-Cloud-Run and cannot refresh state. The
+  workflow stays red until `GCP_WIF_PROVIDER` and `GCP_TF_PLAN_SA` exist as
+  repo variables, i.e. until the first apply completes (step 4 above).
+
+  **Open question, worth settling while an owner is on hand.** The plan
+  identity holds `roles/viewer`, which grants `secretmanager.versions.get`
+  (metadata) but not `.access` (payload). Terraform stores `secret_data` for
+  `google_secret_manager_secret_version.seed` in state, so a refresh may well
+  fail there on the first run. The fix is not simply to add
+  `roles/secretmanager.secretAccessor`: those same secrets will hold the real
+  Firebase admin key and Resend key, so that role would let CI read production
+  credentials in order to render a PR comment. Options are to accept the
+  workflow being red on infra PRs, to grant the role and accept the exposure,
+  or to drop the seed versions from Terraform's management. Deciding it during
+  the first apply avoids needing a third owner-run apply later.
 - GCS bucket names are globally unique: if `bt-impact-academy-tfstate` is
   taken, pick another and change it in both the create command and
   `backend.tf`.

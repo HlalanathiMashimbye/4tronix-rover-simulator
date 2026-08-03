@@ -11,6 +11,10 @@ output "GCP_DEPLOY_SA" {
   value = module.github_wif.deploy_service_account_email
 }
 
+output "GCP_TF_PLAN_SA" {
+  value = module.github_wif.terraform_plan_service_account_email
+}
+
 output "GCP_PROJECT_ID" {
   value = var.project_id
 }
