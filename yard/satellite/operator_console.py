@@ -285,10 +285,28 @@ def require_operator(f):
 
 @operator_bp.route('/')
 def console():
+    """Kept as a redirect, not a page.
+
+    The queue used to live here while the home page showed a read-only preview
+    of the same list. Two screens rendering the same missions meant an operator
+    picked one at random and the other was dead weight, so the queue moved to
+    the home page and this is now just a bookmark that still works.
+    """
+    return redirect('/')
+
+
+@operator_bp.route('/mission/<mission_id>')
+def mission_page(mission_id):
+    """One mission, with the controls for it - including Stop.
+
+    Every action on a mission lives here rather than on the queue. The queue is
+    for choosing what to work on; this is for doing it, and it is the screen an
+    operator has open while a rover is actually moving.
+    """
     operator = current_operator()
     if not operator:
         return redirect('/operator/login')
-    return render_template('operator.html', operator=operator)
+    return render_template('mission.html', operator=operator, mission_id=mission_id)
 
 
 @operator_bp.route('/login')
@@ -361,8 +379,8 @@ def api_logout():
 
 def _mirror_row_to_dict(row):
     """Map a mission_mirror SQLite row (snake_case) to the API's camelCase
-    shape - the frontend (operator.html) contract predates the mirror and is
-    unchanged by it.
+    shape - the frontend contract (home.html's queue, mission.html) predates
+    the mirror and is unchanged by it.
     """
     return {
         'id': row['id'],
@@ -578,7 +596,7 @@ def api_rerun(mission_id):
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
-            'not-terminal': ('Only completed or failed missions can be rerun', 400),
+            'not-terminal': ('Only finished or cancelled missions can be rerun', 400),
             'locked-by-other': ('Mission is locked by another operator', 409),
         }
         msg, code = messages.get(reason, ('Lock failed', 500))
@@ -595,6 +613,66 @@ def api_rerun(mission_id):
     _start_lease_renewal(mission_id)
     _notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id})
+
+
+@operator_bp.route('/api/missions/<mission_id>', methods=['GET'])
+@require_operator
+def api_mission(mission_id):
+    """One mission, for the mission page."""
+    from mission_store import get_mission
+
+    mission = get_mission(mission_id)
+    if mission is None:
+        return jsonify({'error': 'Mission not found'}), 404
+    return jsonify({'mission': _mirror_row_to_dict(mission)})
+
+
+@operator_bp.route('/api/missions/<mission_id>/stop', methods=['POST'])
+@require_operator
+def api_stop_mission(mission_id):
+    """Halt the rover mid-run and put the mission back in the queue.
+
+    The gap this fills: until now an operator standing next to a moving rover,
+    in a hall full of children, had no control that stopped it. The rover has
+    had an emergency stop the whole time (POST /queue/clear drops the queue and
+    calls driver.stop()); nothing in the console was wired to it.
+
+    The rover is stopped FIRST and the bookkeeping happens after. If Firestore,
+    the mirror, or anything else fails, the robot has still stopped - that
+    ordering is the whole point. A failed status write is a tidy-up problem; a
+    rover that keeps driving because a database call raised is not.
+
+    The mission goes back to 'queued' rather than 'failed' or 'cancelled': the
+    code did not do anything wrong, somebody just needed the rover to stop, and
+    it should be re-runnable with one tap. 'failed' would also reach the learner
+    as a run that went wrong, which it did not.
+    """
+    from mission_store import get_mission, release_mission
+
+    mission = get_mission(mission_id)
+    if mission is None:
+        return jsonify({'error': 'Mission not found'}), 404
+    if mission.get('status') != 'processing':
+        return jsonify({'error': 'Only a running mission can be stopped'}), 400
+
+    try:
+        resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
+    except requests.exceptions.RequestException:
+        return jsonify({
+            'error': 'Could not reach the rover to stop it. If it is still moving, '
+                     'use the power switch on the rover itself.'
+        }), 503
+
+    if resp.status_code != 200:
+        return jsonify({
+            'error': f'The rover refused the stop command (HTTP {resp.status_code}). '
+                     'If it is still moving, use the power switch on the rover itself.'
+        }), 502
+
+    _stop_lease_renewal(mission_id)
+    release_mission(mission_id, 'queued', _now_iso())
+    _notify_mission_control_async(mission_id, 'queued')
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
 
 
 @operator_bp.route('/api/missions/<mission_id>/complete', methods=['POST'])

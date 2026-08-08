@@ -219,7 +219,17 @@ def api_queue_add():
 
 @app.route('/api/queue/clear', methods=['POST'])
 def api_queue_clear():
-    """Proxy to rover queue/clear endpoint"""
+    """Proxy to rover queue/clear endpoint - the emergency stop.
+
+    DELIBERATELY NOT behind require_operator, unlike every other control on
+    this server. The tablets at /code/ never sign in (see index()), and this is
+    the stop button a child or a facilitator hits when the rover is heading for
+    a table leg. An auth gate here would mean the one control that has to work
+    for anyone in the room is the one that asks for a password first.
+
+    The worst an unauthenticated caller can do is stop the robot. That is the
+    safe direction to fail in, so it stays open on purpose.
+    """
     try:
         resp = requests.post(
             f'{ROVER_URL}/queue/clear',

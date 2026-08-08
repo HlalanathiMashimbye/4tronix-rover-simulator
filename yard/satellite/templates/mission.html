@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mission · Mars Yard</title>
+    <link rel="stylesheet" href="/static/yard-base.css">
+    <style>
+        :root { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
+
+        /* One screen, no page scroll. The only things that scroll are the code
+           block and the control rail, each inside its own panel. */
+        html, body { height: 100%; }
+        body {
+            height: 100dvh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            color: var(--foreground);
+        }
+        .topbar { flex: 0 0 auto; }
+
+        .shell {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+            padding: 1rem 1.4rem 1.2rem;
+        }
+
+        /* ---------- Header row ---------- */
+        .mbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; flex: 0 0 auto; }
+        .back {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            color: var(--text-dim); text-decoration: none;
+            font-size: var(--fs-sm); font-weight: 600;
+            padding: 0.5rem 0.8rem; min-height: 40px;
+            border: 1px solid var(--border); border-radius: 10px;
+            background: var(--surface);
+        }
+        .back:hover { color: var(--text); border-color: var(--border-strong); }
+        .back svg { width: 15px; height: 15px; }
+        .mbar-title { min-width: 0; flex: 1; }
+        .mbar-title h1 {
+            font-size: 1.4rem; font-weight: 700; color: var(--heading);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .id-chip {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            margin-top: 0.15rem; padding: 0.2rem 0.45rem; margin-left: -0.45rem;
+            border: 1px solid transparent; border-radius: 7px;
+            background: none; cursor: pointer; color: var(--text-faint);
+            font-family: var(--mono); font-size: var(--fs-xs);
+        }
+        .id-chip:hover { color: var(--text); background: var(--surface-2); border-color: var(--border); }
+        .id-chip.copied { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, transparent); }
+        .id-chip svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+
+        .status-badge {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.05em;
+            padding: 0.4rem 0.85rem;
+            border: 1px solid var(--border); background: var(--surface-3);
+            color: var(--text-faint); flex-shrink: 0;
+        }
+        .status-badge svg { width: 14px; height: 14px; }
+        .status-badge[data-tone="ok"]   { color: var(--ok);   background: rgba(52,211,153,0.1);  border-color: rgba(52,211,153,0.35); }
+        .status-badge[data-tone="warn"] { color: var(--warn); background: rgba(251,191,36,0.1);  border-color: rgba(251,191,36,0.35); }
+        .status-badge[data-tone="bad"]  { color: var(--bad);  background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
+        .status-badge[data-tone="info"] { color: var(--accent); background: rgba(118,255,221,0.1); border-color: rgba(118,255,221,0.25); }
+
+        /* ---------- Two-column body ---------- */
+        .grid {
+            flex: 1 1 auto; min-height: 0;
+            display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 1rem;
+        }
+        @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+
+        .panel {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 16px; min-height: 0; display: flex; flex-direction: column;
+        }
+        .panel-head {
+            flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
+            gap: 0.6rem; padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--border);
+        }
+        .panel-head h2 {
+            font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-faint);
+        }
+        .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
+
+        pre.code {
+            padding: 1rem 1.1rem; color: var(--text-dim);
+            font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.6;
+        }
+
+        .rail { display: flex; flex-direction: column; gap: 0.7rem; min-height: 0; overflow-y: auto; padding-right: 2px; }
+
+        /* ---------- The stop button ----------
+           Sized and coloured to be the thing your eye lands on and your thumb
+           finds without looking, because it gets used while watching a rover
+           rather than the screen. */
+        .stop-btn {
+            width: 100%; min-height: 74px;
+            display: flex; align-items: center; justify-content: center; gap: 0.7rem;
+            border: 2px solid var(--bad); border-radius: 16px;
+            background: color-mix(in oklab, var(--bad) 22%, transparent);
+            color: var(--bad);
+            font-family: var(--font-display);
+            font-size: 1.5rem; font-weight: 700; letter-spacing: 0.04em;
+            cursor: pointer;
+        }
+        .stop-btn svg { width: 30px; height: 30px; }
+        .stop-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 34%, transparent); }
+        .stop-btn:disabled { opacity: 0.55; cursor: default; }
+        .stop-note { color: var(--text-faint); font-size: var(--fs-xs); text-align: center; margin-top: 0.5rem; line-height: 1.5; }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 0.8rem 1rem; }
+        .card h3 {
+            font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 0.6rem;
+        }
+
+        .btn {
+            border: 1px solid var(--border); border-radius: 10px;
+            background: var(--surface-3); color: var(--text-dim);
+            font-size: var(--fs-sm); font-weight: 600;
+            padding: 0.6rem 1rem; min-height: 44px; cursor: pointer;
+        }
+        .btn:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-weight: 700; }
+        .btn.primary:hover:not(:disabled) { background: var(--mars); }
+        .btn.danger-quiet { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 35%, transparent); }
+        .btn.danger-quiet:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 12%, transparent); border-color: var(--bad); }
+        .btn.danger-solid { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, transparent); background: color-mix(in oklab, var(--bad) 10%, transparent); }
+        .btn.danger-solid:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 20%, transparent); border-color: var(--bad); }
+        .actions { display: flex; flex-direction: column; gap: 0.5rem; }
+        .actions .btn { width: 100%; }
+
+        .tele-row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; font-size: var(--fs-sm); padding: 0.32rem 0; }
+        .tele-row .k { color: var(--text-faint); }
+        .tele-row .v { color: var(--text); font-weight: 600; font-family: var(--mono); text-align: right; }
+        .tele-row .v.green { color: var(--ok); }
+        .tele-row .v.red { color: var(--bad); }
+        .tele-row .v.amber { color: var(--warn); }
+
+        .yt-steps { margin: 0 0 0.6rem 1.05rem; padding: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; }
+        .tag-copy {
+            display: inline-flex; align-items: center; gap: 0.4rem; min-height: 34px;
+            border: 1px dashed var(--border-strong); border-radius: 8px;
+            background: var(--surface-2); color: var(--text); padding: 0.3rem 0.6rem; cursor: pointer;
+        }
+        .tag-copy code { font-family: var(--mono); font-size: 0.72rem; }
+        .tag-copy.copied { border-style: solid; border-color: var(--ok); color: var(--ok); }
+        .tag-copy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
+        .field input {
+            width: 100%; background: var(--surface-3); border: 1px solid var(--border);
+            border-radius: 9px; color: var(--text); font-size: var(--fs-sm);
+            padding: 0.6rem 0.75rem; min-height: 46px; outline: none; box-sizing: border-box;
+        }
+        .field input.invalid { border-color: var(--bad); }
+        .field input.valid { border-color: var(--ok); }
+        .field-error { color: var(--bad); font-size: var(--fs-xs); min-height: 1em; margin-top: 0.25rem; }
+        .yt-link { color: var(--ok); font-size: var(--fs-sm); text-decoration: none; }
+        .yt-link:hover { text-decoration: underline; }
+
+        .loading, .missing { color: var(--text-faint); font-size: var(--fs-sm); padding: 2.5rem 1rem; text-align: center; }
+
+        /* ---------- Toasts + modal (same contract as the queue) ---------- */
+        .toast-stack { position: fixed; bottom: 1.25rem; right: 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; z-index: 200; max-width: 380px; }
+        .toast { display: flex; align-items: flex-start; gap: 0.6rem; border-radius: 10px; padding: 0.75rem 0.85rem; border: 1px solid var(--border); background: var(--surface-2); box-shadow: 0 12px 30px rgba(0,0,0,0.4); font-size: var(--fs-sm); animation: toast-in 0.18s ease-out; }
+        .toast svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 0.1rem; }
+        .toast[data-tone="success"] { color: var(--ok); border-color: rgba(52,211,153,0.4); }
+        .toast[data-tone="error"] { color: var(--bad); border-color: rgba(248,113,113,0.4); }
+        .toast-msg { flex: 1; color: var(--text); line-height: 1.45; }
+        .toast-close { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 1rem; min-width: 32px; min-height: 32px; }
+        @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 1.25rem; z-index: 300; }
+        .modal-overlay[hidden] { display: none; }
+        .modal { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; max-width: 420px; width: 100%; padding: 1.4rem; }
+        .modal h2 { font-size: 1.05rem; color: var(--heading); margin-bottom: 0.5rem; }
+        .modal p { font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55; margin-bottom: 1.2rem; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; }
+        .modal-actions .btn.danger { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: var(--bad); }
+        .confirm-typed-label { display: block; color: var(--bad); font-size: 0.8rem; font-weight: 600; margin: 0.9rem 0 0.4rem; }
+        .confirm-typed-input { width: 100%; min-height: 46px; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in oklab, var(--bad) 45%, transparent); border-radius: 9px; background: var(--surface); color: var(--text); font-family: var(--mono); letter-spacing: 0.12em; }
+
+        @media (max-width: 1000px) {
+            body { height: auto; overflow: auto; }
+            .grid { min-height: 0; }
+            .panel-body { max-height: 45vh; }
+        }
+    </style>
+</head>
+<body>
+    {% include "_nav.html" %}
+
+    <main class="shell">
+        <div class="mbar">
+            <a class="back" href="/">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Queue
+            </a>
+            <div class="mbar-title">
+                <h1 id="mTitle">Loading&hellip;</h1>
+                <button class="id-chip" id="idChip" title="Copy mission ID" hidden>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                    <span id="mId"></span>
+                </button>
+            </div>
+            <span id="mStatus"></span>
+        </div>
+
+        <div class="grid">
+            <section class="panel">
+                <div class="panel-head">
+                    <h2>Mission code</h2>
+                    <button class="btn" id="copyCode" style="min-height:34px;padding:0.3rem 0.7rem;">Copy</button>
+                </div>
+                <div class="panel-body"><pre class="code" id="mCode">Loading&hellip;</pre></div>
+            </section>
+
+            <aside class="rail" id="rail">
+                <div class="loading">Loading mission&hellip;</div>
+            </aside>
+        </div>
+    </main>
+
+    <div class="toast-stack" id="toastStack"></div>
+
+    <div class="modal-overlay" id="confirmOverlay" hidden>
+        <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmBody">
+            <h2 id="confirmTitle"></h2>
+            <p id="confirmBody"></p>
+            <div id="confirmTyped" hidden>
+                <label class="confirm-typed-label" id="confirmTypedLabel" for="confirmTypedInput"></label>
+                <input id="confirmTypedInput" class="confirm-typed-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" id="confirmCancel">Cancel</button>
+                <button class="btn danger" id="confirmOk"></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MISSION_ID = {{ mission_id | tojson }};
+        let mission = null;
+        let draftUrl = '';
+
+        const STATUS_META = {
+            queued:     { label: 'Queued',      tone: 'info', icon: 'clock' },
+            processing: { label: 'Running',     tone: 'warn', icon: 'play' },
+            completed:  { label: 'Completed',   tone: 'ok',   icon: 'check' },
+            failed:     { label: 'Failed',      tone: 'bad',  icon: 'alert' },
+            cancelled:  { label: 'Cancelled',   tone: '',     icon: 'slash' },
+        };
+        const ICONS = {
+            clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+            play: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4V8z"/></svg>',
+            check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+            alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+            slash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="8.5" y1="15.5" x2="15.5" y2="8.5"/></svg>',
+            stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+        };
+
+        const CONFIRM_COPY = {
+            stop: {
+                title: 'Stop the rover now?',
+                body: 'The rover halts immediately and its queue is cleared. The mission goes back to Queued so you can send it again when you are ready.',
+                confirmLabel: 'Stop the rover',
+            },
+            complete: { title: 'Mark mission complete?', body: 'This marks the mission as completed and cannot be undone.', confirmLabel: 'Mark complete' },
+            rerun: { title: 'Rerun this mission?', body: 'This clears the completed status and any attached video, and sends the mission back into the queue. This cannot be undone.', confirmLabel: 'Rerun' },
+            cancel: { title: 'Cancel this mission?', body: 'It comes out of the queue without running. The learner still sees it as Pending, not rejected. You can put it back afterwards.', confirmLabel: 'Cancel mission' },
+            delete: {
+                title: 'Delete this mission permanently?',
+                body: 'This removes the mission and its attached video link from the platform, for the learner as well as here. There is no undo in this console. If you only want to keep it out of the queue, use Cancel instead - that can be reversed.',
+                confirmLabel: 'Delete permanently',
+                requireTyped: 'DELETE',
+            },
+        };
+
+        const SUCCESS_MESSAGE = {
+            send: 'Mission sent to rover.',
+            stop: 'Rover stopped. Mission is back in the queue.',
+            complete: 'Mission marked complete.',
+            youtube: 'Video attached.',
+            rerun: 'Mission queued for rerun.',
+            cancel: 'Mission cancelled.',
+            delete: 'Mission deleted.',
+        };
+
+        function esc(s) {
+            return (s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+        }
+        function relTime(iso) {
+            if (!iso) return '';
+            const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+            if (mins < 1) return 'just now';
+            if (mins < 60) return mins + 'm ago';
+            const hrs = Math.round(mins / 60);
+            if (hrs < 24) return hrs + 'h ago';
+            return Math.round(hrs / 24) + 'd ago';
+        }
+        function missionTag(id) { return 'MissionID: ' + id; }
+        function isValidYoutubeUrl(v) {
+            return /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=[\w-]{6,}|youtu\.be\/[\w-]{6,})/i.test(v.trim());
+        }
+
+        // navigator.clipboard needs a secure context; the yard is plain HTTP,
+        // so fall back to execCommand there (see the queue page for the detail).
+        async function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                try { await navigator.clipboard.writeText(text); return true; } catch (e) {}
+            }
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.setAttribute('readonly', '');
+            ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;';
+            document.body.appendChild(ta);
+            try { ta.select(); ta.setSelectionRange(0, ta.value.length); return document.execCommand('copy'); }
+            catch (e) { return false; } finally { ta.remove(); }
+        }
+
+        // ---------- Toasts ----------
+        const toastStack = document.getElementById('toastStack');
+        function showToast(tone, message) {
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.dataset.tone = tone;
+            el.setAttribute('role', tone === 'error' ? 'alert' : 'status');
+            el.innerHTML = `${tone === 'error' ? ICONS.alert : ICONS.check}<div class="toast-msg"></div><button class="toast-close" aria-label="Dismiss">&times;</button>`;
+            el.querySelector('.toast-msg').textContent = message;
+            const remove = () => { if (el.parentNode) el.remove(); };
+            el.querySelector('.toast-close').onclick = remove;
+            toastStack.appendChild(el);
+            while (toastStack.children.length > 4) toastStack.removeChild(toastStack.firstChild);
+            setTimeout(remove, tone === 'error' ? 6000 : 3000);
+        }
+
+        // ---------- Confirm ----------
+        const confirmOverlay = document.getElementById('confirmOverlay');
+        const confirmOk = document.getElementById('confirmOk');
+        const confirmCancel = document.getElementById('confirmCancel');
+        const confirmTyped = document.getElementById('confirmTyped');
+        const confirmTypedInput = document.getElementById('confirmTypedInput');
+        let confirmPending = false;
+
+        function openConfirm(copy, onConfirm) {
+            document.getElementById('confirmTitle').textContent = copy.title;
+            document.getElementById('confirmBody').textContent = copy.body;
+            confirmOk.textContent = copy.confirmLabel;
+            confirmPending = false;
+            confirmOk.disabled = false;
+            confirmTyped.hidden = !copy.requireTyped;
+            if (copy.requireTyped) {
+                document.getElementById('confirmTypedLabel').textContent = `Type ${copy.requireTyped} to confirm`;
+                confirmTypedInput.value = '';
+                confirmOk.disabled = true;
+                confirmTypedInput.oninput = () => {
+                    confirmOk.disabled = confirmTypedInput.value.trim().toUpperCase() !== copy.requireTyped;
+                };
+            }
+            confirmOverlay.hidden = false;
+            confirmCancel.focus();
+            confirmOk.onclick = () => {
+                if (confirmPending) return;
+                confirmPending = true;
+                confirmOk.disabled = true;
+                closeConfirm();
+                onConfirm();
+            };
+        }
+        function closeConfirm() { confirmOverlay.hidden = true; }
+        confirmCancel.onclick = closeConfirm;
+        confirmOverlay.addEventListener('click', e => { if (e.target === confirmOverlay) closeConfirm(); });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeConfirm(); });
+
+        // ---------- Render ----------
+        function renderHeader() {
+            document.getElementById('mTitle').textContent = mission.name || ('Mission-' + mission.id.slice(0, 8));
+            document.getElementById('mId').textContent = mission.id;
+            document.getElementById('idChip').hidden = false;
+            const meta = STATUS_META[mission.status] || { label: mission.status, tone: '', icon: 'alert' };
+            document.getElementById('mStatus').innerHTML =
+                `<span class="status-badge" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>`;
+            document.getElementById('mCode').textContent = (mission.code || '').trim() || '# No code';
+        }
+
+        function actionButton(act, label, cls, confirm) {
+            return `<button class="btn ${cls || ''}" data-act="${act}"${confirm ? ' data-confirm="true"' : ''}>${label}</button>`;
+        }
+
+        function renderRail() {
+            const rail = document.getElementById('rail');
+            let html = '';
+
+            // Stop comes first and is the only thing at that size, so there is
+            // never a moment of hunting for it while the rover is moving.
+            if (mission.status === 'processing') {
+                html += `<div>
+                    <button class="stop-btn" id="stopBtn">${ICONS.stop}<span>STOP</span></button>
+                    <div class="stop-note">Halts the rover and clears its queue. The mission returns to Queued so you can run it again.</div>
+                </div>`;
+            }
+
+            html += '<div class="card"><h3>Actions</h3><div class="actions">';
+            if (mission.status === 'queued') {
+                html += actionButton('send', 'Send to rover', 'primary');
+                html += actionButton('complete', 'Mark complete', '', true);
+                html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
+            } else if (mission.status === 'processing') {
+                html += actionButton('complete', 'Mark complete', 'primary', true);
+                html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
+            } else if (mission.status === 'completed') {
+                html += actionButton('rerun', 'Rerun', '', true);
+            } else if (mission.status === 'failed') {
+                html += actionButton('rerun', 'Rerun', 'primary');
+            } else if (mission.status === 'cancelled') {
+                html += actionButton('rerun', 'Put back in queue', 'primary', true);
+            }
+            html += actionButton('delete', 'Delete', 'danger-solid', true);
+            html += '</div></div>';
+
+            // Video linking, only where it applies.
+            if (mission.status === 'completed' && !mission.youtubeUrl) {
+                html += `<div class="card">
+                    <h3>Link the video</h3>
+                    <ol class="yt-steps">
+                        <li>Put this in the YouTube description and it links itself:
+                            <button class="btn tag-copy" data-act="copytag" style="min-height:34px;">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+                                <code>${esc(missionTag(mission.id))}</code>
+                            </button>
+                        </li>
+                        <li>Or paste the video link here now:</li>
+                    </ol>
+                    <div class="field">
+                        <input type="url" inputmode="url" id="ytInput" placeholder="https://youtube.com/watch?v=..." value="${esc(draftUrl)}" aria-label="YouTube URL">
+                        <div class="field-error" id="ytErr"></div>
+                    </div>
+                    <div class="actions" style="margin-top:0.6rem;">${actionButton('youtube', 'Attach video', 'primary')}</div>
+                </div>`;
+            } else if (mission.youtubeUrl) {
+                html += `<div class="card"><h3>Video</h3>
+                    <a class="yt-link" href="${esc(mission.youtubeUrl)}" target="_blank" rel="noopener">Watch on YouTube &#8599;</a></div>`;
+            }
+
+            html += `<div class="card">
+                <h3>Rover</h3>
+                <div id="tele">
+                    <div class="tele-row"><span class="k">Connection</span><span class="v" id="teleConn">&mdash;</span></div>
+                    <div class="tele-row"><span class="k">Queue</span><span class="v" id="teleQueue">&mdash;</span></div>
+                    <div class="tele-row"><span class="k">Now running</span><span class="v" id="teleNow">&mdash;</span></div>
+                </div>
+            </div>`;
+
+            html += `<div class="card"><h3>Timeline</h3>
+                <div class="tele-row"><span class="k">Submitted</span><span class="v">${esc(relTime(mission.submittedAt)) || '&mdash;'}</span></div>
+                ${mission.startedAt ? `<div class="tele-row"><span class="k">Started</span><span class="v">${esc(relTime(mission.startedAt))}</span></div>` : ''}
+                ${mission.completedAt ? `<div class="tele-row"><span class="k">Completed</span><span class="v">${esc(relTime(mission.completedAt))}</span></div>` : ''}
+                <div class="tele-row"><span class="k">Yard</span><span class="v">${esc(mission.yardId || '—')}</span></div>
+            </div>`;
+
+            rail.innerHTML = html;
+            wireRail();
+            paintTelemetry();
+        }
+
+        function wireRail() {
+            const stop = document.getElementById('stopBtn');
+            if (stop) stop.onclick = () => openConfirm(CONFIRM_COPY.stop, () => act('stop', stop));
+
+            document.querySelectorAll('#rail button[data-act]').forEach(btn => {
+                btn.onclick = () => {
+                    const a = btn.dataset.act;
+                    if (a === 'copytag') return copyTag(btn);
+                    if (btn.dataset.confirm === 'true') {
+                        openConfirm(CONFIRM_COPY[a] || { title: 'Are you sure?', body: 'This cannot be undone.', confirmLabel: 'Confirm' }, () => act(a, btn));
+                    } else {
+                        act(a, btn);
+                    }
+                };
+            });
+
+            const yt = document.getElementById('ytInput');
+            if (yt) {
+                const validate = () => {
+                    const val = yt.value.trim();
+                    draftUrl = yt.value;
+                    const bad = val !== '' && !isValidYoutubeUrl(val);
+                    yt.classList.toggle('invalid', bad);
+                    yt.classList.toggle('valid', val !== '' && !bad);
+                    document.getElementById('ytErr').textContent = bad ? 'Please enter a valid YouTube URL.' : '';
+                    const btn = document.querySelector('#rail button[data-act="youtube"]');
+                    if (btn) btn.disabled = !(val !== '' && !bad);
+                };
+                yt.addEventListener('input', validate);
+                yt.addEventListener('blur', validate);
+                validate();
+            }
+        }
+
+        async function copyTag(btn) {
+            const ok = await copyText(missionTag(mission.id));
+            if (!ok) return showToast('error', 'Could not copy. Select the text and copy it manually.');
+            btn.classList.add('copied');
+            setTimeout(() => btn.classList.remove('copied'), 1500);
+            showToast('success', 'Copied');
+        }
+
+        document.getElementById('idChip').onclick = async (e) => {
+            const btn = e.currentTarget;
+            const ok = await copyText(mission.id);
+            if (!ok) return showToast('error', 'Could not copy the mission ID.');
+            btn.classList.add('copied');
+            setTimeout(() => btn.classList.remove('copied'), 1500);
+            showToast('success', 'Mission ID copied');
+        };
+
+        document.getElementById('copyCode').onclick = async (e) => {
+            const btn = e.currentTarget;
+            const ok = await copyText((mission && mission.code) || '');
+            if (!ok) return showToast('error', 'Could not copy the code.');
+            btn.textContent = 'Copied';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        };
+
+        function errorMessage(err, resp, data) {
+            if (resp && resp.ok) return 'The action worked, but the page could not refresh. It will catch up on its own.';
+            if (!resp) {
+                if (err && err.name === 'AbortError') return 'The request timed out. Try again, or check the Status page.';
+                return 'The network connection was interrupted. Check the connection and try again.';
+            }
+            const detail = data && data.error;
+            if (detail) return detail;
+            if (resp.status === 401) return 'Your session has expired. Sign in again and retry.';
+            if (resp.status === 403) return "You don't have permission to do this.";
+            if (resp.status === 404) return 'This mission no longer exists.';
+            if (resp.status >= 500) return 'The satellite hit a server error. Try again, and check the Status page if it continues.';
+            return `That did not work (HTTP ${resp.status}).`;
+        }
+
+        async function act(action, btn) {
+            const body = action === 'youtube' ? { url: draftUrl || '' } : undefined;
+            const prevLabel = btn ? btn.textContent : '';
+            if (btn) btn.disabled = true;
+            if (action === 'stop' && btn) btn.innerHTML = ICONS.stop + '<span>STOPPING…</span>';
+
+            let resp, data;
+            try {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 15000);
+                try {
+                    resp = await fetch(`/operator/api/missions/${MISSION_ID}/${action}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: body ? JSON.stringify(body) : undefined,
+                        signal: controller.signal,
+                    });
+                } finally { clearTimeout(timer); }
+                data = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+            } catch (err) {
+                if (btn) { btn.disabled = false; if (action === 'stop') btn.innerHTML = ICONS.stop + '<span>STOP</span>'; else btn.textContent = prevLabel; }
+                showToast('error', errorMessage(err, resp, data));
+                return;
+            }
+
+            // Succeeded. Nothing past here may report a failure - the same trap
+            // that made the queue page announce a successful dispatch as failed.
+            if (action === 'delete') {
+                showToast('success', SUCCESS_MESSAGE.delete);
+                setTimeout(() => { location.href = '/'; }, 700);
+                return;
+            }
+            showToast('success', SUCCESS_MESSAGE[action] || 'Done.');
+            draftUrl = '';
+            loadMission().catch(() => {});
+        }
+
+        // ---------- Live rover telemetry ----------
+        let roverState = { reachable: false, queue: null, now: null };
+
+        function paintTelemetry() {
+            const conn = document.getElementById('teleConn');
+            if (!conn) return;
+            conn.textContent = roverState.reachable ? 'Online' : 'Offline';
+            conn.className = 'v ' + (roverState.reachable ? 'green' : 'red');
+            document.getElementById('teleQueue').textContent = roverState.queue == null ? '—' : String(roverState.queue);
+            const now = document.getElementById('teleNow');
+            now.textContent = roverState.now || (roverState.reachable ? 'Idle' : '—');
+            now.className = 'v' + (roverState.now ? ' amber' : '');
+        }
+
+        YardStatus.subscribe(function (d) {
+            const r = d.rover || {};
+            roverState.reachable = !!r.reachable;
+            if (r.queue_size != null) roverState.queue = r.queue_size;
+            paintTelemetry();
+        });
+
+        // The rover's own event stream, for what it is doing right now. Falls
+        // back silently to the /api/status poll above if the stream drops.
+        (function subscribeRover() {
+            let es;
+            try { es = new EventSource('/api/queue/events'); } catch (e) { return; }
+            es.onmessage = (ev) => {
+                try {
+                    const s = JSON.parse(ev.data);
+                    roverState.queue = s.pending_count;
+                    roverState.now = s.current ? (s.current.cmd || 'running') : null;
+                    roverState.reachable = true;
+                    paintTelemetry();
+                } catch (e) {}
+            };
+            es.onerror = () => { /* EventSource retries on its own */ };
+        })();
+
+        // ---------- Load ----------
+        async function loadMission() {
+            const resp = await fetch(`/operator/api/missions/${MISSION_ID}`);
+            if (resp.status === 401) { location.href = '/operator/login'; return; }
+            if (resp.status === 404) {
+                document.getElementById('mTitle').textContent = 'Mission not found';
+                document.getElementById('mCode').textContent = '';
+                document.getElementById('rail').innerHTML =
+                    '<div class="missing">This mission is not in the queue. It may have been deleted.<br><br><a class="back" href="/">Back to the queue</a></div>';
+                return;
+            }
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            mission = (await resp.json()).mission;
+            renderHeader();
+            renderRail();
+        }
+
+        loadMission().catch(() => {
+            document.getElementById('mTitle').textContent = 'Could not load this mission';
+        });
+
+        // Keeps the status badge and available actions honest if the mission
+        // finishes on its own (the watcher completes it) while this is open.
+        YardCache.createPoller({
+            interval: 10000,
+            maxInterval: 30000,
+            fetchFn: () => loadMission(),
+        });
+    </script>
+</body>
+</html>

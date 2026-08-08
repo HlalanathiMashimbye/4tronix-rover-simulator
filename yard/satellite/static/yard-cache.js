@@ -147,7 +147,7 @@
             // Must always return a promise. It used to return whatever tick()
             // returned, which was undefined, so every caller doing
             // `refreshNow().catch(...)` threw a TypeError instead - and in
-            // operator.html that throw landed in the same try/catch as the
+            // the queue page that throw landed in the same try/catch as the
             // request itself, turning a successful dispatch into a phantom
             // "mission failed" toast right next to the success one.
             function refreshNow() {

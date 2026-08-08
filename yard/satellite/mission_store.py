@@ -186,7 +186,6 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
             yard_params,
         ).fetchall()
 
-        # 'cancelled' stays hidden from the console entirely.
         finished = conn.execute(
             "SELECT * FROM mission_mirror"
             " WHERE deleted = 0 AND status IN ('completed','failed')" + yard_clause +
@@ -200,10 +199,24 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
             yard_params,
         ).fetchone()['n']
 
+        # Cancelled missions used to be excluded here outright, which made
+        # cancelling a one-way door: the console offered a "put back in queue"
+        # action for them that could never render, because the rows never
+        # reached the client. They are returned now and the queue keeps them
+        # out of its default view, so an operator can still find one they
+        # cancelled by mistake. Paged like the rest, and deliberately NOT part
+        # of finished_total, which drives the Finished tile and its paging.
+        cancelled = conn.execute(
+            "SELECT * FROM mission_mirror"
+            " WHERE deleted = 0 AND status = 'cancelled'" + yard_clause +
+            " ORDER BY submitted_at DESC LIMIT ?",
+            yard_params + [limit],
+        ).fetchall()
+
         meta = conn.execute("SELECT value FROM sync_meta WHERE key = 'last_synced_at'").fetchone()
         conn.close()
 
-    missions = [dict(r) for r in active] + [dict(r) for r in finished]
+    missions = [dict(r) for r in active] + [dict(r) for r in finished] + [dict(r) for r in cancelled]
     missions.sort(key=lambda m: m.get('submitted_at') or '', reverse=True)
 
     last_synced = meta[0] if meta else None
@@ -385,7 +398,14 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
             lease_live = bool(lease) and lease > now_iso
 
             if for_rerun:
-                if status not in ('completed', 'failed'):
+                # 'cancelled' belongs here. The console has always offered a
+                # "put back in queue" action for cancelled missions, and it
+                # could never have worked - this check rejected it as
+                # not-terminal. It went unnoticed because cancelled missions
+                # were filtered out of the console entirely, so the button had
+                # nothing to render against. They are visible now, so the
+                # action has to actually do something.
+                if status not in ('completed', 'failed', 'cancelled'):
                     conn.rollback()
                     return False, 'not-terminal', None
             else:

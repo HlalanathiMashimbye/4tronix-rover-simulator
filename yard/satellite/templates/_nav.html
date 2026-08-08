@@ -21,10 +21,11 @@
     <span class="brand-txt"><b>Mars Yard</b><small>Satellite Console</small></span>
   </a>
   <nav class="topnav">
-    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}>Home</a>
+    {# No separate Queue item: the home page IS the queue. A second link to the
+       same missions just made an operator pick one of two screens at random. #}
+    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}>Queue</a>
     <a href="/code/"{% if nav_active == 'code' %} class="active"{% endif %}>Code</a>
     <a href="/monitor/"{% if nav_active == 'monitor' %} class="active"{% endif %}>Monitor</a>
-    <a href="/operator/"{% if nav_active == 'queue' %} class="active"{% endif %}>Queue</a>
     <a href="/status"{% if nav_active == 'status' %} class="active"{% endif %}>Status</a>
   </nav>
   <div class="topbar-right">
