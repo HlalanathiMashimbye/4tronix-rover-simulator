@@ -6,29 +6,8 @@
     <title>Mission · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
-        :root { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
-
         /* One screen, no page scroll. The only things that scroll are the code
            block and the control rail, each inside its own panel. */
-        html, body { height: 100%; }
-        body {
-            height: 100dvh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            color: var(--foreground);
-        }
-        .topbar { flex: 0 0 auto; }
-
-        .shell {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.9rem;
-            padding: 1rem 1.4rem 1.2rem;
-        }
-
         /* ---------- Header row ---------- */
         .mbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; flex: 0 0 auto; }
         .back {
@@ -42,10 +21,6 @@
         .back:hover { color: var(--text); border-color: var(--border-strong); }
         .back svg { width: 15px; height: 15px; }
         .mbar-title { min-width: 0; flex: 1; }
-        .mbar-title h1 {
-            font-size: 1.4rem; font-weight: 700; color: var(--heading);
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
         .id-chip {
             display: inline-flex; align-items: center; gap: 0.35rem;
             margin-top: 0.15rem; padding: 0.2rem 0.45rem; margin-left: -0.45rem;
@@ -57,19 +32,6 @@
         .id-chip.copied { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, transparent); }
         .id-chip svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
 
-        .status-badge {
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            border-radius: 999px; font-size: 0.72rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.05em;
-            padding: 0.4rem 0.85rem;
-            border: 1px solid var(--border); background: var(--surface-3);
-            color: var(--text-faint); flex-shrink: 0;
-        }
-        .status-badge svg { width: 14px; height: 14px; }
-        .status-badge[data-tone="ok"]   { color: var(--ok);   background: rgba(52,211,153,0.1);  border-color: rgba(52,211,153,0.35); }
-        .status-badge[data-tone="warn"] { color: var(--warn); background: rgba(251,191,36,0.1);  border-color: rgba(251,191,36,0.35); }
-        .status-badge[data-tone="bad"]  { color: var(--bad);  background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
-        .status-badge[data-tone="info"] { color: var(--accent); background: rgba(118,255,221,0.1); border-color: rgba(118,255,221,0.25); }
 
         /* ---------- Two-column body ---------- */
         .grid {
@@ -77,20 +39,6 @@
             display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 1rem;
         }
         @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-
-        .panel {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 16px; min-height: 0; display: flex; flex-direction: column;
-        }
-        .panel-head {
-            flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between;
-            gap: 0.6rem; padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--border);
-        }
-        .panel-head h2 {
-            font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.08em; color: var(--text-faint);
-        }
-        .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 
         pre.code {
             padding: 1rem 1.1rem; color: var(--text-dim);
@@ -124,26 +72,7 @@
         .stop-btn:disabled { opacity: 0.55; cursor: default; }
         .stop-note { color: var(--text-faint); font-size: var(--fs-xs); text-align: center; margin-top: 0.5rem; line-height: 1.5; }
 
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 0.8rem 1rem; }
-        .card h3 {
-            font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 0.6rem;
-        }
-
-        .btn {
-            border: 1px solid var(--border); border-radius: 10px;
-            background: var(--surface-3); color: var(--text-dim);
-            font-size: var(--fs-sm); font-weight: 600;
-            padding: 0.6rem 1rem; min-height: 44px; cursor: pointer;
-        }
-        .btn:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
-        .btn:disabled { opacity: 0.5; cursor: default; }
-        .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-weight: 700; }
-        .btn.primary:hover:not(:disabled) { background: var(--mars); }
-        .btn.danger-quiet { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 35%, transparent); }
-        .btn.danger-quiet:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 12%, transparent); border-color: var(--bad); }
-        .btn.danger-solid { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, transparent); background: color-mix(in oklab, var(--bad) 10%, transparent); }
-        .btn.danger-solid:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 20%, transparent); border-color: var(--bad); }
+        .field input { width: 100%; }
         .actions { display: flex; flex-direction: column; gap: 0.5rem; }
         .actions .btn { width: 100%; }
 
@@ -163,36 +92,11 @@
         .tag-copy code { font-family: var(--mono); font-size: 0.72rem; }
         .tag-copy.copied { border-style: solid; border-color: var(--ok); color: var(--ok); }
         .tag-copy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
-        .field input {
-            width: 100%; background: var(--surface-3); border: 1px solid var(--border);
-            border-radius: 9px; color: var(--text); font-size: var(--fs-sm);
-            padding: 0.6rem 0.75rem; min-height: 46px; outline: none; box-sizing: border-box;
-        }
-        .field input.invalid { border-color: var(--bad); }
-        .field input.valid { border-color: var(--ok); }
-        .field-error { color: var(--bad); font-size: var(--fs-xs); min-height: 1em; margin-top: 0.25rem; }
         .yt-link { color: var(--ok); font-size: var(--fs-sm); text-decoration: none; }
         .yt-link:hover { text-decoration: underline; }
 
         .loading, .missing { color: var(--text-faint); font-size: var(--fs-sm); padding: 2.5rem 1rem; text-align: center; }
 
-        /* ---------- Toasts + modal (same contract as the queue) ---------- */
-        .toast-stack { position: fixed; bottom: 1.25rem; right: 1.25rem; display: flex; flex-direction: column; gap: 0.6rem; z-index: 200; max-width: 380px; }
-        .toast { display: flex; align-items: flex-start; gap: 0.6rem; border-radius: 10px; padding: 0.75rem 0.85rem; border: 1px solid var(--border); background: var(--surface-2); box-shadow: 0 12px 30px rgba(0,0,0,0.4); font-size: var(--fs-sm); animation: toast-in 0.18s ease-out; }
-        .toast svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 0.1rem; }
-        .toast[data-tone="success"] { color: var(--ok); border-color: rgba(52,211,153,0.4); }
-        .toast[data-tone="error"] { color: var(--bad); border-color: rgba(248,113,113,0.4); }
-        .toast-msg { flex: 1; color: var(--text); line-height: 1.45; }
-        .toast-close { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 1rem; min-width: 32px; min-height: 32px; }
-        @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 1.25rem; z-index: 300; }
-        .modal-overlay[hidden] { display: none; }
-        .modal { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; max-width: 420px; width: 100%; padding: 1.4rem; }
-        .modal h2 { font-size: 1.05rem; color: var(--heading); margin-bottom: 0.5rem; }
-        .modal p { font-size: var(--fs-sm); color: var(--text-dim); line-height: 1.55; margin-bottom: 1.2rem; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; }
-        .modal-actions .btn.danger { background: rgba(248,113,113,0.15); border-color: rgba(248,113,113,0.4); color: var(--bad); }
         .confirm-typed-label { display: block; color: var(--bad); font-size: 0.8rem; font-weight: 600; margin: 0.9rem 0 0.4rem; }
         .confirm-typed-input { width: 100%; min-height: 46px; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in oklab, var(--bad) 45%, transparent); border-radius: 9px; background: var(--surface); color: var(--text); font-family: var(--mono); letter-spacing: 0.12em; }
 
@@ -203,7 +107,7 @@
         }
     </style>
 </head>
-<body>
+<body class="console fixed-shell">
     {% include "_nav.html" %}
 
     <main class="shell">
@@ -213,7 +117,7 @@
                 Queue
             </a>
             <div class="mbar-title">
-                <h1 id="mTitle">Loading&hellip;</h1>
+                <h1 class="h-page" id="mTitle" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Loading&hellip;</h1>
                 <button class="id-chip" id="idChip" title="Copy mission ID" hidden>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
                     <span id="mId"></span>
@@ -225,8 +129,8 @@
         <div class="grid">
             <section class="panel">
                 <div class="panel-head">
-                    <h2>Mission code</h2>
-                    <button class="btn" id="copyCode" style="min-height:34px;padding:0.3rem 0.7rem;">Copy</button>
+                    <h2 class="h-card" style="margin-bottom:0;">Mission code</h2>
+                    <button class="btn quiet" id="copyCode">Copy</button>
                 </div>
                 <div class="panel-body"><pre class="code" id="mCode">Loading&hellip;</pre></div>
             </section>
@@ -409,7 +313,7 @@
             document.getElementById('idChip').hidden = false;
             const meta = STATUS_META[mission.status] || { label: mission.status, tone: '', icon: 'alert' };
             document.getElementById('mStatus').innerHTML =
-                `<span class="status-badge" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>`;
+                `<span class="badge has-icon" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>`;
             document.getElementById('mCode').textContent = (mission.code || '').trim() || '# No code';
         }
 
@@ -421,7 +325,7 @@
             const rail = document.getElementById('rail');
             let html = '';
 
-            html += '<div class="card"><h3>Actions</h3><div class="actions">';
+            html += '<div class="card"><h3 class="h-card">Actions</h3><div class="actions">';
             if (mission.status === 'queued') {
                 html += actionButton('send', 'Send to rover', 'primary');
                 html += actionButton('complete', 'Mark complete', '', true);
@@ -442,10 +346,10 @@
             // Video linking, only where it applies.
             if (mission.status === 'completed' && !mission.youtubeUrl) {
                 html += `<div class="card">
-                    <h3>Link the video</h3>
+                    <h3 class="h-card">Link the video</h3>
                     <ol class="yt-steps">
                         <li>Put this in the YouTube description and it links itself:
-                            <button class="btn tag-copy" data-act="copytag" style="min-height:34px;">
+                            <button class="btn tag-copy" data-act="copytag">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
                                 <code>${esc(missionTag(mission.id))}</code>
                             </button>
@@ -459,12 +363,12 @@
                     <div class="actions" style="margin-top:0.6rem;">${actionButton('youtube', 'Attach video', 'primary')}</div>
                 </div>`;
             } else if (mission.youtubeUrl) {
-                html += `<div class="card"><h3>Video</h3>
+                html += `<div class="card"><h3 class="h-card">Video</h3>
                     <a class="yt-link" href="${esc(mission.youtubeUrl)}" target="_blank" rel="noopener">Watch on YouTube &#8599;</a></div>`;
             }
 
             html += `<div class="card">
-                <h3>Rover</h3>
+                <h3 class="h-card">Rover</h3>
                 <div id="tele">
                     <div class="tele-row"><span class="k">Connection</span><span class="v" id="teleConn">&mdash;</span></div>
                     <div class="tele-row"><span class="k">Queue</span><span class="v" id="teleQueue">&mdash;</span></div>
@@ -472,7 +376,7 @@
                 </div>
             </div>`;
 
-            html += `<div class="card"><h3>Timeline</h3>
+            html += `<div class="card"><h3 class="h-card">Timeline</h3>
                 <div class="tele-row"><span class="k">Submitted</span><span class="v">${esc(relTime(mission.submittedAt)) || '&mdash;'}</span></div>
                 ${mission.startedAt ? `<div class="tele-row"><span class="k">Started</span><span class="v">${esc(relTime(mission.startedAt))}</span></div>` : ''}
                 ${mission.completedAt ? `<div class="tele-row"><span class="k">Completed</span><span class="v">${esc(relTime(mission.completedAt))}</span></div>` : ''}

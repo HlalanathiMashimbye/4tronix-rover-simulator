@@ -248,6 +248,32 @@ def status_counts(yard_id=None):
     return {r['status']: r['n'] for r in rows}
 
 
+def completed_without_video(yard_id=None):
+    """Ids of completed missions that have no video attached yet.
+
+    The YouTube poll used to get this list by streaming every completed mission
+    out of Firestore, every five minutes, forever - a cost that grew by one
+    read per child who finished a run, and on this yard was already ~21,000
+    reads a day against a 50,000 free tier shared with the public site.
+
+    The mirror holds `status` and `youtube_url` for the same documents and is
+    kept current by the sync worker, so the candidate list costs nothing.
+    """
+    sql = ("SELECT id FROM mission_mirror"
+           " WHERE deleted = 0 AND status = 'completed'"
+           " AND (youtube_url IS NULL OR youtube_url = '')")
+    params = []
+    if yard_id:
+        sql += ' AND yard_id = ?'
+        params.append(yard_id)
+
+    with _db_lock:
+        conn = _connect()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+    return [r['id'] for r in rows]
+
+
 def get_mission(mission_id, include_deleted=False):
     """A single mission from the mirror, or None if it isn't there.
 

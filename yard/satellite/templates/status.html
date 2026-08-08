@@ -6,179 +6,83 @@
     <title>Settings · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
-        body { min-height: 100vh; color: var(--foreground); }
+        /* Layout only. Cards, buttons, badges, inputs and type all come from
+           the shared console layer in yard-base.css, so this page cannot drift
+           away from the queue and mission pages the way it had. */
 
-        h1 {
-            font-size: 1.8rem;
-            font-weight: 600;
-            margin-bottom: 0.25rem;
-            color: var(--heading);
-        }
-
-        .subtitle {
-            font-size: 0.9rem;
-            color: var(--text-faint);
-            margin-bottom: 2rem;
-        }
-
-        .cards {
-            display: flex;
-            flex-direction: column;
+        /* Three columns so the whole page fits one screen. It was a single
+           narrow column of tall cards that ran well past the fold. */
+        .settings-grid {
+            flex: 1 1 auto; min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr);
             gap: 0.85rem;
-            max-width: 720px;
-            margin-top: 1.4rem;
         }
+        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; }
+        .settings-col.scrolls { overflow-y: auto; padding-right: 2px; }
 
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.1rem 1.25rem;
-            display: flex;
-            align-items: center;
-            gap: 1.1rem;
-            transition: border-color 0.16s, background 0.16s;
+        .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+        .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
+        .rover-url code { color: var(--text); }
+        .link-btn { background: none; border: none; color: var(--primary); font-size: var(--fs-sm); cursor: pointer; padding: 0 0.25rem; }
+        .link-btn:hover { text-decoration: underline; }
+        .url-editor { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .url-editor[hidden] { display: none; }
+        .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
+        .url-error { color: var(--bad); font-size: var(--fs-sm); }
+
+        /* Status card: one compact row, not a 90px block */
+        .stat-card { display: flex; align-items: flex-start; gap: 0.7rem; }
+        .stat-ic {
+            flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border); color: var(--text-faint);
         }
-        .card:hover { border-color: var(--border-strong); background: var(--surface-2); }
-
-        .badge {
-            flex-shrink: 0;
-            width: 46px;
-            height: 46px;
-            border-radius: 13px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid var(--border);
-            color: var(--text-faint);
+        .stat-ic svg { width: 17px; height: 17px; }
+        .stat-ic.green { background: rgba(52,211,153,0.12);  color: var(--ok);   border-color: rgba(52,211,153,0.3); }
+        .stat-ic.amber { background: rgba(251,191,36,0.12);  color: var(--warn); border-color: rgba(251,191,36,0.3); }
+        .stat-ic.red   { background: rgba(248,113,113,0.12); color: var(--bad);  border-color: rgba(248,113,113,0.3); }
+        .stat-ic.grey  { background: var(--surface-3); color: var(--text-faint); border-color: var(--border); }
+        .stat-body { flex: 1; min-width: 0; }
+        .stat-head { display: flex; align-items: center; gap: 0.5rem; }
+        .stat-name { font-family: var(--font-display); font-size: 0.92rem; font-weight: 650; color: var(--heading); }
+        .stat-detail {
+            font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.55;
+            font-family: var(--mono); margin-top: 0.2rem; word-break: break-word;
         }
-        .badge svg { width: 24px; height: 24px; }
-        .badge.green { background: rgba(52, 211, 153, 0.12);  color: var(--ok);   border-color: rgba(52, 211, 153, 0.3); }
-        .badge.amber { background: rgba(251, 191, 36, 0.12);  color: var(--warn); border-color: rgba(251, 191, 36, 0.3); }
-        .badge.red   { background: rgba(248, 113, 113, 0.12); color: var(--bad);  border-color: rgba(248, 113, 113, 0.3); }
-        .badge.grey  { background: var(--surface-3);          color: var(--text-faint); border-color: var(--border); }
+        .stat-detail span { color: var(--text); }
 
-        .card-body { flex: 1; min-width: 0; }
-
-        .card-title { font-size: 1rem; font-weight: 650; color: var(--heading); margin-bottom: 0.3rem; }
-
-        .card-detail { font-size: 0.8rem; color: var(--text-dim); line-height: 1.55; font-family: var(--mono); }
-        .card-detail span { color: var(--text); }
-
+        /* status-label keeps its name because setBadge() writes it */
         .status-label {
-            display: inline-block;
-            margin-top: 0.55rem;
-            font-size: 0.64rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.07em;
-            padding: 0.28rem 0.6rem;
-            border-radius: 999px;
-            border: 1px solid var(--border);
+            display: inline-flex; align-items: center;
+            font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.06em; padding: 0.16rem 0.5rem; border-radius: 999px;
+            border: 1px solid var(--border); white-space: nowrap;
         }
-        .status-label.green { color: var(--ok);   background: rgba(52, 211, 153, 0.1);  border-color: rgba(52, 211, 153, 0.35); }
-        .status-label.amber { color: var(--warn); background: rgba(251, 191, 36, 0.1);  border-color: rgba(251, 191, 36, 0.35); }
-        .status-label.red   { color: var(--bad);  background: rgba(248, 113, 113, 0.1); border-color: rgba(248, 113, 113, 0.35); }
+        .status-label.green { color: var(--ok);   background: rgba(52,211,153,0.1);  border-color: rgba(52,211,153,0.35); }
+        .status-label.amber { color: var(--warn); background: rgba(251,191,36,0.1);  border-color: rgba(251,191,36,0.35); }
+        .status-label.red   { color: var(--bad);  background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
         .status-label.grey  { color: var(--text-faint); background: var(--surface-3); border-color: var(--border); }
 
-        .footer {
-            margin-top: 2rem;
-            font-size: 0.8rem;
-            color: var(--text-faint);
-        }
+        .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; }
+        .camera-controls .btn { min-height: 34px; padding: 0.3rem 0.65rem; font-size: var(--fs-xs); }
+        .camera-index-label { color: var(--text-faint); font-size: var(--fs-xs); }
+        .camera-index { width: 58px; min-height: 34px; padding: 0.25rem 0.45rem; }
+        .camera-managed { color: var(--text-faint); font-size: 0.68rem; font-family: var(--mono); }
+        .camera-msg { margin-top: 0.4rem; font-size: var(--fs-xs); color: var(--text-dim); min-height: 1.1em; }
+        .camera-msg[data-tone="bad"] { color: var(--bad); }
+        .camera-msg[data-tone="ok"]  { color: var(--ok); }
 
-        .subtitle code { color: var(--text); }
-
-        .link-btn {
-            background: none;
-            border: none;
-            color: var(--primary);
-            font-size: 0.85rem;
-            cursor: pointer;
-            padding: 0 0.25rem;
-        }
-
-        .link-btn:hover { text-decoration: underline; }
-
-        .url-editor {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin: -1.25rem 0 2rem;
-            max-width: 640px;
-        }
-
-        /* the hidden attribute must beat the display:flex above */
-        .url-editor[hidden] { display: none; }
-
-        .url-editor input {
-            flex: 1;
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text);
-            font-family: var(--mono);
-            font-size: 0.9rem;
-            padding: 0.45rem 0.6rem;
-        }
-
-        .editor-btn {
-            background: var(--surface-2);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-dim);
-            font-size: 0.85rem;
-            padding: 0.45rem 0.9rem;
-            cursor: pointer;
-        }
-
-        .editor-btn.save {
-            border-color: var(--ok);
-            color: var(--ok);
-        }
-
-        .editor-btn:hover { background: var(--surface); }
-
-        .url-error {
-            color: var(--bad);
-            font-size: 0.8rem;
-        }
-    
-        #conflictSection { margin-top: 2rem; }
-        .conflict-heading { color: var(--heading); font-size: 1rem; font-weight: 700; }
-        .conflict-note { color: var(--text-dim); font-size: .82rem; margin: .25rem 0 .8rem; max-width: 60ch; }
-        .conflict-row {
-            display: flex; gap: .6rem; flex-wrap: wrap; align-items: baseline;
-            border: 1px solid var(--border); border-radius: 10px;
-            padding: .6rem .8rem; margin-bottom: .5rem; background: var(--surface);
-            font-family: var(--mono); font-size: .78rem; color: var(--text-dim);
-        }
-        .conflict-row b { color: var(--heading); font-weight: 600; }
-        .conflict-win { color: var(--warn); }
-
-        #syncSection { margin-top: 2rem; max-width: 720px; }
-        .sync-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .8rem; }
-        .sync-field {
-            display: flex; flex-direction: column; gap: .35rem;
-            border: 1px solid var(--border); border-radius: 10px;
-            padding: .7rem .85rem; background: var(--surface);
-        }
-        .sync-label { color: var(--heading); font-size: .82rem; font-weight: 600; }
-        .sync-input-row { display: flex; align-items: center; gap: .5rem; }
-        .sync-input-row input {
-            width: 92px; min-height: 40px; padding: .4rem .55rem;
-            border: 1px solid var(--border); border-radius: 8px;
-            background: var(--surface-2); color: var(--text);
-            font-family: var(--mono); font-size: .9rem;
-        }
-        .sync-input-row input:focus-visible { border-color: var(--primary); }
-        .sync-unit { color: var(--text-faint); font-size: .8rem; }
-        .sync-hint { color: var(--text-dim); font-size: .74rem; line-height: 1.5; }
+        .sync-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
+        .sync-label { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
+        .sync-input-row { display: flex; align-items: center; gap: 0.5rem; }
+        .sync-input-row input { width: 88px; min-height: 40px; }
+        .sync-unit { color: var(--text-faint); font-size: var(--fs-sm); }
+        .sync-hint { color: var(--text-dim); font-size: 0.7rem; line-height: 1.45; }
         .sync-estimate {
-            margin-top: .8rem; padding: .7rem .85rem;
-            border: 1px solid var(--border); border-radius: 10px;
-            background: var(--surface); color: var(--text-dim);
-            font-size: .78rem; line-height: 1.6;
+            padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--surface-2); color: var(--text-dim);
+            font-size: 0.72rem; line-height: 1.55; margin-bottom: 0.6rem;
         }
         .sync-estimate b { color: var(--heading); font-family: var(--mono); }
         .sync-estimate[data-tone="warn"] { border-color: color-mix(in oklab, var(--warn) 45%, transparent); }
@@ -186,141 +90,143 @@
         .sync-estimate[data-tone="bad"] { border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
         .sync-estimate[data-tone="bad"] b { color: var(--bad); }
 
-        #setupSection { margin-top: 2rem; }
-        .setup-row {
-            display: flex; gap: .75rem; align-items: flex-start;
-            border: 1px solid var(--border); border-radius: 10px;
-            padding: .7rem .85rem; margin-bottom: .5rem; background: var(--surface);
-        }
-        .setup-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: .38rem; flex-shrink: 0; }
+        .setup-row { display: flex; gap: 0.55rem; align-items: flex-start; padding: 0.35rem 0; }
+        .setup-body { flex: 1; min-width: 0; }
+        .setup-name { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
+        .setup-why { color: var(--text-dim); font-size: 0.7rem; margin-top: 0.05rem; line-height: 1.45; }
+        .setup-detail { color: var(--text-faint); font-size: 0.68rem; font-family: var(--mono); margin-top: 0.2rem; word-break: break-word; }
+        .setup-dot { margin-top: 0.35rem; }
         .setup-dot.on { background: var(--ok); }
         .setup-dot.off { background: var(--warn); }
-        .setup-body { flex: 1; min-width: 0; }
-        .setup-name { color: var(--heading); font-size: .87rem; font-weight: 600; }
-        .setup-why { color: var(--text-dim); font-size: .78rem; margin-top: .1rem; }
-        .setup-detail { color: var(--text-faint); font-size: .75rem; font-family: var(--mono); margin-top: .3rem; word-break: break-word; }
 
-        .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-top: .7rem; }
-        .camera-index-label { color: var(--text-faint); font-size: .75rem; margin-left: .3rem; }
-        .camera-index {
-            width: 62px; min-height: 34px; padding: .3rem .5rem;
-            border: 1px solid var(--border); border-radius: 8px;
-            background: var(--surface); color: var(--text); font-family: var(--mono);
+        .conflict-row {
+            display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline;
+            padding: 0.35rem 0; font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
         }
-        .camera-managed { color: var(--text-faint); font-size: .72rem; font-family: var(--mono); }
-        .camera-msg { margin-top: .5rem; font-size: .78rem; color: var(--text-dim); min-height: 1.1em; }
-        .camera-msg[data-tone="bad"] { color: var(--bad); }
-        .camera-msg[data-tone="ok"] { color: var(--ok); }
-        .editor-btn[disabled] { opacity: .5; cursor: not-allowed; }
-</style>
+        .conflict-row b { color: var(--heading); font-weight: 600; }
+        .conflict-win { color: var(--warn); }
+
+        .footer { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); }
+
+        /* Below this the three columns become a keyhole; let it scroll. */
+        @media (max-width: 1100px) {
+            body { height: auto; overflow: auto; }
+            .settings-grid { grid-template-columns: 1fr; }
+            .settings-col.scrolls { overflow: visible; }
+        }
+    </style>
 </head>
-<body>
+<body class="console fixed-shell">
     {% set nav_active = 'status' %}{% include "_nav.html" %}
 
-    <main class="page">
-    <p class="eyebrow">Satellite</p>
-    <h1 class="page-title" style="margin-bottom: 0.4rem;">Settings</h1>
-    <p class="subtitle">
-        Rover URL: <code id="rover-url">{{ rover_url }}</code>
-        <button class="link-btn" id="edit-url-btn">edit</button>
-    </p>
-    <div class="url-editor" id="url-editor" hidden>
-        <input type="text" id="url-input" spellcheck="false"
-               placeholder="http://curiosity.local:8523">
-        <button class="editor-btn save" id="save-url-btn">Save</button>
-        <button class="editor-btn" id="cancel-url-btn">Cancel</button>
-        <span class="url-error" id="url-error"></span>
-    </div>
-
-    <div class="cards" id="cards">
-        <!-- Satellite -->
-        <div class="card" id="card-satellite">
-            <div class="badge grey" id="badge-satellite">?</div>
-            <div class="card-body">
-                <div class="card-title">Satellite</div>
-                <div class="card-detail" id="detail-satellite">Loading&hellip;</div>
-                <div class="status-label grey" id="label-satellite">checking</div>
-            </div>
+    <main class="shell">
+        <div class="headrow">
+            <h1 class="h-page">Settings</h1>
+            <span class="rover-url">Rover: <code id="rover-url">{{ rover_url }}</code><button class="link-btn" id="edit-url-btn">edit</button></span>
         </div>
 
-        <!-- Rover -->
-        <div class="card" id="card-rover">
-            <div class="badge grey" id="badge-rover">?</div>
-            <div class="card-body">
-                <div class="card-title">Rover</div>
-                <div class="card-detail" id="detail-rover">Loading&hellip;</div>
-                <div class="status-label grey" id="label-rover">checking</div>
-            </div>
+        <div class="url-editor" id="url-editor" hidden>
+            <input type="text" id="url-input" spellcheck="false" placeholder="http://curiosity.local:8523">
+            <button class="btn quiet primary" id="save-url-btn">Save</button>
+            <button class="btn quiet" id="cancel-url-btn">Cancel</button>
+            <span class="url-error" id="url-error"></span>
         </div>
 
-        <!-- Camera -->
-        <div class="card" id="card-camera">
-            <div class="badge grey" id="badge-camera">?</div>
-            <div class="card-body">
-                <div class="card-title">Camera</div>
-                <div class="card-detail" id="detail-camera">Loading&hellip;</div>
-                <div class="status-label grey" id="label-camera">checking</div>
-                <div class="camera-controls">
-                    <button class="editor-btn" id="camera-start">Start camera</button>
-                    <button class="editor-btn" id="camera-stop">Stop</button>
-                    <label class="camera-index-label" for="camera-index">Device</label>
-                    <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0"
-                           aria-label="Camera device index">
-                    <span class="camera-managed" id="camera-managed"></span>
+        <div class="settings-grid">
+            <div class="settings-col">
+                <div class="card stat-card" id="card-satellite">
+                    <div class="stat-ic grey" id="badge-satellite"></div>
+                    <div class="stat-body">
+                        <div class="stat-head">
+                            <span class="stat-name">Satellite</span>
+                            <span class="status-label grey" id="label-satellite">checking</span>
+                        </div>
+                        <div class="stat-detail" id="detail-satellite">Loading&hellip;</div>
+                    </div>
                 </div>
-                <div class="camera-msg" id="camera-msg" role="status" aria-live="polite"></div>
+
+                <div class="card stat-card" id="card-rover">
+                    <div class="stat-ic grey" id="badge-rover"></div>
+                    <div class="stat-body">
+                        <div class="stat-head">
+                            <span class="stat-name">Rover</span>
+                            <span class="status-label grey" id="label-rover">checking</span>
+                        </div>
+                        <div class="stat-detail" id="detail-rover">Loading&hellip;</div>
+                    </div>
+                </div>
+
+                <div class="card stat-card" id="card-camera">
+                    <div class="stat-ic grey" id="badge-camera"></div>
+                    <div class="stat-body">
+                        <div class="stat-head">
+                            <span class="stat-name">Camera</span>
+                            <span class="status-label grey" id="label-camera">checking</span>
+                        </div>
+                        <div class="stat-detail" id="detail-camera">Loading&hellip;</div>
+                        <div class="camera-controls">
+                            <button class="btn" id="camera-start">Start</button>
+                            <button class="btn" id="camera-stop">Stop</button>
+                            <label class="camera-index-label" for="camera-index">Device</label>
+                            <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
+                            <span class="camera-managed" id="camera-managed"></span>
+                        </div>
+                        <div class="camera-msg" id="camera-msg" role="status" aria-live="polite"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-col">
+                <div class="card" id="syncSection">
+                    <h3 class="h-card">Firestore sync</h3>
+                    <p class="muted" style="margin-bottom:0.7rem;">The only thing here that spends Firestore's
+                        daily read quota. The queue's own refreshing reads local storage and costs nothing,
+                        however often it happens.</p>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Sync every</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="syncInterval" min="10" max="600" step="5">
+                            <span class="sync-unit">seconds</span>
+                        </span>
+                        <span class="sync-hint">How quickly a mission submitted on the website reaches this yard.</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Deep check every</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="syncReconcile" min="1" max="60" step="1">
+                            <span class="sync-unit">cycles</span>
+                        </span>
+                        <span class="sync-hint">Re-reads unfinished missions, to catch changes made elsewhere.</span>
+                    </label>
+
+                    <div class="sync-estimate" id="syncEstimate"></div>
+                    <div class="camera-controls" style="margin-top:0;">
+                        <button class="btn primary" id="syncSave">Save</button>
+                        <span class="camera-msg" id="syncMsg" style="margin-top:0;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-col scrolls">
+                <div class="card" id="setupSection">
+                    <h3 class="h-card">Setup</h3>
+                    <p class="muted" style="margin-bottom:0.5rem;">What this satellite can and cannot do.
+                        Values are never shown, only whether they are configured.</p>
+                    <div id="setupList"></div>
+                </div>
+
+                <div class="card" id="conflictSection" hidden>
+                    <h3 class="h-card">Sync conflicts</h3>
+                    <p class="muted" style="margin-bottom:0.5rem;">Reconciliations where the losing side had
+                        already finished. Normal progress is not listed.</p>
+                    <div id="conflictList"></div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <section id="syncSection">
-        <h2 class="conflict-heading">Firestore sync</h2>
-        <p class="conflict-note">How often this satellite reconciles with Firestore. This is the only
-            thing here that spends Firestore's daily read quota &mdash; the queue's own refreshing reads
-            local storage and costs nothing, however often it happens.</p>
-
-        <div class="sync-grid">
-            <label class="sync-field">
-                <span class="sync-label">Sync every</span>
-                <span class="sync-input-row">
-                    <input type="number" id="syncInterval" min="10" max="600" step="5">
-                    <span class="sync-unit">seconds</span>
-                </span>
-                <span class="sync-hint">How quickly a mission submitted on the website reaches this yard.</span>
-            </label>
-
-            <label class="sync-field">
-                <span class="sync-label">Deep check every</span>
-                <span class="sync-input-row">
-                    <input type="number" id="syncReconcile" min="1" max="60" step="1">
-                    <span class="sync-unit">cycles</span>
-                </span>
-                <span class="sync-hint">Re-reads unfinished missions, to catch changes made elsewhere.</span>
-            </label>
-        </div>
-
-        <div class="sync-estimate" id="syncEstimate"></div>
-        <div class="camera-controls">
-            <button class="editor-btn save" id="syncSave">Save</button>
-            <span class="camera-msg" id="syncMsg"></span>
-        </div>
-    </section>
-
-    <section id="setupSection">
-        <h2 class="conflict-heading">Setup</h2>
-        <p class="conflict-note">What this satellite can and cannot do right now.
-            Values are never shown here - only whether they are configured.</p>
-        <div id="setupList"></div>
-    </section>
-
-    <section id="conflictSection" hidden>
-        <h2 class="conflict-heading">Sync conflicts</h2>
-        <p class="conflict-note">Reconciliations where the losing side had already finished.
-            Normal progress is not listed.</p>
-        <div id="conflictList"></div>
-    </section>
-
-    <div class="footer" id="footer">Checking&hellip;</div>
+        <div class="footer" id="footer">Checking&hellip;</div>
     </main>
 
     <script>
@@ -368,7 +274,7 @@
             if (!rows.length) { el.innerHTML = '<div class="setup-row"><div class="setup-body"><div class="setup-why">Sign in to see setup status.</div></div></div>'; return; }
             el.innerHTML = rows.map(r => `
                 <div class="setup-row">
-                    <span class="setup-dot ${r.configured ? 'on' : 'off'}"
+                    <span class="dot setup-dot ${r.configured ? 'on' : 'off'}"
                           role="img" aria-label="${r.configured ? 'Configured' : 'Not configured'}"></span>
                     <div class="setup-body">
                         <div class="setup-name">${r.name} &mdash; ${r.configured ? 'ready' : 'not set up'}</div>
@@ -546,7 +452,7 @@
         function setBadge(id, state) {
             const el = document.getElementById('badge-' + id);
             const lbl = document.getElementById('label-' + id);
-            el.className = 'badge ' + state.colour;
+            el.className = 'stat-ic ' + state.colour;
             el.innerHTML = BADGE_ICONS[state.colour] || '';
             lbl.className = 'status-label ' + state.colour;
             lbl.textContent = state.text;

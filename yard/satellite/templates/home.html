@@ -6,12 +6,6 @@
     <title>Mission Queue · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
-        :root {
-            --fs-body: 0.9rem;
-            --fs-sm: 0.8rem;
-            --fs-xs: 0.72rem;
-        }
-
         /* ---------------------------------------------------------------
            One screen. The page itself never scrolls; the mission list is
            the only thing that does, inside its own panel. Everything in
@@ -19,26 +13,8 @@
            or grid child defaults to min-content height, which stops an
            inner overflow:auto from ever engaging and pushes the page tall.
            --------------------------------------------------------------- */
-        html, body { height: 100%; }
-        body {
-            height: 100dvh;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            color: var(--foreground);
-        }
-        .topbar { flex: 0 0 auto; }
         :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
 
-        .shell {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 0.85rem;
-            padding: 0.9rem 1.4rem 1.1rem;
-            width: 100%;
-        }
 
         /* There is no page title or status strip here on purpose. The nav bar
            already names the page and carries the rover chip, and the Sync card
@@ -91,7 +67,11 @@
         }
         .search:focus-within { border-color: var(--primary); }
         .search svg { width: 15px; height: 15px; color: var(--text-faint); flex-shrink: 0; }
-        .search input { flex: 1; background: none; border: none; outline: none; color: var(--text); font-size: var(--fs-sm); min-width: 0; }
+        .search input {
+            flex: 1; min-width: 0; background: none; border: none; outline: none;
+            color: var(--text); font-size: var(--fs-sm);
+            padding: 0; min-height: 0; border-radius: 0;
+        }
         .sort {
             background: var(--surface-2); border: 1px solid var(--border);
             border-radius: 9px; color: var(--text-dim); font-size: var(--fs-sm);
@@ -103,14 +83,6 @@
            what these do - two controls for one job, and a whole band of screen
            spent on it. */
         .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-        .chip {
-            display: inline-flex; align-items: center; gap: 0.4rem;
-            border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
-            border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
-            padding: 0.32rem 0.7rem 0.32rem 0.8rem; cursor: pointer; min-height: 32px;
-        }
-        .chip:hover { border-color: var(--border-strong); }
-        .chip[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
         .chip .c {
             font-variant-numeric: tabular-nums; font-weight: 700;
             color: var(--text); background: var(--surface-3);
@@ -142,20 +114,7 @@
         .row-go { color: var(--text-faint); flex-shrink: 0; display: inline-flex; transition: color 0.14s, transform 0.14s; }
         .row-go svg { width: 17px; height: 17px; }
 
-        .badge {
-            display: inline-flex; align-items: center; gap: 0.3rem;
-            border-radius: 999px; font-size: 0.63rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.05em; padding: 0.22rem 0.6rem;
-            border: 1px solid var(--border); background: var(--surface-3);
-            color: var(--text-faint); flex-shrink: 0; min-width: 92px; justify-content: center;
-        }
-        .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-        .badge[data-tone="ok"] { color: var(--ok); background: rgba(52,211,153,0.1); border-color: rgba(52,211,153,0.35); }
-        .badge[data-tone="warn"] { color: var(--warn); background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.35); }
-        .badge[data-tone="bad"] { color: var(--bad); background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
-        .badge[data-tone="info"] { color: var(--accent); background: rgba(118,255,221,0.1); border-color: rgba(118,255,221,0.28); }
 
-        .empty { text-align: center; color: var(--text-faint); padding: 2.5rem 1rem; border: 1px dashed var(--border); border-radius: 12px; font-size: var(--fs-sm); }
 
         .more-wrap { display: flex; justify-content: center; padding: 0.35rem 0 0.2rem; }
         .more {
@@ -198,8 +157,6 @@
 
         /* ---------- Right rail ---------- */
         .rail { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; overflow-y: auto; }
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 0.9rem 1rem; }
-        .card h3 { font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-faint); margin-bottom: 0.7rem; }
         .acts { display: flex; flex-direction: column; gap: 0.45rem; }
         .act {
             display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
@@ -218,15 +175,7 @@
         .hname { color: var(--text); flex-shrink: 0; min-width: 68px; }
         .hdetail { color: var(--text-dim); font-size: var(--fs-xs); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-        .nrow { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; font-size: var(--fs-sm); padding: 0.2rem 0; }
-        .nrow .k { color: var(--text-faint); }
-        .nrow .v { color: var(--text); font-weight: 600; text-align: right; }
-        .nrow .v.green { color: var(--ok); }
-        .nrow .v.amber { color: var(--warn); }
-        .nrow .v.red { color: var(--bad); }
 
-        .skel { display: inline-block; height: 0.9em; width: 55%; border-radius: 4px; background: var(--surface-3); animation: skel 1.4s ease-in-out infinite; }
-        @keyframes skel { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
 
         .signin {
             background: var(--surface); border: 1px dashed var(--border); border-radius: 12px;
@@ -244,12 +193,11 @@
             .rail { overflow: visible; }
         }
         @media (prefers-reduced-motion: reduce) {
-            .skel { animation: none; opacity: 0.7; }
             .row, .row-go { transition: none; }
         }
     </style>
 </head>
-<body>
+<body class="console fixed-shell">
     {% set nav_active = 'home' %}{% include "_nav.html" %}
 
     <main class="shell">
@@ -303,7 +251,7 @@
 
             <aside class="rail">
                 <div class="card">
-                    <h3>Quick actions</h3>
+                    <h3 class="h-card">Quick actions</h3>
                     <div class="acts">
                         <a class="act" href="/settings">Diagnostics &amp; settings</a>
                         <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
@@ -312,7 +260,7 @@
                 </div>
 
                 <div class="card">
-                    <h3>System health</h3>
+                    <h3 class="h-card">System health</h3>
                     <div id="health">
                         <div class="hrow"><span class="hdot"></span><span class="hname">Rover</span><span class="hdetail"><span class="skel"></span></span></div>
                         <div class="hrow"><span class="hdot"></span><span class="hname">Camera</span><span class="hdetail"><span class="skel"></span></span></div>
@@ -321,12 +269,12 @@
                 </div>
 
                 <div class="card">
-                    <h3>Sync</h3>
+                    <h3 class="h-card">Sync</h3>
                     <div id="net">
-                        <div class="nrow"><span class="k">Connection</span><span class="v"><span class="skel"></span></span></div>
-                        <div class="nrow"><span class="k">Last sync</span><span class="v"><span class="skel"></span></span></div>
-                        <div class="nrow"><span class="k">Loaded</span><span class="v"><span class="skel"></span></span></div>
-                        <div class="nrow"><span class="k">To Firestore</span><span class="v"><span class="skel"></span></span></div>
+                        <div class="kv"><span class="k">Connection</span><span class="v"><span class="skel"></span></span></div>
+                        <div class="kv"><span class="k">Last sync</span><span class="v"><span class="skel"></span></span></div>
+                        <div class="kv"><span class="k">Loaded</span><span class="v"><span class="skel"></span></span></div>
+                        <div class="kv"><span class="k">To Firestore</span><span class="v"><span class="skel"></span></span></div>
                     </div>
                 </div>
             </aside>
@@ -642,7 +590,7 @@
         }
 
         function nrow(k, v, tone) {
-            return '<div class="nrow"><span class="k">' + k + '</span><span class="v' + (tone ? ' ' + tone : '') + '">' + v + '</span></div>';
+            return '<div class="kv"><span class="k">' + k + '</span><span class="v' + (tone ? ' ' + tone : '') + '">' + v + '</span></div>';
         }
 
         // "To Firestore" is the satellite's outbox depth, which the missions

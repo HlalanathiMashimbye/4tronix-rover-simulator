@@ -1097,12 +1097,19 @@ def _youtube_channel_id():
 def check_for_new_videos():
     """Poll the YouTube channel for uploads matching a completed mission's ID.
 
-    A mission never has a `youtubeUrl` field at all until one is attached
-    (mission-control omits it entirely on write; only api_rerun explicitly
-    nulls it out), so this cannot filter on `youtubeUrl == None` in the
-    Firestore query itself - that only matches documents where the field is
-    present and null, not documents where it's absent. Fetch completed
-    missions and filter for a missing/falsy youtubeUrl in Python instead.
+    Candidates come from the local mirror, not Firestore. The previous version
+    streamed every completed mission out of Firestore on each pass: at one read
+    per completed mission every five minutes, that was ~21,000 reads/day on
+    this yard and rising with every child who finished a run - roughly 80% of
+    the satellite's entire Firestore bill, for a list the mirror already had.
+
+    (The old approach could not narrow that query either: a mission has no
+    `youtubeUrl` field at all until one is attached, and Firestore's `== None`
+    matches documents where the field is present and null, not absent. SQL has
+    no such trouble.)
+
+    Firestore is now touched only to WRITE a link that was actually found, so a
+    quiet poll - which is nearly all of them - costs nothing at all.
     """
     print('[youtube-poll] Checking for new videos...')
 
@@ -1112,15 +1119,12 @@ def check_for_new_videos():
         print('[youtube-poll] Missing YOUTUBE_API_KEY or YOUTUBE_CHANNEL_ID; skipping poll')
         return
 
-    try:
-        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
-        completed = list(missions_ref.where('status', '==', 'completed').stream())
-    except Exception as e:
-        print(f'[youtube-poll] Failed to read Firestore: {e}')
-        return
+    from mission_store import completed_without_video
+    from satellite_identity import yard_id
 
-    unlinked = [doc for doc in completed if not doc.to_dict().get('youtubeUrl')]
-    if not unlinked:
+    unlinked_ids = completed_without_video(yard_id=yard_id())
+    if not unlinked_ids:
+        # Nothing to look for, so do not spend a YouTube API call either.
         return
 
     # The uploads playlist id is the channel id with UC -> UU.
@@ -1147,10 +1151,13 @@ def check_for_new_videos():
 
     videos = response.json().get('items', [])
 
-    # Match mission ids embedded in video descriptions.
-    for mission_doc in unlinked:
-        mission_id = mission_doc.id
+    # Built on the first actual match, not up front: constructing the client is
+    # the only thing here that can fail when the yard is offline, and a poll
+    # that matches nothing should not be able to log an error about Firestore.
+    missions_ref = None
 
+    # Match mission ids embedded in video descriptions.
+    for mission_id in unlinked_ids:
         for video in videos:
             description = video.get('snippet', {}).get('description', '')
 
@@ -1169,7 +1176,17 @@ def check_for_new_videos():
                     print(f'[youtube-poll] Skipping {mission_id}: local writes pending')
                     break
 
-                missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
+                try:
+                    if missions_ref is None:
+                        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
+                    missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
+                except Exception as e:
+                    # Leave the mirror alone so this mission is still a
+                    # candidate next pass; the link is not lost, just not
+                    # written yet.
+                    print(f'[youtube-poll] Could not link {mission_id}: {e}')
+                    break
+
                 _mirror_youtube_url(mission_id, youtube_url)
                 print(f'[youtube-poll] Linked mission {mission_id} to video {video_id}')
                 break

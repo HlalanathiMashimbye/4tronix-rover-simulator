@@ -871,9 +871,15 @@ def test_poll_links_mission_with_no_youtube_field_at_all(missions, firestore_mis
     assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=vid123'
 
 
-def test_poll_skips_missions_that_already_have_a_link(missions, firestore_missions, monkeypatch, youtube_env):
-    firestore_missions['c1']['youtubeUrl'] = 'https://www.youtube.com/watch?v=already-linked'
-    monkeypatch.setattr(operator_console, '_firestore', lambda: FakeQueryFirestore(firestore_missions))
+def test_poll_skips_missions_that_already_have_a_link(missions, monkeypatch, youtube_env):
+    """Candidates come from the mirror now, so that is where 'already linked'
+    has to be true - and with nothing outstanding the poll must not spend a
+    Firestore read or a YouTube call."""
+    missions['c1'].update({'youtubeUrl': 'https://www.youtube.com/watch?v=already-linked'})
+    monkeypatch.setattr(
+        operator_console, '_firestore',
+        lambda: pytest.fail('Firestore must not be read to build the candidate list'),
+    )
     monkeypatch.setattr(
         operator_console.requests, 'get',
         lambda *a, **k: pytest.fail('YouTube API must not be called when nothing is unlinked'),
@@ -881,7 +887,32 @@ def test_poll_skips_missions_that_already_have_a_link(missions, firestore_missio
 
     operator_console.check_for_new_videos()
 
-    assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=already-linked'
+    assert missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=already-linked'
+
+
+def test_poll_never_reads_firestore_to_find_candidates(missions, firestore_missions, monkeypatch, youtube_env):
+    """The whole point of the change: the candidate list is free. Firestore is
+    touched only to write a link that was actually found."""
+    reads = []
+
+    class CountingFirestore(FakeQueryFirestore):
+        def collection(self, name):
+            reads.append(name)
+            return super().collection(name)
+
+    monkeypatch.setattr(operator_console, '_firestore', lambda: CountingFirestore(firestore_missions))
+    monkeypatch.setattr(
+        operator_console.requests, 'get',
+        lambda *a, **k: FakeResponse(200, {'items': [{
+            'snippet': {'description': 'nothing matching here', 'resourceId': {'videoId': 'vid999'}},
+        }]}),
+    )
+
+    operator_console.check_for_new_videos()
+
+    # c1 is unlinked, so the YouTube call happens - but no video matched, so
+    # Firestore was never reached at all.
+    assert reads == []
 
 
 def test_poll_skips_entirely_when_credentials_missing(missions, monkeypatch):
