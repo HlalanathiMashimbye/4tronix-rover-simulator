@@ -1,13 +1,20 @@
 {# Shared command bar. Set nav_active before including:
    {% set nav_active = 'home' %}{% include "_nav.html" %}
-   Shows a live rover status chip (polls /api/status) and, when an operator is
-   in context, their email + a logout button.
+   Shows a live rover status chip and, when an operator is in context, their
+   email + a logout button.
 
-   Also defines window.YardCache: a small stale-while-revalidate + adaptive-
-   polling helper shared by this bar, operator.html, and status.html, so all
-   three pages get instant cached first paint, pause polling in background
-   tabs, and back off automatically on transient network failures — without
-   duplicating that logic per page. #}
+   Loads /static/yard-cache.js (window.YardCache) for every page that includes
+   this bar. There used to be a second, near-identical YardCache defined inline
+   here, so pages that did not load the static file silently got a different
+   implementation - one that ignored the onOnline/onOffline options they were
+   passing it. One file now, so a fix lands everywhere.
+
+   Also defines window.YardStatus: the single owner of the /api/status poll.
+   This bar needs that endpoint for the rover chip, and so do home.html and
+   status.html, which each used to run their own poller on top of this one -
+   two identical requests every 5s on the same page, each costing the satellite
+   a 2s-timeout call out to the rover. Pages subscribe instead of polling. #}
+<script src="/static/yard-cache.js"></script>
 <header class="topbar">
   <a class="brand" href="/">
     <span class="brand-mark"></span>
@@ -32,71 +39,51 @@
 </header>
 <script>
 // ============================================================
-// YardCache: shared sessionStorage cache + adaptive poller.
-// Used by this nav bar, and reused as-is by operator.html and
-// status.html so every polling loop in the app behaves the same way.
-// sessionStorage (not localStorage) is deliberate: this is live
-// operational data, not a durable draft — it should give instant
-// paint across page navigations within a visit, but never survive
-// into a new day/tab and read as fresh.
+// YardStatus: the one /api/status poller on the page.
+// Subscribers get every snapshot plus, immediately on subscribe, the
+// last cached one so a page can paint before the first fetch lands.
 // ============================================================
-window.YardCache = window.YardCache || (function () {
-  function read(key) {
-    try {
-      var raw = sessionStorage.getItem('yard:' + key);
-      return raw ? JSON.parse(raw) : null; // {value, ts}
-    } catch (e) { return null; } // storage disabled/full — just skip caching
-  }
-  function write(key, value) {
-    try {
-      sessionStorage.setItem('yard:' + key, JSON.stringify({ value: value, ts: Date.now() }));
-    } catch (e) { /* non-fatal */ }
-  }
+window.YardStatus = window.YardStatus || (function () {
+  var listeners = [];
+  var errorListeners = [];
+  var latest = null;
 
-  // Runs `fetchFn` on an adaptive schedule: normal cadence while the tab is
-  // visible and healthy, paused while backgrounded, and backed off
-  // (doubling up to maxInterval) on consecutive failures so a flaky network
-  // doesn't hammer the satellite with retries. Call .refreshNow() to jump
-  // the queue (e.g. right after the tab regains focus, or after a mutation).
-  function createPoller(opts) {
-    var interval = opts.interval || 5000;
-    var maxInterval = opts.maxInterval || 30000;
-    var cur = interval;
-    var timer = null;
+  var cached = YardCache.read('fullStatus');
+  if (cached) latest = cached.value;
 
-    function schedule(delay) {
-      if (timer) clearTimeout(timer);
-      if (document.hidden) return; // resumed by the visibilitychange listener below
-      timer = setTimeout(tick, delay);
-    }
-
-    function tick() {
-      return Promise.resolve(opts.fetchFn()).then(function () {
-        cur = interval; // reset backoff on success
-        schedule(cur);
-      }).catch(function (err) {
-        cur = Math.min(cur * 2, maxInterval); // back off on transient failures
-        if (opts.onError) opts.onError(err);
-        schedule(cur);
-        throw err; // let a caller awaiting refreshNow() still see the failure
+  var poller = YardCache.createPoller({
+    interval: 5000,
+    maxInterval: 20000,
+    fetchFn: function () {
+      return fetch('/api/status').then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      }).then(function (data) {
+        latest = data;
+        YardCache.write('fullStatus', data);
+        // Kept as its own key: the nav chip paints from it on every page,
+        // including ones that never ask for the full snapshot.
+        YardCache.write('roverStatus', data.rover || {});
+        listeners.forEach(function (fn) { try { fn(data); } catch (e) {} });
       });
+    },
+    onError: function (err) {
+      errorListeners.forEach(function (fn) { try { fn(err); } catch (e) {} });
     }
+  });
 
-    document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) { cur = interval; tick().catch(function () {}); } // catch up immediately on refocus
-    });
-
-    // Backoff can grow up to maxInterval while offline, so without this a
-    // reconnect could sit waiting out the rest of that delay before the next
-    // attempt. The 'online' event fires as soon as the browser sees
-    // connectivity again, so jump straight to a fresh attempt instead.
-    window.addEventListener('online', function () { cur = interval; tick().catch(function () {}); });
-
-    tick().catch(function () {});
-    return { refreshNow: function () { cur = interval; return tick(); } };
-  }
-
-  return { read: read, write: write, createPoller: createPoller };
+  return {
+    // fn is called with each snapshot, and once up front with the cached one
+    // if there is one, so callers never need their own cache-read path.
+    subscribe: function (fn) {
+      listeners.push(fn);
+      if (latest) { try { fn(latest, { cached: true, ts: cached && cached.ts }); } catch (e) {} }
+    },
+    onError: function (fn) { errorListeners.push(fn); },
+    refreshNow: function () { return poller.refreshNow(); },
+    cachedAt: function () { return cached && cached.ts; },
+    latest: function () { return latest; }
+  };
 })();
 
 (function () {
@@ -113,23 +100,13 @@ window.YardCache = window.YardCache || (function () {
 
     // Instant paint from the last known state so nav between pages doesn't
     // flash "Rover…" on every load while the fresh fetch happens in the background.
-    var cached = YardCache.read('roverStatus');
-    if (cached) paint(cached.value);
+    var cachedRover = YardCache.read('roverStatus');
+    if (cachedRover) paint(cachedRover.value);
 
-    YardCache.createPoller({
-      interval: 5000,
-      maxInterval: 30000,
-      fetchFn: function () {
-        return fetch('/api/status').then(function (r) { return r.json(); }).then(function (d) {
-          var r2 = d.rover || {};
-          YardCache.write('roverStatus', r2);
-          paint(r2);
-        });
-      },
-      onError: function () {
-        dot.className = 'sys-dot bad';
-        txt.textContent = 'Rover offline';
-      }
+    YardStatus.subscribe(function (d) { paint(d.rover || {}); });
+    YardStatus.onError(function () {
+      dot.className = 'sys-dot bad';
+      txt.textContent = 'Rover offline';
     });
   }
 

@@ -484,6 +484,7 @@
         var STATUS_TONE = { queued: 'info', processing: 'warn', completed: 'ok', failed: 'bad' };
 
         var latestMissions = [];
+        var missionsMeta = null; // last /operator/api/missions envelope (sync state)
         var missionsHasLoaded = false;
         var missionsSyncedAt = null;
         var cachedMissionCount = 0;
@@ -499,10 +500,22 @@
             var counts = { queued: 0, processing: 0, completed: 0, failed: 0 };
             missions.forEach(function (m) { if (counts[m.status] !== undefined) counts[m.status]++; });
 
+            // "Queue size" used to show missions.length, i.e. everything the
+            // console had loaded - 49 on a yard with 2 missions actually
+            // waiting. An operator reads this tile to decide whether to pick up
+            // the next child, so it has to be the queued count and nothing else.
+            //
+            // Queued and Running are exact: the API always returns actionable
+            // missions in full. Finished comes from the API's own total rather
+            // than the loaded page, which is capped at 40.
+            var finished = missionsMeta && missionsMeta.finishedTotal != null
+                ? missionsMeta.finishedTotal
+                : counts.completed + counts.failed;
+
             document.getElementById('statsBand').innerHTML =
-                statTile(missions.length, 'Queue size') +
+                statTile(counts.queued, 'Queued') +
                 statTile(counts.processing, 'Running') +
-                statTile(counts.completed, 'Completed') +
+                statTile(finished, 'Finished') +
                 statTile(counts.failed, 'Failed', counts.failed > 0 ? 'bad' : '');
 
             var pill = document.getElementById('queueHealthPill');
@@ -585,9 +598,25 @@
             interval: 15000,
             maxInterval: 60000,
             fetchFn: function () {
-                return Promise.resolve();
+                return fetch('/operator/api/missions').then(function (r) {
+                    if (r.status === 401) { location.href = '/operator/login'; return null; }
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                }).then(function (d) {
+                    if (!d) return; // redirecting to login
+                    var list = d.missions || [];
+                    missionsMeta = d;
+                    cachedMissionCount = list.length;
+                    missionsSyncedAt = Date.now();
+                    YardCache.write('homeMissions', list);
+                    renderMissions(list);
+                    missionsFailures = 0;
+                    bannerState.missions = null;
+                    paintBanner();
+                    updateNetworkPanel();
+                });
             },
-            onOnline: function () { bannerState.missions = null; paintBanner(); updateNetworkPanel(); },
+            onOnline: function () { bannerState.missions = 'syncing'; paintBanner(); updateNetworkPanel(); },
             onOffline: function () { bannerState.missions = 'offline'; paintBanner(); updateNetworkPanel(); },
             onError: function () {
                 missionsFailures++;
@@ -651,28 +680,28 @@
         var statusFailures = 0;
         var statusSyncedAt = null;
 
-        var cachedStatus = YardCache.read('fullStatus');
-        if (cachedStatus) {
-            statusSyncedAt = cachedStatus.ts;
-            renderStatus(cachedStatus.value);
-            bannerState.status = 'stale';
-            paintBanner();
-        }
+        // The nav bar already polls /api/status for its rover chip, so this
+        // page subscribes to that instead of running a second identical poll.
+        var statusPoller = { refreshNow: function () { return YardStatus.refreshNow(); } };
 
-        var statusPoller = YardCache.createPoller({
-            interval: 5000,
-            maxInterval: 20000,
-            fetchFn: function () {
-                return Promise.resolve();
-            },
-            onOnline: function () { bannerState.status = null; paintBanner(); },
-            onOffline: function () { bannerState.status = 'offline'; paintBanner(); updateNetworkPanel(); },
-            onError: function () {
-                statusFailures++;
-                bannerState.status = 'offline';
-                paintBanner();
-                updateNetworkPanel();
+        YardStatus.subscribe(function (data, meta) {
+            statusSyncedAt = (meta && meta.cached && meta.ts) || Date.now();
+            renderStatus(data);
+            if (meta && meta.cached) {
+                bannerState.status = 'stale';
+            } else {
+                statusFailures = 0;
+                bannerState.status = null;
             }
+            paintBanner();
+            updateNetworkPanel();
+        });
+
+        YardStatus.onError(function () {
+            statusFailures++;
+            bannerState.status = 'offline';
+            paintBanner();
+            updateNetworkPanel();
         });
 
         function updateStatusStrip() {
@@ -695,8 +724,21 @@
             document.getElementById('stripSyncValue').textContent = lastSync ? ageFrom(lastSync) : '—';
         }
 
+        // This row described the browser, where the only honest answer was a
+        // hardcoded "Inactive". What an operator actually needs to know is
+        // whether the SATELLITE is getting changes through to Firestore, and
+        // /operator/api/missions already reports exactly that.
         function backgroundSyncLabel() {
-            return 'Inactive';
+            if (!missionsMeta) return 'Checking…';
+            var pending = missionsMeta.pendingWrites || 0;
+            if (pending > 0) return pending + ' change' + (pending === 1 ? '' : 's') + ' queued';
+            return missionsMeta.stale ? 'Behind' : 'Up to date';
+        }
+
+        function backgroundSyncTone() {
+            if (!missionsMeta) return '';
+            if (missionsMeta.pendingWrites > 0) return 'amber';
+            return missionsMeta.stale ? 'amber' : 'green';
         }
 
         function connectionQuality() {
@@ -718,7 +760,8 @@
                 netRow('Connection', (offline ? 'Offline' : 'Online') + ' &middot; ' + connectionQuality(), offline ? 'red' : 'green') +
                 netRow('Last sync', lastSync ? ageFrom(lastSync) : 'Never') +
                 netRow('Cached missions', String(cachedMissionCount)) +
-                netRow('Background sync', backgroundSyncLabel(), (missionsFailures || statusFailures) ? 'amber' : '');
+                netRow('Background sync', backgroundSyncLabel(),
+                       (missionsFailures || statusFailures) ? 'amber' : backgroundSyncTone());
 
             updateStatusStrip();
         }

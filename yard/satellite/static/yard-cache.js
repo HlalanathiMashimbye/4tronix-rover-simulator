@@ -103,8 +103,14 @@
             var running = false;
             var wasOffline = !navigator.onLine;
 
+            // A hidden tab is not worth a request. The tablets in the yard sit
+            // on this page all day with the screen off, and every poll costs
+            // the satellite a call out to the rover with a 2s timeout. Polling
+            // resumes on visibilitychange below, with the backoff reset so a
+            // tab that was hidden through a network blip catches up at once.
             function schedule(delay) {
                 if (timer) clearTimeout(timer);
+                if (typeof document !== 'undefined' && document.hidden) return;
                 timer = setTimeout(tick, delay);
             }
 
@@ -148,6 +154,17 @@
                 if (timer) clearTimeout(timer);
                 if (running) return Promise.resolve(); // a fetch is already in flight
                 return run();
+            }
+
+            if (typeof document !== 'undefined') {
+                document.addEventListener('visibilitychange', function () {
+                    if (document.hidden) {
+                        if (timer) { clearTimeout(timer); timer = null; }
+                        return;
+                    }
+                    currentDelay = interval;
+                    tick(); // whatever is on screen is stale by definition
+                });
             }
 
             global.addEventListener('online', function () {

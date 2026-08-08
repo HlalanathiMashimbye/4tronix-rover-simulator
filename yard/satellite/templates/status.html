@@ -485,38 +485,37 @@
             }
         }
 
-        // Instant paint from the last snapshot this tab saw, so the cards
-        // don't sit on "Loading…" every time this page is opened.
-        const cachedStatus = YardCache.read('fullStatus');
-        if (cachedStatus) {
-            renderStatus(cachedStatus.value);
-            const age = Math.round((Date.now() - cachedStatus.ts) / 1000);
-            document.getElementById('footer').textContent = 'Showing cached status (' + age + 's old) — refreshing…';
-        }
-
         let consecutiveFailures = 0;
 
-        const statusPoller = YardCache.createPoller({
-            interval: 5000,
-            maxInterval: 20000,
-            fetchFn: function () {
-                return fetch('/api/status').then(r => r.json()).then(data => {
-                    consecutiveFailures = 0;
-                    YardCache.write('fullStatus', data);
-                    renderStatus(data);
-                    const now = new Date().toLocaleTimeString();
-                    document.getElementById('footer').textContent = 'Last checked: ' + now;
-                });
-            },
-            onError: function () {
-                // Exponential backoff (handled by the poller) means retries
-                // space out on their own; surface that instead of implying
-                // we're hammering the satellite every 5s regardless.
-                consecutiveFailures++;
-                document.getElementById('footer').textContent = consecutiveFailures > 1
-                    ? 'Fetch failed (' + consecutiveFailures + ' in a row) — backing off, retrying…'
-                    : 'Fetch failed — retrying…';
+        // The nav bar polls /api/status for its rover chip; this page used to
+        // run an identical poller alongside it, so every 5s the satellite
+        // answered the same request twice and called out to the rover twice.
+        // Subscribing gets the same data at half the cost, and the first
+        // callback carries the cached snapshot so the cards still paint
+        // instantly instead of sitting on "Loading…".
+        const statusPoller = { refreshNow: () => YardStatus.refreshNow() };
+
+        YardStatus.subscribe((data, meta) => {
+            renderStatus(data);
+            if (meta && meta.cached) {
+                const age = Math.round((Date.now() - meta.ts) / 1000);
+                document.getElementById('footer').textContent =
+                    'Showing cached status (' + age + 's old) — refreshing…';
+            } else {
+                consecutiveFailures = 0;
+                document.getElementById('footer').textContent =
+                    'Last checked: ' + new Date().toLocaleTimeString();
             }
+        });
+
+        YardStatus.onError(() => {
+            // Exponential backoff (handled by the poller) means retries
+            // space out on their own; surface that instead of implying
+            // we're hammering the satellite every 5s regardless.
+            consecutiveFailures++;
+            document.getElementById('footer').textContent = consecutiveFailures > 1
+                ? 'Fetch failed (' + consecutiveFailures + ' in a row) — backing off, retrying…'
+                : 'Fetch failed — retrying…';
         });
 
         // Rover URL editor
