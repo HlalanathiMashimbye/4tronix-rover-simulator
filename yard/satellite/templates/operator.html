@@ -893,6 +893,13 @@
         }
 
         function missionErrorMessage(err, resp, data) {
+            // An ok response reaching here means the caller reported something
+            // that actually worked. Say what is true rather than falling
+            // through the switch below to "failed for an unknown reason".
+            if (resp && resp.ok) {
+                return 'The action worked, but the queue could not be refreshed just now. It will catch up on its own.';
+            }
+
             if (!resp) {
                 if (err && err.name === 'AbortError') {
                     return 'Mission failed because the request timed out. Try again in a few minutes, or check the Status page for rover connectivity.';
@@ -980,13 +987,19 @@
                 }, 15000);
                 data = await resp.json().catch(() => ({}));
                 if (!resp.ok) throw new Error(data.error || `Failed (HTTP ${resp.status})`);
-                delete drafts[missionId];
-                if (SUCCESS_MESSAGE[action]) showSuccess(missionId, SUCCESS_MESSAGE[action]);
-                missionsPoller.refreshNow().catch(() => {});
             } catch (err) {
                 btn.disabled = false;
                 showError(missionId, missionErrorMessage(err, resp, data));
+                return;
             }
+
+            // Past this line the rover has the mission and Firestore is updated.
+            // Nothing below is allowed to report a failure: refreshing the list
+            // is housekeeping, and an operator who is told "sent to rover" and
+            // "mission failed" in the same breath cannot know which to believe.
+            delete drafts[missionId];
+            if (SUCCESS_MESSAGE[action]) showSuccess(missionId, SUCCESS_MESSAGE[action]);
+            missionsPoller.refreshNow().catch(() => { /* next poll catches up */ });
         }
 
         function applyMissions(list) {
@@ -1044,11 +1057,11 @@
                     body: JSON.stringify({ outcome: btn.dataset.review }),
                 });
                 if (!resp.ok) throw new Error((await resp.json()).error || 'Could not save');
-                showToast('success', btn.dataset.review === 'completed' ? 'Marked complete' : 'Back in the queue');
+                showSuccess(btn.dataset.id, btn.dataset.review === 'completed' ? 'Marked complete' : 'Back in the queue');
                 await loadReview();
-                missionsPoller.refresh && missionsPoller.refresh();
+                if (missionsPoller && missionsPoller.refreshNow) missionsPoller.refreshNow().catch(() => {});
             } catch (e) {
-                showToast('error', e.message || 'Could not save');
+                showError(btn.dataset.id, e.message || 'Could not save');
                 btn.disabled = false;
             }
         });
