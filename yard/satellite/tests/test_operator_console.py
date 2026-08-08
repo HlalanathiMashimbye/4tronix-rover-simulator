@@ -348,8 +348,22 @@ def test_code_and_monitor_stay_public(client):
     assert client.get('/monitor/').status_code == 200
 
 
-def test_console_page_redirects_to_login_without_session(client):
+def test_operator_root_redirects_to_the_queue(client):
+    """/operator/ was the queue; the home page is. The URL stays alive because
+    it is bookmarked on the yard's tablets."""
     resp = client.get('/operator/')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/')
+
+
+def test_hub_redirects_to_login_without_session(client):
+    resp = client.get('/')
+    assert resp.status_code == 302
+    assert '/operator/login' in resp.headers['Location']
+
+
+def test_mission_page_redirects_to_login_without_session(client):
+    resp = client.get('/operator/mission/p1')
     assert resp.status_code == 302
     assert '/operator/login' in resp.headers['Location']
 
@@ -358,10 +372,118 @@ def test_console_page_redirects_to_login_without_session(client):
 
 def test_auth_off_opens_console_and_hub_without_session(client, monkeypatch):
     monkeypatch.setenv('OPERATOR_AUTH', 'off')
-    assert client.get('/operator/').status_code == 200
     assert client.get('/').status_code == 200
+    assert client.get('/operator/mission/p1').status_code == 200
     login = client.get('/operator/login')
     assert login.status_code == 302  # login page steps aside
+
+
+# --- Stop: the control an operator uses with a rover already moving --------
+
+def test_stop_halts_the_rover_and_requeues_the_mission(client, missions, monkeypatch):
+    sign_in(client)
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(url)
+        return FakeResponse(200, {'status': 'success'})
+
+    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    resp = client.post('/operator/api/missions/p1/stop')
+
+    assert resp.status_code == 200
+    assert any(url.endswith('/queue/clear') for url in calls), calls
+    assert missions['p1']['status'] == 'queued'
+
+
+def test_stop_still_clears_the_rover_when_this_mission_is_not_running(client, missions, monkeypatch):
+    """The button is on screen at all times. Refusing to stop a rover because
+    the mission being viewed is not the one running would be indefensible."""
+    sign_in(client)
+    calls = []
+    monkeypatch.setattr(
+        operator_console.requests, 'post',
+        lambda url, **k: (calls.append(url), FakeResponse(200, {'status': 'success'}))[1],
+    )
+
+    resp = client.post('/operator/api/missions/c1/stop')
+
+    assert resp.status_code == 200
+    assert any(url.endswith('/queue/clear') for url in calls), calls
+    assert missions['c1']['status'] == 'completed'  # untouched
+
+
+def test_stop_reports_an_unreachable_rover_rather_than_claiming_success(client, missions, monkeypatch):
+    sign_in(client)
+    def boom(*a, **k):
+        raise operator_console.requests.exceptions.ConnectionError()
+
+    monkeypatch.setattr(operator_console.requests, 'post', boom)
+    resp = client.post('/operator/api/missions/p1/stop')
+
+    assert resp.status_code == 503
+    # Still 'processing': claiming it stopped would be a lie about a machine
+    # that may well still be driving.
+    assert missions['p1']['status'] == 'processing'
+    assert 'power switch' in resp.get_json()['error']
+
+
+def test_stop_survives_a_deliberate_demotion_through_the_sync_merge():
+    """A stop moves 'processing' back to 'queued'. The merge ladder ranks
+    queued below processing, so without the operator-decision marker the write
+    is silently dropped and the mission reverts on the next reconcile."""
+    from sync_worker import should_local_win, FORCE_KEY
+
+    assert not should_local_win({'status': 'queued'}, {'status': 'processing'})
+    assert should_local_win({'status': 'queued', FORCE_KEY: True}, {'status': 'processing'})
+    # The ladder still governs everything that happens on its own.
+    assert should_local_win({'status': 'completed'}, {'status': 'queued'})
+    assert not should_local_win({'status': 'queued'}, {'status': 'completed'})
+
+
+def test_the_force_marker_never_reaches_firestore(client, missions, monkeypatch):
+    """It is instruction to the merge, not part of the mission document."""
+    sign_in(client)
+    import json as _json
+    from mission_store import peek_outbox
+    from sync_worker import FORCE_KEY
+
+    monkeypatch.setattr(
+        operator_console.requests, 'post',
+        lambda *a, **k: FakeResponse(200, {'status': 'success'}),
+    )
+    client.post('/operator/api/missions/p1/stop')
+
+    entry = peek_outbox()
+    payload = _json.loads(entry['payload'])
+    assert payload.get(FORCE_KEY) is True
+
+    written = {k: v for k, v in payload.items() if k != FORCE_KEY}
+    assert FORCE_KEY not in written
+    assert written['status'] == 'queued'
+
+
+# --- Sync rate, exposed on the Settings page -------------------------------
+
+def test_sync_config_rejects_a_rate_that_would_burn_the_quota(client, monkeypatch):
+    monkeypatch.setenv('OPERATOR_AUTH', 'off')
+    resp = client.post('/operator/api/config/sync', json={'interval': 1})
+    assert resp.status_code == 400
+    assert 'between' in resp.get_json()['error']
+
+
+def test_sync_config_round_trips(client, monkeypatch):
+    monkeypatch.setenv('OPERATOR_AUTH', 'off')
+    saved = client.post('/operator/api/config/sync', json={'interval': 90, 'reconcileEvery': 15})
+    assert saved.status_code == 200
+
+    current = client.get('/operator/api/config/sync').get_json()
+    assert current['interval'] == 90
+    assert current['reconcileEvery'] == 15
+    # A slower sync must estimate fewer reads, or the number on the page is
+    # not telling an operator anything useful.
+    faster = client.post('/operator/api/config/sync', json={'interval': 30, 'reconcileEvery': 10}).get_json()
+    assert faster['estimatedDailyReads'] > saved.get_json()['estimatedDailyReads']
 
 
 def test_auth_off_opens_apis_without_session(client, missions, monkeypatch):
@@ -435,7 +557,7 @@ def test_login_accepts_operator_and_sets_session(client, monkeypatch):
     )
     resp = client.post('/operator/api/login', json={'email': 'op@test.com', 'password': 'pw'})
     assert resp.status_code == 200
-    assert client.get('/operator/').status_code == 200
+    assert client.get('/').status_code == 200  # the queue, no longer behind /operator/
 
 
 def test_login_reports_missing_configuration(client, monkeypatch):

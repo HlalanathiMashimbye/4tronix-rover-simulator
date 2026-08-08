@@ -40,25 +40,10 @@
             width: 100%;
         }
 
-        /* ---------- Title + live strip, on one row to buy vertical space ---------- */
-        .headrow {
-            flex: 0 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 1.5rem;
-            flex-wrap: wrap;
-        }
-        .headrow h1 { font-size: 1.45rem; font-weight: 700; color: var(--heading); }
-        .headrow .sub { color: var(--text-dim); font-size: var(--fs-xs); margin-top: 0.1rem; }
-        .strip { display: flex; align-items: center; gap: 1.15rem; flex-wrap: wrap; font-size: var(--fs-sm); }
-        .strip-item { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
-        .strip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
-        .strip-dot.green { background: var(--ok); }
-        .strip-dot.red { background: var(--bad); }
-        .strip-label { color: var(--text-faint); }
-        .strip-value { color: var(--text); font-weight: 600; }
-
+        /* There is no page title or status strip here on purpose. The nav bar
+           already names the page and carries the rover chip, and the Sync card
+           in the rail already reports connection and last-sync. Repeating any
+           of it just pushed the mission list down the screen. */
         .net-banner {
             display: none; align-items: center; gap: 0.5rem;
             font-size: var(--fs-sm); border-radius: 8px; padding: 0.5rem 0.85rem;
@@ -68,26 +53,6 @@
         .net-banner.stale { color: var(--warn); background: rgba(251,191,36,0.14); border: 1px solid rgba(251,191,36,0.3); }
         .net-banner.offline { color: var(--bad); background: rgba(248,113,113,0.14); border: 1px solid rgba(248,113,113,0.35); }
         .net-banner.syncing { color: var(--primary); background: rgba(255,214,150,0.14); border: 1px solid rgba(255,214,150,0.25); }
-
-        /* ---------- Stat tiles double as filters ---------- */
-        .stats {
-            flex: 0 0 auto;
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 0.85rem;
-        }
-        .stat {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: 14px; padding: 0.75rem 1.1rem;
-            text-align: left; cursor: pointer; font: inherit; color: inherit;
-            transition: border-color 0.15s, background 0.15s;
-        }
-        .stat:hover { border-color: var(--border-strong); background: var(--surface-2); }
-        .stat[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in oklab, var(--primary) 10%, transparent); }
-        .stat .n { font-size: 1.75rem; font-weight: 700; line-height: 1.05; color: var(--heading); font-variant-numeric: tabular-nums; }
-        .stat .l { margin-top: 0.15rem; font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); }
-        .stat.bad .n { color: var(--bad); }
-        .stat.warn .n { color: var(--warn); }
 
         /* ---------- Workspace ---------- */
         .work {
@@ -133,14 +98,27 @@
             padding: 0.45rem 0.6rem; cursor: pointer;
         }
 
+        /* The chips carry their own counts. A separate row of stat tiles used
+           to show the same four numbers and filter on click, which is exactly
+           what these do - two controls for one job, and a whole band of screen
+           spent on it. */
         .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
         .chip {
+            display: inline-flex; align-items: center; gap: 0.4rem;
             border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
             border-radius: 999px; font-size: var(--fs-xs); font-weight: 600;
-            padding: 0.32rem 0.75rem; cursor: pointer; min-height: 30px;
+            padding: 0.32rem 0.7rem 0.32rem 0.8rem; cursor: pointer; min-height: 32px;
         }
         .chip:hover { border-color: var(--border-strong); }
         .chip[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+        .chip .c {
+            font-variant-numeric: tabular-nums; font-weight: 700;
+            color: var(--text); background: var(--surface-3);
+            border-radius: 999px; padding: 0.05rem 0.4rem; min-width: 1.5rem; text-align: center;
+        }
+        .chip[aria-pressed="true"] .c { color: var(--primary); background: color-mix(in oklab, var(--primary) 18%, transparent); }
+        .chip[data-status="failed"] .c[data-nonzero="1"] { color: var(--bad); }
+        .chip .c:empty { display: none; }
 
         /* The one scrolling region on the page. */
         .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.7rem 1.1rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; }
@@ -189,20 +167,32 @@
         .more-count { color: var(--text-faint); font-weight: 400; margin-left: 0.3rem; }
 
         /* Needs review: amber, and deliberately not one of the status colours,
-           because this is an unknown rather than a state. */
-        .review {
-            flex: 0 0 auto; margin: 0.7rem 1.1rem 0;
+           because this is an unknown rather than a state. Collapsed to a single
+           row by default - it was a permanent block eating a third of the list
+           on a yard with a few interrupted missions, which is precisely the
+           yard where you most want to see the list. */
+        .review { flex: 0 0 auto; margin: 0.6rem 1.1rem 0; }
+        .review-toggle {
+            display: flex; align-items: center; gap: 0.5rem; width: 100%;
             border: 1px solid color-mix(in oklab, var(--warn) 45%, transparent);
             background: color-mix(in oklab, var(--warn) 9%, var(--surface));
-            border-radius: 12px; padding: 0.7rem 0.9rem;
+            border-radius: 10px; padding: 0.45rem 0.75rem; min-height: 38px;
+            color: var(--warn); font: inherit; font-size: var(--fs-xs); font-weight: 700;
+            cursor: pointer; text-align: left;
         }
-        .review h3 { color: var(--warn); font-size: var(--fs-sm); font-weight: 700; margin-bottom: 0.2rem; }
-        .review p { color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.5; }
-        .review-links { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem; }
+        .review-toggle:hover { background: color-mix(in oklab, var(--warn) 15%, var(--surface)); }
+        .review-toggle .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+        .review-toggle .why { color: var(--text-dim); font-weight: 400; }
+        .review-toggle .chev { margin-left: auto; display: inline-flex; transition: transform 0.15s; }
+        .review-toggle .chev svg { width: 14px; height: 14px; }
+        .review-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+        .review-body { padding: 0.55rem 0.15rem 0.1rem; }
+        .review-body p { color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.5; margin-bottom: 0.5rem; }
+        .review-links { display: flex; flex-wrap: wrap; gap: 0.35rem; }
         .review-links a {
             font-size: var(--fs-xs); font-weight: 600; color: var(--warn); text-decoration: none;
             border: 1px solid color-mix(in oklab, var(--warn) 40%, transparent);
-            border-radius: 8px; padding: 0.28rem 0.6rem;
+            border-radius: 8px; padding: 0.26rem 0.55rem;
         }
         .review-links a:hover { background: color-mix(in oklab, var(--warn) 14%, transparent); }
 
@@ -263,29 +253,8 @@
     {% set nav_active = 'home' %}{% include "_nav.html" %}
 
     <main class="shell">
-        <div class="headrow">
-            <div>
-                <h1>Mission Queue</h1>
-                <div class="sub">Tap a mission to run it, stop it, or close it out.</div>
-            </div>
-            {% if operator %}
-            <div class="strip">
-                <span class="strip-item"><span class="strip-dot" id="stripNetDot"></span><span class="strip-label">Network</span><span class="strip-value" id="stripNetValue">&hellip;</span></span>
-                <span class="strip-item"><span class="strip-dot" id="stripRoverDot"></span><span class="strip-label">Rover</span><span class="strip-value" id="stripRoverValue">&hellip;</span></span>
-                <span class="strip-item"><span class="strip-label">Last sync</span><span class="strip-value" id="stripSyncValue">&mdash;</span></span>
-            </div>
-            {% endif %}
-        </div>
-
         {% if operator %}
         <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
-
-        <section class="stats" id="stats" role="group" aria-label="Filter by status">
-            <button class="stat" type="button" data-status="queued" aria-pressed="false"><div class="n"><span class="skel"></span></div><div class="l">Queued</div></button>
-            <button class="stat" type="button" data-status="processing" aria-pressed="false"><div class="n"><span class="skel"></span></div><div class="l">Running</div></button>
-            <button class="stat" type="button" data-status="completed" aria-pressed="false"><div class="n"><span class="skel"></span></div><div class="l">Finished</div></button>
-            <button class="stat bad" type="button" data-status="failed" aria-pressed="false"><div class="n"><span class="skel"></span></div><div class="l">Failed</div></button>
-        </section>
 
         <div class="work">
             <section class="queue-panel">
@@ -307,19 +276,26 @@
                         </select>
                     </div>
                     <div class="chips" id="chips" role="group" aria-label="Filter missions by status">
-                        <button class="chip" type="button" data-status="all" aria-pressed="true">All</button>
-                        <button class="chip" type="button" data-status="queued" aria-pressed="false">Queued</button>
-                        <button class="chip" type="button" data-status="processing" aria-pressed="false">Running</button>
-                        <button class="chip" type="button" data-status="completed" aria-pressed="false">Completed</button>
-                        <button class="chip" type="button" data-status="failed" aria-pressed="false">Failed</button>
-                        <button class="chip" type="button" data-status="cancelled" aria-pressed="false">Cancelled</button>
+                        <button class="chip" type="button" data-status="all" aria-pressed="true">All<span class="c"></span></button>
+                        <button class="chip" type="button" data-status="queued" aria-pressed="false">Queued<span class="c"></span></button>
+                        <button class="chip" type="button" data-status="processing" aria-pressed="false">Running<span class="c"></span></button>
+                        <button class="chip" type="button" data-status="completed" aria-pressed="false">Completed<span class="c"></span></button>
+                        <button class="chip" type="button" data-status="failed" aria-pressed="false">Failed<span class="c"></span></button>
+                        <button class="chip" type="button" data-status="cancelled" aria-pressed="false">Cancelled<span class="c"></span></button>
                     </div>
                 </div>
 
                 <div class="review" id="review" hidden>
-                    <h3>Needs review</h3>
-                    <p>These were running when the satellite stopped, so nobody knows whether the rover finished them. Open one to decide.</p>
-                    <div class="review-links" id="reviewLinks"></div>
+                    <button class="review-toggle" id="reviewToggle" type="button" aria-expanded="false" aria-controls="reviewBody">
+                        <span class="dot"></span>
+                        <span id="reviewCount"></span>
+                        <span class="why">interrupted, outcome unknown</span>
+                        <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
+                    </button>
+                    <div class="review-body" id="reviewBody" hidden>
+                        <p>These were running when the satellite stopped, so nobody knows whether the rover finished them. Open one to decide.</p>
+                        <div class="review-links" id="reviewLinks"></div>
+                    </div>
                 </div>
 
                 <div class="rows" id="rows"><div class="empty">Loading missions&hellip;</div></div>
@@ -329,7 +305,7 @@
                 <div class="card">
                     <h3>Quick actions</h3>
                     <div class="acts">
-                        <a class="act" href="/status">Run diagnostics</a>
+                        <a class="act" href="/settings">Diagnostics &amp; settings</a>
                         <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
                         <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
                     </div>
@@ -425,21 +401,37 @@
         var PAGE = 40;
         var requested = PAGE;
 
+        // Prefer the API's SQL counts: the loaded page caps finished missions,
+        // so counting the rows in hand would under-report Completed badly.
         function counts() {
+            if (meta && meta.counts) {
+                var api = meta.counts;
+                return {
+                    queued: api.queued || 0,
+                    processing: api.processing || 0,
+                    completed: api.completed || 0,
+                    failed: api.failed || 0,
+                    cancelled: api.cancelled || 0,
+                };
+            }
             var c = { queued: 0, processing: 0, completed: 0, failed: 0, cancelled: 0 };
             missions.forEach(function (m) { if (c[m.status] !== undefined) c[m.status]++; });
             return c;
         }
 
-        function renderStats() {
+        function renderCounts() {
             var c = counts();
-            // Queued and Running are exact. Finished uses the API's own total
-            // rather than the loaded page, which stops at `requested`.
-            var finished = meta && meta.finishedTotal != null ? meta.finishedTotal : c.completed + c.failed;
-            var values = { queued: c.queued, processing: c.processing, completed: finished, failed: c.failed };
+            // "All" mirrors what the All filter actually shows, which excludes
+            // cancelled - a total that disagreed with the list underneath it
+            // would just look broken.
+            var all = c.queued + c.processing + c.completed + c.failed;
+            var values = { all: all, queued: c.queued, processing: c.processing, completed: c.completed, failed: c.failed, cancelled: c.cancelled };
 
-            document.querySelectorAll('#stats .stat').forEach(function (el) {
-                el.querySelector('.n').textContent = values[el.dataset.status];
+            document.querySelectorAll('#chips .chip').forEach(function (el) {
+                var n = values[el.dataset.status];
+                var slot = el.querySelector('.c');
+                slot.textContent = (meta || missions.length) ? String(n) : '';
+                slot.dataset.nonzero = n > 0 ? '1' : '0';
                 el.setAttribute('aria-pressed', filter === el.dataset.status ? 'true' : 'false');
             });
 
@@ -525,7 +517,7 @@
         }
 
         function renderAll() {
-            renderStats();
+            renderCounts();
             renderRows();
             document.getElementById('qFresh').textContent = syncedAt ? 'Synced ' + ageFrom(syncedAt) : '';
         }
@@ -585,24 +577,17 @@
 
         function setFilter(status) {
             filter = status;
-            document.querySelectorAll('#chips .chip').forEach(function (c) {
-                c.setAttribute('aria-pressed', c.dataset.status === filter ? 'true' : 'false');
-            });
-            renderStats();
+            renderCounts();
             renderRows();
         }
 
+        // Tapping the chip that is already active clears back to All, so the
+        // filter never becomes a state you have to hunt for the way out of.
         document.getElementById('chips').addEventListener('click', function (e) {
             var btn = e.target.closest('.chip');
-            if (btn) setFilter(btn.dataset.status);
-        });
-
-        // The tiles are the fastest way to say "show me the running ones", so
-        // they filter too. Tapping the active one clears back to All.
-        document.getElementById('stats').addEventListener('click', function (e) {
-            var tile = e.target.closest('.stat');
-            if (!tile) return;
-            setFilter(filter === tile.dataset.status ? 'all' : tile.dataset.status);
+            if (!btn) return;
+            var next = btn.dataset.status;
+            setFilter(filter === next && next !== 'all' ? 'all' : next);
         });
 
         // ---------- Health / status ----------
@@ -629,7 +614,6 @@
             out.push(hrow('Satellite', 'green', esc(s.hostname || '—')));
 
             document.getElementById('health').innerHTML = out.join('');
-            updateStrip();
         }
 
         var statusFailures = 0;
@@ -650,21 +634,6 @@
             updateNet();
         });
 
-        function updateStrip() {
-            var offline = bannerState.missions === 'offline' || bannerState.status === 'offline' || !navigator.onLine;
-            document.getElementById('stripNetDot').className = 'strip-dot ' + (offline ? 'red' : 'green');
-            document.getElementById('stripNetValue').textContent = offline ? 'Offline' : 'Online';
-
-            var rover = (latestStatus && latestStatus.rover) || (YardCache.read('roverStatus') || {}).value;
-            if (rover) {
-                var ok = rover.reachable && (rover.status == null || rover.status === 'ok');
-                document.getElementById('stripRoverDot').className = 'strip-dot ' + (ok ? 'green' : 'red');
-                document.getElementById('stripRoverValue').textContent = ok ? 'Online' : (rover.reachable ? 'Degraded' : 'Offline');
-            }
-
-            var last = Math.max(syncedAt || 0, statusSyncedAt || 0) || null;
-            document.getElementById('stripSyncValue').textContent = last ? ageFrom(last) : '—';
-        }
 
         function connectionQuality() {
             var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -696,17 +665,13 @@
                 nrow('Last sync', last ? ageFrom(last) : 'Never') +
                 nrow('Loaded', String(missions.length)) +
                 nrow('To Firestore', sync[0], (missionFailures || statusFailures) ? 'amber' : sync[1]);
-
-            updateStrip();
         }
 
         setInterval(function () {
             document.getElementById('qFresh').textContent = syncedAt ? 'Synced ' + ageFrom(syncedAt) : '';
-            updateStrip();
             updateNet();
         }, 5000);
         updateNet();
-        updateStrip();
 
         var refreshHint = document.getElementById('refreshHint');
         document.getElementById('refreshBtn').addEventListener('click', function () {
@@ -727,6 +692,15 @@
         });
 
         // ---------- Needs review ----------
+        var reviewToggle = document.getElementById('reviewToggle');
+        var reviewBody = document.getElementById('reviewBody');
+
+        reviewToggle.addEventListener('click', function () {
+            var open = reviewToggle.getAttribute('aria-expanded') === 'true';
+            reviewToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+            reviewBody.hidden = open;
+        });
+
         function loadReview() {
             return fetch('/operator/api/missions/needs-review').then(function (r) {
                 if (!r.ok) return null;
@@ -735,6 +709,8 @@
                 if (!d) return;
                 var list = d.missions || [];
                 document.getElementById('review').hidden = list.length === 0;
+                document.getElementById('reviewCount').textContent =
+                    list.length + (list.length === 1 ? ' mission needs review' : ' missions need review');
                 document.getElementById('reviewLinks').innerHTML = list.map(function (m) {
                     return '<a href="/operator/mission/' + encodeURIComponent(m.id) + '">' +
                         (esc(m.name) || 'Mission-' + esc(m.id.slice(0, 8))) + ' &rarr;</a>';

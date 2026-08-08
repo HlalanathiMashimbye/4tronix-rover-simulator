@@ -409,7 +409,7 @@ def _mirror_is_stale(last_synced_at):
 @operator_bp.route('/api/missions', methods=['GET'])
 @require_operator
 def api_missions():
-    from mission_store import get_missions, outbox_count, DEFAULT_FINISHED_PAGE
+    from mission_store import get_missions, outbox_count, status_counts, DEFAULT_FINISHED_PAGE
     from satellite_identity import yard_id
 
     # Scoped to this satellite's own yard (plan 3.3) so a second yard's
@@ -432,6 +432,10 @@ def api_missions():
         'pendingWrites': outbox_count(),
         'finishedShown': min(finished, finished_total),
         'finishedTotal': finished_total,
+        # Counted in SQL, so the queue's filters can show a true total per
+        # status rather than however many of that status happen to be on the
+        # returned page.
+        'counts': status_counts(yard_id=yard_id()),
     })
 
 
@@ -646,14 +650,20 @@ def api_stop_mission(mission_id):
     code did not do anything wrong, somebody just needed the rover to stop, and
     it should be re-runnable with one tap. 'failed' would also reach the learner
     as a run that went wrong, which it did not.
+
+    Deliberately works whatever state THIS mission is in. The button is on
+    screen at all times, and refusing to stop a rover because the mission you
+    happen to be looking at is not the one running would be indefensible - the
+    rover is one machine and it may be carrying anything. When the mission is
+    not the running one, the rover is still cleared and only the status write
+    is skipped.
     """
     from mission_store import get_mission, release_mission
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') != 'processing':
-        return jsonify({'error': 'Only a running mission can be stopped'}), 400
+    was_running = mission.get('status') == 'processing'
 
     try:
         resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
@@ -669,8 +679,12 @@ def api_stop_mission(mission_id):
                      'If it is still moving, use the power switch on the rover itself.'
         }), 502
 
+    if not was_running:
+        # Rover cleared, nothing to record: this mission was not the one on it.
+        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': mission.get('status')})
+
     _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'queued', _now_iso())
+    release_mission(mission_id, 'queued', _now_iso(), operator_decision=True)
     _notify_mission_control_async(mission_id, 'queued')
     return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
 
@@ -874,6 +888,79 @@ def api_delete_mission(mission_id):
     _stop_lease_renewal(mission_id)
     delete_mission(mission_id, _now_iso())
     return jsonify({'status': 'ok', 'missionId': mission_id})
+
+
+@operator_bp.route('/api/config/sync', methods=['GET', 'POST'])
+@require_operator
+def api_sync_config():
+    """Read or change how often the satellite talks to Firestore.
+
+    Worth being precise about what this controls, because it is easy to assume
+    it is the console refreshing. It is not: the queue's own polling reads
+    local SQLite and costs no Firestore quota at all. This is the background
+    worker that reconciles the mirror with Firestore, and it is the only thing
+    on the satellite billed against the daily read limit.
+    """
+    import json as _json
+    from sync_worker import (
+        sync_interval, reconcile_every, estimated_daily_reads,
+        MIN_INTERVAL, MAX_INTERVAL, MIN_RECONCILE, MAX_RECONCILE,
+    )
+    from satellite_identity import CONFIG_FILE
+
+    if request.method == 'GET':
+        from mission_store import status_counts
+        from satellite_identity import yard_id
+        counts = status_counts(yard_id=yard_id())
+        active = (counts.get('queued', 0) + counts.get('processing', 0))
+        return jsonify({
+            'interval': sync_interval(),
+            'reconcileEvery': reconcile_every(),
+            'activeMissions': active,
+            'estimatedDailyReads': estimated_daily_reads(active_missions=active),
+            'freeTierDailyReads': 50000,
+            'limits': {
+                'interval': [MIN_INTERVAL, MAX_INTERVAL],
+                'reconcileEvery': [MIN_RECONCILE, MAX_RECONCILE],
+            },
+        })
+
+    data = request.get_json(silent=True) or {}
+    try:
+        interval = int(data.get('interval', sync_interval()))
+        reconcile = int(data.get('reconcileEvery', reconcile_every()))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'interval and reconcileEvery must be whole numbers of seconds/cycles'}), 400
+
+    if not MIN_INTERVAL <= interval <= MAX_INTERVAL:
+        return jsonify({'error': f'Sync interval must be between {MIN_INTERVAL} and {MAX_INTERVAL} seconds'}), 400
+    if not MIN_RECONCILE <= reconcile <= MAX_RECONCILE:
+        return jsonify({'error': f'Reconcile every must be between {MIN_RECONCILE} and {MAX_RECONCILE} cycles'}), 400
+
+    try:
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = _json.load(f)
+        except Exception:
+            cfg = {}
+        cfg['sync_interval'] = interval
+        cfg['sync_reconcile_every'] = reconcile
+        with open(CONFIG_FILE, 'w') as f:
+            _json.dump(cfg, f, indent=2)
+    except OSError as e:
+        return jsonify({'error': f'Could not save the setting: {e}'}), 500
+
+    from mission_store import status_counts
+    from satellite_identity import yard_id
+    counts = status_counts(yard_id=yard_id())
+    active = counts.get('queued', 0) + counts.get('processing', 0)
+
+    return jsonify({
+        'status': 'ok',
+        'interval': interval,
+        'reconcileEvery': reconcile,
+        'estimatedDailyReads': estimated_daily_reads(interval, reconcile, active),
+    })
 
 
 @operator_bp.route('/api/integrations', methods=['GET'])

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>System Status</title>
+    <title>Settings · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
         body { min-height: 100vh; color: var(--foreground); }
@@ -156,6 +156,36 @@
         .conflict-row b { color: var(--heading); font-weight: 600; }
         .conflict-win { color: var(--warn); }
 
+        #syncSection { margin-top: 2rem; max-width: 720px; }
+        .sync-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .8rem; }
+        .sync-field {
+            display: flex; flex-direction: column; gap: .35rem;
+            border: 1px solid var(--border); border-radius: 10px;
+            padding: .7rem .85rem; background: var(--surface);
+        }
+        .sync-label { color: var(--heading); font-size: .82rem; font-weight: 600; }
+        .sync-input-row { display: flex; align-items: center; gap: .5rem; }
+        .sync-input-row input {
+            width: 92px; min-height: 40px; padding: .4rem .55rem;
+            border: 1px solid var(--border); border-radius: 8px;
+            background: var(--surface-2); color: var(--text);
+            font-family: var(--mono); font-size: .9rem;
+        }
+        .sync-input-row input:focus-visible { border-color: var(--primary); }
+        .sync-unit { color: var(--text-faint); font-size: .8rem; }
+        .sync-hint { color: var(--text-dim); font-size: .74rem; line-height: 1.5; }
+        .sync-estimate {
+            margin-top: .8rem; padding: .7rem .85rem;
+            border: 1px solid var(--border); border-radius: 10px;
+            background: var(--surface); color: var(--text-dim);
+            font-size: .78rem; line-height: 1.6;
+        }
+        .sync-estimate b { color: var(--heading); font-family: var(--mono); }
+        .sync-estimate[data-tone="warn"] { border-color: color-mix(in oklab, var(--warn) 45%, transparent); }
+        .sync-estimate[data-tone="warn"] b { color: var(--warn); }
+        .sync-estimate[data-tone="bad"] { border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
+        .sync-estimate[data-tone="bad"] b { color: var(--bad); }
+
         #setupSection { margin-top: 2rem; }
         .setup-row {
             display: flex; gap: .75rem; align-items: flex-start;
@@ -188,8 +218,8 @@
     {% set nav_active = 'status' %}{% include "_nav.html" %}
 
     <main class="page">
-    <p class="eyebrow">Diagnostics</p>
-    <h1 class="page-title" style="margin-bottom: 0.4rem;">System Status</h1>
+    <p class="eyebrow">Satellite</p>
+    <h1 class="page-title" style="margin-bottom: 0.4rem;">Settings</h1>
     <p class="subtitle">
         Rover URL: <code id="rover-url">{{ rover_url }}</code>
         <button class="link-btn" id="edit-url-btn">edit</button>
@@ -242,6 +272,39 @@
             </div>
         </div>
     </div>
+
+    <section id="syncSection">
+        <h2 class="conflict-heading">Firestore sync</h2>
+        <p class="conflict-note">How often this satellite reconciles with Firestore. This is the only
+            thing here that spends Firestore's daily read quota &mdash; the queue's own refreshing reads
+            local storage and costs nothing, however often it happens.</p>
+
+        <div class="sync-grid">
+            <label class="sync-field">
+                <span class="sync-label">Sync every</span>
+                <span class="sync-input-row">
+                    <input type="number" id="syncInterval" min="10" max="600" step="5">
+                    <span class="sync-unit">seconds</span>
+                </span>
+                <span class="sync-hint">How quickly a mission submitted on the website reaches this yard.</span>
+            </label>
+
+            <label class="sync-field">
+                <span class="sync-label">Deep check every</span>
+                <span class="sync-input-row">
+                    <input type="number" id="syncReconcile" min="1" max="60" step="1">
+                    <span class="sync-unit">cycles</span>
+                </span>
+                <span class="sync-hint">Re-reads unfinished missions, to catch changes made elsewhere.</span>
+            </label>
+        </div>
+
+        <div class="sync-estimate" id="syncEstimate"></div>
+        <div class="camera-controls">
+            <button class="editor-btn save" id="syncSave">Save</button>
+            <span class="camera-msg" id="syncMsg"></span>
+        </div>
+    </section>
 
     <section id="setupSection">
         <h2 class="conflict-heading">Setup</h2>
@@ -397,6 +460,81 @@
 
         loadConflicts();
         setInterval(loadConflicts, 60000);
+
+        // ---------- Firestore sync rate ----------
+        const syncInterval = document.getElementById('syncInterval');
+        const syncReconcile = document.getElementById('syncReconcile');
+        const syncEstimate = document.getElementById('syncEstimate');
+        const syncMsg = document.getElementById('syncMsg');
+        let syncActive = 10;
+        let syncFreeTier = 50000;
+
+        // Mirrors sync_worker.estimated_daily_reads so the number moves as the
+        // operator types, instead of only after saving. The server recomputes
+        // it on save and that value wins.
+        function estimateReads(interval, reconcile) {
+            const cycles = 86400 / Math.max(1, interval);
+            return Math.round(cycles + (cycles / Math.max(1, reconcile)) * Math.max(0, syncActive));
+        }
+
+        function paintEstimate() {
+            const interval = Number(syncInterval.value) || 30;
+            const reconcile = Number(syncReconcile.value) || 10;
+            const reads = estimateReads(interval, reconcile);
+            const pct = Math.round((reads / syncFreeTier) * 100);
+            syncEstimate.dataset.tone = pct >= 90 ? 'bad' : pct >= 50 ? 'warn' : '';
+            syncEstimate.innerHTML =
+                'Roughly <b>' + reads.toLocaleString() + '</b> Firestore reads a day at these settings, ' +
+                'about <b>' + pct + '%</b> of the free tier (' + syncFreeTier.toLocaleString() + '/day), ' +
+                'with ' + syncActive + ' unfinished mission' + (syncActive === 1 ? '' : 's') + ' to re-check. ' +
+                'The daily allowance is shared with everyone loading the public website, so this should not be the whole budget.';
+        }
+
+        async function loadSyncConfig() {
+            try {
+                const resp = await fetch('/operator/api/config/sync');
+                if (!resp.ok) return;
+                const d = await resp.json();
+                syncInterval.value = d.interval;
+                syncReconcile.value = d.reconcileEvery;
+                syncActive = d.activeMissions != null ? d.activeMissions : syncActive;
+                syncFreeTier = d.freeTierDailyReads || syncFreeTier;
+                paintEstimate();
+            } catch (e) { /* offline: leave the fields as they are */ }
+        }
+
+        syncInterval.addEventListener('input', paintEstimate);
+        syncReconcile.addEventListener('input', paintEstimate);
+
+        document.getElementById('syncSave').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            syncMsg.dataset.tone = '';
+            syncMsg.textContent = 'Saving…';
+            try {
+                const resp = await fetch('/operator/api/config/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interval: Number(syncInterval.value),
+                        reconcileEvery: Number(syncReconcile.value),
+                    }),
+                });
+                const d = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
+                syncMsg.dataset.tone = 'ok';
+                syncMsg.textContent = 'Saved. Applies on the next sync cycle.';
+                paintEstimate();
+            } catch (e) {
+                syncMsg.dataset.tone = 'bad';
+                syncMsg.textContent = e.message || 'Could not save';
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { syncMsg.textContent = ''; syncMsg.dataset.tone = ''; }, 5000);
+            }
+        });
+
+        loadSyncConfig();
 
         const BADGE_ICONS = {
             green: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',

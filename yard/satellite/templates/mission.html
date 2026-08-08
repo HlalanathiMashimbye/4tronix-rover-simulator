@@ -97,7 +97,13 @@
             font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.6;
         }
 
-        .rail { display: flex; flex-direction: column; gap: 0.7rem; min-height: 0; overflow-y: auto; padding-right: 2px; }
+        /* The rail scrolls its cards, but the stop control is pinned below them
+           and never scrolls away. It is not only "stop this mission": it clears
+           the rover's queue and cuts the motors, so it has to be reachable at
+           any moment, whatever this mission happens to be doing. */
+        .rail { display: flex; flex-direction: column; min-height: 0; }
+        .rail-cards { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 0.7rem; padding-right: 2px; }
+        .rail-stop { flex: 0 0 auto; padding-top: 0.7rem; }
 
         /* ---------- The stop button ----------
            Sized and coloured to be the thing your eye lands on and your thumb
@@ -225,8 +231,17 @@
                 <div class="panel-body"><pre class="code" id="mCode">Loading&hellip;</pre></div>
             </section>
 
-            <aside class="rail" id="rail">
-                <div class="loading">Loading mission&hellip;</div>
+            <aside class="rail">
+                <div class="rail-cards" id="rail">
+                    <div class="loading">Loading mission&hellip;</div>
+                </div>
+                <div class="rail-stop">
+                    <button class="stop-btn" id="stopBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+                        <span>STOP</span>
+                    </button>
+                    <div class="stop-note" id="stopNote">Clears the rover's queue and cuts the motors.</div>
+                </div>
             </aside>
         </div>
     </main>
@@ -270,10 +285,15 @@
         };
 
         const CONFIRM_COPY = {
-            stop: {
+            stopRunning: {
                 title: 'Stop the rover now?',
-                body: 'The rover halts immediately and its queue is cleared. The mission goes back to Queued so you can send it again when you are ready.',
+                body: 'The rover halts immediately and its queue is cleared. This mission goes back to Queued so you can send it again when you are ready.',
                 confirmLabel: 'Stop the rover',
+            },
+            stopIdle: {
+                title: 'Reset the rover?',
+                body: "This clears whatever is on the rover's queue and cuts its motors. This mission is not running, so its status will not change.",
+                confirmLabel: 'Reset the rover',
             },
             complete: { title: 'Mark mission complete?', body: 'This marks the mission as completed and cannot be undone.', confirmLabel: 'Mark complete' },
             rerun: { title: 'Rerun this mission?', body: 'This clears the completed status and any attached video, and sends the mission back into the queue. This cannot be undone.', confirmLabel: 'Rerun' },
@@ -401,15 +421,6 @@
             const rail = document.getElementById('rail');
             let html = '';
 
-            // Stop comes first and is the only thing at that size, so there is
-            // never a moment of hunting for it while the rover is moving.
-            if (mission.status === 'processing') {
-                html += `<div>
-                    <button class="stop-btn" id="stopBtn">${ICONS.stop}<span>STOP</span></button>
-                    <div class="stop-note">Halts the rover and clears its queue. The mission returns to Queued so you can run it again.</div>
-                </div>`;
-            }
-
             html += '<div class="card"><h3>Actions</h3><div class="actions">';
             if (mission.status === 'queued') {
                 html += actionButton('send', 'Send to rover', 'primary');
@@ -471,12 +482,20 @@
             rail.innerHTML = html;
             wireRail();
             paintTelemetry();
+            paintStop();
+        }
+
+        // The stop control is always on screen, so its wording has to say what
+        // pressing it will actually do right now - stopping a run that is in
+        // flight is a different promise from resetting an idle rover.
+        function paintStop() {
+            const running = mission && mission.status === 'processing';
+            document.getElementById('stopNote').textContent = running
+                ? 'Halts the rover and clears its queue. This mission returns to Queued so you can run it again.'
+                : "Clears the rover's queue and cuts the motors. This mission is not running, so its status will not change.";
         }
 
         function wireRail() {
-            const stop = document.getElementById('stopBtn');
-            if (stop) stop.onclick = () => openConfirm(CONFIRM_COPY.stop, () => act('stop', stop));
-
             document.querySelectorAll('#rail button[data-act]').forEach(btn => {
                 btn.onclick = () => {
                     const a = btn.dataset.act;
@@ -580,10 +599,23 @@
                 setTimeout(() => { location.href = '/'; }, 700);
                 return;
             }
-            showToast('success', SUCCESS_MESSAGE[action] || 'Done.');
+            if (action === 'stop') {
+                showToast('success', (data && data.newStatus === 'queued')
+                    ? 'Rover stopped. Mission is back in the queue.'
+                    : 'Rover stopped and its queue cleared.');
+            } else {
+                showToast('success', SUCCESS_MESSAGE[action] || 'Done.');
+            }
             draftUrl = '';
             loadMission().catch(() => {});
         }
+
+        const stopBtn = document.getElementById('stopBtn');
+        stopBtn.onclick = () => {
+            const running = mission && mission.status === 'processing';
+            openConfirm(running ? CONFIRM_COPY.stopRunning : CONFIRM_COPY.stopIdle,
+                        () => act('stop', stopBtn));
+        };
 
         // ---------- Live rover telemetry ----------
         let roverState = { reachable: false, queue: null, now: null };

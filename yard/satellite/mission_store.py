@@ -13,6 +13,10 @@ DB_PATH = os.environ.get('MISSION_MIRROR_DB', 'missions.db')
 DEFAULT_FINISHED_PAGE = 40
 _db_lock = threading.Lock()
 
+# Kept in step with sync_worker.FORCE_KEY by hand rather than imported: the
+# sync worker imports this module, so importing it back would be circular.
+_FORCE_KEY = '__operatorDecision'
+
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -221,6 +225,27 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
 
     last_synced = meta[0] if meta else None
     return missions, last_synced, finished_total
+
+
+def status_counts(yard_id=None):
+    """How many live missions sit in each status, for the queue's filters.
+
+    Counted in SQL rather than from the returned page, because the page caps
+    finished missions - counting those rows would have told an operator there
+    were 39 completed missions when there were 74.
+    """
+    sql = "SELECT status, COUNT(*) AS n FROM mission_mirror WHERE deleted = 0"
+    params = []
+    if yard_id:
+        sql += ' AND yard_id = ?'
+        params.append(yard_id)
+    sql += ' GROUP BY status'
+
+    with _db_lock:
+        conn = _connect()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+    return {r['status']: r['n'] for r in rows}
 
 
 def get_mission(mission_id, include_deleted=False):
@@ -439,11 +464,15 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 'leaseExpiresAt': expires_iso,
             }
             if for_rerun:
-                # A rerun supersedes the previous run's outcome.
+                # A rerun supersedes the previous run's outcome. It also moves
+                # the mission backwards (completed -> processing), which the
+                # sync merge would otherwise reject, so say plainly that a
+                # human asked for this.
                 updates['completed_at'] = None
                 updates['youtube_url'] = None
                 payload['completedAt'] = None
                 payload['youtubeUrl'] = None
+                payload[_FORCE_KEY] = True
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -460,11 +489,17 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
             conn.close()
 
 
-def release_mission(mission_id, status, now_iso, review_reason=None):
+def release_mission(mission_id, status, now_iso, review_reason=None, operator_decision=False):
     """Drop the lock and set a status, queueing both for Firestore.
 
     Used for terminal transitions and for rolling back when a dispatch never
     reached the rover.
+
+    `operator_decision` marks the change as a human's call so the sync merge
+    lets it through even when it moves the mission backwards - stopping a rover
+    is the case that matters (see sync_worker.should_local_win). Left False for
+    changes that happen on their own, so the normal merge still protects
+    against a stale local copy overwriting real progress.
     """
     with _db_lock:
         conn = _connect()
@@ -493,6 +528,8 @@ def release_mission(mission_id, status, now_iso, review_reason=None):
                 updates['review_reason'] = review_reason
                 payload['needsReview'] = True
                 payload['reviewReason'] = review_reason
+            if operator_decision:
+                payload[_FORCE_KEY] = True
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -648,6 +685,10 @@ def resolve_review(mission_id, status, now_iso):
                 'lockOwner': None,
                 'lockedAt': None,
                 'leaseExpiresAt': None,
+                # This IS the operator's decision about an ambiguous mission -
+                # the whole point of the review flow. Re-queuing moves it back
+                # from 'processing', which the merge ladder would drop.
+                _FORCE_KEY: True,
             }
             if status == 'completed':
                 updates['completed_at'] = now_iso
