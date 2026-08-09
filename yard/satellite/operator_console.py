@@ -40,7 +40,6 @@ shadow Python's stdlib `operator` module.
 
 import os
 import re
-import requests
 import threading
 from datetime import datetime, timezone
 from functools import wraps

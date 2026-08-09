@@ -5,7 +5,19 @@ import threading
 import uuid as uuid_mod
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get('MISSION_MIRROR_DB', 'missions.db')
+# Anchored to this file's directory, not the working directory, matching
+# satellite_identity.CONFIG_FILE and web_server.CONFIG_FILE. A bare relative
+# 'missions.db' made the mirror's location depend on wherever the process
+# happened to be started from: it works in production only because the systemd
+# unit sets WorkingDirectory, and it silently created stray empty databases
+# anywhere else (one got committed at the repo root). The failure mode if that
+# WorkingDirectory line were ever dropped is the bad one - the satellite comes
+# up pointing at a brand-new empty mirror and simply shows no missions, with
+# nothing logged to say why.
+DB_PATH = os.environ.get(
+    'MISSION_MIRROR_DB',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'missions.db'),
+)
 
 # Finished missions are paged rather than capped. This is only a page size:
 # the console asks for more as the operator scrolls, and it all comes from

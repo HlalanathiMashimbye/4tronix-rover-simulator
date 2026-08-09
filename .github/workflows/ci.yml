@@ -40,16 +40,34 @@ jobs:
       - run: npx next build
       - run: npx jest --ci
 
-  yard:
-    name: yard (python tests)
+  yard-rover:
+    name: yard rover (python tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install yard deps
+      - name: Install rover deps
         run: pip install -r yard/rover/requirements.txt
-      - name: Run yard tests
+      - name: Run rover tests
         working-directory: yard/rover
-        run: python -m pytest test_service.py test_rover_physics.py -q
+        run: python -m pytest -q
+
+  # The satellite is where mission locking, the offline sync worker, the
+  # operator console and the rover stop-control all live, and none of it was
+  # gated: this job did not exist, so ~200 tests covering the most
+  # safety-relevant code in the repo could go red without failing a build.
+  yard-satellite:
+    name: yard satellite (python tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install satellite test deps
+        run: pip install -r yard/satellite/requirements-test.txt
+      - name: Run satellite tests
+        working-directory: yard/satellite
+        run: python -m pytest tests -q
