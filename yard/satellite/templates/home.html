@@ -68,59 +68,58 @@
 
         /* One compact control, not a field plus a whole separate row of
            filter chips underneath. Capped width (not flex:1) so it can't
-           stretch to fill the header the way the old one did - mission-
-           control's own search caps at 34rem for the same reason. Status
-           filters live inside it as small icon buttons, the same way
-           NavbarSearch.tsx overlays its filter icons on the right of the
-           input; done here with plain flexbox rather than absolute
-           positioning; the input just shrinks to give them room. */
+           stretch to fill the header the way the old one did. Status filters
+           live inside it as icon buttons, generously sized and spaced -
+           taller pill, bigger circles, real gaps between them - matching the
+           reference screenshot exactly rather than the first, too-cramped
+           attempt at it. */
         .search {
-            flex: 0 1 380px; max-width: 420px; min-width: 220px;
-            display: flex; align-items: center; gap: 0.5rem;
+            flex: 0 1 460px; max-width: 500px; min-width: 260px;
+            display: flex; align-items: center; gap: 0.6rem;
             background: color-mix(in oklab, var(--surface-2) 65%, transparent);
             border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-            border-radius: 999px; padding: 0.35rem 0.4rem 0.35rem 0.9rem; min-height: 40px;
+            border-radius: 999px; padding: 0.4rem 0.55rem 0.4rem 1.1rem; min-height: 54px;
             transition: border-color 0.15s, background 0.15s;
         }
         .search:focus-within { border-color: var(--primary); background: var(--surface-2); }
-        .search-ic { width: 15px; height: 15px; color: var(--text-faint); flex-shrink: 0; }
+        .search-ic { width: 17px; height: 17px; color: var(--text-faint); flex-shrink: 0; }
         .search input {
             flex: 1; min-width: 0; background: none; border: none; outline: none;
-            color: var(--text); font-size: var(--fs-sm);
+            color: var(--text); font-size: var(--fs-body);
             padding: 0; min-height: 0; border-radius: 0;
         }
         .search input::placeholder { color: var(--text-faint); }
         .search-clear {
             display: none; align-items: center; justify-content: center;
-            width: 22px; height: 22px; padding: 4px;
+            width: 26px; height: 26px; padding: 5px;
             border: none; border-radius: 999px; background: none;
             color: var(--text-faint); cursor: pointer; flex-shrink: 0;
         }
         .search-clear.visible { display: inline-flex; }
         .search-clear:hover { color: var(--text); background: var(--surface-3); }
-        .search-clear svg { width: 12px; height: 12px; }
-        .search-sep { width: 1px; height: 20px; background: var(--border-strong); flex-shrink: 0; }
+        .search-clear svg { width: 13px; height: 13px; }
+        .search-sep { width: 1px; height: 26px; background: color-mix(in oklab, var(--border) 55%, transparent); flex-shrink: 0; }
 
-        .chips { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
-        .chip {
+        .chips { display: flex; align-items: center; gap: 0.3rem; flex-shrink: 0; }
+        .filter-ic {
             position: relative;
             display: inline-flex; align-items: center; justify-content: center;
-            width: 26px; height: 26px; padding: 0; flex-shrink: 0;
+            width: 40px; height: 40px; padding: 0; flex-shrink: 0;
             border: none; border-radius: 999px; background: none;
             color: var(--text-faint); cursor: pointer;
             transition: color 0.15s, background 0.15s;
         }
-        .chip svg { width: 14px; height: 14px; }
-        .chip:hover { background: var(--surface-3); color: var(--text); }
-        .chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
+        .filter-ic svg { width: 18px; height: 18px; }
+        .filter-ic:hover { background: var(--surface-3); color: var(--text); }
+        .filter-ic[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
         /* A failure is the one status an operator must not miss even with the
            count hidden behind a tooltip now - so it alone keeps a visible cue. */
-        .chip[data-status="failed"][data-nonzero="1"]::after {
-            content: ""; position: absolute; top: 3px; right: 3px;
-            width: 6px; height: 6px; border-radius: 50%;
+        .filter-ic[data-status="failed"][data-nonzero="1"]::after {
+            content: ""; position: absolute; top: 6px; right: 6px;
+            width: 7px; height: 7px; border-radius: 50%;
             background: var(--bad); border: 1.5px solid var(--surface);
         }
-        .chip[data-status="failed"][aria-pressed="true"][data-nonzero="1"]::after { border-color: var(--primary); }
+        .filter-ic[data-status="failed"][aria-pressed="true"][data-nonzero="1"]::after { border-color: var(--primary); }
 
         .sort {
             background: var(--surface-2); border: 1px solid var(--border);
@@ -271,19 +270,19 @@
                             </button>
                             <span class="search-sep" aria-hidden="true"></span>
                             <div class="chips" id="chips" role="group" aria-label="Filter missions by status">
-                                <button class="chip" type="button" data-status="queued" aria-pressed="false">
+                                <button class="filter-ic" type="button" data-status="queued" aria-pressed="false">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                                 </button>
-                                <button class="chip" type="button" data-status="processing" aria-pressed="false">
+                                <button class="filter-ic" type="button" data-status="processing" aria-pressed="false">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4V8z"/></svg>
                                 </button>
-                                <button class="chip" type="button" data-status="completed" aria-pressed="false">
+                                <button class="filter-ic" type="button" data-status="completed" aria-pressed="false">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
                                 </button>
-                                <button class="chip" type="button" data-status="failed" aria-pressed="false">
+                                <button class="filter-ic" type="button" data-status="failed" aria-pressed="false">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                                 </button>
-                                <button class="chip" type="button" data-status="cancelled" aria-pressed="false">
+                                <button class="filter-ic" type="button" data-status="cancelled" aria-pressed="false">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="8.5" y1="15.5" x2="15.5" y2="8.5"/></svg>
                                 </button>
                             </div>
@@ -438,7 +437,7 @@
             // instead - aria-label for screen readers, title for a mouse
             // hover, same text in both. Failed alone keeps a visible dot: an
             // operator has to notice a failure even without hovering.
-            document.querySelectorAll('#chips .chip').forEach(function (el) {
+            document.querySelectorAll('#chips .filter-ic').forEach(function (el) {
                 var status = el.dataset.status;
                 var n = c[status] || 0;
                 var text = LABEL[status] + ' (' + n + ')';
@@ -610,7 +609,7 @@
         // active clears back to it, so the filter never becomes a state you
         // have to hunt for the way out of.
         document.getElementById('chips').addEventListener('click', function (e) {
-            var btn = e.target.closest('.chip');
+            var btn = e.target.closest('.filter-ic');
             if (!btn) return;
             var next = btn.dataset.status;
             setFilter(filter === next ? 'all' : next);
