@@ -46,7 +46,12 @@
         .stat-ic.grey  { background: var(--surface-3); color: var(--text-faint); border-color: var(--border); }
         .stat-body { flex: 1; min-width: 0; }
         .stat-head { display: flex; align-items: center; gap: 0.5rem; }
-        .stat-name { font-family: var(--font-display); font-size: 0.92rem; font-weight: 650; color: var(--heading); }
+        /* Matches .setup-name's treatment exactly - same page, same role (an
+           item's name), so the same typeface and weight. It used to be
+           Fredoka at a different size while Setup's row names sat a few
+           inches away in Inter, which is the "different fonts" this page got
+           called out for specifically. */
+        .stat-name { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
         .stat-detail {
             font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.55;
             font-family: var(--mono); margin-top: 0.2rem; word-break: break-word;

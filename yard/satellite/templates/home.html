@@ -40,29 +40,17 @@
         }
         @media (max-width: 1180px) { .work { grid-template-columns: minmax(0, 1fr) 290px; } }
 
-        /* A thin brand-gradient cap on the panel that owns the page, so it
-           reads as the hero surface rather than one more grey box among the
-           rail's grey boxes. overflow:hidden is what lets the ::before sit
-           flush with the panel's own rounded top corners; .rows keeps its own
-           overflow-y:auto for scrolling, which nests fine inside a hidden
-           parent - only content that would render fully outside the panel's
-           box gets clipped by that, not the list's own internal scroll. */
         .queue-panel {
-            position: relative; overflow: hidden;
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 18px; min-height: 0;
             display: flex; flex-direction: column;
             box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.55);
         }
-        .queue-panel::before {
-            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-            background: linear-gradient(90deg, var(--mars), var(--primary) 45%, var(--accent) 100%);
-        }
         .qhead { flex: 0 0 auto; padding: 1rem 1.2rem 0.8rem; border-bottom: 1px solid var(--border); }
         .qhead-top { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.8rem; }
         .qhead-top h2 {
             display: flex; align-items: center; gap: 0.45rem;
-            font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--heading);
+            font-size: 1.15rem; font-weight: 700; color: var(--heading);
         }
         .qhead-top h2 svg { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
         .pill-live {
@@ -77,18 +65,34 @@
         .qfresh { color: var(--text-faint); font-size: var(--fs-xs); margin-left: auto; }
 
         .qcontrols { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+        /* Pill-shaped and translucent rather than a boxed field, after
+           mission-control's navbar search - a quieter control that recedes
+           until you actually focus it, instead of a bordered box competing
+           with the panel it sits inside. */
         .search {
-            flex: 1 1 200px; min-width: 160px; display: flex; align-items: center; gap: 0.5rem;
-            background: var(--surface-2); border: 1px solid var(--border);
-            border-radius: 9px; padding: 0.45rem 0.75rem;
+            flex: 1 1 200px; min-width: 160px; display: flex; align-items: center; gap: 0.55rem;
+            background: color-mix(in oklab, var(--surface-2) 65%, transparent);
+            border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+            border-radius: 999px; padding: 0.5rem 0.9rem; min-height: 40px;
+            transition: border-color 0.15s, background 0.15s;
         }
-        .search:focus-within { border-color: var(--primary); }
+        .search:focus-within { border-color: var(--primary); background: var(--surface-2); }
         .search svg { width: 15px; height: 15px; color: var(--text-faint); flex-shrink: 0; }
         .search input {
             flex: 1; min-width: 0; background: none; border: none; outline: none;
             color: var(--text); font-size: var(--fs-sm);
             padding: 0; min-height: 0; border-radius: 0;
         }
+        .search input::placeholder { color: var(--text-faint); }
+        .search-clear {
+            display: none; align-items: center; justify-content: center;
+            width: 22px; height: 22px; padding: 4px; margin: -4px 0;
+            border: none; border-radius: 999px; background: none;
+            color: var(--text-faint); cursor: pointer; flex-shrink: 0;
+        }
+        .search-clear.visible { display: inline-flex; }
+        .search-clear:hover { color: var(--text); background: var(--surface-3); }
+        .search-clear svg { width: 12px; height: 12px; }
         .sort {
             background: var(--surface-2); border: 1px solid var(--border);
             border-radius: 9px; color: var(--text-dim); font-size: var(--fs-sm);
@@ -140,7 +144,6 @@
         }
         .row-name { flex: 1; min-width: 0; }
         .row-title { font-size: var(--fs-body); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .row-meta { font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono); margin-top: 0.2rem; }
         .row-time { font-size: var(--fs-xs); color: var(--text-faint); flex-shrink: 0; white-space: nowrap; }
         .row-go { color: var(--text-faint); flex-shrink: 0; display: inline-flex; transition: color 0.14s, transform 0.14s; }
         .row-go svg { width: 17px; height: 17px; }
@@ -246,8 +249,11 @@
                     </div>
                     <div class="qcontrols">
                         <label class="search">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                            <input type="text" id="search" placeholder="Search by name or mission ID&hellip;" autocomplete="off" aria-label="Search missions">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="search" placeholder="Search missions&hellip;" autocomplete="off" aria-label="Search missions">
+                            <button type="button" class="search-clear" id="searchClear" aria-label="Clear search">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
                         </label>
                         <select class="sort" id="sort" aria-label="Sort missions">
                             <option value="newest">Newest first</option>
@@ -460,11 +466,13 @@
             // Each row is a link, so the whole thing is one target rather than a
             // small button inside it - this gets used on a tablet, one-thumbed.
             rows.innerHTML = visible.map(function (m) {
+                // No yard tag on the row: this satellite only ever serves one
+                // yard (plan 3.3 scopes every query to it), so the value is
+                // identical on all 49 rows - pure repetition, not information.
                 return '<a class="row" data-tone="' + TONE[m.status] + '" href="/operator/mission/' + encodeURIComponent(m.id) + '">' +
                     '<span class="badge" data-tone="' + TONE[m.status] + '">' + esc(LABEL[m.status] || m.status) + '</span>' +
                     '<span class="row-name">' +
                         '<span class="row-title">' + (esc(m.name) || 'Mission-' + esc(m.id.slice(0, 8))) + '</span>' +
-                        '<span class="row-meta">' + esc(m.yardId || '') + '</span>' +
                     '</span>' +
                     '<span class="row-time">' + relTime(m.submittedAt) + '</span>' + ARROW +
                 '</a>';
@@ -546,9 +554,19 @@
         });
 
         // ---------- Controls ----------
-        document.getElementById('search').addEventListener('input', function (e) {
+        var searchInput = document.getElementById('search');
+        var searchClear = document.getElementById('searchClear');
+        searchInput.addEventListener('input', function (e) {
             query = e.target.value.trim().toLowerCase();
+            searchClear.classList.toggle('visible', query.length > 0);
             renderRows();
+        });
+        searchClear.addEventListener('click', function () {
+            searchInput.value = '';
+            query = '';
+            searchClear.classList.remove('visible');
+            renderRows();
+            searchInput.focus();
         });
         document.getElementById('sort').addEventListener('change', function (e) {
             sortMode = e.target.value;

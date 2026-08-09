@@ -258,6 +258,18 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 }
 
 /* ---- Headings ---------------------------------------------------------- */
+/* h1, h2, h3 further up this file opt every heading-level tag into the
+   display font (Fredoka) - correct for monitor.html's TV headings, which
+   that rule exists for, but it was reaching into every operator console page
+   too and silently setting "Mission code", "Actions", "Firestore sync" and
+   every modal title to Fredoka, while sibling text right next to them
+   (button labels, row titles, .stat-name) stayed on the body font (Inter) -
+   two typefaces doing the same job on the same screen. Reset back to the
+   body font here, scoped to .console so monitor.html (no .console class on
+   its <body>) is completely unaffected; .h-page below opts back into Fredoka
+   deliberately, for the one heading per page - the page title - that should
+   actually carry it. */
+.console h1, .console h2, .console h3 { font-family: var(--font-sans); letter-spacing: normal; }
 .console .h-page { font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; color: var(--heading); letter-spacing: -0.01em; }
 .console .h-panel { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--heading); }
 .console .h-card {

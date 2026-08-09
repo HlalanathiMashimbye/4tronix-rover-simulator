@@ -50,17 +50,7 @@
         }
         @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
 
-        /* Same brand-gradient cap as the queue panel, so the page that OWNS
-           this screen (the code) reads as the hero surface rather than a bare
-           text dump next to a row of cards. */
-        .grid .panel {
-            position: relative; overflow: hidden;
-            box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.55);
-        }
-        .grid .panel::before {
-            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 1;
-            background: linear-gradient(90deg, var(--mars), var(--primary) 45%, var(--accent) 100%);
-        }
+        .grid .panel { box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.55); }
         .panel-head-title { display: flex; align-items: baseline; gap: 0.6rem; min-width: 0; }
         .code-meta { color: var(--text-faint); font-size: var(--fs-xs); font-family: var(--mono); white-space: nowrap; }
 
@@ -384,11 +374,13 @@
         }
 
         // The facts that don't change while you're looking at the page - when
-        // it was submitted, which yard, when it started/finished - live here
-        // in one quiet strip rather than a rail card competing for room with
-        // live telemetry.
+        // it was submitted, when it started/finished - live here in one quiet
+        // strip rather than a rail card competing for room with live
+        // telemetry. Yard isn't one of them: this satellite only ever serves
+        // one yard, so the value is identical on every mission and names
+        // nothing an operator doesn't already know.
         function renderMeta() {
-            const parts = [['Yard', esc(mission.yardId) || '—'], ['Submitted', esc(relTime(mission.submittedAt)) || '—']];
+            const parts = [['Submitted', esc(relTime(mission.submittedAt)) || '—']];
             if (mission.startedAt) parts.push(['Started', esc(relTime(mission.startedAt))]);
             if (mission.completedAt) parts.push(['Completed', esc(relTime(mission.completedAt))]);
             document.getElementById('mMeta').innerHTML = parts.map(([k, v]) =>
