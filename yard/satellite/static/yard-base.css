@@ -289,8 +289,12 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   font-family: var(--font-sans); font-size: var(--fs-sm); font-weight: 600;
   padding: 0.6rem 1rem; min-height: 44px; cursor: pointer; line-height: 1.2;
   text-decoration: none;
+  transition: border-color .15s, background .15s, color .15s, transform .1s;
 }
 .console .btn:hover:not(:disabled) { border-color: var(--border-strong); color: var(--text); }
+/* Tactile press feedback - a tap should look like it did something the
+   instant a finger lands, not just after the network responds. */
+.console .btn:active:not(:disabled) { transform: scale(0.97); }
 .console .btn:disabled { opacity: 0.5; cursor: default; }
 .console .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-weight: 700; }
 .console .btn.primary:hover:not(:disabled) { background: var(--mars); color: var(--primary-foreground); }
@@ -326,9 +330,38 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
   border-radius: 999px; font-family: var(--font-sans); font-size: var(--fs-xs); font-weight: 600;
   padding: 0.32rem 0.7rem 0.32rem 0.8rem; cursor: pointer; min-height: 32px;
+  transition: border-color .15s, background .15s, color .15s, transform .1s;
 }
 .console .chip:hover { border-color: var(--border-strong); }
+.console .chip:active { transform: scale(0.96); }
 .console .chip[aria-pressed="true"] { border-color: var(--primary); color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); }
+
+/* ---- Info tip: a clickable (i) that opens a short popover ---------------
+   For the sentence of context a setting needs once, not every time the eye
+   passes over it. Settings used to keep that sentence permanently on the
+   page as body text under every card heading, which is the thing this
+   replaces - the heading stays, the explanation moves behind a tap.
+   Positioned with JS (see _nav.html) rather than a CSS anchor, because two
+   of its three homes (Setup, Sync conflicts) sit inside a column that
+   scrolls, and a CSS-positioned popover would be clipped by that ancestor's
+   overflow. */
+.console .info-tip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; padding: 5px; margin: -5px;
+  border: none; border-radius: 999px; background: none;
+  color: var(--text-faint); cursor: pointer; flex-shrink: 0;
+  transition: color .15s, background .15s;
+}
+.console .info-tip:hover, .console .info-tip:focus-visible { color: var(--primary); background: var(--surface-3); }
+.console .info-tip[aria-expanded="true"] { color: var(--primary); background: color-mix(in oklab, var(--primary) 16%, transparent); }
+.console .info-tip svg { width: 15px; height: 15px; }
+
+.console .info-pop {
+  display: none; position: fixed; z-index: 220; width: max-content; max-width: 260px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0.65rem 0.75rem; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.55;
+}
 
 /* ---- Inputs ------------------------------------------------------------ */
 .console .input, .console input[type="text"], .console input[type="url"], .console input[type="number"], .console input[type="password"] {

@@ -116,4 +116,61 @@ window.YardStatus = window.YardStatus || (function () {
     fetch('/operator/api/logout', { method: 'POST' }).then(function () { location.href = '/operator/login'; });
   };
 })();
+
+// ============================================================
+// Info tip: click a `.info-tip` button to open the `.info-pop`
+// its aria-describedby points at, positioned under the button.
+// Shared here so every console page gets it for free by including
+// this file, rather than each page wiring its own popover logic.
+// position:fixed on the popover (set here, not in CSS) is
+// deliberate - it has to escape any ancestor's overflow:auto
+// (the Settings page's scrolling columns) rather than being
+// clipped by it, which a CSS-anchored popover would be.
+// ============================================================
+(function () {
+  function closeAll() {
+    document.querySelectorAll('.info-tip[aria-expanded="true"]').forEach(function (btn) {
+      btn.setAttribute('aria-expanded', 'false');
+    });
+    document.querySelectorAll('.info-pop').forEach(function (pop) {
+      pop.style.display = 'none';
+    });
+  }
+
+  function openFor(btn) {
+    var pop = document.getElementById(btn.getAttribute('aria-describedby'));
+    if (!pop) return;
+    closeAll();
+    btn.setAttribute('aria-expanded', 'true');
+    pop.style.display = 'block';
+
+    var r = btn.getBoundingClientRect();
+    var maxW = 260;
+    var left = Math.min(r.left, window.innerWidth - maxW - 16);
+    left = Math.max(8, left);
+    var top = r.bottom + 8;
+    // Flip above the button rather than run off the bottom of the screen.
+    if (top + pop.offsetHeight > window.innerHeight - 8) {
+      top = Math.max(8, r.top - 8 - pop.offsetHeight);
+    }
+    pop.style.left = left + 'px';
+    pop.style.top = top + 'px';
+  }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.info-tip');
+    if (btn) {
+      var wasOpen = btn.getAttribute('aria-expanded') === 'true';
+      wasOpen ? closeAll() : openFor(btn);
+      e.stopPropagation();
+      return;
+    }
+    if (!e.target.closest('.info-pop')) closeAll();
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
+  // A fixed-position popover would otherwise drift away from the button
+  // it's anchored to as soon as the page scrolls or the window resizes.
+  window.addEventListener('scroll', closeAll, true);
+  window.addEventListener('resize', closeAll);
+})();
 </script>

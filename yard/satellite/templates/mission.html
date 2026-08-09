@@ -66,9 +66,11 @@
             font-family: var(--font-display);
             font-size: 1.5rem; font-weight: 700; letter-spacing: 0.04em;
             cursor: pointer;
+            transition: background .12s, transform .1s;
         }
         .stop-btn svg { width: 30px; height: 30px; }
         .stop-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--bad) 34%, transparent); }
+        .stop-btn:active:not(:disabled) { transform: scale(0.98); }
         .stop-btn:disabled { opacity: 0.55; cursor: default; }
         .stop-note { color: var(--text-faint); font-size: var(--fs-xs); text-align: center; margin-top: 0.5rem; line-height: 1.5; }
 

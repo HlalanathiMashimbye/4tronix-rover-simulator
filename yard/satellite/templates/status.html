@@ -22,6 +22,7 @@
         .settings-col.scrolls { overflow-y: auto; padding-right: 2px; }
 
         .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+        .card-head-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.7rem; }
         .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
         .rover-url code { color: var(--text); }
         .link-btn { background: none; border: none; color: var(--primary); font-size: var(--fs-sm); cursor: pointer; padding: 0 0.25rem; }
@@ -178,10 +179,13 @@
 
             <div class="settings-col">
                 <div class="card" id="syncSection">
-                    <h3 class="h-card">Firestore sync</h3>
-                    <p class="muted" style="margin-bottom:0.7rem;">The only thing here that spends Firestore's
-                        daily read quota. The queue's own refreshing reads local storage and costs nothing,
-                        however often it happens.</p>
+                    <div class="card-head-row">
+                        <h3 class="h-card" style="margin-bottom:0;">Firestore sync</h3>
+                        <button type="button" class="info-tip" aria-expanded="false" aria-describedby="tip-sync" aria-label="About Firestore sync">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/></svg>
+                        </button>
+                    </div>
+                    <div class="info-pop" id="tip-sync" role="note">The only satellite setting that spends Firestore's daily read quota &mdash; shared with everyone loading the public site. The queue's own refreshing reads local storage and costs nothing, however often it happens.</div>
 
                     <label class="sync-field">
                         <span class="sync-label">Sync every</span>
@@ -211,17 +215,25 @@
 
             <div class="settings-col scrolls">
                 <div class="card" id="setupSection">
-                    <h3 class="h-card">Setup</h3>
-                    <p class="muted" style="margin-bottom:0.5rem;">What this satellite can and cannot do.
-                        Values are never shown, only whether they are configured.</p>
-                    <div id="setupList"></div>
+                    <div class="card-head-row">
+                        <h3 class="h-card" style="margin-bottom:0;">Setup</h3>
+                        <button type="button" class="info-tip" aria-expanded="false" aria-describedby="tip-setup" aria-label="About Setup">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/></svg>
+                        </button>
+                    </div>
+                    <div class="info-pop" id="tip-setup" role="note">What this satellite can and cannot do. Values are never shown, only whether they are configured.</div>
+                    <div id="setupList" style="margin-top:0.5rem;"></div>
                 </div>
 
                 <div class="card" id="conflictSection" hidden>
-                    <h3 class="h-card">Sync conflicts</h3>
-                    <p class="muted" style="margin-bottom:0.5rem;">Reconciliations where the losing side had
-                        already finished. Normal progress is not listed.</p>
-                    <div id="conflictList"></div>
+                    <div class="card-head-row">
+                        <h3 class="h-card" style="margin-bottom:0;">Sync conflicts</h3>
+                        <button type="button" class="info-tip" aria-expanded="false" aria-describedby="tip-conflicts" aria-label="About sync conflicts">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/></svg>
+                        </button>
+                    </div>
+                    <div class="info-pop" id="tip-conflicts" role="note">Reconciliations where the losing side had already finished. Normal progress is not listed.</div>
+                    <div id="conflictList" style="margin-top:0.5rem;"></div>
                 </div>
             </div>
         </div>
@@ -389,11 +401,13 @@
             const reads = estimateReads(interval, reconcile);
             const pct = Math.round((reads / syncFreeTier) * 100);
             syncEstimate.dataset.tone = pct >= 90 ? 'bad' : pct >= 50 ? 'warn' : '';
+            // Shortened from a full sentence to the numbers that actually
+            // answer the question ("will this blow the quota?"); the caveat
+            // about the quota being shared now lives in the heading's info tip.
             syncEstimate.innerHTML =
-                'Roughly <b>' + reads.toLocaleString() + '</b> Firestore reads a day at these settings, ' +
-                'about <b>' + pct + '%</b> of the free tier (' + syncFreeTier.toLocaleString() + '/day), ' +
-                'with ' + syncActive + ' unfinished mission' + (syncActive === 1 ? '' : 's') + ' to re-check. ' +
-                'The daily allowance is shared with everyone loading the public website, so this should not be the whole budget.';
+                '<b>' + reads.toLocaleString() + '</b> reads/day &middot; <b>' + pct + '%</b> of ' +
+                syncFreeTier.toLocaleString() + '/day free tier &middot; ' +
+                syncActive + ' unfinished mission' + (syncActive === 1 ? '' : 's') + ' re-checked each pass';
         }
 
         async function loadSyncConfig() {
