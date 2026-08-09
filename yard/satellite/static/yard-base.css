@@ -264,6 +264,11 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.07em; color: var(--text-faint); margin-bottom: 0.7rem;
 }
+/* A small leading icon on a card heading, shared by the queue's and the
+   mission page's rail cards - one rule rather than a copy living in each
+   page's own <style>, so the two rails can't quietly drift apart. */
+.console .rail-h { display: flex; align-items: center; gap: 0.45rem; }
+.console .rail-h svg { width: 14px; height: 14px; color: var(--text-faint); flex-shrink: 0; }
 .console .muted { color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.55; }
 
 /* ---- Surfaces ---------------------------------------------------------- */

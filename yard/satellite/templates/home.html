@@ -35,19 +35,36 @@
             flex: 1 1 auto;
             min-height: 0;
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 330px;
-            gap: 1rem;
+            grid-template-columns: minmax(0, 1fr) 340px;
+            gap: 1.1rem;
         }
         @media (max-width: 1180px) { .work { grid-template-columns: minmax(0, 1fr) 290px; } }
 
+        /* A thin brand-gradient cap on the panel that owns the page, so it
+           reads as the hero surface rather than one more grey box among the
+           rail's grey boxes. overflow:hidden is what lets the ::before sit
+           flush with the panel's own rounded top corners; .rows keeps its own
+           overflow-y:auto for scrolling, which nests fine inside a hidden
+           parent - only content that would render fully outside the panel's
+           box gets clipped by that, not the list's own internal scroll. */
         .queue-panel {
+            position: relative; overflow: hidden;
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 18px; min-height: 0;
             display: flex; flex-direction: column;
+            box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.55);
         }
-        .qhead { flex: 0 0 auto; padding: 0.9rem 1.1rem 0.75rem; border-bottom: 1px solid var(--border); }
-        .qhead-top { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.7rem; }
-        .qhead-top h2 { font-size: 1rem; font-weight: 700; color: var(--heading); }
+        .queue-panel::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, var(--mars), var(--primary) 45%, var(--accent) 100%);
+        }
+        .qhead { flex: 0 0 auto; padding: 1rem 1.2rem 0.8rem; border-bottom: 1px solid var(--border); }
+        .qhead-top { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 0.8rem; }
+        .qhead-top h2 {
+            display: flex; align-items: center; gap: 0.45rem;
+            font-family: var(--font-display); font-size: 1.15rem; font-weight: 700; color: var(--heading);
+        }
+        .qhead-top h2 svg { width: 18px; height: 18px; color: var(--primary); flex-shrink: 0; }
         .pill-live {
             display: inline-flex; align-items: center; gap: 0.3rem;
             border-radius: 999px; font-size: 0.64rem; font-weight: 700;
@@ -93,24 +110,37 @@
         .chip .c:empty { display: none; }
 
         /* The one scrolling region on the page. */
-        .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.7rem 1.1rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; }
+        .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.8rem 1.2rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 
+        /* A coloured left edge repeats the badge's tone at a glance while
+           scanning a long list, without adding any height to the row - the
+           only signal a flat grey stack of rows gave you was the small badge
+           text, which meant reading every row individually to tell them apart. */
         .row {
             display: flex; align-items: center; gap: 0.85rem;
-            padding: 0.7rem 0.9rem;
-            border: 1px solid var(--border); border-radius: 11px;
+            padding: 0.85rem 1rem;
+            border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
+            border-radius: 12px;
             background: var(--surface-2);
             text-decoration: none; color: inherit;
-            transition: border-color 0.14s, background 0.14s, transform 0.14s;
+            transition: border-color 0.14s, background 0.14s, transform 0.14s, box-shadow 0.14s;
         }
+        .row[data-tone="info"] { border-left-color: var(--accent); }
+        .row[data-tone="warn"] { border-left-color: var(--warn); }
+        .row[data-tone="ok"]   { border-left-color: var(--ok); }
+        .row[data-tone="bad"]  { border-left-color: var(--bad); }
         .row:active { transform: scale(0.985); }
         @media (hover: hover) and (pointer: fine) {
-            .row:hover { border-color: var(--primary); background: var(--surface-3); transform: translateX(2px); }
+            .row:hover {
+                border-color: var(--primary); background: var(--surface-3);
+                transform: translateX(2px);
+                box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.5);
+            }
             .row:hover .row-go { color: var(--primary); transform: translateX(2px); }
         }
         .row-name { flex: 1; min-width: 0; }
         .row-title { font-size: var(--fs-body); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .row-meta { font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono); margin-top: 0.15rem; }
+        .row-meta { font-size: var(--fs-xs); color: var(--text-faint); font-family: var(--mono); margin-top: 0.2rem; }
         .row-time { font-size: var(--fs-xs); color: var(--text-faint); flex-shrink: 0; white-space: nowrap; }
         .row-go { color: var(--text-faint); flex-shrink: 0; display: inline-flex; transition: color 0.14s, transform 0.14s; }
         .row-go svg { width: 17px; height: 17px; }
@@ -157,7 +187,8 @@
         .review-links a:hover { background: color-mix(in oklab, var(--warn) 14%, transparent); }
 
         /* ---------- Right rail ---------- */
-        .rail { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; overflow-y: auto; }
+        .rail { display: flex; flex-direction: column; gap: 0.95rem; min-height: 0; overflow-y: auto; }
+        .rail .card { padding: 1rem 1.1rem; }
         .acts { display: flex; flex-direction: column; gap: 0.45rem; }
         .act {
             display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
@@ -209,7 +240,7 @@
             <section class="queue-panel">
                 <div class="qhead">
                     <div class="qhead-top">
-                        <h2>Missions</h2>
+                        <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/><rect x="3" y="16" width="12" height="4" rx="1"/></svg>Missions</h2>
                         <span class="pill-live" id="livePill">checking&hellip;</span>
                         <span class="qfresh" id="qFresh"></span>
                     </div>
@@ -252,7 +283,7 @@
 
             <aside class="rail">
                 <div class="card">
-                    <h3 class="h-card">Quick actions</h3>
+                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h3>
                     <div class="acts">
                         <a class="act" href="/settings">Diagnostics &amp; settings</a>
                         <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
@@ -261,7 +292,7 @@
                 </div>
 
                 <div class="card">
-                    <h3 class="h-card">System health</h3>
+                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 12 8 12 10 6 14 18 16 12 21 12"/></svg>System health</h3>
                     <div id="health">
                         <div class="hrow"><span class="hdot"></span><span class="hname">Rover</span><span class="hdetail"><span class="skel"></span></span></div>
                         <div class="hrow"><span class="hdot"></span><span class="hname">Camera</span><span class="hdetail"><span class="skel"></span></span></div>
@@ -270,7 +301,7 @@
                 </div>
 
                 <div class="card">
-                    <h3 class="h-card">Sync</h3>
+                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>Sync</h3>
                     <div id="net">
                         <div class="kv"><span class="k">Connection</span><span class="v"><span class="skel"></span></span></div>
                         <div class="kv"><span class="k">Last sync</span><span class="v"><span class="skel"></span></span></div>
@@ -429,7 +460,7 @@
             // Each row is a link, so the whole thing is one target rather than a
             // small button inside it - this gets used on a tablet, one-thumbed.
             rows.innerHTML = visible.map(function (m) {
-                return '<a class="row" href="/operator/mission/' + encodeURIComponent(m.id) + '">' +
+                return '<a class="row" data-tone="' + TONE[m.status] + '" href="/operator/mission/' + encodeURIComponent(m.id) + '">' +
                     '<span class="badge" data-tone="' + TONE[m.status] + '">' + esc(LABEL[m.status] || m.status) + '</span>' +
                     '<span class="row-name">' +
                         '<span class="row-title">' + (esc(m.name) || 'Mission-' + esc(m.id.slice(0, 8))) + '</span>' +

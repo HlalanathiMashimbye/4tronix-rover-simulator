@@ -221,7 +221,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/></svg>
                         </button>
                     </div>
-                    <div class="info-pop" id="tip-setup" role="note">What this satellite can and cannot do. Values are never shown, only whether they are configured.</div>
+                    <div class="info-pop" id="tip-setup" role="note">Each of these is set by an environment variable, not a control here, so only what still needs setting up is shown. Values themselves are never shown.</div>
                     <div id="setupList" style="margin-top:0.5rem;"></div>
                 </div>
 
@@ -263,33 +263,39 @@
         // Setup panel. Deliberately read-only: this console is reachable by
         // anyone on the venue network, and OPERATOR_AUTH=off removes the login
         // entirely on event days, so it must never display or accept secrets.
+        //
+        // Only surfaces what is NOT configured. Every row here is set by an
+        // env var, not a control on this page - repeating "Firestore: ready"
+        // forever once it's true tells the operator nothing they can act on.
+        // The camera feed isn't listed at all: it already has a live,
+        // actionable row with Start/Stop above, in the Camera card, so a
+        // second read-only copy of the same fact added nothing.
         async function loadSetup() {
             const rows = [];
             try {
                 const resp = await fetch('/operator/api/integrations');
                 if (resp.ok) rows.push(...((await resp.json()).integrations || []));
             } catch (e) { /* offline */ }
-            try {
-                const resp = await fetch('/operator/api/camera');
-                if (resp.ok) {
-                    const cam = await resp.json();
-                    rows.push({
-                        id: 'camera', name: 'Camera feed',
-                        why: 'Live view on the monitor page.',
-                        configured: cam.reachable,
-                        detail: cam.reachable ? cam.wsUrl : (cam.hint || 'Not running'),
-                    });
-                }
-            } catch (e) { /* offline */ }
 
             const el = document.getElementById('setupList');
             if (!rows.length) { el.innerHTML = '<div class="setup-row"><div class="setup-body"><div class="setup-why">Sign in to see setup status.</div></div></div>'; return; }
-            el.innerHTML = rows.map(r => `
-                <div class="setup-row">
-                    <span class="dot setup-dot ${r.configured ? 'on' : 'off'}"
-                          role="img" aria-label="${r.configured ? 'Configured' : 'Not configured'}"></span>
+
+            const broken = rows.filter(r => !r.configured);
+            if (broken.length === 0) {
+                el.innerHTML = `<div class="setup-row">
+                    <span class="dot setup-dot on" role="img" aria-label="Configured"></span>
                     <div class="setup-body">
-                        <div class="setup-name">${r.name} &mdash; ${r.configured ? 'ready' : 'not set up'}</div>
+                        <div class="setup-name">All integrations configured</div>
+                        <div class="setup-why">${rows.map(r => r.name).join(', ')}.</div>
+                    </div>
+                </div>`;
+                return;
+            }
+            el.innerHTML = broken.map(r => `
+                <div class="setup-row">
+                    <span class="dot setup-dot off" role="img" aria-label="Not configured"></span>
+                    <div class="setup-body">
+                        <div class="setup-name">${r.name} &mdash; not set up</div>
                         <div class="setup-why">${r.why}</div>
                         <div class="setup-detail">${r.detail}</div>
                     </div>

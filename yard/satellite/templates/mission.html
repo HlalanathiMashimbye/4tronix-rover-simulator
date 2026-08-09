@@ -32,17 +32,55 @@
         .id-chip.copied { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, transparent); }
         .id-chip svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
 
+        /* Static facts (yard, submitted, started, completed) used to live in
+           a "Timeline" card competing for room in the rail with three other
+           cards. They don't change while you're looking at the page, so they
+           belong in one quiet full-width line under the header, not fighting
+           live telemetry for space in a 400px column. */
+        .mmeta { flex: 0 0 auto; display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; font-size: var(--fs-xs); padding: 0 0.15rem; }
+        .mmeta-item { display: inline-flex; align-items: baseline; gap: 0.35rem; }
+        .mmeta-k { color: var(--text-faint); }
+        .mmeta-v { color: var(--text-dim); font-family: var(--mono); }
+        .mmeta-sep { color: var(--border-strong); }
 
         /* ---------- Two-column body ---------- */
         .grid {
             flex: 1 1 auto; min-height: 0;
-            display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 1rem;
+            display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 1.1rem;
         }
         @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
 
+        /* Same brand-gradient cap as the queue panel, so the page that OWNS
+           this screen (the code) reads as the hero surface rather than a bare
+           text dump next to a row of cards. */
+        .grid .panel {
+            position: relative; overflow: hidden;
+            box-shadow: 0 18px 40px -24px rgba(0, 0, 0, 0.55);
+        }
+        .grid .panel::before {
+            content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; z-index: 1;
+            background: linear-gradient(90deg, var(--mars), var(--primary) 45%, var(--accent) 100%);
+        }
+        .panel-head-title { display: flex; align-items: baseline; gap: 0.6rem; min-width: 0; }
+        .code-meta { color: var(--text-faint); font-size: var(--fs-xs); font-family: var(--mono); white-space: nowrap; }
+
+        /* Line numbers turn the code from one flat block of text into
+           something with visible structure - and a hover per line gives a
+           little texture back to what was otherwise the plainest surface on
+           the page next to three brand-gradient-capped panels. */
         pre.code {
-            padding: 1rem 1.1rem; color: var(--text-dim);
-            font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.6;
+            padding: 0.9rem 0; color: var(--text-dim); counter-reset: line;
+            font-family: var(--mono); font-size: var(--fs-sm); line-height: 1.7;
+        }
+        pre.code .line { display: block; padding: 0 1.2rem 0 3.6rem; position: relative; }
+        pre.code .line::before {
+            counter-increment: line; content: counter(line);
+            position: absolute; left: 1.2rem; width: 2rem; text-align: right;
+            color: var(--text-faint); opacity: 0.55;
+            font-variant-numeric: tabular-nums; user-select: none;
+        }
+        @media (hover: hover) and (pointer: fine) {
+            pre.code .line:hover { background: color-mix(in oklab, var(--surface-3) 70%, transparent); }
         }
 
         /* The rail scrolls its cards, but the stop control is pinned below them
@@ -128,10 +166,15 @@
             <span id="mStatus"></span>
         </div>
 
+        <div class="mmeta" id="mMeta"></div>
+
         <div class="grid">
             <section class="panel">
                 <div class="panel-head">
-                    <h2 class="h-card" style="margin-bottom:0;">Mission code</h2>
+                    <div class="panel-head-title">
+                        <h2 class="h-card" style="margin-bottom:0;">Mission code</h2>
+                        <span class="code-meta" id="codeLineCount"></span>
+                    </div>
                     <button class="btn quiet" id="copyCode">Copy</button>
                 </div>
                 <div class="panel-body"><pre class="code" id="mCode">Loading&hellip;</pre></div>
@@ -188,6 +231,9 @@
             alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
             slash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="8.5" y1="15.5" x2="15.5" y2="8.5"/></svg>',
             stop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+            bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+            video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+            satellite: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>',
         };
 
         const CONFIRM_COPY = {
@@ -316,7 +362,38 @@
             const meta = STATUS_META[mission.status] || { label: mission.status, tone: '', icon: 'alert' };
             document.getElementById('mStatus').innerHTML =
                 `<span class="badge has-icon" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>`;
-            document.getElementById('mCode').textContent = (mission.code || '').trim() || '# No code';
+            renderCode(mission.code);
+            renderMeta();
+        }
+
+        // One <span class="line"> per source line, numbered by CSS counter -
+        // gives the code panel visible structure instead of one flat block of
+        // text. Escaped per line rather than once over the whole string so a
+        // line that is itself empty still renders (and numbers) as a line.
+        function renderCode(code) {
+            const trimmed = (code || '').trim();
+            const el = document.getElementById('mCode');
+            if (!trimmed) {
+                el.innerHTML = '<span class="line"># No code</span>';
+                document.getElementById('codeLineCount').textContent = '';
+                return;
+            }
+            const lines = trimmed.split('\n');
+            el.innerHTML = lines.map(l => '<span class="line">' + esc(l) + '</span>').join('');
+            document.getElementById('codeLineCount').textContent = lines.length + ' line' + (lines.length === 1 ? '' : 's');
+        }
+
+        // The facts that don't change while you're looking at the page - when
+        // it was submitted, which yard, when it started/finished - live here
+        // in one quiet strip rather than a rail card competing for room with
+        // live telemetry.
+        function renderMeta() {
+            const parts = [['Yard', esc(mission.yardId) || '—'], ['Submitted', esc(relTime(mission.submittedAt)) || '—']];
+            if (mission.startedAt) parts.push(['Started', esc(relTime(mission.startedAt))]);
+            if (mission.completedAt) parts.push(['Completed', esc(relTime(mission.completedAt))]);
+            document.getElementById('mMeta').innerHTML = parts.map(([k, v]) =>
+                `<span class="mmeta-item"><span class="mmeta-k">${k}</span><span class="mmeta-v">${v}</span></span>`
+            ).join('<span class="mmeta-sep">&middot;</span>');
         }
 
         function actionButton(act, label, cls, confirm) {
@@ -327,7 +404,7 @@
             const rail = document.getElementById('rail');
             let html = '';
 
-            html += '<div class="card"><h3 class="h-card">Actions</h3><div class="actions">';
+            html += '<div class="card"><h3 class="h-card rail-h">' + ICONS.bolt + 'Actions</h3><div class="actions">';
             if (mission.status === 'queued') {
                 html += actionButton('send', 'Send to rover', 'primary');
                 html += actionButton('complete', 'Mark complete', '', true);
@@ -348,7 +425,7 @@
             // Video linking, only where it applies.
             if (mission.status === 'completed' && !mission.youtubeUrl) {
                 html += `<div class="card">
-                    <h3 class="h-card">Link the video</h3>
+                    <h3 class="h-card rail-h">${ICONS.video}Link the video</h3>
                     <ol class="yt-steps">
                         <li>Put this in the YouTube description and it links itself:
                             <button class="btn tag-copy" data-act="copytag">
@@ -365,24 +442,21 @@
                     <div class="actions" style="margin-top:0.6rem;">${actionButton('youtube', 'Attach video', 'primary')}</div>
                 </div>`;
             } else if (mission.youtubeUrl) {
-                html += `<div class="card"><h3 class="h-card">Video</h3>
+                html += `<div class="card"><h3 class="h-card rail-h">${ICONS.video}Video</h3>
                     <a class="yt-link" href="${esc(mission.youtubeUrl)}" target="_blank" rel="noopener">Watch on YouTube &#8599;</a></div>`;
             }
 
+            // Live telemetry only - the static facts (yard, submitted, started,
+            // completed) live in the full-width strip under the header now,
+            // which is what used to be a separate "Timeline" card competing
+            // for room here.
             html += `<div class="card">
-                <h3 class="h-card">Rover</h3>
+                <h3 class="h-card rail-h">${ICONS.satellite}Rover</h3>
                 <div id="tele">
                     <div class="tele-row"><span class="k">Connection</span><span class="v" id="teleConn">&mdash;</span></div>
                     <div class="tele-row"><span class="k">Queue</span><span class="v" id="teleQueue">&mdash;</span></div>
                     <div class="tele-row"><span class="k">Now running</span><span class="v" id="teleNow">&mdash;</span></div>
                 </div>
-            </div>`;
-
-            html += `<div class="card"><h3 class="h-card">Timeline</h3>
-                <div class="tele-row"><span class="k">Submitted</span><span class="v">${esc(relTime(mission.submittedAt)) || '&mdash;'}</span></div>
-                ${mission.startedAt ? `<div class="tele-row"><span class="k">Started</span><span class="v">${esc(relTime(mission.startedAt))}</span></div>` : ''}
-                ${mission.completedAt ? `<div class="tele-row"><span class="k">Completed</span><span class="v">${esc(relTime(mission.completedAt))}</span></div>` : ''}
-                <div class="tele-row"><span class="k">Yard</span><span class="v">${esc(mission.yardId || '—')}</span></div>
             </div>`;
 
             rail.innerHTML = html;
