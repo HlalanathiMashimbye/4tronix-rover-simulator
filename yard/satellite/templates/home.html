@@ -64,20 +64,26 @@
         .pill-live[data-tone="warn"] { color: var(--warn); background: rgba(251,191,36,0.1); border-color: rgba(251,191,36,0.35); }
         .qfresh { color: var(--text-faint); font-size: var(--fs-xs); margin-left: auto; }
 
-        .qcontrols { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
-        /* Pill-shaped and translucent rather than a boxed field, after
-           mission-control's navbar search - a quieter control that recedes
-           until you actually focus it, instead of a bordered box competing
-           with the panel it sits inside. */
+        .qcontrols { display: flex; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+
+        /* One compact control, not a field plus a whole separate row of
+           filter chips underneath. Capped width (not flex:1) so it can't
+           stretch to fill the header the way the old one did - mission-
+           control's own search caps at 34rem for the same reason. Status
+           filters live inside it as small icon buttons, the same way
+           NavbarSearch.tsx overlays its filter icons on the right of the
+           input; done here with plain flexbox rather than absolute
+           positioning; the input just shrinks to give them room. */
         .search {
-            flex: 1 1 200px; min-width: 160px; display: flex; align-items: center; gap: 0.55rem;
+            flex: 0 1 380px; max-width: 420px; min-width: 220px;
+            display: flex; align-items: center; gap: 0.5rem;
             background: color-mix(in oklab, var(--surface-2) 65%, transparent);
             border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-            border-radius: 999px; padding: 0.5rem 0.9rem; min-height: 40px;
+            border-radius: 999px; padding: 0.35rem 0.4rem 0.35rem 0.9rem; min-height: 40px;
             transition: border-color 0.15s, background 0.15s;
         }
         .search:focus-within { border-color: var(--primary); background: var(--surface-2); }
-        .search svg { width: 15px; height: 15px; color: var(--text-faint); flex-shrink: 0; }
+        .search-ic { width: 15px; height: 15px; color: var(--text-faint); flex-shrink: 0; }
         .search input {
             flex: 1; min-width: 0; background: none; border: none; outline: none;
             color: var(--text); font-size: var(--fs-sm);
@@ -86,32 +92,41 @@
         .search input::placeholder { color: var(--text-faint); }
         .search-clear {
             display: none; align-items: center; justify-content: center;
-            width: 22px; height: 22px; padding: 4px; margin: -4px 0;
+            width: 22px; height: 22px; padding: 4px;
             border: none; border-radius: 999px; background: none;
             color: var(--text-faint); cursor: pointer; flex-shrink: 0;
         }
         .search-clear.visible { display: inline-flex; }
         .search-clear:hover { color: var(--text); background: var(--surface-3); }
         .search-clear svg { width: 12px; height: 12px; }
+        .search-sep { width: 1px; height: 20px; background: var(--border-strong); flex-shrink: 0; }
+
+        .chips { display: flex; align-items: center; gap: 0.1rem; flex-shrink: 0; }
+        .chip {
+            position: relative;
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 26px; height: 26px; padding: 0; flex-shrink: 0;
+            border: none; border-radius: 999px; background: none;
+            color: var(--text-faint); cursor: pointer;
+            transition: color 0.15s, background 0.15s;
+        }
+        .chip svg { width: 14px; height: 14px; }
+        .chip:hover { background: var(--surface-3); color: var(--text); }
+        .chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-foreground); }
+        /* A failure is the one status an operator must not miss even with the
+           count hidden behind a tooltip now - so it alone keeps a visible cue. */
+        .chip[data-status="failed"][data-nonzero="1"]::after {
+            content: ""; position: absolute; top: 3px; right: 3px;
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--bad); border: 1.5px solid var(--surface);
+        }
+        .chip[data-status="failed"][aria-pressed="true"][data-nonzero="1"]::after { border-color: var(--primary); }
+
         .sort {
             background: var(--surface-2); border: 1px solid var(--border);
             border-radius: 9px; color: var(--text-dim); font-size: var(--fs-sm);
             padding: 0.45rem 0.6rem; cursor: pointer;
         }
-
-        /* The chips carry their own counts. A separate row of stat tiles used
-           to show the same four numbers and filter on click, which is exactly
-           what these do - two controls for one job, and a whole band of screen
-           spent on it. */
-        .chips { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-        .chip .c {
-            font-variant-numeric: tabular-nums; font-weight: 700;
-            color: var(--text); background: var(--surface-3);
-            border-radius: 999px; padding: 0.05rem 0.4rem; min-width: 1.5rem; text-align: center;
-        }
-        .chip[aria-pressed="true"] .c { color: var(--primary); background: color-mix(in oklab, var(--primary) 18%, transparent); }
-        .chip[data-status="failed"] .c[data-nonzero="1"] { color: var(--bad); }
-        .chip .c:empty { display: none; }
 
         /* The one scrolling region on the page. */
         .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0.8rem 1.2rem 1.1rem; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -248,26 +263,36 @@
                         <span class="qfresh" id="qFresh"></span>
                     </div>
                     <div class="qcontrols">
-                        <label class="search">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <div class="search">
+                            <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                             <input type="text" id="search" placeholder="Search missions&hellip;" autocomplete="off" aria-label="Search missions">
                             <button type="button" class="search-clear" id="searchClear" aria-label="Clear search">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
-                        </label>
+                            <span class="search-sep" aria-hidden="true"></span>
+                            <div class="chips" id="chips" role="group" aria-label="Filter missions by status">
+                                <button class="chip" type="button" data-status="queued" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                </button>
+                                <button class="chip" type="button" data-status="processing" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4V8z"/></svg>
+                                </button>
+                                <button class="chip" type="button" data-status="completed" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>
+                                </button>
+                                <button class="chip" type="button" data-status="failed" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                </button>
+                                <button class="chip" type="button" data-status="cancelled" aria-pressed="false">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="8.5" y1="15.5" x2="15.5" y2="8.5"/></svg>
+                                </button>
+                            </div>
+                        </div>
                         <select class="sort" id="sort" aria-label="Sort missions">
                             <option value="newest">Newest first</option>
                             <option value="oldest">Oldest first</option>
                             <option value="status">By status</option>
                         </select>
-                    </div>
-                    <div class="chips" id="chips" role="group" aria-label="Filter missions by status">
-                        <button class="chip" type="button" data-status="all" aria-pressed="true">All<span class="c"></span></button>
-                        <button class="chip" type="button" data-status="queued" aria-pressed="false">Queued<span class="c"></span></button>
-                        <button class="chip" type="button" data-status="processing" aria-pressed="false">Running<span class="c"></span></button>
-                        <button class="chip" type="button" data-status="completed" aria-pressed="false">Completed<span class="c"></span></button>
-                        <button class="chip" type="button" data-status="failed" aria-pressed="false">Failed<span class="c"></span></button>
-                        <button class="chip" type="button" data-status="cancelled" aria-pressed="false">Cancelled<span class="c"></span></button>
                     </div>
                 </div>
 
@@ -407,18 +432,20 @@
 
         function renderCounts() {
             var c = counts();
-            // "All" mirrors what the All filter actually shows, which excludes
-            // cancelled - a total that disagreed with the list underneath it
-            // would just look broken.
-            var all = c.queued + c.processing + c.completed + c.failed;
-            var values = { all: all, queued: c.queued, processing: c.processing, completed: c.completed, failed: c.failed, cancelled: c.cancelled };
 
+            // The chips are icon-only now, so the count that used to sit
+            // visibly on each one lives in its tooltip/accessible name
+            // instead - aria-label for screen readers, title for a mouse
+            // hover, same text in both. Failed alone keeps a visible dot: an
+            // operator has to notice a failure even without hovering.
             document.querySelectorAll('#chips .chip').forEach(function (el) {
-                var n = values[el.dataset.status];
-                var slot = el.querySelector('.c');
-                slot.textContent = (meta || missions.length) ? String(n) : '';
-                slot.dataset.nonzero = n > 0 ? '1' : '0';
-                el.setAttribute('aria-pressed', filter === el.dataset.status ? 'true' : 'false');
+                var status = el.dataset.status;
+                var n = c[status] || 0;
+                var text = LABEL[status] + ' (' + n + ')';
+                el.setAttribute('aria-label', text);
+                el.title = text;
+                el.setAttribute('aria-pressed', filter === status ? 'true' : 'false');
+                el.dataset.nonzero = n > 0 ? '1' : '0';
             });
 
             var pill = document.getElementById('livePill');
@@ -579,13 +606,14 @@
             renderRows();
         }
 
-        // Tapping the chip that is already active clears back to All, so the
-        // filter never becomes a state you have to hunt for the way out of.
+        // There's no visible "All" icon - tapping the filter that's already
+        // active clears back to it, so the filter never becomes a state you
+        // have to hunt for the way out of.
         document.getElementById('chips').addEventListener('click', function (e) {
             var btn = e.target.closest('.chip');
             if (!btn) return;
             var next = btn.dataset.status;
-            setFilter(filter === next && next !== 'all' ? 'all' : next);
+            setFilter(filter === next ? 'all' : next);
         });
 
         // ---------- Health / status ----------
