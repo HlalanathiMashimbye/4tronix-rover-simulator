@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "build:roversim": "node scripts/build-roversim.mjs",
+    "check:roversim": "node scripts/build-roversim.mjs --check"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

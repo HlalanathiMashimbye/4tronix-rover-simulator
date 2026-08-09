@@ -37,6 +37,12 @@ jobs:
           cache-dependency-path: mission-control/package-lock.json
       - run: npm ci
       - run: npm run lint
+      # The yard satellite serves a compiled copy of the rover simulator so its
+      # monitor page can animate a fake rover with the same physics and
+      # renderer the learner's mission page uses. That copy is committed (the
+      # Pi has no Node toolchain), so this fails the build if it no longer
+      # matches the TypeScript it was built from.
+      - run: npm run check:roversim
       - run: npx next build
       - run: npx jest --ci
 

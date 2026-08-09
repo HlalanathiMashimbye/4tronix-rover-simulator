@@ -764,6 +764,9 @@
             }
 
             connect(url = CAMERA_WS_URL) {
+                // A reconnect timer scheduled before disable() will still fire;
+                // this is where it gets stopped.
+                if (this.disabled) return;
                 this.updateStatus('connecting', 'Connecting...');
 
                 try {
@@ -818,6 +821,7 @@
             handleReconnect(url) {
                 // Retry forever with capped backoff — the camera service may
                 // be down for hours and must recover without a page reload
+                if (this.disabled) return;
                 this.reconnectAttempts++;
                 const delay = Math.min(
                     this.reconnectInterval * this.reconnectAttempts,
@@ -830,6 +834,21 @@
             updateStatus(state, text) {
                 this.cameraDot.className = 'connection-dot ' + state;
                 this.cameraStatus.textContent = text;
+            }
+
+            // Stand down permanently and hand the canvas to something else.
+            // Used when the yard is running a fake rover: there is no camera
+            // to connect to, so retrying forever would both fight the
+            // simulator for the canvas and sit on "Reconnecting…" for good.
+            disable() {
+                this.disabled = true;
+                if (this.ws) {
+                    this.ws.onclose = null;   // don't trigger the reconnect loop
+                    this.ws.onerror = null;
+                    try { this.ws.close(); } catch (e) { /* already closing */ }
+                    this.ws = null;
+                }
+                this.cameraMessage.classList.add('hidden');
             }
         }
 
@@ -1050,11 +1069,24 @@
 
         eventSource.onopen = () => queue.updateStatus('connected', 'Connected');
 
+        // Extra subscribers to the same stream. Kept as a list rather than a
+        // second EventSource because each one holds an open proxied connection
+        // to the rover for the life of the page.
+        const queueEventSubscribers = [];
+
         eventSource.onmessage = (event) => {
+            let status;
             try {
-                queue.updateUI(JSON.parse(event.data));
+                status = JSON.parse(event.data);
             } catch (e) {
                 console.error('SSE parse error:', e);
+                return;
+            }
+            queue.updateUI(status);
+            // A throwing subscriber must not take the queue display down with
+            // it - that is the part of this page someone is actually watching.
+            for (const fn of queueEventSubscribers) {
+                try { fn(status); } catch (e) { console.error('[monitor] subscriber failed:', e); }
             }
         };
 
@@ -1089,6 +1121,26 @@
         document.addEventListener('click', () => {
             roverPopover.classList.remove('visible');
         });
+
+        // Handed to the simulator module below. Deliberately a narrow surface
+        // rather than letting it reach into this script's internals.
+        window.__yardMonitorHooks = {
+            camera,
+            onQueueEvent: (fn) => queueEventSubscribers.push(fn),
+            setLabel: (text) => { document.getElementById('cameraStatus').textContent = text; },
+        };
+    </script>
+
+    <!-- Fake-rover simulation. Loads only the compiled simulator from
+         mission-control, and takes over the camera canvas only when the rover
+         reports itself as running the fake driver; on real hardware this does
+         nothing beyond one /api/status call. Module scripts are deferred, so
+         this runs after the classic script above has published its hooks. -->
+    <script type="module">
+        import { initSimIfFakeRover } from '/static/sim-monitor.js';
+        initSimIfFakeRover(window.__yardMonitorHooks || {}).catch((e) =>
+            console.warn('[sim] not started:', e)
+        );
     </script>
 </body>
 </html>

@@ -1,16 +1,35 @@
 """
 rover_physics.py
 
-Canonical, dependency-free rover physics for HEADLESS use (no PyQt6 / cv2).
+DEPRECATED - not used by any running code path. Kept deliberately, not deleted:
+David's repo may still merge against it, and it is the clearest readable
+statement of the steering model in Python.
 
-This is a faithful port of the SAME 4-wheel steering model used by:
+Dependency-free rover physics for HEADLESS use (no PyQt6 / cv2), a faithful
+port of the SAME 4-wheel steering model used by:
   - roversimui.py        (the interactive visual simulator / "real" reference)
   - rover-physics.ts     (the browser manual-control physics)
 
-so that the headless sim-video produced by sim_recorder.py moves identically to
-manual control and the visual simulator. Keep this in sync with rover-physics.ts
-(mission-control/src/lib/rover-physics.ts) — the two are line-for-line
-equivalent and the constants + command→servo mapping must match exactly.
+WHY IT IS DEPRECATED
+  1. Its stated purpose is gone. It existed to feed `sim_recorder.py`, which
+     produced a headless sim video; that file no longer exists in this repo
+     (mission-control now records the simulation client-side with
+     MediaRecorder instead). Nothing imports this module except its own test.
+  2. The simulation the yard actually renders is now the TypeScript one. The
+     monitor page draws a fake rover using mission-control's compiled
+     simulator (yard/satellite/static/roversim/, built by
+     mission-control/scripts/build-roversim.mjs), so browser and yard share
+     one implementation rather than agreeing by hand.
+
+The header used to say "keep this in sync with rover-physics.ts - the two are
+line-for-line equivalent". Nothing enforced that: there is no test comparing
+the two, and no build step that would notice them diverging. They do currently
+agree (same constants, same seven commands), but treat rover-physics.ts as the
+source of truth if they ever disagree.
+
+If this is revived for real use, add a test that asserts the constants and the
+command->servo mapping match rover-physics.ts, so the claim above is checked
+rather than merely written down.
 """
 
 import math
