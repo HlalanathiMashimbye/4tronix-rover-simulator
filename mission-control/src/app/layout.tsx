@@ -39,8 +39,12 @@ const fredoka = Fredoka({
 });
 
 const APP_TITLE = "Mission Control · Mars Mission Platform";
+// Describes what the platform actually does. The previous line promised a
+// rover called Sparky and mission patches to earn; neither exists anywhere in
+// the codebase, and this string is what a shared link shows to someone who has
+// never seen the site.
 const APP_DESCRIPTION =
-  "Pilot Sparky across Mars, code with blocks, and earn mission patches on the Red Planet";
+  "Write a rover mission in blocks or Python, send it to a real Mars rover at the yard, and watch the video of your code driving it.";
 
 export const metadata: Metadata = {
   // Absolute base for the og:image URL. Open Graph requires an absolute URL,
