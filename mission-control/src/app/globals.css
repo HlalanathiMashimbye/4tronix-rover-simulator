@@ -505,7 +505,11 @@
 .workspaceSplitGrid {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: 1fr;
+  /* minmax(0, 1fr), never a bare 1fr. A bare `1fr` is minmax(AUTO, 1fr), and
+     that auto minimum lets the track grow to its content's min-content width -
+     so Blockly's canvas and the simulator pushed the column wider than the
+     phone, and everything to the right of the fold was simply unreachable. */
+  grid-template-columns: minmax(0, 1fr);
   /* Create Mission owns the viewport and sizes to it. The mission view puts
      this inside an already-sized flex parent instead, and passes 100%. */
   max-height: var(--workspace-height, calc(100vh - 122px));
@@ -554,6 +558,25 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   border-radius: 999px;
+}
+
+/* Phones only. The grid is sized to one viewport height, which is right when
+   the panels sit side by side and fine on a tablet, but on a phone they stack
+   - so two panels shared ~690px, leaving Blockly and the simulator about 340px
+   each. Let the column grow and the page scroll instead: a phone scrolls
+   anyway, and half a screen of Blockly is not usable.
+
+   Deliberately max-width 767px and not the lg breakpoint the columns use:
+   tablets are the device the yard runs on, and their layout is already good. */
+@media (max-width: 767px) {
+  .workspaceSplitGrid {
+    height: auto;
+    max-height: none;
+  }
+
+  .workspaceSplitGrid > * {
+    min-height: 70vh;
+  }
 }
 
 @media (min-width: 1024px) {
