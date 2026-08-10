@@ -491,6 +491,16 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 'lock_owner': owner,
                 'locked_at': now_iso,
                 'lease_expires_at': expires_iso,
+                # A review flag is a question about a PREVIOUS run: "the
+                # satellite restarted while this was on the rover, so nobody
+                # knows what happened." Dispatching it again answers that
+                # question by making it moot. Leaving the flag on was not
+                # cosmetic: mission_watcher skips flagged missions on purpose,
+                # so a re-run mission stayed 'processing' forever - the rover
+                # finished it, the watcher refused to record it, and the
+                # operator saw a mission that never changed status.
+                'needs_review': 0,
+                'review_reason': None,
                 'local_dirty': 1,
             }
             payload = {
@@ -500,6 +510,8 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 'lockOwner': owner,
                 'lockedAt': now_iso,
                 'leaseExpiresAt': expires_iso,
+                'needsReview': False,
+                'reviewReason': None,
             }
             if for_rerun:
                 # A rerun supersedes the previous run's outcome. It also moves
@@ -566,6 +578,18 @@ def release_mission(mission_id, status, now_iso, review_reason=None, operator_de
                 updates['review_reason'] = review_reason
                 payload['needsReview'] = True
                 payload['reviewReason'] = review_reason
+            else:
+                # Every other caller is establishing an outcome: marked
+                # complete, cancelled, stopped and put back in the queue. The
+                # flag means "nobody knows what happened to this run", so a
+                # stated outcome retires it. Without this, marking a flagged
+                # mission complete changed its status but left it sitting in
+                # the needs-review list, which is the one place the operator
+                # goes to find work that is not finished.
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
             if operator_decision:
                 payload[_FORCE_KEY] = True
 

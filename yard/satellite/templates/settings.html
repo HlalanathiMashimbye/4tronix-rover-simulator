@@ -23,14 +23,25 @@
 
         .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
         .card-head-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.7rem; }
-        .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
-        .rover-url code { color: var(--text); }
         .link-btn { background: none; border: none; color: var(--primary); font-size: var(--fs-sm); cursor: pointer; padding: 0 0.25rem; }
         .link-btn:hover { text-decoration: underline; }
-        .url-editor { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+        /* The rover's address lives in the rover card, not in the page header.
+           It is a property of one component, and the header is the wrong place
+           to answer "which rover is this yard pointed at" - you look at the
+           Rover card for that, and it was the one card that did not say. */
+        .addr-row {
+            display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap;
+            margin-top: 0.4rem; font-size: var(--fs-xs);
+        }
+        .addr-label { color: var(--text-faint); }
+        .addr-row code { font-family: var(--mono); color: var(--text); word-break: break-all; }
+        .url-editor { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.45rem; }
         .url-editor[hidden] { display: none; }
-        .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
-        .url-error { color: var(--bad); font-size: var(--fs-sm); }
+        /* Full-width input on its own row: the card is a third of a column, so
+           input + Save + Cancel on one line left Cancel wrapping alone. */
+        .url-editor input { flex: 1 1 100%; min-width: 0; font-family: var(--mono); }
+        .url-error { color: var(--bad); font-size: var(--fs-xs); flex-basis: 100%; }
 
         /* Status card: one compact row, not a 90px block */
         .stat-card { display: flex; align-items: flex-start; gap: 0.7rem; }
@@ -57,6 +68,10 @@
             font-family: var(--mono); margin-top: 0.2rem; word-break: break-word;
         }
         .stat-detail span { color: var(--text); }
+        /* The detail line is monospace because it is almost always key: value
+           data. A sentence set in mono reads as a code sample, so prose opts
+           back into the page's sans. */
+        .stat-detail .prose { font-family: var(--font-sans); color: var(--text-dim); }
 
         /* status-label keeps its name because setBadge() writes it */
         .status-label {
@@ -140,14 +155,6 @@
     <main class="shell">
         <div class="headrow">
             <h1 class="h-page">Settings</h1>
-            <span class="rover-url">Rover: <code id="rover-url">{{ rover_url }}</code><button class="link-btn" id="edit-url-btn">edit</button></span>
-        </div>
-
-        <div class="url-editor" id="url-editor" hidden>
-            <input type="text" id="url-input" spellcheck="false" placeholder="http://curiosity.local:8523">
-            <button class="btn quiet primary" id="save-url-btn">Save</button>
-            <button class="btn quiet" id="cancel-url-btn">Cancel</button>
-            <span class="url-error" id="url-error"></span>
         </div>
 
         <div class="settings-grid">
@@ -171,6 +178,21 @@
                             <span class="status-label grey" id="label-rover">checking</span>
                         </div>
                         <div class="stat-detail" id="detail-rover">Loading&hellip;</div>
+                        <!-- Outside #detail-rover on purpose: renderStatus()
+                             replaces that node's innerHTML on every poll, so
+                             anything interactive placed inside it would lose
+                             its listeners a few seconds after page load. -->
+                        <div class="addr-row">
+                            <span class="addr-label">Address</span>
+                            <code id="rover-url">{{ rover_url }}</code>
+                            <button class="link-btn" id="edit-url-btn">edit</button>
+                        </div>
+                        <div class="url-editor" id="url-editor" hidden>
+                            <input type="text" id="url-input" spellcheck="false" placeholder="http://curiosity.local:8523">
+                            <button class="btn quiet primary" id="save-url-btn">Save</button>
+                            <button class="btn quiet" id="cancel-url-btn">Cancel</button>
+                            <span class="url-error" id="url-error"></span>
+                        </div>
                     </div>
                 </div>
 
@@ -450,17 +472,36 @@
                 syncActive + ' unfinished mission' + (syncActive === 1 ? '' : 's') + ' re-checked each pass';
         }
 
+        // Two empty number boxes and a live Save button is the worst possible
+        // state: it looks like the yard syncs every "nothing", and saving from
+        // there posts NaN. Say why the values are missing and take the
+        // controls away until they can be trusted.
+        function lockSyncCard(message) {
+            syncInterval.disabled = true;
+            syncReconcile.disabled = true;
+            document.getElementById('syncSave').disabled = true;
+            syncEstimate.dataset.tone = '';
+            syncEstimate.textContent = message;
+        }
+
         async function loadSyncConfig() {
             try {
                 const resp = await fetch('/operator/api/config/sync');
-                if (!resp.ok) return;
+                if (!resp.ok) {
+                    lockSyncCard(resp.status === 401
+                        ? 'Sign in as an operator to see and change how often this yard syncs.'
+                        : 'Could not read the current sync settings (HTTP ' + resp.status + ').');
+                    return;
+                }
                 const d = await resp.json();
                 syncInterval.value = d.interval;
                 syncReconcile.value = d.reconcileEvery;
                 syncActive = d.activeMissions != null ? d.activeMissions : syncActive;
                 syncFreeTier = d.freeTierDailyReads || syncFreeTier;
                 paintEstimate();
-            } catch (e) { /* offline: leave the fields as they are */ }
+            } catch (e) {
+                lockSyncCard('Could not reach the satellite to read these settings.');
+            }
         }
 
         syncInterval.addEventListener('input', paintEstimate);
@@ -549,7 +590,9 @@
             const r = data.rover;
             if (!r.reachable) {
                 setBadge('rover', { colour: 'red', text: 'Unreachable' });
-                setDetail('rover', row('URL', r.url));
+                // The address is on the card now, so repeating it here said
+                // nothing. Say what to do about it instead.
+                setDetail('rover', '<span class="prose">No reply. Check the rover is powered on and on this network, then correct the address below if it moved.</span>');
             } else if (r.status && r.status !== 'ok') {
                 // Reachable but the queue processor thread is dead:
                 // commands would be accepted yet never executed

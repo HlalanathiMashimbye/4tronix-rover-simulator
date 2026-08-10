@@ -1499,6 +1499,35 @@ def test_resolve_rejects_a_mission_not_under_review(client, missions):
                        json={'outcome': 'completed'}).status_code == 400
 
 
+def test_marking_a_flagged_mission_complete_retires_the_flag(client, missions):
+    """Stating an outcome answers the question the flag asks.
+
+    The status write always worked; the flag was what stayed behind, so a
+    mission the operator had just closed out kept appearing in the needs-review
+    list - the one place they look for work that is not finished.
+    """
+    import mission_store
+    sign_in(client)
+    mission_store.flag_for_review('p1', 'interrupted')
+
+    assert client.post('/operator/api/missions/p1/complete').status_code == 200
+
+    row = mission_store.get_mission('p1')
+    assert row['status'] == 'completed'
+    assert row['needs_review'] == 0
+    assert mission_store.get_needs_review() == []
+
+
+def test_cancelling_a_flagged_mission_retires_the_flag(client, missions):
+    import mission_store
+    sign_in(client)
+    mission_store.flag_for_review('p1', 'interrupted')
+
+    assert client.post('/operator/api/missions/p1/cancel').status_code == 200
+
+    assert mission_store.get_mission('p1')['needs_review'] == 0
+
+
 def test_conflicts_endpoint_exposes_the_log(client, missions):
     import mission_store
     sign_in(client)

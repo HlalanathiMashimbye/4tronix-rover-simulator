@@ -123,6 +123,36 @@ def test_missions_awaiting_human_review_are_left_alone(monkeypatch):
     assert mission_store.get_mission('m1')['needs_review'] == 1
 
 
+def test_a_flagged_mission_is_finishable_once_it_has_been_run_again(monkeypatch):
+    """Running a flagged mission again retires the question the flag asks.
+
+    The flag means "the satellite restarted mid-run, so nobody knows what
+    happened to it". Dispatching it again makes that moot. Before this,
+    acquire_mission left the flag in place, and the two rules above collided:
+    the rover finished the re-run, the watcher skipped it as awaiting a human,
+    and the mission sat at 'processing' with no way out except the review
+    screen. Reported against the fake rover, but nothing here is
+    driver-specific - the watcher reads /queue/status the same way for both.
+    """
+    _seed('m1', 'completed', needs_review=1)
+
+    ok, reason, _ = mission_store.acquire_mission(
+        'm1', 'sat-1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z', for_rerun=True,
+    )
+    assert ok, reason
+    assert mission_store.get_mission('m1')['needs_review'] == 0
+
+    # Stand in for the sync worker draining the lock write, so this exercises
+    # the review flag rather than the pending-writes guard below.
+    while (entry := mission_store.peek_outbox()) is not None:
+        mission_store.delete_outbox(entry['seq'])
+
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
+
+    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['m1']
+    assert mission_store.get_mission('m1')['status'] == 'completed'
+
+
 def test_a_mission_with_pending_writes_is_skipped(monkeypatch):
     """Do not race a flush that is already carrying a change for this row."""
     _seed('m1', 'processing')
