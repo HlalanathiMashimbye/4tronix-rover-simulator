@@ -14,10 +14,12 @@
 # change, which is the whole reason this file exists instead of edited defaults.
 #
 # Usage:
-#   terraform init -reconfigure \
-#     -backend-config="bucket=mars-rover-cloud-platform-tfstate" \
-#     -backend-config="prefix=mission-control"
+#   terraform init
 #   terraform apply -var-file=demo.tfvars
+#
+# backend.tf already names this project's state bucket, because CI runs a bare
+# `terraform init` and cannot be handed a -backend-config. Moving back to
+# Impact means editing that one line as well as swapping this file out.
 
 project_id = "mars-rover-cloud-platform"
 
