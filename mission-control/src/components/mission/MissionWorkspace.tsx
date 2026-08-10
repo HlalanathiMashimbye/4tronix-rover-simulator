@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { RoverState } from '@/lib/rover-physics';
 import { getLearnerID } from '@/lib/getLearnerID';
@@ -9,6 +9,7 @@ import { validateMission } from '@/infrastructure/validation/schemas';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
+import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { simulateCommands } from '@/lib/simulateCommands';
 
@@ -36,7 +37,7 @@ const SPLIT_MAX = 75;
 const SPLIT_DEFAULT = 60;
 
 export function MissionWorkspace() {
-  const { learnerEmail, openEmailPrompt } = useLearner();
+  const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
   const initialMode = (searchParams.get('mode') as EditorMode) || 'manual';
   const initialCode = searchParams.get('code') ?? '';
@@ -49,6 +50,11 @@ export function MissionWorkspace() {
   const [blocklyState, setBlocklyState] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [missionSentOpen, setMissionSentOpen] = useState(false);
+  // True between opening the email prompt and the learner answering it either
+  // way. A ref, not state: nothing renders from it, and it must be readable by
+  // the effect below in the same tick the prompt closes.
+  const awaitingEmailChoiceRef = useRef(false);
   const [missionName, setMissionName] = useState('');
   const [missionNameError, setMissionNameError] = useState<string | null>(null);
   const [showMissionNameValidation, setShowMissionNameValidation] = useState(false);
@@ -186,8 +192,15 @@ export function MissionWorkspace() {
       setSubmitSuccess(true);
       setMissionName('');
       // Offer notifications once the mission is in (never on landing), and only
-      // if the learner has not already saved an email.
-      if (!learnerEmail) openEmailPrompt();
+      // if the learner has not already saved an email. The confirmation waits
+      // for that answer rather than racing it: the prompt covers the whole
+      // screen, so anything shown underneath now is read by nobody.
+      if (!learnerEmail) {
+        awaitingEmailChoiceRef.current = true;
+        openEmailPrompt();
+      } else {
+        setMissionSentOpen(true);
+      }
       setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit mission');
@@ -196,6 +209,17 @@ export function MissionWorkspace() {
       setSubmitting(false);
     }
   };
+
+  // Both Skip and Save close the prompt (LearnerContext.setLearnerEmail clears
+  // it too), so watching it close covers either answer with one path. By the
+  // time this runs, learnerEmail already holds a just-saved address, which is
+  // what lets the dialog promise an email to the right place.
+  useEffect(() => {
+    if (!showEmailPrompt && awaitingEmailChoiceRef.current) {
+      awaitingEmailChoiceRef.current = false;
+      setMissionSentOpen(true);
+    }
+  }, [showEmailPrompt]);
 
   return (
     <div className="space-y-1.5">
@@ -247,6 +271,12 @@ export function MissionWorkspace() {
             }
           />
         }
+      />
+
+      <MissionSentDialog
+        open={missionSentOpen}
+        onClose={() => setMissionSentOpen(false)}
+        email={learnerEmail}
       />
     </div>
   );
