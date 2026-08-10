@@ -122,7 +122,7 @@ def settings():
     Was /status, and that URL still works: it is written on setup sheets and
     bookmarked on the yard's tablets, so it redirects here rather than 404ing.
     """
-    return render_template('status.html', rover_url=ROVER_URL)
+    return render_template('settings.html', rover_url=ROVER_URL)
 
 
 @app.route('/status')
