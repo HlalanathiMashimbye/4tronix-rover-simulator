@@ -27,5 +27,5 @@ region = "africa-south1"
 
 # Must match the bucket passed to `terraform init -backend-config` above.
 # Backends cannot read variables, so these are kept in step by hand.
-tfstate_bucket = "mars-rover-cloud-platform-tfstate"
+tfstate_bucket             = "mars-rover-cloud-platform-tfstate"
 firebase_credential_source = "adc"
