@@ -392,6 +392,19 @@
     background: color-mix(in oklab, var(--primary) 60%, var(--color-border));
     background-clip: content-box;
   }
+
+  /* input[type=search] draws its own clear button in WebKit, so the navbar
+     showed TWO of them: the browser's, and ours - which is the one that is
+     positioned with the filter chips, themed, and carries a real accessible
+     name. Suppress the native pair rather than dropping type=search, which is
+     what gives the field its search semantics and Escape-to-clear. */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration,
+  input[type='search']::-webkit-search-results-button,
+  input[type='search']::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 /* Respect users who prefer less motion: drop the ambient space animations and

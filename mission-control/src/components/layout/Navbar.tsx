@@ -20,11 +20,12 @@ import {
   Sun,
   Moon,
 } from 'lucide-react';
-import { useState, type ComponentProps } from 'react';
+import { useCallback, useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useCompletionNotifications } from '@/lib/useCompletionNotifications';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -43,8 +44,28 @@ export function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
-  // Real notifications will be wired to the backend later - no placeholder data.
-  const sampleNotifications: ComponentProps<typeof NotificationModal>['notifications'] = [];
+  const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
+
+  // What the open panel shows is captured when it opens, not read live.
+  // Opening marks everything seen, so a live list would empty itself in front
+  // of the learner as they looked at it.
+  const [viewing, setViewing] = useState<
+    ComponentProps<typeof NotificationModal>['notifications']
+  >([]);
+
+  const openNotifications = useCallback(() => {
+    setViewing(unread.map((n) => ({ type: 'completed' as const, ...n })));
+    setIsNotificationOpen(true);
+    markAllSeen();
+  }, [unread, markAllSeen]);
+
+  const dismissNotification = useCallback(
+    (id: string) => {
+      dismiss(id);
+      setViewing((prev) => (prev ?? []).filter((n) => n.id !== id));
+    },
+    [dismiss]
+  );
 
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
@@ -63,8 +84,6 @@ export function Navbar() {
 
     return `${base} ${isActive(path) ? active : inactive}`;
   };
-
-  const hasUnread = sampleNotifications.length > 0;
 
   return (
     <>
@@ -156,7 +175,7 @@ export function Navbar() {
 
             {/* Notification bell (desktop; mobile uses the bottom "Alerts" tab) */}
             <button
-              onClick={() => setIsNotificationOpen(true)}
+              onClick={openNotifications}
               className="relative hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
               aria-label="Notifications"
             >
@@ -203,7 +222,7 @@ export function Navbar() {
           </Link>
 
           <button
-            onClick={() => setIsNotificationOpen(true)}
+            onClick={openNotifications}
             className="relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-colors"
             aria-label="Notifications"
           >
@@ -219,7 +238,8 @@ export function Navbar() {
       <NotificationModal
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}
-        notifications={sampleNotifications}
+        notifications={viewing}
+        onDismiss={dismissNotification}
       />
 
       <EmailPrompt />

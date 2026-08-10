@@ -32,12 +32,15 @@ const EXIT_MS = 200;
 
 interface CompletedNotification {
   type: 'completed';
+  /** Mission id, so a single notification can be dismissed by hand. */
+  id: string;
   missionName: string;
-  completedAt: string; // e.g., "1 day ago", "2 hours ago"
+  completedAt: string; // ISO timestamp; rendered as "2 hours ago"
 }
 
 interface NewMissionNotification {
   type: 'new-mission';
+  id: string;
   missionName: string;
   message: string;
 }
@@ -48,12 +51,31 @@ interface NotificationModalProps {
   isOpen: boolean;
   onClose: () => void;
   notifications?: Notification[];
+  /** Remove one notification. Opening the panel already clears the dot; this
+      is the manual way out when something stays put anyway. */
+  onDismiss?: (id: string) => void;
+}
+
+/** "2 hours ago" from an ISO timestamp. Kept local: the only other relative
+    time in the app formats mission cards and carries their wording. */
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'recently';
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
 export function NotificationModal({
   isOpen,
   onClose,
-  notifications = []
+  notifications = [],
+  onDismiss,
 }: NotificationModalProps) {
   const [mounted, setMounted] = useState(isOpen);
   const [visible, setVisible] = useState(false);
@@ -118,21 +140,22 @@ export function NotificationModal({
               No new notifications
             </div>
           ) : (
-            notifications.map((notification, index) => (
-              <div key={index}>
+            notifications.map((notification) => (
+              <div key={notification.id} className="group relative">
                 {notification.type === 'completed' && (
-                  <div className="bg-green-600/90 p-4 text-white">
+                  <div className="bg-green-600/90 p-4 pr-10 text-white">
                     <p className="mb-1 text-sm font-semibold">
-                      Your mission is complete
+                      A mission finished on the rover
                     </p>
                     <p className="text-sm opacity-90">
-                      Mission <span className="font-medium">{notification.missionName}</span> was completed {notification.completedAt}
+                      <span className="font-medium">{notification.missionName}</span> was
+                      completed {relativeTime(notification.completedAt)}
                     </p>
                   </div>
                 )}
 
                 {notification.type === 'new-mission' && (
-                  <div className="bg-orange-500/90 p-4 text-white">
+                  <div className="bg-orange-500/90 p-4 pr-10 text-white">
                     <p className="mb-1 text-sm font-semibold">
                       New Missions to Explore!
                     </p>
@@ -140,6 +163,19 @@ export function NotificationModal({
                       {notification.message}
                     </p>
                   </div>
+                )}
+
+                {onDismiss && (
+                  <button
+                    onClick={() => onDismiss(notification.id)}
+                    // Always visible, not hover-revealed: this is the fallback
+                    // for when the automatic clear has not worked, and a
+                    // fallback nobody can find is not one.
+                    className="absolute right-2 top-3 rounded-full p-1 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
+                    aria-label={`Dismiss notification for ${notification.missionName}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 )}
               </div>
             ))
