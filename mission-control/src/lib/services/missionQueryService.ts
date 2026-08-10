@@ -135,6 +135,66 @@ export async function subscribeMissionsByLearnerEmail(
 }
 
 /**
+ * How many recent completions the notification bell tracks.
+ *
+ * Small on purpose. A listener bills one read per document when it attaches
+ * and one per document that changes afterwards, so this is the per-tab cost of
+ * having the bell on screen at all - paid once per session, not per poll. A
+ * bigger window would cost more reads to tell the learner the same thing,
+ * because nobody reads past the first few.
+ */
+export const COMPLETION_FEED_LIMIT = 8;
+
+/**
+ * Watch the most recently completed missions, whoever submitted them.
+ *
+ * Deliberately NOT scoped to the current learner: a learner's own missions
+ * reach them by email, and the bell exists for the shared yard - "a rover just
+ * finished someone's run" is the thing worth glancing up for, and the learner
+ * may not have identified themselves at all.
+ *
+ * Ordered by completedAt with NO status filter, and the status checked in the
+ * browser instead. Adding `where('status','==','completed')` would make this a
+ * composite query, which Firestore refuses to serve until someone deploys a
+ * new index - so the bell would stay dark in production until an infra change
+ * landed. Ordering by a single field needs no such deployment.
+ *
+ * That relies on an invariant worth stating: completedAt is only ever written
+ * when a mission completes, and is cleared on a rerun (yard mission_store.py,
+ * the only writer). Documents missing the ordered field are excluded by
+ * Firestore, so this query already returns completed missions only. The
+ * client-side status check is belt and braces, not the load-bearing part.
+ */
+export function subscribeRecentCompletions(
+  callback: (missions: Mission[]) => void,
+  max: number = COMPLETION_FEED_LIMIT
+): Unsubscribe {
+  const db = getFirestoreClient();
+  const q = query(
+    collection(db, 'missions'),
+    orderBy('completedAt', 'desc'),
+    limit(max)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const missions: Mission[] = [];
+      snapshot.forEach((doc) => {
+        const mission = convertTimestamps(doc.data() as Mission, doc.id);
+        if (!mission.deleted && mission.status === 'completed') missions.push(mission);
+      });
+      callback(missions);
+    },
+    (error) => {
+      // A bell that cannot load is not worth breaking a page over.
+      console.error('Recent completions subscription error:', error);
+      callback([]);
+    }
+  );
+}
+
+/**
  * Get all missions for a learner (one-time fetch)
  *
  * @param learnerId - Unique learner identifier (hashed before querying)

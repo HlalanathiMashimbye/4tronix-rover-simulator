@@ -140,6 +140,17 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         startWithHat();
       }
 
+      // Centre whatever we just put on the canvas. Saved workspaces keep the
+      // coordinates they were dragged to, and a remix carries the coordinates
+      // of whoever built it, so opening the editor could land on empty canvas
+      // with the program off-screen. Deliberately scrollCenter and not
+      // zoomToFit: the learner's zoom level is theirs, and rescaling on open
+      // is the behaviour the recenter button was removed for (see below).
+      // After a frame, so it measures the container at its final size.
+      requestAnimationFrame(() => {
+        if (workspaceRef.current) workspaceRef.current.scrollCenter();
+      });
+
       // Blockly hides a flyout but leaves its scrollbar behind. Closing a
       // category left a 15x322 scrollbar sitting over the workspace, still
       // display:block with a visible handle, covering blocks underneath and

@@ -52,7 +52,14 @@ export function BlocklyViewer({ state }: { state: string }) {
       // Ignore malformed state; an empty read-only canvas is an acceptable fallback.
     }
 
-    requestAnimationFrame(() => Blockly.svgResize(workspace));
+    requestAnimationFrame(() => {
+      Blockly.svgResize(workspace);
+      // Blocks carry the coordinates they were authored at, so a mission built
+      // off to one side opened showing empty canvas and the learner had to
+      // hunt for it. scrollCenter (not zoomToFit) keeps the scale the viewer
+      // was configured with and only moves the viewport.
+      workspace.scrollCenter();
+    });
 
     return () => workspace.dispose();
   }, [loaded, state]);
