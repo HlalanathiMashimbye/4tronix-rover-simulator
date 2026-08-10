@@ -113,7 +113,12 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   };
 
   return (
-    <main className="h-[calc(100vh-64px)] overflow-hidden px-3 py-2">
+    // Pinned to the viewport from md up, where the panels sit side by side and
+    // a page that never scrolls is the point. On a phone they stack, so a
+    // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
+    // blocks and the code were rendered, just unreachable, with no scrollbar to
+    // hint that anything was below.
+    <main className="px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
