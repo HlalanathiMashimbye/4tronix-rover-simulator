@@ -25,6 +25,12 @@ load_dotenv(Path(__file__).resolve().parent / '.env')
 
 CAMERA_PORT = int(os.environ.get('CAMERA_PORT', 8890))
 
+# Read here rather than only in __main__ so the monitor can print the address
+# a tablet should actually be typing. The TV footer used to hard-code :5050,
+# which stopped being true when the default moved to 3001 - a wrong number on
+# a wall-mounted screen is worse than no number at all.
+SERVER_PORT = int(os.environ.get('SATELLITE_PORT', 3001))
+
 # Runtime config persisted across restarts (e.g. rover URL edited on /status)
 CONFIG_FILE = os.environ.get(
     'SATELLITE_CONFIG',
@@ -205,7 +211,8 @@ def monitor():
     return render_template('monitor.html',
                            server_hostname=socket.gethostname(),
                            server_ip=_local_ip(),
-                           camera_port=CAMERA_PORT)
+                           camera_port=CAMERA_PORT,
+                           server_port=SERVER_PORT)
 
 
 @app.route('/api/queue/add', methods=['POST'])
@@ -346,7 +353,7 @@ def api_health():
 
 if __name__ == '__main__':
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
-    port = int(os.environ.get('SATELLITE_PORT', 3001))
+    port = SERVER_PORT
     print(f"[satellite] serving on port {port}")
     print(f"[satellite] rover url {ROVER_URL}")
     import flask.cli

@@ -8,7 +8,7 @@ The system is three devices:
 | Device | Hostname | What it does |
 |--------|----------|--------------|
 | **Rover** | `marspi.local` (old card) or `curiosity.local` (Bookworm) | Executes queued instructions on the 4tronix M.A.R.S. Rover (port 8523) |
-| **Satellite** | `mro.local` | Web server for tablets/TV (port 5050) + camera stream (port 8890) |
+| **Satellite** | `mro.local` | Web server for tablets/TV (port 3001) + camera stream (port 8890) |
 | **Tablets / TV** | — | Browser only: kids code at `/code/`, the class watches `/monitor/` |
 
 ---
@@ -20,15 +20,15 @@ The system is three devices:
 1. **Rover** — power on, wait ~1 minute. The mast twitches left then centres
    when the server is ready.
 2. **Satellite** — power on. Both services start automatically under systemd.
-3. **TV** — open `http://mro.local:5050/monitor/` in a fullscreen browser.
-4. **Tablets** — open `http://mro.local:5050/code/` (or launch the installed
+3. **TV** — open `http://mro.local:3001/monitor/` in a fullscreen browser.
+4. **Tablets** — open `http://mro.local:3001/code/` (or launch the installed
    PWA from the home screen).
 
 Everything must be on the same WiFi: **`marsyard`** or **`mars-relay-network`**.
 
 ### Check it's all up
 
-Open **`http://mro.local:5050/status`**. Three badges:
+Open **`http://mro.local:3001/status`**. Three badges:
 
 | Badge | Green | Amber | Red |
 |-------|-------|-------|-----|
@@ -152,10 +152,10 @@ Full walkthrough: [docs/satellite.md](docs/satellite.md).
 
 4. Make sure the rover URL points at the rover actually deployed
    (`marspi.local` or `curiosity.local`): open
-   `http://mro.local:5050/status` and use the **edit** button next to the
+   `http://mro.local:3001/status` and use the **edit** button next to the
    rover URL — the change applies immediately and survives restarts.
-5. Verify: `curl http://localhost:5050/api/status` and open
-   `http://mro.local:5050/status` from another device.
+5. Verify: `curl http://localhost:3001/api/status` and open
+   `http://mro.local:3001/status` from another device.
 
 All three services restart automatically on crash and start on boot. The
 camera unit never gives up retrying, so a camera plugged in late is picked up
@@ -163,9 +163,9 @@ within ~10 seconds.
 
 ### Tablets and TV
 
-- Tablets: Safari/Chrome → `http://mro.local:5050/code/` → Add to Home
+- Tablets: Safari/Chrome → `http://mro.local:3001/code/` → Add to Home
   Screen for fullscreen PWA.
-- TV: any browser fullscreen on `http://mro.local:5050/monitor/`.
+- TV: any browser fullscreen on `http://mro.local:3001/monitor/`.
 
 ---
 
@@ -186,8 +186,8 @@ journalctl -u rover-server -f
 
 ```bash
 curl http://<rover>.local:8523/health     # rover: status, processor_alive, driver, queue_size
-curl http://mro.local:5050/api/status     # everything the /status page shows, as JSON
-curl http://mro.local:5050/api/health     # satellite + rover connectivity
+curl http://mro.local:3001/api/status     # everything the /status page shows, as JSON
+curl http://mro.local:3001/api/health     # satellite + rover connectivity
 curl http://<rover>.local:8523/queue/status   # current/pending/history
 ```
 
