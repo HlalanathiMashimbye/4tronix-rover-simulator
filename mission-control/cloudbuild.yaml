@@ -1,0 +1,41 @@
+# Build the Mission Control image on Cloud Build rather than locally.
+#
+# Two reasons this exists instead of `docker build`:
+#
+#   1. No local Docker. Nothing on the dev machines has a daemon, and the
+#      deploy path should not depend on installing one.
+#   2. Architecture. The dev machines are Apple Silicon, so a local build
+#      produces linux/arm64 and Cloud Run runs linux/amd64 - the service comes
+#      up and dies with "exec format error", which reads like a broken app
+#      rather than a broken image. Cloud Build is amd64 by default.
+#
+# The NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time, so
+# they have to be here rather than set on the service. They are the public
+# Firebase web config, which ships to every browser anyway. Server secrets
+# (FIREBASE_PRIVATE_KEY, RESEND_API_KEY) are NOT here: Cloud Run mounts those
+# from Secret Manager at runtime.
+#
+# Invoked by scripts/deploy-demo.sh, which reads the values from
+# mission-control/.env so nobody has to paste them.
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=NEXT_PUBLIC_APP_URL=${_APP_URL}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_API_KEY=${_FB_API_KEY}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${_FB_AUTH_DOMAIN}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_PROJECT_ID=${_FB_PROJECT_ID}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${_FB_STORAGE_BUCKET}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${_FB_SENDER_ID}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_APP_ID=${_FB_APP_ID}
+      - --build-arg=NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${_FB_MEASUREMENT_ID}
+      - -t
+      - ${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}
+
+options:
+  logging: CLOUD_LOGGING_ONLY

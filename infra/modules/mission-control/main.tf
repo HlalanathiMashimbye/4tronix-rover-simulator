@@ -55,11 +55,21 @@ resource "google_secret_manager_secret_version" "seed" {
 }
 
 locals {
-  secrets = {
+  # With ADC, the two Firebase service-account variables must be ABSENT, not
+  # empty: firebase-admin.ts treats one-of-the-pair as a broken .env and throws
+  # rather than silently authenticating as a different identity. Leaving them
+  # mounted at the CHANGE_ME seed is worse still - the app would take the
+  # service-account path with a junk key.
+  firebase_secrets = var.firebase_credential_source == "adc" ? {} : {
     FIREBASE_CLIENT_EMAIL = google_secret_manager_secret.firebase_client_email
     FIREBASE_PRIVATE_KEY  = google_secret_manager_secret.firebase_private_key
-    RESEND_API_KEY        = google_secret_manager_secret.resend_api_key
   }
+
+  # Resend is unrelated to how Firestore is authenticated: it is a third-party
+  # API key with no ADC equivalent, so it is mounted either way.
+  secrets = merge(local.firebase_secrets, {
+    RESEND_API_KEY = google_secret_manager_secret.resend_api_key
+  })
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
   # set: while it has a value, every mission email is redirected to that one
