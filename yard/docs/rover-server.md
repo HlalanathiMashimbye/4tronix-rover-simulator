@@ -308,7 +308,7 @@ The 4tronix `rover.sh` installs an older `driveRover.py`. Replace it with a syml
 
 ```bash
 rm ~/marsrover/driveRover.py
-ln -s ~/4tronix-rover-simulator/driveRover.py ~/marsrover/driveRover.py
+ln -s ~/4tronix-rover-simulator/real-rover/driveRover.py ~/marsrover/driveRover.py
 ```
 
 ### 5. Calibrate Servos
