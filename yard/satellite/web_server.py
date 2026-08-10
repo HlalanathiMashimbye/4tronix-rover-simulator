@@ -115,9 +115,19 @@ def index():
     return render_template('home.html', operator=operator)
 
 
+@app.route('/settings')
+def settings():
+    """Diagnostics and the satellite's tunables.
+
+    Was /status, and that URL still works: it is written on setup sheets and
+    bookmarked on the yard's tablets, so it redirects here rather than 404ing.
+    """
+    return render_template('status.html', rover_url=ROVER_URL)
+
+
 @app.route('/status')
 def status():
-    return render_template('status.html', rover_url=ROVER_URL)
+    return redirect('/settings')
 
 
 @app.route('/api/status', methods=['GET'])
@@ -219,7 +229,17 @@ def api_queue_add():
 
 @app.route('/api/queue/clear', methods=['POST'])
 def api_queue_clear():
-    """Proxy to rover queue/clear endpoint"""
+    """Proxy to rover queue/clear endpoint - the emergency stop.
+
+    DELIBERATELY NOT behind require_operator, unlike every other control on
+    this server. The tablets at /code/ never sign in (see index()), and this is
+    the stop button a child or a facilitator hits when the rover is heading for
+    a table leg. An auth gate here would mean the one control that has to work
+    for anyone in the room is the one that asks for a password first.
+
+    The worst an unauthenticated caller can do is stop the robot. That is the
+    safe direction to fail in, so it stays open on purpose.
+    """
     try:
         resp = requests.post(
             f'{ROVER_URL}/queue/clear',

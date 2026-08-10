@@ -5,13 +5,29 @@ import threading
 import uuid as uuid_mod
 from datetime import datetime, timezone
 
-DB_PATH = os.environ.get('MISSION_MIRROR_DB', 'missions.db')
+# Anchored to this file's directory, not the working directory, matching
+# satellite_identity.CONFIG_FILE and web_server.CONFIG_FILE. A bare relative
+# 'missions.db' made the mirror's location depend on wherever the process
+# happened to be started from: it works in production only because the systemd
+# unit sets WorkingDirectory, and it silently created stray empty databases
+# anywhere else (one got committed at the repo root). The failure mode if that
+# WorkingDirectory line were ever dropped is the bad one - the satellite comes
+# up pointing at a brand-new empty mirror and simply shows no missions, with
+# nothing logged to say why.
+DB_PATH = os.environ.get(
+    'MISSION_MIRROR_DB',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'missions.db'),
+)
 
 # Finished missions are paged rather than capped. This is only a page size:
 # the console asks for more as the operator scrolls, and it all comes from
 # local SQLite, so a larger page costs DOM nodes and nothing else.
 DEFAULT_FINISHED_PAGE = 40
 _db_lock = threading.Lock()
+
+# Kept in step with sync_worker.FORCE_KEY by hand rather than imported: the
+# sync worker imports this module, so importing it back would be circular.
+_FORCE_KEY = '__operatorDecision'
 
 
 def _now_iso():
@@ -186,7 +202,6 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
             yard_params,
         ).fetchall()
 
-        # 'cancelled' stays hidden from the console entirely.
         finished = conn.execute(
             "SELECT * FROM mission_mirror"
             " WHERE deleted = 0 AND status IN ('completed','failed')" + yard_clause +
@@ -200,14 +215,75 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
             yard_params,
         ).fetchone()['n']
 
+        # Cancelled missions used to be excluded here outright, which made
+        # cancelling a one-way door: the console offered a "put back in queue"
+        # action for them that could never render, because the rows never
+        # reached the client. They are returned now and the queue keeps them
+        # out of its default view, so an operator can still find one they
+        # cancelled by mistake. Paged like the rest, and deliberately NOT part
+        # of finished_total, which drives the Finished tile and its paging.
+        cancelled = conn.execute(
+            "SELECT * FROM mission_mirror"
+            " WHERE deleted = 0 AND status = 'cancelled'" + yard_clause +
+            " ORDER BY submitted_at DESC LIMIT ?",
+            yard_params + [limit],
+        ).fetchall()
+
         meta = conn.execute("SELECT value FROM sync_meta WHERE key = 'last_synced_at'").fetchone()
         conn.close()
 
-    missions = [dict(r) for r in active] + [dict(r) for r in finished]
+    missions = [dict(r) for r in active] + [dict(r) for r in finished] + [dict(r) for r in cancelled]
     missions.sort(key=lambda m: m.get('submitted_at') or '', reverse=True)
 
     last_synced = meta[0] if meta else None
     return missions, last_synced, finished_total
+
+
+def status_counts(yard_id=None):
+    """How many live missions sit in each status, for the queue's filters.
+
+    Counted in SQL rather than from the returned page, because the page caps
+    finished missions - counting those rows would have told an operator there
+    were 39 completed missions when there were 74.
+    """
+    sql = "SELECT status, COUNT(*) AS n FROM mission_mirror WHERE deleted = 0"
+    params = []
+    if yard_id:
+        sql += ' AND yard_id = ?'
+        params.append(yard_id)
+    sql += ' GROUP BY status'
+
+    with _db_lock:
+        conn = _connect()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+    return {r['status']: r['n'] for r in rows}
+
+
+def completed_without_video(yard_id=None):
+    """Ids of completed missions that have no video attached yet.
+
+    The YouTube poll used to get this list by streaming every completed mission
+    out of Firestore, every five minutes, forever - a cost that grew by one
+    read per child who finished a run, and on this yard was already ~21,000
+    reads a day against a 50,000 free tier shared with the public site.
+
+    The mirror holds `status` and `youtube_url` for the same documents and is
+    kept current by the sync worker, so the candidate list costs nothing.
+    """
+    sql = ("SELECT id FROM mission_mirror"
+           " WHERE deleted = 0 AND status = 'completed'"
+           " AND (youtube_url IS NULL OR youtube_url = '')")
+    params = []
+    if yard_id:
+        sql += ' AND yard_id = ?'
+        params.append(yard_id)
+
+    with _db_lock:
+        conn = _connect()
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+    return [r['id'] for r in rows]
 
 
 def get_mission(mission_id, include_deleted=False):
@@ -385,7 +461,14 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
             lease_live = bool(lease) and lease > now_iso
 
             if for_rerun:
-                if status not in ('completed', 'failed'):
+                # 'cancelled' belongs here. The console has always offered a
+                # "put back in queue" action for cancelled missions, and it
+                # could never have worked - this check rejected it as
+                # not-terminal. It went unnoticed because cancelled missions
+                # were filtered out of the console entirely, so the button had
+                # nothing to render against. They are visible now, so the
+                # action has to actually do something.
+                if status not in ('completed', 'failed', 'cancelled'):
                     conn.rollback()
                     return False, 'not-terminal', None
             else:
@@ -419,11 +502,15 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 'leaseExpiresAt': expires_iso,
             }
             if for_rerun:
-                # A rerun supersedes the previous run's outcome.
+                # A rerun supersedes the previous run's outcome. It also moves
+                # the mission backwards (completed -> processing), which the
+                # sync merge would otherwise reject, so say plainly that a
+                # human asked for this.
                 updates['completed_at'] = None
                 updates['youtube_url'] = None
                 payload['completedAt'] = None
                 payload['youtubeUrl'] = None
+                payload[_FORCE_KEY] = True
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -440,11 +527,17 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
             conn.close()
 
 
-def release_mission(mission_id, status, now_iso, review_reason=None):
+def release_mission(mission_id, status, now_iso, review_reason=None, operator_decision=False):
     """Drop the lock and set a status, queueing both for Firestore.
 
     Used for terminal transitions and for rolling back when a dispatch never
     reached the rover.
+
+    `operator_decision` marks the change as a human's call so the sync merge
+    lets it through even when it moves the mission backwards - stopping a rover
+    is the case that matters (see sync_worker.should_local_win). Left False for
+    changes that happen on their own, so the normal merge still protects
+    against a stale local copy overwriting real progress.
     """
     with _db_lock:
         conn = _connect()
@@ -473,6 +566,8 @@ def release_mission(mission_id, status, now_iso, review_reason=None):
                 updates['review_reason'] = review_reason
                 payload['needsReview'] = True
                 payload['reviewReason'] = review_reason
+            if operator_decision:
+                payload[_FORCE_KEY] = True
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -628,6 +723,10 @@ def resolve_review(mission_id, status, now_iso):
                 'lockOwner': None,
                 'lockedAt': None,
                 'leaseExpiresAt': None,
+                # This IS the operator's decision about an ambiguous mission -
+                # the whole point of the review flow. Re-queuing moves it back
+                # from 'processing', which the merge ladder would drop.
+                _FORCE_KEY: True,
             }
             if status == 'completed':
                 updates['completed_at'] = now_iso

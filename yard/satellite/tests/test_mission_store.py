@@ -114,13 +114,28 @@ def test_get_missions_orders_by_submitted_at_descending():
     assert missions[0]['id'] == 'new'
 
 
-def test_get_missions_excludes_cancelled():
+def test_get_missions_returns_cancelled_for_the_queues_own_filter():
+    """Cancelled missions used to be dropped here, which made cancelling a
+    one-way door - the console offered a "put back in queue" action for them
+    that could never render. They come back now; keeping them out of the
+    default view is the queue's job, not the store's."""
     mission_store.upsert_missions([
         _mission('a', status='queued'),
         _mission('b', status='cancelled'),
     ], '2026-07-14T09:00:00Z')
     missions, _, _total = mission_store.get_missions()
-    assert {m['id'] for m in missions} == {'a'}
+    assert {m['id'] for m in missions} == {'a', 'b'}
+
+
+def test_cancelled_are_not_counted_as_finished():
+    """finished_total drives the Finished count and its paging, so a cancelled
+    mission must not inflate it."""
+    mission_store.upsert_missions([
+        _mission('done', status='completed'),
+        _mission('gone', status='cancelled'),
+    ], '2026-07-14T09:00:00Z')
+    _missions, _, total = mission_store.get_missions()
+    assert total == 1
 
 
 def test_the_limit_applies_to_finished_missions_only():
@@ -203,7 +218,25 @@ def test_actionable_missions_are_never_capped(tmp_path, monkeypatch):
     assert len([r for r in rows if r['status'] == 'completed']) == 5, 'finished ones are capped'
 
 
-def test_cancelled_missions_stay_hidden(tmp_path, monkeypatch):
+def test_cancelled_missions_are_reachable_and_scoped_to_the_yard(tmp_path, monkeypatch):
+    import mission_store
+    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    mission_store.init_db()
+    mission_store.upsert_missions(
+        [
+            {'id': 'x', 'yardId': 'uct-rover-1', 'status': 'cancelled', 'submittedAt': '2026-07-01'},
+            {'id': 'y', 'yardId': 'other-yard', 'status': 'cancelled', 'submittedAt': '2026-07-01'},
+        ],
+        '2026-07-02',
+    )
+
+    rows, _, _total = mission_store.get_missions(yard_id='uct-rover-1')
+    assert [r['id'] for r in rows] == ['x']
+
+
+def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
+    """The rerun path rejected 'cancelled' as not-terminal, so the console's
+    "put back in queue" button could never have worked."""
     import mission_store
     monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
@@ -212,5 +245,7 @@ def test_cancelled_missions_stay_hidden(tmp_path, monkeypatch):
         '2026-07-02',
     )
 
-    rows, _, _total = mission_store.get_missions(yard_id='uct-rover-1')
-    assert rows == []
+    ok, reason, _mission = mission_store.acquire_mission(
+        'x', 'sat-1', '2026-07-03T00:00:00Z', '2026-07-03T00:05:00Z', for_rerun=True,
+    )
+    assert ok, reason

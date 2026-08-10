@@ -40,7 +40,6 @@ shadow Python's stdlib `operator` module.
 
 import os
 import re
-import requests
 import threading
 from datetime import datetime, timezone
 from functools import wraps
@@ -285,10 +284,28 @@ def require_operator(f):
 
 @operator_bp.route('/')
 def console():
+    """Kept as a redirect, not a page.
+
+    The queue used to live here while the home page showed a read-only preview
+    of the same list. Two screens rendering the same missions meant an operator
+    picked one at random and the other was dead weight, so the queue moved to
+    the home page and this is now just a bookmark that still works.
+    """
+    return redirect('/')
+
+
+@operator_bp.route('/mission/<mission_id>')
+def mission_page(mission_id):
+    """One mission, with the controls for it - including Stop.
+
+    Every action on a mission lives here rather than on the queue. The queue is
+    for choosing what to work on; this is for doing it, and it is the screen an
+    operator has open while a rover is actually moving.
+    """
     operator = current_operator()
     if not operator:
         return redirect('/operator/login')
-    return render_template('operator.html', operator=operator)
+    return render_template('mission.html', operator=operator, mission_id=mission_id)
 
 
 @operator_bp.route('/login')
@@ -361,8 +378,8 @@ def api_logout():
 
 def _mirror_row_to_dict(row):
     """Map a mission_mirror SQLite row (snake_case) to the API's camelCase
-    shape - the frontend (operator.html) contract predates the mirror and is
-    unchanged by it.
+    shape - the frontend contract (home.html's queue, mission.html) predates
+    the mirror and is unchanged by it.
     """
     return {
         'id': row['id'],
@@ -391,7 +408,7 @@ def _mirror_is_stale(last_synced_at):
 @operator_bp.route('/api/missions', methods=['GET'])
 @require_operator
 def api_missions():
-    from mission_store import get_missions, outbox_count, DEFAULT_FINISHED_PAGE
+    from mission_store import get_missions, outbox_count, status_counts, DEFAULT_FINISHED_PAGE
     from satellite_identity import yard_id
 
     # Scoped to this satellite's own yard (plan 3.3) so a second yard's
@@ -414,6 +431,10 @@ def api_missions():
         'pendingWrites': outbox_count(),
         'finishedShown': min(finished, finished_total),
         'finishedTotal': finished_total,
+        # Counted in SQL, so the queue's filters can show a true total per
+        # status rather than however many of that status happen to be on the
+        # returned page.
+        'counts': status_counts(yard_id=yard_id()),
     })
 
 
@@ -578,7 +599,7 @@ def api_rerun(mission_id):
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
-            'not-terminal': ('Only completed or failed missions can be rerun', 400),
+            'not-terminal': ('Only finished or cancelled missions can be rerun', 400),
             'locked-by-other': ('Mission is locked by another operator', 409),
         }
         msg, code = messages.get(reason, ('Lock failed', 500))
@@ -595,6 +616,76 @@ def api_rerun(mission_id):
     _start_lease_renewal(mission_id)
     _notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id})
+
+
+@operator_bp.route('/api/missions/<mission_id>', methods=['GET'])
+@require_operator
+def api_mission(mission_id):
+    """One mission, for the mission page."""
+    from mission_store import get_mission
+
+    mission = get_mission(mission_id)
+    if mission is None:
+        return jsonify({'error': 'Mission not found'}), 404
+    return jsonify({'mission': _mirror_row_to_dict(mission)})
+
+
+@operator_bp.route('/api/missions/<mission_id>/stop', methods=['POST'])
+@require_operator
+def api_stop_mission(mission_id):
+    """Halt the rover mid-run and put the mission back in the queue.
+
+    The gap this fills: until now an operator standing next to a moving rover,
+    in a hall full of children, had no control that stopped it. The rover has
+    had an emergency stop the whole time (POST /queue/clear drops the queue and
+    calls driver.stop()); nothing in the console was wired to it.
+
+    The rover is stopped FIRST and the bookkeeping happens after. If Firestore,
+    the mirror, or anything else fails, the robot has still stopped - that
+    ordering is the whole point. A failed status write is a tidy-up problem; a
+    rover that keeps driving because a database call raised is not.
+
+    The mission goes back to 'queued' rather than 'failed' or 'cancelled': the
+    code did not do anything wrong, somebody just needed the rover to stop, and
+    it should be re-runnable with one tap. 'failed' would also reach the learner
+    as a run that went wrong, which it did not.
+
+    Deliberately works whatever state THIS mission is in. The button is on
+    screen at all times, and refusing to stop a rover because the mission you
+    happen to be looking at is not the one running would be indefensible - the
+    rover is one machine and it may be carrying anything. When the mission is
+    not the running one, the rover is still cleared and only the status write
+    is skipped.
+    """
+    from mission_store import get_mission, release_mission
+
+    mission = get_mission(mission_id)
+    if mission is None:
+        return jsonify({'error': 'Mission not found'}), 404
+    was_running = mission.get('status') == 'processing'
+
+    try:
+        resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
+    except requests.exceptions.RequestException:
+        return jsonify({
+            'error': 'Could not reach the rover to stop it. If it is still moving, '
+                     'use the power switch on the rover itself.'
+        }), 503
+
+    if resp.status_code != 200:
+        return jsonify({
+            'error': f'The rover refused the stop command (HTTP {resp.status_code}). '
+                     'If it is still moving, use the power switch on the rover itself.'
+        }), 502
+
+    if not was_running:
+        # Rover cleared, nothing to record: this mission was not the one on it.
+        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': mission.get('status')})
+
+    _stop_lease_renewal(mission_id)
+    release_mission(mission_id, 'queued', _now_iso(), operator_decision=True)
+    _notify_mission_control_async(mission_id, 'queued')
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
 
 
 @operator_bp.route('/api/missions/<mission_id>/complete', methods=['POST'])
@@ -798,6 +889,79 @@ def api_delete_mission(mission_id):
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
+@operator_bp.route('/api/config/sync', methods=['GET', 'POST'])
+@require_operator
+def api_sync_config():
+    """Read or change how often the satellite talks to Firestore.
+
+    Worth being precise about what this controls, because it is easy to assume
+    it is the console refreshing. It is not: the queue's own polling reads
+    local SQLite and costs no Firestore quota at all. This is the background
+    worker that reconciles the mirror with Firestore, and it is the only thing
+    on the satellite billed against the daily read limit.
+    """
+    import json as _json
+    from sync_worker import (
+        sync_interval, reconcile_every, estimated_daily_reads,
+        MIN_INTERVAL, MAX_INTERVAL, MIN_RECONCILE, MAX_RECONCILE,
+    )
+    from satellite_identity import CONFIG_FILE
+
+    if request.method == 'GET':
+        from mission_store import status_counts
+        from satellite_identity import yard_id
+        counts = status_counts(yard_id=yard_id())
+        active = (counts.get('queued', 0) + counts.get('processing', 0))
+        return jsonify({
+            'interval': sync_interval(),
+            'reconcileEvery': reconcile_every(),
+            'activeMissions': active,
+            'estimatedDailyReads': estimated_daily_reads(active_missions=active),
+            'freeTierDailyReads': 50000,
+            'limits': {
+                'interval': [MIN_INTERVAL, MAX_INTERVAL],
+                'reconcileEvery': [MIN_RECONCILE, MAX_RECONCILE],
+            },
+        })
+
+    data = request.get_json(silent=True) or {}
+    try:
+        interval = int(data.get('interval', sync_interval()))
+        reconcile = int(data.get('reconcileEvery', reconcile_every()))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'interval and reconcileEvery must be whole numbers of seconds/cycles'}), 400
+
+    if not MIN_INTERVAL <= interval <= MAX_INTERVAL:
+        return jsonify({'error': f'Sync interval must be between {MIN_INTERVAL} and {MAX_INTERVAL} seconds'}), 400
+    if not MIN_RECONCILE <= reconcile <= MAX_RECONCILE:
+        return jsonify({'error': f'Reconcile every must be between {MIN_RECONCILE} and {MAX_RECONCILE} cycles'}), 400
+
+    try:
+        try:
+            with open(CONFIG_FILE) as f:
+                cfg = _json.load(f)
+        except Exception:
+            cfg = {}
+        cfg['sync_interval'] = interval
+        cfg['sync_reconcile_every'] = reconcile
+        with open(CONFIG_FILE, 'w') as f:
+            _json.dump(cfg, f, indent=2)
+    except OSError as e:
+        return jsonify({'error': f'Could not save the setting: {e}'}), 500
+
+    from mission_store import status_counts
+    from satellite_identity import yard_id
+    counts = status_counts(yard_id=yard_id())
+    active = counts.get('queued', 0) + counts.get('processing', 0)
+
+    return jsonify({
+        'status': 'ok',
+        'interval': interval,
+        'reconcileEvery': reconcile,
+        'estimatedDailyReads': estimated_daily_reads(interval, reconcile, active),
+    })
+
+
 @operator_bp.route('/api/integrations', methods=['GET'])
 @require_operator
 def api_integrations():
@@ -932,12 +1096,19 @@ def _youtube_channel_id():
 def check_for_new_videos():
     """Poll the YouTube channel for uploads matching a completed mission's ID.
 
-    A mission never has a `youtubeUrl` field at all until one is attached
-    (mission-control omits it entirely on write; only api_rerun explicitly
-    nulls it out), so this cannot filter on `youtubeUrl == None` in the
-    Firestore query itself - that only matches documents where the field is
-    present and null, not documents where it's absent. Fetch completed
-    missions and filter for a missing/falsy youtubeUrl in Python instead.
+    Candidates come from the local mirror, not Firestore. The previous version
+    streamed every completed mission out of Firestore on each pass: at one read
+    per completed mission every five minutes, that was ~21,000 reads/day on
+    this yard and rising with every child who finished a run - roughly 80% of
+    the satellite's entire Firestore bill, for a list the mirror already had.
+
+    (The old approach could not narrow that query either: a mission has no
+    `youtubeUrl` field at all until one is attached, and Firestore's `== None`
+    matches documents where the field is present and null, not absent. SQL has
+    no such trouble.)
+
+    Firestore is now touched only to WRITE a link that was actually found, so a
+    quiet poll - which is nearly all of them - costs nothing at all.
     """
     print('[youtube-poll] Checking for new videos...')
 
@@ -947,15 +1118,12 @@ def check_for_new_videos():
         print('[youtube-poll] Missing YOUTUBE_API_KEY or YOUTUBE_CHANNEL_ID; skipping poll')
         return
 
-    try:
-        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
-        completed = list(missions_ref.where('status', '==', 'completed').stream())
-    except Exception as e:
-        print(f'[youtube-poll] Failed to read Firestore: {e}')
-        return
+    from mission_store import completed_without_video
+    from satellite_identity import yard_id
 
-    unlinked = [doc for doc in completed if not doc.to_dict().get('youtubeUrl')]
-    if not unlinked:
+    unlinked_ids = completed_without_video(yard_id=yard_id())
+    if not unlinked_ids:
+        # Nothing to look for, so do not spend a YouTube API call either.
         return
 
     # The uploads playlist id is the channel id with UC -> UU.
@@ -982,10 +1150,13 @@ def check_for_new_videos():
 
     videos = response.json().get('items', [])
 
-    # Match mission ids embedded in video descriptions.
-    for mission_doc in unlinked:
-        mission_id = mission_doc.id
+    # Built on the first actual match, not up front: constructing the client is
+    # the only thing here that can fail when the yard is offline, and a poll
+    # that matches nothing should not be able to log an error about Firestore.
+    missions_ref = None
 
+    # Match mission ids embedded in video descriptions.
+    for mission_id in unlinked_ids:
         for video in videos:
             description = video.get('snippet', {}).get('description', '')
 
@@ -1004,7 +1175,17 @@ def check_for_new_videos():
                     print(f'[youtube-poll] Skipping {mission_id}: local writes pending')
                     break
 
-                missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
+                try:
+                    if missions_ref is None:
+                        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
+                    missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
+                except Exception as e:
+                    # Leave the mirror alone so this mission is still a
+                    # candidate next pass; the link is not lost, just not
+                    # written yet.
+                    print(f'[youtube-poll] Could not link {mission_id}: {e}')
+                    break
+
                 _mirror_youtube_url(mission_id, youtube_url)
                 print(f'[youtube-poll] Linked mission {mission_id} to video {video_id}')
                 break

@@ -186,6 +186,9 @@ client_secret.json
 
 
 # Satellite mission mirror (local SQLite state, never shared)
+missions.db
+missions.db-shm
+missions.db-wal
 yard/satellite/missions.db
 yard/satellite/missions.db-shm
 yard/satellite/missions.db-wal

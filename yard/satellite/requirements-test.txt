@@ -1,0 +1,26 @@
+# Dependencies needed to RUN THE TESTS, not to run the satellite.
+#
+# Deliberately not `-r requirements.txt`: that pulls opencv-python, numpy and
+# (on Linux) picamera2, which exist only for camera_server.py on the Pi.
+# picamera2 in particular needs Pi system libraries and does not install on a
+# generic Linux CI runner, so requiring the full file would fail the build for
+# a reason that has nothing to do with the code under test.
+#
+# What is here is the minimum the suite actually imports, verified by running
+# it in a clean virtualenv:
+#   flask / requests / python-dotenv  - web_server + operator_console
+#   firebase-admin                    - imported by test_sync_worker
+#   websockets                        - imported by camera_server, which two
+#                                       operator_console tests import
+pytest>=7.0.0
+flask>=2.0.0
+requests>=2.28.0
+python-dotenv>=1.0.0
+firebase-admin>=6.0.0
+websockets>=10.0
+
+# Browser tests (test_status_page.py, test_blockly_codegen.py) additionally
+# need `playwright` plus `playwright install chromium`. They are skipped
+# automatically when it is absent - see tests/conftest.py - so this file
+# leaves it out and the suite still passes; add it locally if you are working
+# on those two files.

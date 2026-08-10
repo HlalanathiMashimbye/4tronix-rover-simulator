@@ -348,8 +348,22 @@ def test_code_and_monitor_stay_public(client):
     assert client.get('/monitor/').status_code == 200
 
 
-def test_console_page_redirects_to_login_without_session(client):
+def test_operator_root_redirects_to_the_queue(client):
+    """/operator/ was the queue; the home page is. The URL stays alive because
+    it is bookmarked on the yard's tablets."""
     resp = client.get('/operator/')
+    assert resp.status_code == 302
+    assert resp.headers['Location'].endswith('/')
+
+
+def test_hub_redirects_to_login_without_session(client):
+    resp = client.get('/')
+    assert resp.status_code == 302
+    assert '/operator/login' in resp.headers['Location']
+
+
+def test_mission_page_redirects_to_login_without_session(client):
+    resp = client.get('/operator/mission/p1')
     assert resp.status_code == 302
     assert '/operator/login' in resp.headers['Location']
 
@@ -358,10 +372,118 @@ def test_console_page_redirects_to_login_without_session(client):
 
 def test_auth_off_opens_console_and_hub_without_session(client, monkeypatch):
     monkeypatch.setenv('OPERATOR_AUTH', 'off')
-    assert client.get('/operator/').status_code == 200
     assert client.get('/').status_code == 200
+    assert client.get('/operator/mission/p1').status_code == 200
     login = client.get('/operator/login')
     assert login.status_code == 302  # login page steps aside
+
+
+# --- Stop: the control an operator uses with a rover already moving --------
+
+def test_stop_halts_the_rover_and_requeues_the_mission(client, missions, monkeypatch):
+    sign_in(client)
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(url)
+        return FakeResponse(200, {'status': 'success'})
+
+    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    resp = client.post('/operator/api/missions/p1/stop')
+
+    assert resp.status_code == 200
+    assert any(url.endswith('/queue/clear') for url in calls), calls
+    assert missions['p1']['status'] == 'queued'
+
+
+def test_stop_still_clears_the_rover_when_this_mission_is_not_running(client, missions, monkeypatch):
+    """The button is on screen at all times. Refusing to stop a rover because
+    the mission being viewed is not the one running would be indefensible."""
+    sign_in(client)
+    calls = []
+    monkeypatch.setattr(
+        operator_console.requests, 'post',
+        lambda url, **k: (calls.append(url), FakeResponse(200, {'status': 'success'}))[1],
+    )
+
+    resp = client.post('/operator/api/missions/c1/stop')
+
+    assert resp.status_code == 200
+    assert any(url.endswith('/queue/clear') for url in calls), calls
+    assert missions['c1']['status'] == 'completed'  # untouched
+
+
+def test_stop_reports_an_unreachable_rover_rather_than_claiming_success(client, missions, monkeypatch):
+    sign_in(client)
+    def boom(*a, **k):
+        raise operator_console.requests.exceptions.ConnectionError()
+
+    monkeypatch.setattr(operator_console.requests, 'post', boom)
+    resp = client.post('/operator/api/missions/p1/stop')
+
+    assert resp.status_code == 503
+    # Still 'processing': claiming it stopped would be a lie about a machine
+    # that may well still be driving.
+    assert missions['p1']['status'] == 'processing'
+    assert 'power switch' in resp.get_json()['error']
+
+
+def test_stop_survives_a_deliberate_demotion_through_the_sync_merge():
+    """A stop moves 'processing' back to 'queued'. The merge ladder ranks
+    queued below processing, so without the operator-decision marker the write
+    is silently dropped and the mission reverts on the next reconcile."""
+    from sync_worker import should_local_win, FORCE_KEY
+
+    assert not should_local_win({'status': 'queued'}, {'status': 'processing'})
+    assert should_local_win({'status': 'queued', FORCE_KEY: True}, {'status': 'processing'})
+    # The ladder still governs everything that happens on its own.
+    assert should_local_win({'status': 'completed'}, {'status': 'queued'})
+    assert not should_local_win({'status': 'queued'}, {'status': 'completed'})
+
+
+def test_the_force_marker_never_reaches_firestore(client, missions, monkeypatch):
+    """It is instruction to the merge, not part of the mission document."""
+    sign_in(client)
+    import json as _json
+    from mission_store import peek_outbox
+    from sync_worker import FORCE_KEY
+
+    monkeypatch.setattr(
+        operator_console.requests, 'post',
+        lambda *a, **k: FakeResponse(200, {'status': 'success'}),
+    )
+    client.post('/operator/api/missions/p1/stop')
+
+    entry = peek_outbox()
+    payload = _json.loads(entry['payload'])
+    assert payload.get(FORCE_KEY) is True
+
+    written = {k: v for k, v in payload.items() if k != FORCE_KEY}
+    assert FORCE_KEY not in written
+    assert written['status'] == 'queued'
+
+
+# --- Sync rate, exposed on the Settings page -------------------------------
+
+def test_sync_config_rejects_a_rate_that_would_burn_the_quota(client, monkeypatch):
+    monkeypatch.setenv('OPERATOR_AUTH', 'off')
+    resp = client.post('/operator/api/config/sync', json={'interval': 1})
+    assert resp.status_code == 400
+    assert 'between' in resp.get_json()['error']
+
+
+def test_sync_config_round_trips(client, monkeypatch):
+    monkeypatch.setenv('OPERATOR_AUTH', 'off')
+    saved = client.post('/operator/api/config/sync', json={'interval': 90, 'reconcileEvery': 15})
+    assert saved.status_code == 200
+
+    current = client.get('/operator/api/config/sync').get_json()
+    assert current['interval'] == 90
+    assert current['reconcileEvery'] == 15
+    # A slower sync must estimate fewer reads, or the number on the page is
+    # not telling an operator anything useful.
+    faster = client.post('/operator/api/config/sync', json={'interval': 30, 'reconcileEvery': 10}).get_json()
+    assert faster['estimatedDailyReads'] > saved.get_json()['estimatedDailyReads']
 
 
 def test_auth_off_opens_apis_without_session(client, missions, monkeypatch):
@@ -435,7 +557,7 @@ def test_login_accepts_operator_and_sets_session(client, monkeypatch):
     )
     resp = client.post('/operator/api/login', json={'email': 'op@test.com', 'password': 'pw'})
     assert resp.status_code == 200
-    assert client.get('/operator/').status_code == 200
+    assert client.get('/').status_code == 200  # the queue, no longer behind /operator/
 
 
 def test_login_reports_missing_configuration(client, monkeypatch):
@@ -749,9 +871,15 @@ def test_poll_links_mission_with_no_youtube_field_at_all(missions, firestore_mis
     assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=vid123'
 
 
-def test_poll_skips_missions_that_already_have_a_link(missions, firestore_missions, monkeypatch, youtube_env):
-    firestore_missions['c1']['youtubeUrl'] = 'https://www.youtube.com/watch?v=already-linked'
-    monkeypatch.setattr(operator_console, '_firestore', lambda: FakeQueryFirestore(firestore_missions))
+def test_poll_skips_missions_that_already_have_a_link(missions, monkeypatch, youtube_env):
+    """Candidates come from the mirror now, so that is where 'already linked'
+    has to be true - and with nothing outstanding the poll must not spend a
+    Firestore read or a YouTube call."""
+    missions['c1'].update({'youtubeUrl': 'https://www.youtube.com/watch?v=already-linked'})
+    monkeypatch.setattr(
+        operator_console, '_firestore',
+        lambda: pytest.fail('Firestore must not be read to build the candidate list'),
+    )
     monkeypatch.setattr(
         operator_console.requests, 'get',
         lambda *a, **k: pytest.fail('YouTube API must not be called when nothing is unlinked'),
@@ -759,7 +887,32 @@ def test_poll_skips_missions_that_already_have_a_link(missions, firestore_missio
 
     operator_console.check_for_new_videos()
 
-    assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=already-linked'
+    assert missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=already-linked'
+
+
+def test_poll_never_reads_firestore_to_find_candidates(missions, firestore_missions, monkeypatch, youtube_env):
+    """The whole point of the change: the candidate list is free. Firestore is
+    touched only to write a link that was actually found."""
+    reads = []
+
+    class CountingFirestore(FakeQueryFirestore):
+        def collection(self, name):
+            reads.append(name)
+            return super().collection(name)
+
+    monkeypatch.setattr(operator_console, '_firestore', lambda: CountingFirestore(firestore_missions))
+    monkeypatch.setattr(
+        operator_console.requests, 'get',
+        lambda *a, **k: FakeResponse(200, {'items': [{
+            'snippet': {'description': 'nothing matching here', 'resourceId': {'videoId': 'vid999'}},
+        }]}),
+    )
+
+    operator_console.check_for_new_videos()
+
+    # c1 is unlinked, so the YouTube call happens - but no video matched, so
+    # Firestore was never reached at all.
+    assert reads == []
 
 
 def test_poll_skips_entirely_when_credentials_missing(missions, monkeypatch):
@@ -795,13 +948,38 @@ def test_poll_survives_youtube_network_error(missions, firestore_missions, monke
     assert 'youtubeUrl' not in firestore_missions['c1']
 
 
-def test_poll_survives_firestore_error(monkeypatch, youtube_env):
+def test_poll_survives_firestore_error(missions, monkeypatch, youtube_env):
+    """A Firestore failure must not propagate out of the poll.
+
+    Rewritten for where Firestore is now actually touched. This used to fail
+    the very first call, because the poll opened by streaming every completed
+    mission out of Firestore to find its candidates. It reads those from the
+    local mirror now, so the only Firestore call left is the write that
+    records a link - and that is the call this has to prove is survivable.
+    """
     monkeypatch.setattr(
         operator_console, '_firestore',
         lambda: (_ for _ in ()).throw(RuntimeError('firestore unavailable')),
     )
+    # c1 is completed with no video, so it IS a candidate: the poll gets as far
+    # as matching a video and attempting the write, rather than returning early
+    # with nothing to do and passing for the wrong reason.
+    monkeypatch.setattr(
+        operator_console.requests, 'get',
+        lambda *a, **k: FakeResponse(200, {'items': [{
+            'snippet': {
+                'description': f'MissionID: c1',
+                'resourceId': {'videoId': 'vid123'},
+            },
+        }]}),
+    )
 
-    operator_console.check_for_new_videos()
+    operator_console.check_for_new_videos()  # must not raise
+
+    # The link was not recorded, so c1 stays a candidate and the next poll
+    # retries it - losing the video silently would be worse than not linking it.
+    from mission_store import completed_without_video
+    assert 'c1' in completed_without_video()
 
 
 def test_start_polling_reschedules_even_when_check_raises(monkeypatch):

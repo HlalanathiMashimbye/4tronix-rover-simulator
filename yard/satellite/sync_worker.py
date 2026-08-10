@@ -72,11 +72,63 @@ RECONCILE_EVERY = int(os.environ.get('SYNC_RECONCILE_EVERY', 10))
 DEFAULT_INTERVAL = int(os.environ.get('SYNC_INTERVAL', 30))
 _CYCLE_KEY = 'sync_cycle_count'
 
+# Bounds for the operator-facing setting. The floor is not arbitrary: at 10s a
+# single satellite spends ~8,600 reads/day before anything happens, and the
+# free tier is 50,000 shared with every learner loading the public site. The
+# ceiling is where "live" stops being a fair description of the queue.
+MIN_INTERVAL = 10
+MAX_INTERVAL = 600
+MIN_RECONCILE = 1
+MAX_RECONCILE = 60
+
+
+def _configured(key, default):
+    """Read a tunable from satellite_config.json on every use.
+
+    Read per cycle rather than captured at import so a change from the Settings
+    page takes effect on the next tick, instead of at the next restart of a
+    box that lives in a science centre and is rarely restarted deliberately.
+    """
+    try:
+        import json
+        from satellite_identity import CONFIG_FILE
+        with open(CONFIG_FILE) as f:
+            value = json.load(f).get(key)
+        return default if value is None else int(value)
+    except Exception:
+        return default
+
+
+def sync_interval():
+    return max(MIN_INTERVAL, min(_configured('sync_interval', DEFAULT_INTERVAL), MAX_INTERVAL))
+
+
+def reconcile_every():
+    return max(MIN_RECONCILE, min(_configured('sync_reconcile_every', RECONCILE_EVERY), MAX_RECONCILE))
+
+
+def estimated_daily_reads(interval=None, reconcile=None, active_missions=10):
+    """Rough Firestore reads/day for the current settings, for the Settings page.
+
+    Deliberately an estimate and labelled as one. The incremental pull bills one
+    read per cycle even when it returns nothing; the reconcile costs one per
+    still-active mission, every Nth cycle.
+    """
+    interval = sync_interval() if interval is None else interval
+    reconcile = reconcile_every() if reconcile is None else reconcile
+    cycles = 86400 / max(1, interval)
+    return int(cycles + (cycles / max(1, reconcile)) * max(0, active_missions))
+
 # Higher wins. A mission only ever moves up this ladder, never back down, so
 # most reconnect conflicts resolve themselves with no coordination.
 _RANK = {'queued': 0, 'processing': 1, 'cancelled': 2, 'failed': 3, 'completed': 4}
 
 _TERMINAL = ('completed', 'failed', 'cancelled')
+
+# Marks an outbox payload as a deliberate operator decision (see
+# should_local_win). Stripped before the payload reaches Firestore - it is
+# instruction to the merge, not part of the mission.
+FORCE_KEY = '__operatorDecision'
 
 
 def _now_iso():
@@ -85,6 +137,22 @@ def _now_iso():
 
 def should_local_win(local_payload, remote_data):
     """Merge rule from plan section 6: higher rank wins, later time breaks ties."""
+    # An operator decision beats the ladder. The ranking below assumes missions
+    # only ever move forward, which is true of everything that happens on its
+    # own - a run finishes, the watcher records it - but not of the things a
+    # human deliberately does. Stopping a rover moves 'processing' back to
+    # 'queued' (1 -> 0), a rerun moves 'completed' back to 'processing'
+    # (4 -> 1), and re-queuing an interrupted mission does the same. Every one
+    # of those loses to the remote copy under the ladder, so the local change
+    # was flushed, silently rejected, and pulled straight back on the next
+    # reconcile: the operator saw the mission revert for no stated reason.
+    #
+    # Those transitions are marked at the point they are made, rather than
+    # inferred here, because "is this a demotion" is not the question - the
+    # question is whether a human chose it, and only the caller knows that.
+    if local_payload.get(FORCE_KEY):
+        return True
+
     local_status = local_payload.get('status')
     remote_status = remote_data.get('status')
 
@@ -149,7 +217,8 @@ def flush_one(firestore_client, entry, collection_name='missions'):
             outcome['won'] = won
 
             if won:
-                transaction.update(ref, local_payload)
+                # The marker is ours, not the mission's; Firestore never sees it.
+                transaction.update(ref, {k: v for k, v in local_payload.items() if k != FORCE_KEY})
 
         _apply(firestore_client.transaction())
 
@@ -280,7 +349,7 @@ def sync_cycle(firestore_client, collection_name='missions', yard_id=None):
     # Periodically re-read the missions that can still change remotely.
     count = int(get_meta(_CYCLE_KEY, '0') or 0) + 1
     set_meta(_CYCLE_KEY, str(count))
-    if ok and count % RECONCILE_EVERY == 0:
+    if ok and count % reconcile_every() == 0:
         reconcile_active(firestore_client, collection_name, yard_id=yard_id)
 
     return ok
@@ -297,8 +366,6 @@ def start_sync_worker(client_factory, interval=None):
     Mirrors start_polling's shape - the body can never kill the loop, so one
     bad cycle does not stop syncing forever.
     """
-    interval = DEFAULT_INTERVAL if interval is None else interval
-
     def _loop():
         try:
             client = client_factory() if callable(client_factory) else client_factory
@@ -311,7 +378,11 @@ def start_sync_worker(client_factory, interval=None):
         except Exception as e:
             print(f'[sync] Unexpected error: {e}')
 
-        timer = threading.Timer(interval, _loop)
+        # Re-read every cycle: an explicit `interval` argument still pins it
+        # (the tests rely on that), but the default follows the configured
+        # value so a change on the Settings page applies without a restart.
+        delay = sync_interval() if interval is None else interval
+        timer = threading.Timer(delay, _loop)
         timer.daemon = True
         timer.start()
 

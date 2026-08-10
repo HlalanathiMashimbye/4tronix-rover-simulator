@@ -103,30 +103,68 @@
             var running = false;
             var wasOffline = !navigator.onLine;
 
+            // A hidden tab is not worth a request. The tablets in the yard sit
+            // on this page all day with the screen off, and every poll costs
+            // the satellite a call out to the rover with a 2s timeout. Polling
+            // resumes on visibilitychange below, with the backoff reset so a
+            // tab that was hidden through a network blip catches up at once.
             function schedule(delay) {
                 if (timer) clearTimeout(timer);
+                if (typeof document !== 'undefined' && document.hidden) return;
                 timer = setTimeout(tick, delay);
+            }
+
+            // Runs fetchFn once and always reschedules. The returned promise
+            // REJECTS when the fetch failed, so an explicit caller can react to
+            // it; the scheduled loop swallows that below, because a failed poll
+            // is already reported through onError and an unhandled rejection
+            // every cycle would bury the real errors in the console.
+            function run() {
+                running = true;
+                function settle() {
+                    running = false;
+                    schedule(currentDelay);
+                }
+                return Promise.resolve()
+                    .then(fetchFn)
+                    .then(function (value) {
+                        currentDelay = interval; // reset backoff on success
+                        settle();
+                        return value;
+                    }, function (err) {
+                        currentDelay = Math.min(currentDelay * 2, maxInterval);
+                        onError(err);
+                        settle();
+                        throw err;
+                    });
             }
 
             function tick() {
                 if (running) return;
-                running = true;
-                Promise.resolve()
-                    .then(fetchFn)
-                    .then(function () { currentDelay = interval; })
-                    .catch(function (err) {
-                        currentDelay = Math.min(currentDelay * 2, maxInterval);
-                        onError(err);
-                    })
-                    .then(function () {
-                        running = false;
-                        schedule(currentDelay);
-                    });
+                run().catch(function () { /* reported via onError */ });
             }
 
+            // Must always return a promise. It used to return whatever tick()
+            // returned, which was undefined, so every caller doing
+            // `refreshNow().catch(...)` threw a TypeError instead - and in
+            // the queue page that throw landed in the same try/catch as the
+            // request itself, turning a successful dispatch into a phantom
+            // "mission failed" toast right next to the success one.
             function refreshNow() {
                 if (timer) clearTimeout(timer);
-                return tick();
+                if (running) return Promise.resolve(); // a fetch is already in flight
+                return run();
+            }
+
+            if (typeof document !== 'undefined') {
+                document.addEventListener('visibilitychange', function () {
+                    if (document.hidden) {
+                        if (timer) { clearTimeout(timer); timer = null; }
+                        return;
+                    }
+                    currentDelay = interval;
+                    tick(); // whatever is on screen is stale by definition
+                });
             }
 
             global.addEventListener('online', function () {
