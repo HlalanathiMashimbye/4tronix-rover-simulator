@@ -44,13 +44,16 @@ cd \dev\4tronix-rover-simulator
 4. Next, we create something called a Python _virtual environment_. That's essentially a place to put all the libraries this code uses. Run this command:
 
 ```
-py -m venv env
+python -m venv .venv
 ```
 
 5. Next, you need to activate this environment. (Activating it means telling the command window to use this Python environment.):
 
 ```
-.\env\Scripts\activate
+# Windows:
+.\.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
 ```
 
 Once you've done this, the terminal or command window should change its prompt to show that the environment is activated by showing `(env)` at the start
@@ -68,6 +71,12 @@ Once you've done the steps just described, you're now ready to use the simulator
 So the next thing you'll probably want to do is run the simulator.
 
 ## Simulator User Interface (UI)
+
+> **Note:** This standalone Qt simulator is the original, still-working way to
+> dev and test rover code locally. The current platform is **Mission Control**
+> (see the section at the top, `npm run dev`), which runs its own browser-based
+> simulator. Use this desktop simulator for quick, offline Python experiments;
+> use Mission Control for the full learner experience.
 
 The [roversimui.py](roversimui.py) displays a simple representation of the Rover. This lets us see:
 
@@ -92,10 +101,13 @@ cd \dev\4tronix-rover-simulator
 4. Activate the environment by running this command:
 
 ```
-.\env\Scripts\activate
+# Windows:
+.\.venv\Scripts\activate
+# macOS / Linux:
+source .venv/bin/activate
 ```
 
-The terminal or command window should change its prompt to show that the environment is activated by showing `(env)` at the start.
+The terminal or command window should change its prompt to show that the environment is activated by showing `(.venv)` at the start.
 
 6. Start the emulator UI with this command:
 
@@ -123,7 +135,7 @@ import roversimulator as rover
 this tells Python that anything in the code that uses the `rover` module should use the simulator instead.
 
 Here's a simple example using the forward and spin functions to start drawing a square. 
-Complete square code is in [square.py](square.py), Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
+Complete square code is in [examples/square.py](examples/square.py), Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
 ```py
 import roversimulator as rover
 import time
@@ -141,7 +153,7 @@ time.sleep(0.5) # take a short break
 
 ```
 
-Here's a simple example of direct servo control which is in the [very-simple-example.py](very-simple-example.py) file. Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
+Here's a simple example of direct servo control which is in the [examples/very-simple-example.py](examples/very-simple-example.py) file. Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
 
 ```py
 import roversimulator as rover
@@ -209,6 +221,7 @@ rover.forward(0)
 
 | Folder | Description |
 |--------|-------------|
+| [examples/](examples/) | Ready-to-run sample programs for the simulator (`square.py`, `very-simple-example.py`, `move-rover.py`) |
 | [real-rover/](real-rover/README.md) | Controlling the real M.A.R.S. Rover hardware |
 | [web_interface/](web_interface/README.md) | Browser-based control interface (experimental) |
 | [yard/](yard/README.md) | Classroom setup with tablets and TV monitor |

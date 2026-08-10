@@ -1,3 +1,8 @@
+# Running from a subfolder: put the repo root on sys.path so the rover
+# library modules that live at the root (roversimulator, rover_web_driver) import.
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.abspath(_os.path.join(_os.path.dirname(__file__), _os.pardir)))
+
 #!/usr/bin/env python3
 """
 Example: Connecting to the real rover
