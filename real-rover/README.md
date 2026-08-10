@@ -130,8 +130,8 @@ sudo journalctl -u rover-server.service -n 50
 Run your rover control programs (the same ones you use with the simulator):
 
 ```bash
-python3 square.py
-python3 move-rover.py
+python3 examples/square.py
+python3 examples/move-rover.py
 ```
 
 Just make sure `roversimulator.py` points to your Raspberry Pi's address:
