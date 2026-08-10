@@ -948,13 +948,38 @@ def test_poll_survives_youtube_network_error(missions, firestore_missions, monke
     assert 'youtubeUrl' not in firestore_missions['c1']
 
 
-def test_poll_survives_firestore_error(monkeypatch, youtube_env):
+def test_poll_survives_firestore_error(missions, monkeypatch, youtube_env):
+    """A Firestore failure must not propagate out of the poll.
+
+    Rewritten for where Firestore is now actually touched. This used to fail
+    the very first call, because the poll opened by streaming every completed
+    mission out of Firestore to find its candidates. It reads those from the
+    local mirror now, so the only Firestore call left is the write that
+    records a link - and that is the call this has to prove is survivable.
+    """
     monkeypatch.setattr(
         operator_console, '_firestore',
         lambda: (_ for _ in ()).throw(RuntimeError('firestore unavailable')),
     )
+    # c1 is completed with no video, so it IS a candidate: the poll gets as far
+    # as matching a video and attempting the write, rather than returning early
+    # with nothing to do and passing for the wrong reason.
+    monkeypatch.setattr(
+        operator_console.requests, 'get',
+        lambda *a, **k: FakeResponse(200, {'items': [{
+            'snippet': {
+                'description': f'MissionID: c1',
+                'resourceId': {'videoId': 'vid123'},
+            },
+        }]}),
+    )
 
-    operator_console.check_for_new_videos()
+    operator_console.check_for_new_videos()  # must not raise
+
+    # The link was not recorded, so c1 stays a candidate and the next poll
+    # retries it - losing the video silently would be worse than not linking it.
+    from mission_store import completed_without_video
+    assert 'c1' in completed_without_video()
 
 
 def test_start_polling_reschedules_even_when_check_raises(monkeypatch):
