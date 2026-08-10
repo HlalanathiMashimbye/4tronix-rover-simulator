@@ -9,7 +9,7 @@ The Yard system consists of three devices working together:
 │     Tablet       │     │    Satellite     │     │      Rover       │
 │   (Browser)      │────▶│   (mro.local)    │────▶│  (marspi.local)  │
 │                  │     │                  │     │                  │
-│  Blockly IDE     │     │  :5050 Web       │     │  :8523 Queue     │
+│  Blockly IDE     │     │  :3001 Web       │     │  :8523 Queue     │
 │  /code/          │     │  :8890 Camera    │     │  Processor       │
 └──────────────────┘     └──────────────────┘     └──────────────────┘
         │                        │                        │
@@ -109,7 +109,7 @@ yard/
 │   ├── test_integration.py  # Integration tests (26 tests)
 │   └── requirements.txt
 ├── satellite/
-│   ├── web_server.py        # Flask server for mro.local (port 5050)
+│   ├── web_server.py        # Flask server for mro.local (port 3001)
 │   ├── camera_server.py     # Pi AI camera WebSocket stream (port 8890)
 │   ├── templates/
 │   │   ├── code.html        # Tablet Blockly PWA
@@ -178,7 +178,7 @@ yard/
 The monitor receives queue state via Server-Sent Events rather than polling. Each layer holds one persistent HTTP connection to the layer below it — nothing polls.
 
 ```
-Browser                  Satellite (Flask :5050)       Rover (Flask :8523)
+Browser                  Satellite (Flask :3001)       Rover (Flask :8523)
    │                              │                              │
    │  GET /api/queue/events       │                              │
    │─────────────────────────────▶│                              │

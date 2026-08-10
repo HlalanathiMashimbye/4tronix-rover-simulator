@@ -104,13 +104,18 @@ confirms), `recovery.py`, `satellite_identity.py` (holds the lease),
 **Band C.** `rover_server.py` (Flask, four endpoints) to `RoverQueueService`
 implementing abstract `RoverQueuePort` (FIFO queue, worker thread, sandboxed
 `run_python` with a wall-clock watchdog) to `RoverDriver` abstract forking to
-`FakeRoverDriver` and `RealRoverDriver`, plus `rover_physics.py`. Hardware: M.A.R.S.
+`FakeRoverDriver` and `RealRoverDriver`. Hardware: M.A.R.S.
 rover on a Pi Zero; separate node for the Pi AI Camera IMX500 on a Pi 5, WS 8890.
+
+Band C carries no physics model. `rover_physics.py` is deprecated and nothing
+imports it outside its own test; the simulation the yard renders is the
+compiled TypeScript one. Draw it in the deprecated group in Band D, not here.
 
 **Band D.** Terraform to GitHub Actions to Artifact Registry to Cloud Run
 (staging, prod) to Secret Manager, with Workload Identity Federation tagged
 "OIDC, no JSON keys". At the right end, a small dashed greyscale group at 60%
-opacity: `roversimui.py`, `roversimulator.py`, `dev-launcher.js`, Jest, pytest.
+opacity: `roversimui.py`, `roversimulator.py`, `rover_physics.py` (deprecated),
+`dev-launcher.js`, Jest, pytest.
 
 ---
 

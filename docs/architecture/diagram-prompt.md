@@ -109,7 +109,6 @@ Left to right, as a pipeline:
   `FakeRoverDriver` and `RealRoverDriver`, as a small explicit inheritance fork.
   Keep this fork visually clean, it is the one place the drawing should show a
   class relationship.
-- **`rover_physics.py`** : four-wheel steering model
 - **Hardware** : 4tronix M.A.R.S. rover on a Raspberry Pi Zero (motors, 16 servo
   channels, LEDs, ultrasonic). Separate node: Pi AI Camera IMX500 on a Raspberry
   Pi 5, WebSocket on 8890.
@@ -123,8 +122,13 @@ Terraform (GCS remote state) to GitHub Actions to Artifact Registry to Cloud Run
 
 At the right of the same strip, a small dashed group labelled "dev and simulation,
 same code paths, no hardware": `roversimui.py` (PyQt6 viewer),
-`roversimulator.py` (drop-in for the real rover module), `dev-launcher.js`, Jest,
-pytest. Greyscale, roughly 60% opacity.
+`roversimulator.py` (drop-in for the real rover module), `rover_physics.py`
+(deprecated four-wheel steering model, kept for reference only), `dev-launcher.js`,
+Jest, pytest. Greyscale, roughly 60% opacity.
+
+Do not place any physics model inside the rover band. The rover service runs no
+physics module of its own; the simulation is rendered by compiled TypeScript in
+the satellite's static assets.
 
 ## Edges
 

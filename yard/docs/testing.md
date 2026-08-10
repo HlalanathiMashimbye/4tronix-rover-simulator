@@ -113,7 +113,7 @@ curl -X POST http://localhost:8523/queue/add \
 ### Test Tablet Client (Spy Mode)
 
 ```
-http://localhost:5050/code/?spy=true
+http://localhost:3001/code/?spy=true
 ```
 
 In spy mode:

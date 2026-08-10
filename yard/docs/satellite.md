@@ -6,7 +6,7 @@ The satellite (mro.local) hosts the web interfaces and camera stream, acting as 
 
 | Port | Service | Description |
 |------|---------|-------------|
-| 5050 | Web Server | Flask app serving Blockly IDE and monitor |
+| 3001 | Web Server | Flask app serving Blockly IDE and monitor |
 | 8890 | Camera Server | WebSocket streaming Pi AI camera frames |
 
 ## Setup
@@ -46,7 +46,7 @@ sudo systemctl enable --now satellite-web satellite-camera
 Check the rover hostname in `satellite-web.service` (`Environment=ROVER_URL=...`)
 matches the rover actually deployed — `marspi.local` (old card) or
 `curiosity.local` (Bookworm). The easiest fix is the **edit** button next to
-the rover URL on `http://mro.local:5050/status` — it persists across restarts.
+the rover URL on `http://mro.local:3001/status` — it persists across restarts.
 (Editing `/etc/systemd/system/satellite-web.service` + `daemon-reload` works
 too, but a saved `/status` edit takes precedence over the unit's environment.)
 
@@ -138,12 +138,12 @@ If you see the process listed with a systemd service path, use `systemctl restar
 ### Verify it worked
 
 ```bash
-curl http://localhost:5050/api/health
+curl http://localhost:3001/api/health
 ```
 
 Should return JSON with `"status": "ok"`. If the rover is also running you'll see `"rover_status": "connected"`.
 
-## Web Server (port 5050)
+## Web Server (port 3001)
 
 ### Routes
 
@@ -175,6 +175,7 @@ All `/api/*` requests are proxied to the rover server:
 |----------|---------|-------------|
 | `ROVER_URL` | `http://marspi.local:8523` | Rover server URL (startup default) |
 | `SATELLITE_CONFIG` | `satellite_config.json` next to `web_server.py` | Where runtime config is persisted |
+| `SATELLITE_PORT` | `3001` | Port the Flask app listens on. The systemd unit does not set it, so the deployed service uses the default. |
 
 ```bash
 ROVER_URL=http://localhost:8523 python web_server.py
@@ -249,7 +250,7 @@ Both tabs submit a `run_python` instruction when Run is pressed. Blockly submiss
 ### Spy Mode
 
 ```
-http://mro.local:5050/code/?spy=true
+http://mro.local:3001/code/?spy=true
 ```
 
 Shows what instructions would be sent without making network calls
@@ -270,7 +271,7 @@ const isSpyMode = urlParams.get('spy') === 'true' || urlParams.get('mock') === '
 
 ### PWA Installation (iPad)
 
-1. Open Safari to `http://mro.local:5050/code/`
+1. Open Safari to `http://mro.local:3001/code/`
 2. Tap Share → Add to Home Screen
 3. App launches in fullscreen mode
 

@@ -108,7 +108,7 @@ curl http://marspi.local:8523/health
 it isn't running — a degraded rover accepts instructions but never executes
 them, so treat it as down.
 
-## Satellite Server (mro.local:5050)
+## Satellite Server (mro.local:3001)
 
 The satellite proxies all `/api/*` calls to the rover.
 
