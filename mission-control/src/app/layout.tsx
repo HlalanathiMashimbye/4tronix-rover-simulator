@@ -38,9 +38,33 @@ const fredoka = Fredoka({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+const APP_TITLE = "Mission Control · Mars Mission Platform";
+const APP_DESCRIPTION =
+  "Pilot Sparky across Mars, code with blocks, and earn mission patches on the Red Planet";
+
 export const metadata: Metadata = {
-  title: "Mission Control · Mars Mission Platform",
-  description: "Pilot Sparky across Mars, code with blocks, and earn mission patches on the Red Planet",
+  // Absolute base for the og:image URL. Open Graph requires an absolute URL,
+  // and a crawler resolving a relative one against its own host gets nothing,
+  // so a shared link shows no image at all. Falls back to localhost for dev.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  title: APP_TITLE,
+  description: APP_DESCRIPTION,
+
+  // The tab icon and the link preview both come from app/ file conventions:
+  // icon.png, apple-icon.png, favicon.ico and opengraph-image.jpg. All four
+  // are the SAME centre crop of public/rover-hero.jpg that the navbar renders
+  // top-left, so the rover in the tab is the rover on the page.
+  openGraph: {
+    title: APP_TITLE,
+    description: APP_DESCRIPTION,
+    type: "website",
+    siteName: "Mission Control",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: APP_TITLE,
+    description: APP_DESCRIPTION,
+  },
 };
 
 export default function RootLayout({
