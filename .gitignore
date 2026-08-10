@@ -196,3 +196,10 @@ yard/satellite/satellite_config.json
 
 # Console-spawned camera output (development only)
 yard/satellite/camera_server.log
+
+# Terraform: saved plans are point-in-time binaries containing resolved
+# variable values, and state must never be committed.
+*.tfplan
+*.tfstate
+*.tfstate.*
+.terraform/

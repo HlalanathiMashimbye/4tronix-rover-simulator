@@ -65,3 +65,9 @@ variable "environments" {
     prod    = { min_instances = 0, max_instances = 10 }
   }
 }
+
+variable "firebase_credential_source" {
+  description = "\"adc\" to authenticate to Firestore as the runtime service account (no key stored anywhere), or \"service-account\" to mount FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY from Secret Manager. See the module variable for the full reasoning."
+  type        = string
+  default     = "service-account"
+}
