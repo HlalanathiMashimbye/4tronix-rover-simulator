@@ -1,8 +1,7 @@
 # INF4027W — Mission Control
 ## Iteration 2 ReadMe, 2026
 
-**Team:** TeamXY *(replace with your team code)*
-**Members:** *(list names and student numbers)*
+**Team:** Team06 
 **Repository:** https://github.com/HlalanathiMashimbye/4tronix-rover-simulator
 **Live system:** https://mission-control-staging-cp4cyuy7ga-bq.a.run.app
 
@@ -63,7 +62,7 @@ Individual services: `npm run dev:control`, `npm run dev:satellite`,
 
 The hub reads `mission-control/.env`. **That file is excluded from this
 submission because it contains live credentials.** To run the system you will
-need to create it with your own Firebase project values:
+need to create it with your own Firebase project values(you can use the hosted site to skip the hassle):
 
 ```
 NEXT_PUBLIC_FIREBASE_API_KEY=...
