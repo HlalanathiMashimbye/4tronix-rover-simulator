@@ -226,17 +226,9 @@
             satellite: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>',
         };
 
+        // Stop is not in here on purpose: it fires on the first press. See the
+        // stopBtn handler for why it is the one exception.
         const CONFIRM_COPY = {
-            stopRunning: {
-                title: 'Stop the rover now?',
-                body: 'The rover halts immediately and its queue is cleared. This mission goes back to Queued so you can send it again when you are ready.',
-                confirmLabel: 'Stop the rover',
-            },
-            stopIdle: {
-                title: 'Reset the rover?',
-                body: "This clears whatever is on the rover's queue and cuts its motors. This mission is not running, so its status will not change.",
-                confirmLabel: 'Reset the rover',
-            },
             complete: { title: 'Mark mission complete?', body: 'This marks the mission as completed and cannot be undone.', confirmLabel: 'Mark complete' },
             rerun: { title: 'Rerun this mission?', body: 'This clears the completed status and any attached video, and sends the mission back into the queue. This cannot be undone.', confirmLabel: 'Rerun' },
             cancel: { title: 'Cancel this mission?', body: 'It comes out of the queue without running. The learner still sees it as Pending, not rejected. You can put it back afterwards.', confirmLabel: 'Cancel mission' },
@@ -559,9 +551,27 @@
                 data = await resp.json().catch(() => ({}));
                 if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
             } catch (err) {
-                if (btn) { btn.disabled = false; if (action === 'stop') btn.innerHTML = ICONS.stop + '<span>STOP</span>'; else btn.textContent = prevLabel; }
                 showToast('error', errorMessage(err, resp, data));
                 return;
+            } finally {
+                // Restore the control on EVERY outcome, not just failure.
+                //
+                // This used to live in the catch alone, so a SUCCESSFUL stop
+                // left the button disabled and reading "STOPPING…" until the
+                // page was reloaded. It went unnoticed because every other
+                // action's button lives in the rail, which loadMission()
+                // re-renders from scratch; the stop button is pinned outside
+                // the rail precisely so it never scrolls away, which also
+                // means nothing ever rebuilds it.
+                //
+                // An emergency control that works once per page load is not an
+                // emergency control. If a first stop does not settle the rover,
+                // the operator's next instinct is to press it again.
+                if (btn) {
+                    btn.disabled = false;
+                    if (action === 'stop') btn.innerHTML = ICONS.stop + '<span>STOP</span>';
+                    else btn.textContent = prevLabel;
+                }
             }
 
             // Succeeded. Nothing past here may report a failure - the same trap
@@ -583,11 +593,22 @@
         }
 
         const stopBtn = document.getElementById('stopBtn');
-        stopBtn.onclick = () => {
-            const running = mission && mission.status === 'processing';
-            openConfirm(running ? CONFIRM_COPY.stopRunning : CONFIRM_COPY.stopIdle,
-                        () => act('stop', stopBtn));
-        };
+        // No confirmation, deliberately, and it is the ONLY action here without
+        // one. Every other action on this page is a bookkeeping change that can
+        // wait a second; this one cuts the motors on a machine moving across a
+        // room with children around it. A control you press when something is
+        // going wrong has to fire on the first press.
+        //
+        // The asymmetry justifies it: an accidental stop costs one re-send (the
+        // mission returns to Queued), while a stop that arrives a second late
+        // costs whatever the rover hit. The warning belongs BEFORE the press,
+        // which is what the note under the button is for - not in a dialog
+        // standing between the operator and the brakes.
+        //
+        // It also matches the tablet, whose stop has always called
+        // /api/queue/clear immediately. The console asking twice meant the
+        // person responsible for safety had the slower control.
+        stopBtn.onclick = () => act('stop', stopBtn);
 
         // ---------- Live rover telemetry ----------
         let roverState = { reachable: false, queue: null, now: null };
