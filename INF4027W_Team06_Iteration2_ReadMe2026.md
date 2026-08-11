@@ -58,6 +58,24 @@ npm run dev          # starts all three services and opens the browser
 Individual services: `npm run dev:control`, `npm run dev:satellite`,
 `npm run dev:yard`.
 
+### Python environment
+
+Only needed to run the Python test suites, or to start the yard services by
+hand. `npm run dev` installs the satellite's Python dependencies on first run
+by itself.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate                 # macOS and Linux
+# .venv\Scripts\activate                  # Windows PowerShell
+
+pip install -r yard/satellite/requirements-test.txt -r yard/rover/requirements.txt
+```
+
+Activating puts `(.venv)` in your prompt, after which plain `python` works.
+The root `requirements.txt` belongs to the original desktop simulator (PyQt6,
+OpenCV) and is **not** needed for Mission Control.
+
 ### Configuration
 
 The hub reads `mission-control/.env`. **That file is excluded from this
