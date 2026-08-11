@@ -15,7 +15,7 @@ and opens the two browser pages you actually use:
 | Rover backend | http://localhost:8523 | Yard rover server (`yard/rover`) |
 
 ```bash
-npm install      # first time only
+npm install      # first time only; a postinstall hook also installs mission-control/
 npm run dev      # start hub + satellite + rover, then open 3000 and 3001
 ```
 
