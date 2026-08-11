@@ -45,7 +45,7 @@ runs on one laptop.
 ### Quick start
 
 ```bash
-npm install          # first time only
+npm install          # first time only; also installs mission-control/
 npm run dev          # starts all three services and opens the browser
 ```
 
