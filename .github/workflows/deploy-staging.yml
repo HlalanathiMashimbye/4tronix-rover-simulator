@@ -14,10 +14,13 @@ name: Deploy staging
 #   GCP_WIF_PROVIDER        projects/N/locations/global/workloadIdentityPools/github/providers/github
 #   GCP_DEPLOY_SA           deploy SA email (push image + update Cloud Run)
 #   GCP_PROJECT_ID          bt-impact-academy
-#   GCP_REGION              e.g. europe-west1
+#   GCP_REGION              e.g. africa-south1
 #   GCP_AR_REPO             Artifact Registry docker repo name
 #   STAGING_SERVICE         e.g. mission-control-staging
+#   STAGING_URL             load-balancer URL from terraform output service_urls.staging
+#                           (NOT the Cloud Run *.run.app URI — that 403s without allUsers)
 #   NEXT_PUBLIC_FIREBASE_*  public web config for the staging Firebase app
+#   NEXT_PUBLIC_APP_URL     same as STAGING_URL (baked into the image at build time)
 #
 # Server secrets (FIREBASE_* admin credentials) are NOT here: Terraform wires
 # them from Secret Manager onto the Cloud Run service itself.
@@ -87,11 +90,13 @@ jobs:
 
       - name: Smoke check
         run: |
-          URL=$(gcloud run services describe "${{ vars.STAGING_SERVICE }}" \
-            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
-            --format='value(status.url)')
+          URL="${{ vars.STAGING_URL }}"
+          if [ -z "$URL" ]; then
+            echo "STAGING_URL GitHub variable is unset; copy terraform output service_urls.staging" >&2
+            exit 1
+          fi
           echo "Staging URL: $URL"
-          # Learner home must serve; the operator surface must NOT exist.
+          # Learner home must serve via the load balancer; the operator surface must NOT exist.
           curl -sSf -o /dev/null "$URL/"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/operator")" = "404"
           echo "Smoke check passed"

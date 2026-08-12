@@ -116,7 +116,17 @@ resource "google_cloud_run_v2_service" "mission_control" {
 
   name     = "mission-control-${each.key}"
   location = var.region
-  ingress  = "INGRESS_TRAFFIC_ALL"
+  # Only the load balancer may reach the service. Requires the folder
+  # run.allowedIngress allow-list to include internal-and-cloud-load-balancing
+  # (Gavin's folder currently allows only `all` — ask him to add this value).
+  ingress = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+
+  # Domain-restricted sharing blocks allUsers, and the Application LB service
+  # agent (gcp-sa-l7xlb) is not minted in this project. Google's documented
+  # escape hatch: disable the invoker IAM check and rely on ingress to keep
+  # *.run.app closed. See cloud.google.com/run/docs/securing/managing-access
+  # ("Disable the Cloud Run Invoker IAM check").
+  invoker_iam_disabled = true
 
   template {
     service_account = google_service_account.runtime[each.key].email
@@ -174,15 +184,6 @@ resource "google_cloud_run_v2_service" "mission_control" {
     google_secret_manager_secret_iam_member.runtime_secret_access,
     google_secret_manager_secret_version.seed,
   ]
-}
-
-# Learner-facing site is public by design (no auth surface exists in the app).
-resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
-  for_each = var.environments
-  name     = google_cloud_run_v2_service.mission_control[each.key].name
-  location = var.region
-  role     = "roles/run.invoker"
-  member   = "allUsers"
 }
 
 # --- Deploy service account powers (push image, roll services) ------------
