@@ -67,8 +67,6 @@
   .btn:disabled{opacity:.35;cursor:default}
   .kbd{color:var(--muted);font-size:11px}
   .kbd b{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-family:ui-monospace,monospace}
-
-  .rubric{display:inline-block;background:rgba(78,161,255,.12);border:1px solid rgba(78,161,255,.35);color:var(--accent);border-radius:20px;padding:3px 12px;font-size:11px;letter-spacing:.3px;margin-left:6px;vertical-align:middle;white-space:nowrap}
   .stackgroup{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin:0 0 12px}
   .stackgroup h4{margin:0 0 12px;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);font-weight:600}
   .logos{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:12px}
@@ -169,7 +167,6 @@ const CRITERIA = [
  {
   "id": 1,
   "title": "The stack",
-  "rubric": "Technology used \u00b7 appropriateness",
   "lead": "Every pick answers a named constraint, not a trend.",
   "stack": [
    {
@@ -307,6 +304,10 @@ const CRITERIA = [
   ],
   "evidence": [
    {
+    "file": "Repo layout",
+    "code": "4tronix-rover-fork/\n  mission-control/      Next.js + TypeScript - the learner web app (cloud)\n    src/app/              pages and API routes\n    src/core/             domain + application logic, no framework imports\n    src/infrastructure/   Firestore, Resend, Zod, sandbox analysis\n    src/components/       Blockly, Monaco, simulator, layout\n  yard/                 Python - everything at the science centre\n    satellite/            Flask console + SQLite mirror + sync (mro.local)\n    rover/                queue service + drivers (marspi.local, Pi Zero)\n    deploy/               systemd units for both Pis\n  infra/                Terraform - Cloud Run, Artifact Registry, IAM\n  docs/architecture/    system, network and deployment docs\n  .github/workflows/    CI and deploy pipelines"
+   },
+   {
     "file": "mission-control/package.json",
     "path": "mission-control/package.json",
     "code": "\"dependencies\": {\n  \"next\": \"16.2.4\",                 // App Router: pages + API, one container\n  \"typescript\": \"^5\",               // compile-time shape checking\n  \"zod\": \"^3.25.76\",                // runtime shape checking at the boundary\n  \"firebase-admin\": \"^13.10.0\",     // trusted server writes only\n  \"blockly\": \"^12.5.1\",             // beginners\n  \"@monaco-editor/react\": \"^4.7.0\", // the confident\n  \"resend\": \"^6.18.0\"               // swapped in for SendGrid, one adapter\n}"
@@ -341,7 +342,6 @@ const CRITERIA = [
  {
   "id": 2,
   "title": "Practicality, cost & scale",
-  "rubric": "Technology used \u00b7 considerations",
   "lead": "Firestore bills per read. Cloud Run bills per request. The sponsor is a non-profit.",
   "evidence": [
    {
@@ -396,7 +396,6 @@ const CRITERIA = [
  {
   "id": 3,
   "title": "The data layer",
-  "rubric": "Database \u00b7 appropriateness, connection, structure",
   "lead": "Two databases on purpose: Firestore is the record, SQLite is the venue's independence.",
   "stack": [
    {
@@ -427,7 +426,11 @@ const CRITERIA = [
     "code": "// On Cloud Run: NO service-account key exists at all.\n// The runtime identity already holds roles/datastore.user in the same project.\nif (clientEmail && privateKey) return {credentialSource:'service-account', ...};\nif (clientEmail || privateKey) throw new Error(...);  // half a pair = fail loudly\nreturn { credentialSource:'application-default', projectId };"
    },
    {
-    "file": "Structure",
+    "file": "Where the data code lives",
+    "code": "mission-control/src/\n  core/domain/repositories/IMissionRepository.ts   the interface\n  core/domain/entities/Mission.ts                  the shape\n  infrastructure/persistence/\n    firebase-admin.ts                              the connection\n    FirestoreMissionRepository.ts                  the implementation\nfirestore.rules                                    access control\nfirestore.indexes.json                             composite indexes\n\nyard/satellite/\n  mission_store.py    SQLite schema + every local read and write\n  sync_worker.py      the only file that talks to Firestore"
+   },
+   {
+    "file": "Collections and tables",
     "code": "missions/                     world-readable queue + feed\n  status, learnerRef, learnerEmailHash      <- hashes, never raw identifiers\n  lockOwner, lockedAt, leaseExpiresAt       <- the execution lease\nlearners/{id}                 gettable by exact id, NEVER listable\nlearners/{id}/private/contact the real email - Admin SDK only\nusers/ , rover-configs/\n\n-- satellite (SQLite)\nmission_mirror   local copy of this yard's missions\noutbox           local changes not yet pushed\nsync_meta        cursors + watermarks\nconflict_log     what was overwritten, by whom, when, why"
    }
   ],
@@ -459,11 +462,10 @@ const CRITERIA = [
  {
   "id": 4,
   "title": "Architecture",
-  "rubric": "Coding structure \u00b7 framework, best practice",
   "lead": "Layered Clean Architecture, not MVC. Dependencies point inward only.",
   "evidence": [
    {
-    "file": "mission-control/src/core/",
+    "file": "mission-control/src/ \u2014 the four layers on disk",
     "path": "mission-control/src/core",
     "code": "core/domain/          entities + PORTS. Zero framework imports.\n  repositories/IMissionRepository.ts     <- the interface (line 15)\n  services/IEmailSender.ts               <- the email port\ncore/application/     use cases\n  services/MissionService.ts\ninfrastructure/       ADAPTERS: the concrete technology\n  persistence/FirestoreMissionRepository.ts   implements IMissionRepository\n  email/ResendEmailSender.ts                  implements IEmailSender\napp/                  presentation + API routes (the \"controllers\")"
    }
@@ -497,7 +499,6 @@ const CRITERIA = [
  {
   "id": 5,
   "title": "Object-oriented design",
-  "rubric": "OO concepts \u00b7 classes, encapsulation",
   "lead": "Abstract base class \u2192 two polymorphic drivers \u2192 a factory that picks one.",
   "evidence": [
    {
@@ -535,7 +536,6 @@ const CRITERIA = [
  {
   "id": 6,
   "title": "Validation, controls & security",
-  "rubric": "Data validation, controls & security",
   "lead": "Four independent layers. Users are children; the output moves a machine.",
   "evidence": [
    {
@@ -607,7 +607,6 @@ const CRITERIA = [
  {
   "id": 7,
   "title": "The yard & operator console",
-  "rubric": "Integration \u00b7 the other half",
   "lead": "A separate Flask app at the science centre, built to outlive the internet.",
   "stack": [
    {
@@ -681,7 +680,6 @@ const CRITERIA = [
  {
   "id": 8,
   "title": "How a mission runs",
-  "rubric": "Key features work \u00b7 MVP",
   "lead": "The full loop across three services. Running code, not a mock.",
   "evidence": [
    {
@@ -717,7 +715,6 @@ const CRITERIA = [
  {
   "id": 9,
   "title": "The interface",
-  "rubric": "User interface",
   "lead": "Two audiences, two philosophies: protect the learner, empower the operator.",
   "evidence": [
    {
@@ -772,7 +769,6 @@ const CRITERIA = [
  {
   "id": 10,
   "title": "Getting around",
-  "rubric": "Ease of navigation",
   "lead": "Few destinations, stable links, no login wall.",
   "evidence": [
    {
@@ -803,7 +799,6 @@ const CRITERIA = [
  {
   "id": 11,
   "title": "APIs & fallbacks",
-  "rubric": "APIs \u00b7 appropriateness, use, fallbacks",
   "lead": "Three exposed, three consumed. Each has a defined behaviour when it fails.",
   "evidence": [
    {
@@ -856,7 +851,6 @@ const CRITERIA = [
  {
   "id": 12,
   "title": "How it fits together",
-  "rubric": "Integration \u00b7 separation of concerns",
   "lead": "Three services, one job each, and one rule that decides the rest.",
   "evidence": [
    {
@@ -888,7 +882,6 @@ const CRITERIA = [
  {
   "id": 13,
   "title": "The hard parts",
-  "rubric": "Sophistication & complexity",
   "lead": "Offline reconciliation, lease locking, an interruptible sandbox, threat-modelled hashing.",
   "evidence": [
    {
@@ -930,7 +923,6 @@ const CRITERIA = [
  {
   "id": 14,
   "title": "Tests, docs & craft",
-  "rubric": "Professional practice",
   "lead": "538 automated tests, gating deployment, across two languages.",
   "evidence": [
    {
@@ -974,7 +966,7 @@ function renderNav(){
   nav.innerHTML = CRITERIA.map((c,i)=>`
     <div class="navitem ${i===current?'active':''}" data-i="${i}">
       <span class="navnum">${c.id}</span>
-      <span class="navtitle">${c.title}<br><span style="color:var(--muted);font-size:11px">${c.rubric}</span></span>
+      <span class="navtitle">${c.title}</span>
     </div>`).join('');
   nav.querySelectorAll('.navitem').forEach(el=>{
     el.onclick=()=>{current=+el.dataset.i;render();};
@@ -1018,7 +1010,7 @@ function render(){
   const c = CRITERIA[current];
   document.getElementById('main').innerHTML = `
     <div class="crumb">${c.id} of ${CRITERIA.length}</div>
-    <h2>${c.title} <span class="rubric">${c.rubric}</span></h2>
+    <h2>${c.title}</h2>
     <p class="lead">${c.lead}</p>
     ${c.stack ? `<div class="block">${stackHTML(c.stack)}</div>` : ''}
     ${c.evidence ? `<div class="block">${evidenceHTML(c.evidence)}</div>` : ''}
