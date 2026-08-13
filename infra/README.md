@@ -34,17 +34,15 @@ create or `gcloud services enable` will just error as already-existing.
 
 ### What is left
 
-Not yet created: the Workload Identity pool, its provider and the
-impersonation binding (the previous apply stopped right here), both Cloud Run
-services, and every IAM binding.
+A partial apply on 2026-08-06 created WIF, the plan SA, Resend secret, and
+all deploy/runtime IAM bindings. It **stopped** on Cloud Run create when
+`constraints/run.allowedIngress` only allowed `internal`. Gavin then moved
+`bt-impact-academy` under a folder that allows ingress `all`.
 
-That last one is easy to under-read. The three service accounts exist but hold
-**zero project roles** - confirmed by reading the project IAM policy, and by
-the absence of any `google_project_iam_member` in state. So fixing only the
-WIF pool would not be enough: CI would authenticate and then fail on the first
-push to Artifact Registry, because the deploy SA cannot write to it yet. This
-is also why every `Deploy staging` run so far dies at the auth step with
-`invalid_target` - the pool it names does not exist.
+Still not created: both Cloud Run services, their LB invoker bindings, and the
+external Application Load Balancer stack in front of them (one LB per env).
+There is **no** `allUsers` invoker — Impact domain-restricted sharing forbids
+it, and learners reach the app via the load balancer only.
 
 ```bash
 gcloud auth login
@@ -56,21 +54,24 @@ terraform plan
 terraform apply
 ```
 
-**Expected plan: `27 to add, 0 to change, 0 to destroy`.**
+**Expected plan:** Cloud Run ×2, LB invoker ×2, compute API (if not yet in
+state), plus per-env LB resources (address, NEG, backend, url map, HTTP proxy
++ forwarding rule; HTTPS pieces only when `var.domains` is set). If you see a
+**destroy** of the Artifact Registry repo, stop — `var.region` has drifted
+from `africa-south1`.
 
-Measured against real state on 2026-08-03. It was 22 before the
-`terraform-plan` workflow landed; that added five resources (the read-only
-plan service account, its two project roles, its state-bucket binding and its
-WIF impersonation binding), which are created by this same apply rather than
-needing a second one.
+Optional hostnames (Google-managed cert + HTTPS):
 
-If you see a **destroy**, stop and ask. It means `var.region` has drifted from
-`africa-south1` again: `location` is a force-new attribute on the Artifact
-Registry repo, so a region mismatch silently proposes destroying and
-recreating the registry that CI pushes to. This bit us once already - the
-default said `europe-west1` while the state, the GitHub Actions variables and
-the live repo all said `africa-south1`, and the plan came back
-`23 to add, 0 to change, 1 to destroy`.
+```bash
+# terraform.tfvars (not committed if personal), or -var / TF_VAR_domains
+domains = {
+  staging = "mission-control-staging.example.com"
+  prod    = "mission-control.example.com"
+}
+```
+
+Without `domains`, each env is HTTP on the reserved LB IP — fine for a short
+demo; point DNS and re-apply with `domains` before real mail links.
 
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
@@ -82,20 +83,26 @@ import caveat in the Notes below does not apply.
 terraform output
 # Settings -> Secrets and variables -> Actions -> Variables:
 #   GCP_WIF_PROVIDER, GCP_DEPLOY_SA, GCP_TF_PLAN_SA, GCP_PROJECT_ID,
-#   GCP_REGION, GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE
+#   GCP_REGION, GCP_AR_REPO, STAGING_SERVICE, PROD_SERVICE,
+#   STAGING_URL, PROD_URL          # = service_urls.staging / .prod (LB URLs)
 # plus the NEXT_PUBLIC_FIREBASE_* values from the NEW Firebase web app
 # (Part B). The deploy workflow reads all of these; it will fail without the
 # NEXT_PUBLIC_FIREBASE_* set, so they gate the first deploy, not the apply.
 #
-# Also set NEXT_PUBLIC_APP_URL to the service's own URL (get it from
+# Also set NEXT_PUBLIC_APP_URL to the same value as STAGING_URL (from
 # `terraform output service_urls`). It is inlined at `next build` time, so it
 # has to be a GitHub *variable* read by the build - a Cloud Run runtime env
-# var is too late.
+# var is too late. Do NOT use the Cloud Run *.run.app URI: without allUsers
+# that URL returns 403 by design.
+#
+# If using var.domains: point each hostname's DNS A record at
+# `terraform output lb_ip_addresses`, then wait until the managed cert is
+# ACTIVE before relying on HTTPS smoke checks.
 ```
 
-**`NEXT_PUBLIC_APP_URL` is not set today** (13 variables are; this is not one
-of them). It is worth being precise about what that breaks, because the code
-looks like it has a safe fallback and does not:
+**`NEXT_PUBLIC_APP_URL` / `STAGING_URL` must be the load balancer URL.** It is
+worth being precise about what an unset `NEXT_PUBLIC_APP_URL` breaks, because
+the code looks like it has a safe fallback and does not:
 
 ```ts
 `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/history`
@@ -223,6 +230,17 @@ The app moves to Impact's Firebase world. In the Firebase console
 
 ## Notes
 
+- **Public access is via load balancer, not allUsers.** Cloud Run uses
+  `invoker_iam_disabled = true` (Google's documented escape hatch under
+  domain-restricted sharing) plus
+  `ingress = INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER`, so only the external
+  Application Load Balancer can reach the service. Learners hit
+  `service_urls` / `lb_ip_addresses`. Direct `*.run.app` is blocked by ingress.
+  Do not add `member = "allUsers"`.
+- **Folder `run.allowedIngress` must allow `internal-and-cloud-load-balancing`.**
+  Gavin's folder currently allows only `all`. Without that value, Terraform
+  cannot set the ingress above and the apply will fail on the Cloud Run
+  services — ask him to add it (he can drop `all` once this is live).
 - **Regions are deliberately split.** Cloud Run and Artifact Registry are in
   `africa-south1` (Johannesburg); Firestore is in `europe-west1`.
 

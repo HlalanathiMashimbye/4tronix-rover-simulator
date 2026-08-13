@@ -14,6 +14,8 @@ locals {
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    # External HTTPS load balancer in front of Cloud Run (no allUsers invoker).
+    "compute.googleapis.com",
   ]
 }
 
@@ -37,6 +39,7 @@ module "mission_control" {
   project_id   = var.project_id
   region       = var.region
   environments = var.environments
+  domains      = var.domains
 
   resend_from_email        = var.resend_from_email
   resend_sandbox_recipient = var.resend_sandbox_recipient

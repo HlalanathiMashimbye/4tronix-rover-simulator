@@ -12,7 +12,8 @@ name: Deploy prod
 #   gcloud run services update-traffic / gcloud run deploy --image <old digest>
 #
 # Variables (from Terraform outputs): GCP_WIF_PROVIDER, GCP_DEPLOY_SA,
-# GCP_PROJECT_ID, GCP_REGION, STAGING_SERVICE, PROD_SERVICE.
+# GCP_PROJECT_ID, GCP_REGION, STAGING_SERVICE, PROD_SERVICE, PROD_URL.
+# PROD_URL is the load-balancer URL (service_urls.prod), not *.run.app.
 
 on:
   workflow_dispatch:
@@ -61,9 +62,11 @@ jobs:
 
       - name: Smoke check
         run: |
-          URL=$(gcloud run services describe "${{ vars.PROD_SERVICE }}" \
-            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
-            --format='value(status.url)')
+          URL="${{ vars.PROD_URL }}"
+          if [ -z "$URL" ]; then
+            echo "PROD_URL GitHub variable is unset; copy terraform output service_urls.prod" >&2
+            exit 1
+          fi
           echo "Prod URL: $URL"
           curl -sSf -o /dev/null "$URL/"
           test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/operator")" = "404"

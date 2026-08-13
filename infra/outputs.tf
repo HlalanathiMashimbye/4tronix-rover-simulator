@@ -35,6 +35,12 @@ output "PROD_SERVICE" {
   value = module.mission_control.service_names["prod"]
 }
 
+# Public learner URLs (load balancer), NOT the Cloud Run *.run.app URIs.
+# *.run.app stays closed (no allUsers); set NEXT_PUBLIC_APP_URL from these.
 output "service_urls" {
   value = module.mission_control.service_urls
+}
+
+output "lb_ip_addresses" {
+  value = module.mission_control.lb_ip_addresses
 }

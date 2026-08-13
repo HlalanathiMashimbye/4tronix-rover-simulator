@@ -54,3 +54,9 @@ variable "firebase_credential_source" {
     error_message = "firebase_credential_source must be \"adc\" or \"service-account\"."
   }
 }
+
+variable "domains" {
+  description = "Optional public hostname per environment. Empty string / missing key = HTTP-only on the LB IP for that env."
+  type        = map(string)
+  default     = {}
+}

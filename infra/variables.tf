@@ -71,3 +71,9 @@ variable "firebase_credential_source" {
   type        = string
   default     = "service-account"
 }
+
+variable "domains" {
+  description = "Optional public hostname per environment (e.g. staging = mission-control-staging.example.com). When set, Terraform provisions a Google-managed cert and HTTPS on the load balancer; point DNS A records at terraform output lb_ip_addresses first. When empty, that env is HTTP-only on the LB IP (fine for a short demo, not for real mail links)."
+  type        = map(string)
+  default     = {}
+}
