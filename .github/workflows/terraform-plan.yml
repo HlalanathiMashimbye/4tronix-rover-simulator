@@ -85,8 +85,15 @@ jobs:
         # the PR comment too, and the explicit check at the end of the job
         # decides pass/fail.
         continue-on-error: true
+        #
+        # -var-file is NOT optional. A bare plan falls back to variable
+        # defaults, and since the deployment moved to Impact those no longer
+        # describe the live infrastructure: `domains` defaults to empty, so the
+        # plan reads "6 to destroy" and proposes tearing down both managed
+        # certs and the HTTPS listeners. Plan with the same file the apply uses
+        # or the PR comment is worse than no comment.
         run: |
-          terraform plan -no-color -input=false -out=tfplan 2>&1 | tee plan.txt
+          terraform plan -no-color -input=false -var-file=impact.tfvars -out=tfplan 2>&1 | tee plan.txt
           echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Comment plan on the PR
