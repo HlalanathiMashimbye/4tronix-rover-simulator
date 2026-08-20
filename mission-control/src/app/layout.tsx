@@ -7,6 +7,7 @@ import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { PageTransition } from "@/components/layout/PageTransition";
+import { resolveAppUrl } from "@/infrastructure/config/appUrl";
 
 // Runs before hydration (next/script's beforeInteractive: "injected into the
 // initial HTML from the server, downloaded before any Next.js module" -
@@ -50,7 +51,7 @@ export const metadata: Metadata = {
   // Absolute base for the og:image URL. Open Graph requires an absolute URL,
   // and a crawler resolving a relative one against its own host gets nothing,
   // so a shared link shows no image at all. Falls back to localhost for dev.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
+  metadataBase: new URL(resolveAppUrl()),
   title: APP_TITLE,
   description: APP_DESCRIPTION,
 

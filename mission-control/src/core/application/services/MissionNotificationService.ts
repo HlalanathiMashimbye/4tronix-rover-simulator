@@ -40,7 +40,12 @@ export class MissionNotificationService {
   constructor(
     private readonly emailSender: IEmailSender,
     private readonly firestore: Firestore,
-    private readonly historyUrl: string
+    /**
+     * Base URL of the learner app, e.g. https://marsyard.sapient.rocks. The
+     * per-mission and history links are derived here rather than passed in, so
+     * every route that sends mail cannot drift on how they are built.
+     */
+    private readonly appUrl: string
   ) {}
 
   async notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome> {
@@ -69,7 +74,8 @@ export class MissionNotificationService {
       const { subject, html } = buildMissionStatusEmail(status, {
         missionName: mission.name || mission.id,
         learnerName: learner.displayName,
-        historyUrl: this.historyUrl,
+        missionUrl: this.missionUrl(mission.id),
+        historyUrl: `${this.baseUrl()}/history`,
       });
 
       await this.emailSender.send(learner.email, subject, html);
@@ -96,6 +102,17 @@ export class MissionNotificationService {
    * lookup never hit and every email greeted "Space Explorer". Both now derive
    * from the same learnerRef, so they cannot drift apart again.
    */
+  /** Trailing slashes on NEXT_PUBLIC_APP_URL are easy to leave in and would
+   * otherwise produce '//missions/<id>', which some mail clients mangle. */
+  private baseUrl(): string {
+    return this.appUrl.replace(/\/+$/, '');
+  }
+
+  /** Deep link to one mission - matches the app/missions/[missionId] route. */
+  private missionUrl(missionId: string): string {
+    return `${this.baseUrl()}/missions/${encodeURIComponent(missionId)}`;
+  }
+
   private async resolveLearner(missionLearnerRef: string): Promise<LearnerContact> {
     // Missions carry only a hash of the learner id, so the learner cannot be
     // fetched by document id any more - it is found by the matching learnerRef
