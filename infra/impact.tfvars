@@ -17,8 +17,8 @@ region     = "africa-south1"
 #
 # ORDER MATTERS. Point the DNS A records at the LB IPs BEFORE applying:
 #
-#   missioncontrol.sapient.rocks          A    136.68.161.27    (prod)
-#   staging.missioncontrol.sapient.rocks  A    136.68.166.17    (staging)
+#   marsyard.sapient.rocks  A    136.68.161.27    (prod)
+#   marsyard.labs.ws        A    136.68.166.17    (staging)
 #
 # Google validates domain ownership by resolving the name to the load
 # balancer. Apply first and the certificate sits in PROVISIONING until DNS
@@ -26,7 +26,19 @@ region     = "africa-south1"
 #
 # The IPs are reserved global addresses, so they do not change on re-apply.
 # Confirm them with: terraform output lb_ip_addresses
+#
+# Domains provided by David Campey (2026-08-14): marsyard.sapient.rocks for
+# email + prod, marsyard.labs.ws for staging.
 domains = {
-  prod    = "missioncontrol.sapient.rocks"
-  staging = "staging.missioncontrol.sapient.rocks"
+  prod    = "marsyard.sapient.rocks"
+  staging = "marsyard.labs.ws"
 }
+
+# Email. The domain marsyard.sapient.rocks is verified in Resend (DKIM + SPF
+# MX/TXT + DMARC live in GoDaddy), so mail can now go to any learner address
+# and no longer has to come from Resend's shared onboarding@resend.dev sender.
+#
+# resend_sandbox_recipient is deliberately NOT set here. While it has a value,
+# EVERY mission email is redirected to that one inbox and no learner receives
+# mail. It defaults to "" and must stay empty now that the domain is verified.
+resend_from_email = "missions@marsyard.sapient.rocks"

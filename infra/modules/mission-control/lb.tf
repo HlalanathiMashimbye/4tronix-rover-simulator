@@ -12,6 +12,20 @@ locals {
     for env, domain in var.domains : env => domain
     if contains(keys(var.environments), env) && trimspace(domain) != ""
   }
+
+  # Public origin per environment, same rule as the service_urls output.
+  # Handed to the container as a RUNTIME env var rather than baked in at build
+  # time: prod promotes the exact image digest already serving on staging, and
+  # Next freezes every NEXT_PUBLIC_* value when `next build` runs, so a
+  # build-time origin would make prod emails link to the staging domain.
+  app_urls = {
+    for env, _ in var.environments :
+    env => (
+      contains(keys(local.domains), env)
+      ? "https://${local.domains[env]}"
+      : "http://${google_compute_global_address.mission_control[env].address}"
+    )
+  }
 }
 
 resource "google_compute_global_address" "mission_control" {
