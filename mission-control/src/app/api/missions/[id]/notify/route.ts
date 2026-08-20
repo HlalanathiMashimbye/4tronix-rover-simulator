@@ -70,9 +70,15 @@ export async function POST(
       appUrl
     );
 
-    await notificationService.notifyStatusChange(mission, validation.data.status);
+    const outcome = await notificationService.notifyStatusChange(mission, validation.data.status);
 
-    return NextResponse.json({ success: true }, { status: 200 });
+    // Surfaced rather than discarded. Sending stays best-effort - a provider
+    // outage must not fail the caller, which is the yard console - but the
+    // caller can no longer tell "sent" apart from "silently skipped because
+    // the learner has no address" or "Resend rejected it". That ambiguity cost
+    // an afternoon of testing a domain-verification failure as if it were a
+    // broken template. Always HTTP 200; the detail is in the body.
+    return NextResponse.json({ success: true, notification: outcome }, { status: 200 });
   } catch (error) {
     return NextResponse.json(
       { success: false, error: error instanceof Error ? error.message : 'Unknown error' },
