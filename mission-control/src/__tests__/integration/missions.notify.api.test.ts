@@ -128,6 +128,15 @@ describe('POST /api/missions/[id]/notify Integration Tests', () => {
     expect(missions.get('mission-1')?.status).toBe('processing');
   });
 
+  it('reports a successful send in the response body', async () => {
+    const response = await POST(notifyRequest('mission-1', { status: 'completed' }), {
+      params: Promise.resolve({ id: 'mission-1' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, notification: { sent: true } });
+  });
+
   it('returns 404 for an unknown mission id', async () => {
     const response = await POST(notifyRequest('does-not-exist', { status: 'completed' }), {
       params: Promise.resolve({ id: 'does-not-exist' }),
@@ -169,6 +178,12 @@ describe('POST /api/missions/[id]/notify Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(sendMock).not.toHaveBeenCalled();
+    // Reported, not silent: the caller has to be able to tell this apart from
+    // a successful send, or a misconfiguration looks identical to working.
+    expect(await response.json()).toEqual({
+      success: true,
+      notification: { sent: false, reason: 'no-learner-email' },
+    });
   });
 
   it('still returns 200 when the email send fails', async () => {
@@ -182,6 +197,13 @@ describe('POST /api/missions/[id]/notify Integration Tests', () => {
 
     expect(response.status).toBe(200);
     expect(data.success).toBe(true);
+    // Best-effort stays best-effort - the yard console must not be failed by a
+    // provider outage - but the reason travels back with the 200.
+    expect(data.notification).toEqual({
+      sent: false,
+      reason: 'send-failed',
+      error: 'Resend is down',
+    });
     consoleErrorSpy.mockRestore();
   });
 });
