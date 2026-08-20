@@ -42,3 +42,16 @@ domains = {
 # EVERY mission email is redirected to that one inbox and no learner receives
 # mail. It defaults to "" and must stay empty now that the domain is verified.
 resend_from_email = "missions@marsyard.sapient.rocks"
+
+# Authenticate to Firestore as the Cloud Run runtime service account rather
+# than a mounted key. Firestore lives in this same project and the runtime SA
+# already holds roles/datastore.user, so no key needs to exist: nothing to
+# store in Secret Manager, nothing to rotate, nothing to leak.
+#
+# The module default is still "service-account" so an existing deployment does
+# not change identity underneath itself on an unrelated apply. Impact's never
+# had a real key seeded - FIREBASE_PRIVATE_KEY was still the CHANGE_ME
+# placeholder, so every server-side Firestore call failed with
+# "Failed to parse private key: DECODER routines::unsupported" and no mission
+# could be submitted at all.
+firebase_credential_source = "adc"
