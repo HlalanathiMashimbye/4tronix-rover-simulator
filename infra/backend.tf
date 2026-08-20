@@ -15,7 +15,7 @@
 # Never commit .tfstate.
 terraform {
   backend "gcs" {
-    bucket = "mars-rover-cloud-platform-tfstate"
+    bucket = "bt-impact-academy-tfstate"
     prefix = "mission-control"
   }
 }

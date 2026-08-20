@@ -149,7 +149,7 @@ resource "google_cloud_run_v2_service" "mission_control" {
       }
 
       dynamic "env" {
-        for_each = local.plain_env
+        for_each = merge(local.plain_env, { APP_URL = local.app_urls[each.key] })
         content {
           name  = env.key
           value = env.value
