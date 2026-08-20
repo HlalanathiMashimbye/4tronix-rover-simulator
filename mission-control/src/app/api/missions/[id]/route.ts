@@ -14,6 +14,7 @@ import { FirestoreMissionRepository } from '@/infrastructure/persistence/Firesto
 import { MissionService } from '@/core/application/services/MissionService';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 
 export async function PATCH(
   request: NextRequest,
@@ -59,11 +60,11 @@ export async function PATCH(
     }
 
     if (validation.data.status) {
-      const historyUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/history`;
+      const appUrl = resolveAppUrl();
       const notificationService = new MissionNotificationService(
         new ResendEmailSender(),
         firestore,
-        historyUrl
+        appUrl
       );
 
       await notificationService.notifyStatusChange(updatedMission, validation.data.status);

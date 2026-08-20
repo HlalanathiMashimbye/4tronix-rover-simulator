@@ -15,6 +15,7 @@ import { FirestoreMissionRepository } from '@/infrastructure/persistence/Firesto
 import { MissionService } from '@/core/application/services/MissionService';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 
 const notifyRequestSchema = z.object({
   status: z.enum(['queued', 'processing', 'completed', 'failed', 'cancelled']),
@@ -62,11 +63,11 @@ export async function POST(
       );
     }
 
-    const historyUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/history`;
+    const appUrl = resolveAppUrl();
     const notificationService = new MissionNotificationService(
       new ResendEmailSender(),
       firestore,
-      historyUrl
+      appUrl
     );
 
     await notificationService.notifyStatusChange(mission, validation.data.status);

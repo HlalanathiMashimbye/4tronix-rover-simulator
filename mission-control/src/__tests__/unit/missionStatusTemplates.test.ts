@@ -7,6 +7,7 @@ import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTem
 import { MissionStatus } from '@/core/domain/entities/Mission';
 
 const HISTORY_URL = 'http://localhost:3000/history';
+const MISSION_URL = 'http://localhost:3000/missions/mission-123';
 
 describe('buildMissionStatusEmail', () => {
   const statuses: MissionStatus[] = ['queued', 'processing', 'completed', 'failed', 'cancelled'];
@@ -15,6 +16,7 @@ describe('buildMissionStatusEmail', () => {
     const { subject, html } = buildMissionStatusEmail(status, {
       missionName: 'Orbital Nomad',
       learnerName: 'Ada',
+      missionUrl: MISSION_URL,
       historyUrl: HISTORY_URL,
     });
 
@@ -22,13 +24,15 @@ describe('buildMissionStatusEmail', () => {
     expect(html).toContain('Orbital Nomad');
   });
 
-  it.each(statuses)('includes the history link CTA for status "%s"', (status) => {
+  it.each(statuses)('deep links to the mission itself for status "%s"', (status) => {
     const { html } = buildMissionStatusEmail(status, {
       missionName: 'Orbital Nomad',
       learnerName: 'Ada',
+      missionUrl: MISSION_URL,
       historyUrl: HISTORY_URL,
     });
 
+    expect(html).toContain(`href="${MISSION_URL}"`);
     expect(html).toContain(HISTORY_URL);
     expect(html).toContain('Mission Control');
   });
@@ -37,6 +41,7 @@ describe('buildMissionStatusEmail', () => {
     const { html } = buildMissionStatusEmail('completed', {
       missionName: 'Orbital Nomad',
       learnerName: 'Ada',
+      missionUrl: MISSION_URL,
       historyUrl: HISTORY_URL,
     });
 
@@ -46,6 +51,7 @@ describe('buildMissionStatusEmail', () => {
   it('falls back to "Space Explorer" when no learner name is provided', () => {
     const { html } = buildMissionStatusEmail('completed', {
       missionName: 'Orbital Nomad',
+      missionUrl: MISSION_URL,
       historyUrl: HISTORY_URL,
     });
 
@@ -56,6 +62,7 @@ describe('buildMissionStatusEmail', () => {
     const { html } = buildMissionStatusEmail('completed', {
       missionName: 'Orbital Nomad',
       learnerName: '   ',
+      missionUrl: MISSION_URL,
       historyUrl: HISTORY_URL,
     });
 
@@ -68,6 +75,7 @@ describe('buildMissionStatusEmail', () => {
         (status) =>
           buildMissionStatusEmail(status, {
             missionName: 'Orbital Nomad',
+            missionUrl: MISSION_URL,
             historyUrl: HISTORY_URL,
           }).subject
       )
