@@ -1,5 +1,5 @@
 import { RoverPhysics } from './rover-physics';
-import type { SimulationCommand } from '@/components/mission/roverBlockly';
+import type { SimulationCommand } from './roverBlockly';
 
 export interface TrajectoryPoint {
   x: number;

@@ -6,7 +6,7 @@
  * simulator. Uses lightweight mock blocks so no browser/Blockly is required.
  */
 
-import { mergeUplinkHats, workspaceToPython, workspaceToCommands } from '@/components/mission/roverBlockly';
+import { mergeUplinkHats, workspaceToPython, workspaceToCommands } from '@/lib/roverBlockly';
 
 type Fields = Record<string, string | number>;
 

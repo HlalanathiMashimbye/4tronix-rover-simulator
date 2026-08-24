@@ -314,7 +314,26 @@
     </div>
     <div class="toast" id="toast"></div>
 
-    <script>
+    <!-- A module, so it can import the block definitions rather than carry a
+         second copy of them. Safe because this page has no inline event
+         handlers: nothing here needs to be global. Blockly and the Monaco AMD
+         loader are classic scripts above, so both are on window by the time
+         this deferred module runs. -->
+    <script type="module">
+        // All 16 block definitions, the toolbox and the Python generator used
+        // to live here, byte-identical to mission-control's TypeScript, with a
+        // comment in each copy asking humans to mirror changes into the other.
+        // They now come from that single source via `npm run build:roversim`,
+        // and CI fails if this committed output drifts from it.
+        import {
+            defineRoverBlocks,
+            ROVER_TOOLBOX,
+            ROVER_MAX_INSTANCES,
+            mergeUplinkHats,
+            workspaceToPython,
+        } from '/static/roversim/roverBlockly.js';
+
+        defineRoverBlocks(Blockly);
         // ============================================================
         // Ports & Adapters Pattern for Testability
         // ============================================================
@@ -417,303 +436,12 @@
             }
         }
 
-        // ============================================================
-        // Blockly Block Definitions
-        // ============================================================
-
-        Blockly.Blocks['rover_on_receive'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("\uD83D\uDEF0\uFE0F On uplink");
-                this.appendStatementInput("DO")
-                    .setCheck(null);
-                this.setColour("#FF6D00");
-                this.setTooltip("Blocks inside run when sent to the rover");
-            }
-        };
-
-        Blockly.Blocks['rover_forward'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Move Forward")
-                    .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#2196F3");
-                this.setTooltip("Move the rover forward");
-            }
-        };
-
-        Blockly.Blocks['rover_backward'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Move Backward")
-                    .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#2196F3");
-                this.setTooltip("Move the rover backward");
-            }
-        };
-
-        Blockly.Blocks['rover_spin_left'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Spin Left")
-                    .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#9C27B0");
-                this.setTooltip("Spin the rover left in place");
-            }
-        };
-
-        Blockly.Blocks['rover_spin_right'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Spin Right")
-                    .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#9C27B0");
-                this.setTooltip("Spin the rover right in place");
-            }
-        };
-
-        Blockly.Blocks['rover_stop'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Stop");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#f44336");
-                this.setTooltip("Stop the rover immediately");
-            }
-        };
-
-        Blockly.Blocks['rover_steer_left'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Steer Left")
-                    .appendField(new Blockly.FieldNumber(20, 5, 45, 5), "DEGREES")
-                    .appendField("degrees for")
-                    .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#00BCD4");
-                this.setTooltip("Steer left while moving forward");
-            }
-        };
-
-        Blockly.Blocks['rover_steer_right'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Steer Right")
-                    .appendField(new Blockly.FieldNumber(20, 5, 45, 5), "DEGREES")
-                    .appendField("degrees for")
-                    .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#00BCD4");
-                this.setTooltip("Steer right while moving forward");
-            }
-        };
-
-        Blockly.Blocks['rover_wait'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Wait")
-                    .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), "TIME")
-                    .appendField("seconds");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#FF9800");
-                this.setTooltip("Wait for specified time");
-            }
-        };
-
-        Blockly.Blocks['rover_repeat'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Repeat")
-                    .appendField(new Blockly.FieldNumber(3, 1, 20, 1), "TIMES")
-                    .appendField("times");
-                this.appendStatementInput("DO")
-                    .setCheck(null);
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#FF9800");
-                this.setTooltip("Repeat the blocks inside");
-            }
-        };
-
-        Blockly.Blocks['rover_mast_turn'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Point Mast")
-                    .appendField(new Blockly.FieldDropdown([
-                        ["left", "LEFT"],
-                        ["centre", "CENTRE"],
-                        ["right", "RIGHT"]
-                    ]), "DIR")
-                    .appendField(new Blockly.FieldNumber(45, 5, 80, 5), "DEGREES")
-                    .appendField("°");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#00897B");
-                this.setTooltip("Turn the mast left or right, or point it straight ahead");
-            }
-        };
-
-        Blockly.Blocks['rover_read_distance'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Read Distance");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#00897B");
-                this.setTooltip("Measure how far away the nearest thing is and show it on the monitor");
-            }
-        };
-
-        Blockly.Blocks['rover_take_photo'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Take a Picture");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#00897B");
-                this.setTooltip("Take a photo with the mast camera and show it on the monitor");
-            }
-        };
-
-        Blockly.Blocks['rover_distance'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("distance (cm)");
-                this.setOutput(true, "Number");
-                this.setColour("#00897B");
-                this.setTooltip("The distance the mast sensor sees — for use with comparisons");
-            }
-        };
-
-        // Dropdown values are "R, G, B" strings consumed by the generator
-        const LED_COLOURS = [
-            ["red", "255, 0, 0"],
-            ["orange", "255, 96, 0"],
-            ["yellow", "255, 200, 0"],
-            ["green", "0, 255, 0"],
-            ["blue", "0, 0, 255"],
-            ["purple", "160, 0, 255"],
-            ["pink", "255, 64, 160"],
-            ["white", "255, 255, 255"],
-            ["off", "0, 0, 0"]
-        ];
-
-        // Pixel numbers from the 4tronix board layout
-        const LED_POSITIONS = [
-            ["front left", "1"],
-            ["front right", "2"],
-            ["rear left", "0"],
-            ["rear right", "3"]
-        ];
-
-        Blockly.Blocks['rover_leds_all'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Set all LEDs")
-                    .appendField(new Blockly.FieldDropdown(LED_COLOURS), "COLOUR");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#673AB7");
-                this.setTooltip("Set all four LEDs to a colour (driving blocks change them back)");
-            }
-        };
-
-        Blockly.Blocks['rover_led_one'] = {
-            init: function() {
-                this.appendDummyInput()
-                    .appendField("Set")
-                    .appendField(new Blockly.FieldDropdown(LED_POSITIONS), "LED")
-                    .appendField("LED")
-                    .appendField(new Blockly.FieldDropdown(LED_COLOURS), "COLOUR");
-                this.setPreviousStatement(true, null);
-                this.setNextStatement(true, null);
-                this.setColour("#673AB7");
-                this.setTooltip("Set one LED to a colour (driving blocks change them back)");
-            }
-        };
 
         // ============================================================
         // Toolbox Configuration
         // ============================================================
 
-        const toolbox = {
-            kind: 'categoryToolbox',
-            contents: [
-                {
-                    kind: 'category',
-                    name: '\uD83D\uDEF0\uFE0F Uplink',
-                    colour: '#FF6D00',
-                    // The instance cap lives on Blockly.inject()'s maxInstances
-                    // option below, not here - Blockly never reads maxInstances
-                    // from a toolbox content entry, so one placed here is
-                    // silently ignored: no error, the block just isn't capped.
-                    contents: [
-                        {kind: 'block', type: 'rover_on_receive'}
-                    ]
-                },
-                {
-                    kind: 'category',
-                    name: 'Movement',
-                    colour: '#2196F3',
-                    contents: [
-                        {kind: 'block', type: 'rover_forward'},
-                        {kind: 'block', type: 'rover_backward'},
-                        {kind: 'block', type: 'rover_steer_left'},
-                        {kind: 'block', type: 'rover_steer_right'},
-                        {kind: 'block', type: 'rover_spin_left'},
-                        {kind: 'block', type: 'rover_spin_right'},
-                        {kind: 'block', type: 'rover_stop'}
-                    ]
-                },
-                {
-                    kind: 'category',
-                    name: 'Mast',
-                    colour: '#00897B',
-                    contents: [
-                        {kind: 'block', type: 'rover_mast_turn'},
-                        {kind: 'block', type: 'rover_read_distance'},
-                        {kind: 'block', type: 'rover_take_photo'},
-                        {kind: 'block', type: 'rover_distance'}
-                    ]
-                },
-                {
-                    kind: 'category',
-                    name: 'Lights',
-                    colour: '#673AB7',
-                    contents: [
-                        {kind: 'block', type: 'rover_leds_all'},
-                        {kind: 'block', type: 'rover_led_one'}
-                    ]
-                },
-                {
-                    kind: 'category',
-                    name: 'Control',
-                    colour: '#FF9800',
-                    contents: [
-                        {kind: 'block', type: 'rover_wait'},
-                        {kind: 'block', type: 'rover_repeat'}
-                    ]
-                }
-            ]
-        };
+        const toolbox = ROVER_TOOLBOX;
 
         // ============================================================
         // Workspace Initialization
@@ -723,7 +451,7 @@
             toolbox: toolbox,
             // The actual cap - Blockly reads maxInstances only from here,
             // never from a toolbox content entry.
-            maxInstances: {rover_on_receive: 1},
+            maxInstances: ROVER_MAX_INSTANCES,
             zoom: {
                 controls: true,
                 wheel: true,
@@ -762,209 +490,15 @@
             })
         });
 
-        // ============================================================
-        // Python Code Generator (from Blockly workspace)
-        // ============================================================
+        // Module scope is NOT global, unlike the classic script this used to
+        // be. The Playwright codegen tests drive the page through these two
+        // names, so publish them deliberately - a narrow surface, the same way
+        // monitor.html publishes __yardMonitorHooks - rather than leaving the
+        // tests to reach into a scope they cannot see.
+        window.workspace = workspace;
+        window.workspaceToPython = workspaceToPython;
 
-        function generatePythonCode() {
-            const lines = [];
 
-            function blockToLines(block, indent) {
-                if (!block) return;
-                const pad = '    '.repeat(indent);
-                const type = block.type;
-
-                switch (type) {
-                    case 'rover_on_receive': {
-                        blockToLines(block.getInputTargetBlock('DO'), indent);
-                        return;  // hat block — no next block to follow
-                    }
-                    case 'rover_forward': {
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.setServo(9, 0)`);
-                        lines.push(`${pad}rover.setServo(11, 0)`);
-                        lines.push(`${pad}rover.setServo(13, 0)`);
-                        lines.push(`${pad}rover.setServo(15, 0)`);
-                        lines.push(`${pad}rover.forward(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        break;
-                    }
-                    case 'rover_backward': {
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.setServo(9, 0)`);
-                        lines.push(`${pad}rover.setServo(11, 0)`);
-                        lines.push(`${pad}rover.setServo(13, 0)`);
-                        lines.push(`${pad}rover.setServo(15, 0)`);
-                        lines.push(`${pad}rover.reverse(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        break;
-                    }
-                    case 'rover_spin_left': {
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.stop()`);
-                        lines.push(`${pad}rover.setServo(9, 50)`);
-                        lines.push(`${pad}rover.setServo(15, -50)`);
-                        lines.push(`${pad}rover.setServo(11, -50)`);
-                        lines.push(`${pad}rover.setServo(13, 50)`);
-                        lines.push(`${pad}rover.spinLeft(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        break;
-                    }
-                    case 'rover_spin_right': {
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.stop()`);
-                        lines.push(`${pad}rover.setServo(9, 50)`);
-                        lines.push(`${pad}rover.setServo(15, -50)`);
-                        lines.push(`${pad}rover.setServo(11, -50)`);
-                        lines.push(`${pad}rover.setServo(13, 50)`);
-                        lines.push(`${pad}rover.spinRight(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        break;
-                    }
-                    case 'rover_stop':
-                        lines.push(`${pad}rover.stop()`);
-                        break;
-                    case 'rover_steer_left': {
-                        const d = block.getFieldValue('DEGREES');
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.setServo(9, -${d})`);
-                        lines.push(`${pad}rover.setServo(15, -${d})`);
-                        lines.push(`${pad}rover.setServo(11, ${d})`);
-                        lines.push(`${pad}rover.setServo(13, ${d})`);
-                        lines.push(`${pad}rover.forward(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        lines.push(`${pad}rover.setServo(9, 0)`);
-                        lines.push(`${pad}rover.setServo(11, 0)`);
-                        lines.push(`${pad}rover.setServo(13, 0)`);
-                        lines.push(`${pad}rover.setServo(15, 0)`);
-                        break;
-                    }
-                    case 'rover_steer_right': {
-                        const d = block.getFieldValue('DEGREES');
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}rover.setServo(9, ${d})`);
-                        lines.push(`${pad}rover.setServo(15, ${d})`);
-                        lines.push(`${pad}rover.setServo(11, -${d})`);
-                        lines.push(`${pad}rover.setServo(13, -${d})`);
-                        lines.push(`${pad}rover.forward(60)`);
-                        lines.push(`${pad}time.sleep(${t})`);
-                        lines.push(`${pad}rover.stop()`);
-                        lines.push(`${pad}rover.setServo(9, 0)`);
-                        lines.push(`${pad}rover.setServo(11, 0)`);
-                        lines.push(`${pad}rover.setServo(13, 0)`);
-                        lines.push(`${pad}rover.setServo(15, 0)`);
-                        break;
-                    }
-                    case 'rover_wait': {
-                        const t = block.getFieldValue('TIME');
-                        lines.push(`${pad}time.sleep(${t})`);
-                        break;
-                    }
-                    case 'rover_mast_turn': {
-                        // Mast servo is 0; positive degrees = left, negative = right
-                        const dir = block.getFieldValue('DIR');
-                        const deg = block.getFieldValue('DEGREES');
-                        const angle = dir === 'LEFT' ? deg : dir === 'RIGHT' ? -deg : 0;
-                        lines.push(`${pad}rover.setServo(0, ${angle})`);
-                        lines.push(`${pad}time.sleep(0.5)`);
-                        break;
-                    }
-                    case 'rover_read_distance': {
-                        lines.push(`${pad}print('Distance: ' + str(round(rover.getDistance())) + ' cm')`);
-                        break;
-                    }
-                    case 'rover_take_photo': {
-                        lines.push(`${pad}take_photo()`);
-                        break;
-                    }
-                    case 'rover_leds_all': {
-                        const rgb = block.getFieldValue('COLOUR');
-                        lines.push(`${pad}rover.setColor(rover.fromRGB(${rgb}))`);
-                        lines.push(`${pad}rover.show()`);
-                        break;
-                    }
-                    case 'rover_led_one': {
-                        const led = block.getFieldValue('LED');
-                        const rgb = block.getFieldValue('COLOUR');
-                        lines.push(`${pad}rover.setPixel(${led}, rover.fromRGB(${rgb}))`);
-                        lines.push(`${pad}rover.show()`);
-                        break;
-                    }
-                    case 'rover_repeat': {
-                        const times = block.getFieldValue('TIMES');
-                        lines.push(`${pad}for _ in range(${times}):`);
-                        const inner = block.getInputTargetBlock('DO');
-                        if (inner) {
-                            // recursion via getNextBlock() below walks the
-                            // rest of the body chain — do not iterate it here
-                            blockToLines(inner, indent + 1);
-                        } else {
-                            lines.push(`${pad}    pass`);
-                        }
-                        break;
-                    }
-                }
-
-                blockToLines(block.getNextBlock(), indent);
-            }
-
-            workspace.getTopBlocks(true)
-                .filter(b => b.type === 'rover_on_receive')
-                .forEach(b => blockToLines(b, 0));
-            return lines.join('\n') + '\n';
-        }
-
-        // Returns whether the workspace was mutated - callers use this to
-        // decide whether to re-save. That has to mean "did I dispose a hat",
-        // not "did I relocate a body": an empty spare hat (dragged out,
-        // never used) still gets disposed below regardless of whether it had
-        // anything inside it. Tying the return value to body-relocation
-        // instead meant that exact case - the most likely real one - got
-        // silently re-disposed from the live workspace on every load without
-        // the cleanup ever reaching storage.
-        function mergeUplinkHats(workspace) {
-            const hats = workspace
-                .getTopBlocks(true)
-                .filter(b => b.type === 'rover_on_receive');
-
-            if (hats.length <= 1) return false;
-
-            const primaryHat = hats[0];
-            const primaryInput = primaryHat.getInput('DO');
-            let primaryBody = primaryHat.getInputTargetBlock('DO');
-
-            function statementTail(block) {
-                let tail = block;
-                while (tail && tail.getNextBlock()) {
-                    tail = tail.getNextBlock();
-                }
-                return tail;
-            }
-
-            hats.slice(1).forEach(function(hat) {
-                const body = hat.getInputTargetBlock('DO');
-
-                if (body) {
-                    if (!primaryBody) {
-                        primaryInput && primaryInput.connection && primaryInput.connection.connect(body.previousConnection);
-                        primaryBody = body;
-                    } else {
-                        const tail = statementTail(primaryBody);
-                        tail && tail.nextConnection && tail.nextConnection.connect(body.previousConnection);
-                        primaryBody = statementTail(body);
-                    }
-                }
-
-                hat.dispose(false, false);
-            });
-
-            return true;
-        }
 
         // ============================================================
         // Tab Switching
@@ -1038,7 +572,7 @@
             let blockly_state = null;
 
             if (activeTab === 'blockly') {
-                code = generatePythonCode();
+                code = workspaceToPython(workspace);
                 if (code.trim() === '') {
                     showToast('No blocks to run', 'error');
                     return;
