@@ -269,13 +269,16 @@
                 </div>
 
                 <div class="review" id="review" hidden>
-                    <button class="review-toggle" id="reviewToggle" type="button" aria-expanded="false" aria-controls="reviewBody">
+                    <!-- Starts EXPANDED. A count an operator cannot see the
+                         missions behind is just an unexplained number: the
+                         whole point of the banner is the list under it. -->
+                    <button class="review-toggle" id="reviewToggle" type="button" aria-expanded="true" aria-controls="reviewBody">
                         <span class="dot"></span>
                         <span id="reviewCount"></span>
                         <span class="why">interrupted, outcome unknown</span>
                         <span class="chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>
                     </button>
-                    <div class="review-body" id="reviewBody" hidden>
+                    <div class="review-body" id="reviewBody">
                         <p>These were running when the satellite stopped, so nobody knows whether the rover finished them. Open one to decide.</p>
                         <div class="review-links" id="reviewLinks"></div>
                     </div>
