@@ -247,7 +247,6 @@ def _stop_lease_renewal(mission_id):
         timer.cancel()
 
 
-
 # Event-day escape hatch: OPERATOR_AUTH=off skips login entirely. Firebase
 # sign-in needs internet, and venue wifi (science centre) can be too flaky to
 # get operators through the front door. The satellite only serves the yard's
@@ -393,6 +392,13 @@ def _mirror_row_to_dict(row):
         'completedAt': row.get('completed_at'),
         'youtubeUrl': row.get('youtube_url'),
         'deleted': bool(row.get('deleted')),
+        # Recovery flags. The home page already surfaces a needs-review banner
+        # linking to each flagged mission, but the mission page could not see
+        # the flag because it was not in this contract - so the banner led the
+        # operator to a page offering nothing, which is worse than no banner.
+        # The resolve endpoint has existed all along with no way to reach it.
+        'needsReview': bool(row.get('needs_review')),
+        'reviewReason': row.get('review_reason'),
     }
 
 
@@ -438,74 +444,8 @@ def api_missions():
     })
 
 
-
-def _get_mission_ref(mission_id):
-    ref = _firestore().collection(MISSIONS_COLLECTION).document(mission_id)
-    snapshot = ref.get()
-    if not snapshot.exists:
-        return None, None
-    return ref, snapshot.to_dict() or {}
-
 _acquire_lock = threading.Lock()
 LEASE_TTL_SECONDS = 300  # 5 minutes
-
-def _transactional(fn):
-    """Apply firebase-admin's @firestore.transactional lazily.
-
-    Everything firebase-admin in this module is imported inside functions, so
-    the kiosk pages and the test-suite work without the package or real
-    credentials present (see _init_firebase / _firestore). A module-level
-    `@firestore.transactional` breaks that contract - and in fact breaks
-    importing this module at all, because `firestore` is not a module-level
-    name here. Wrapping at call time keeps the lazy design intact.
-    """
-    from firebase_admin import firestore
-    return firestore.transactional(fn)
-
-
-def _acquire(transaction, ref, owner, now_iso, expires_iso):
-    snap = ref.get(transaction=transaction)
-    if not snap.exists:
-        return False, 'not-found', None
-    data = snap.to_dict() or {}
-
-    status = data.get('status')
-    holder = data.get('lockOwner')
-    lease = data.get('leaseExpiresAt')
-    lease_live = bool(lease) and lease > now_iso
-
-    # A 'processing' mission whose lease has EXPIRED is abandoned: the operator
-    # that held it crashed, closed the tab, or lost the venue wifi, and the
-    # in-process renewal timer died with it. Reclaiming it is the entire point
-    # of having a lease - without this, an expired lease leaves the mission
-    # stuck in 'processing' forever, rejected by send (not-queued) and by rerun
-    # (not-terminal), recoverable only by hand-editing Firestore.
-    #
-    # A mission with NO lease at all is deliberately NOT reclaimable. Every path
-    # that sets 'processing' also sets a lease, so no-lease means legacy data
-    # written before this feature. Treating that as free to grab would let two
-    # operators drive the same mission, so those are left to be unstuck
-    # deliberately rather than silently re-dispatched.
-    reclaimable = status == 'processing' and bool(lease) and not lease_live
-
-    if status != 'queued' and not reclaimable:
-        return False, 'not-queued', None
-
-    if holder and holder != owner and lease_live:
-        return False, 'locked-by-other', None
-
-    transaction.update(ref, {
-        'status': 'processing',
-        'startedAt': now_iso,
-        'statusUpdatedAt': now_iso,
-        'lockOwner': owner,
-        'lockedAt': now_iso,
-        'leaseExpiresAt': expires_iso,
-    })
-    # Returns the pre-update snapshot so the caller has the mission's code to
-    # dispatch, matching _acquire_for_rerun's shape.
-    return True, None, data
-
 
 
 def _dispatch_to_rover(mission, mission_id=None):
@@ -703,7 +643,6 @@ def api_mark_complete(mission_id):
     release_mission(mission_id, 'completed', _now_iso())
     _notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
-
 
 
 @operator_bp.route('/api/missions/<mission_id>/youtube', methods=['POST'])

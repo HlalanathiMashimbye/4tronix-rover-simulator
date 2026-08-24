@@ -12,6 +12,7 @@ import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
 import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { simulateCommands } from '@/lib/simulateCommands';
+import { resolveYardId } from '@/infrastructure/config/yard';
 
 interface TrajectoryPoint {
   x: number;
@@ -161,7 +162,7 @@ export function MissionWorkspace() {
 
       const validation = validateMission({
         code: currentCode,
-        yardId: 'uct-rover-1',
+        yardId: resolveYardId(),
         learnerId,
         sessionId,
         // Stamp the email when the learner has provided one so this mission

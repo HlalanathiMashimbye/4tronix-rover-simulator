@@ -250,18 +250,26 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
     """
     try:
         col = firestore_client.collection(collection_name)
-        cursor = newest_submitted_at()
+        cursor = newest_submitted_at(yard_id=yard_id)
+
+        # Scope every pull to this yard. Without it the mirror ingested EVERY
+        # yard's missions: the parameter was accepted here and never used, so a
+        # second yard's queue would appear in this console and be dispatchable
+        # from it, and the read budget would grow with a yard we do not serve.
+        # yard_id is None only if satellite_identity failed to import, in which
+        # case pulling everything is still better than pulling nothing.
+        scoped = col.where('yardId', '==', yard_id) if yard_id else col
 
         if cursor:
             # Incremental: missions submitted since the newest one we hold.
             query = (
-                col.where('submittedAt', '>', cursor)
+                scoped.where('submittedAt', '>', cursor)
                 .order_by('submittedAt')
                 .limit(INCREMENTAL_LIMIT)
             )
         else:
             # Empty mirror (first boot, or the db was cleared): seed it.
-            query = col.order_by('submittedAt', direction='DESCENDING').limit(FIRST_PULL_LIMIT)
+            query = scoped.order_by('submittedAt', direction='DESCENDING').limit(FIRST_PULL_LIMIT)
 
         missions = []
         for doc in query.stream():

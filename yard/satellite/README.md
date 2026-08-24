@@ -17,7 +17,7 @@ server, and keeps working when the venue network drops. See
 | `camera_server.py` / `camera_control.py` | Pi camera stream for the TV monitor. |
 | `recovery.py` | Recovers state after a crash or power loss. |
 | `satellite_identity.py` | Stable per-satellite identity (used for lock ownership). |
-| `set_operator_claims.py` | One-off admin script to grant a user the operator role. |
+| _(removed)_ | Granting the operator role now lives in `mission-control/scripts/set-operator-role.mjs`. The old Python script wrote only the custom claim and replaced the whole claims object; the Node one writes the claim and the `users/{uid}` ledger, merges rather than clobbers, revokes refresh tokens on revoke, and is dry-run by default. |
 | `tests/` | pytest suites for the store, sync worker, console, proxying, and recovery. |
 
 ```bash
