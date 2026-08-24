@@ -19,8 +19,8 @@
  * Approved rover control commands
  *
  * Movement Commands:
- * - forward(distance_cm): Move forward specified distance in centimeters
- * - backward(distance_cm): Move backward specified distance
+ * - forward(speed): Drive forward at a speed of 0-100 (percent of full power)
+ * - backward(speed): Drive backward at a speed of 0-100
  * - turn_left(degrees): Rotate left by specified degrees
  * - turn_right(degrees): Rotate right by specified degrees
  *
@@ -34,6 +34,34 @@
  *
  * All commands are called as `rover.command_name(args)`
  */
+/**
+ * Numeric argument limits, checked at submission.
+ *
+ * The allowlist above answers "may this command be called at all". It never
+ * looked at the arguments, so `rover.forward(6300)` passed every check and
+ * reached the rover, which then refused to run the whole mission - silently,
+ * from the operator's point of view.
+ *
+ * Speeds are a percentage of full power on the 4tronix API, so 0-100. Sleeps
+ * are bounded well under the sandbox's own wall-clock limit so a learner gets
+ * a clear message here rather than a watchdog kill on the rover.
+ *
+ * Only the FIRST numeric argument is checked. That is where every speed and
+ * duration sits, and guessing at the rest (servo indices, RGB triples) would
+ * reject valid programs.
+ */
+export const ROVER_ARGUMENT_LIMITS: Record<string, { min: number; max: number; label: string }> = {
+  'rover.forward': { min: 0, max: 100, label: 'speed' },
+  'rover.backward': { min: 0, max: 100, label: 'speed' },
+  'rover.reverse': { min: 0, max: 100, label: 'speed' },
+  'rover.spinLeft': { min: 0, max: 100, label: 'speed' },
+  'rover.spinRight': { min: 0, max: 100, label: 'speed' },
+  'rover.steerLeft': { min: 0, max: 100, label: 'speed' },
+  'rover.steerRight': { min: 0, max: 100, label: 'speed' },
+  'time.sleep': { min: 0, max: 60, label: 'number of seconds' },
+  'rover.wait': { min: 0, max: 60, label: 'number of seconds' },
+};
+
 export const ROVER_COMMAND_ALLOWLIST = [
   // Movement commands
   'rover.forward',

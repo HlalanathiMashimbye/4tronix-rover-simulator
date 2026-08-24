@@ -181,3 +181,78 @@ def test_the_rover_url_is_read_each_cycle(monkeypatch):
 
     assert urls[0].startswith('http://first')
     assert urls[1].startswith('http://second')
+
+
+# --- Runs the rover could not execute ---------------------------------------
+#
+# Regression: the rover records status='error' with the reason on the
+# instruction, but the watcher only ever read 'completed' entries. A mission
+# whose code could not run therefore sat in 'processing' forever, and the
+# operator was given no reason at all - it simply never happened.
+
+def _errored(mission_id, message):
+    return {'cmd': 'run_python', 'status': 'error', 'error': message,
+            'params': {'mission_id': mission_id}}
+
+
+def test_a_run_the_rover_rejected_is_flagged_with_the_reason(monkeypatch):
+    _seed('m1', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _errored('m1', 'SyntaxError: invalid syntax (line 1)'),
+    ]))
+
+    mission_watcher.autocomplete_finished_missions(ROVER)
+
+    row = mission_store.get_mission('m1')
+    assert row['needs_review'] == 1
+    assert 'SyntaxError' in row['review_reason'], row['review_reason']
+    assert row['status'] == 'processing', 'the watcher must not invent an outcome'
+
+
+def test_an_errored_run_is_never_marked_failed(monkeypatch):
+    """'failed' reaches the learner as a run that went wrong. The truth here is
+    that the code never ran, which is an operator's problem, not a child's."""
+    _seed('m1', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _errored('m1', 'boom'),
+    ]))
+
+    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
+    assert mission_store.get_mission('m1')['status'] != 'failed'
+
+
+def test_an_errored_run_does_not_re_flag_an_already_flagged_mission(monkeypatch):
+    _seed('m1', 'processing', needs_review=1)
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _errored('m1', 'second complaint'),
+    ]))
+
+    mission_watcher.autocomplete_finished_missions(ROVER)
+
+    reason = mission_store.get_mission('m1')['review_reason']
+    assert reason != 'rover could not run it: second complaint', \
+        'a mission awaiting a human decision is theirs, not the watcher to restamp'
+
+
+def test_a_long_rover_error_is_truncated(monkeypatch):
+    _seed('m1', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _errored('m1', 'x' * 5000),
+    ]))
+
+    mission_watcher.autocomplete_finished_missions(ROVER)
+
+    assert len(mission_store.get_mission('m1')['review_reason']) <= \
+        mission_watcher.REVIEW_REASON_MAX
+
+
+def test_completions_still_work_alongside_errors(monkeypatch):
+    _seed('ok', 'processing')
+    _seed('bad', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _done('ok'), _errored('bad', 'SyntaxError'),
+    ]))
+
+    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['ok']
+    assert mission_store.get_mission('ok')['status'] == 'completed'
+    assert mission_store.get_mission('bad')['needs_review'] == 1

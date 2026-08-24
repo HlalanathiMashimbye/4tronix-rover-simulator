@@ -22,6 +22,7 @@
 import type { AllowlistFinding } from '@/core/application/services/AllowlistService';
 import {
   ROVER_COMMAND_ALLOWLIST,
+  ROVER_ARGUMENT_LIMITS,
   DISALLOWED_IMPORTS,
   ALLOWLIST_ERROR_MESSAGES,
 } from '@/infrastructure/sandbox/rover-command-allowlist';
@@ -57,6 +58,10 @@ export function analyzeCodeForAllowlist(code: string): AllowlistFinding[] {
     // Check for dangerous built-ins
     const builtinFindings = checkDangerousBuiltins(line, lineNumber);
     findings.push(...builtinFindings);
+
+    // Check numeric arguments are within what the hardware accepts
+    const rangeFindings = checkArgumentRanges(line, lineNumber);
+    findings.push(...rangeFindings);
   });
 
   return findings;
@@ -199,4 +204,51 @@ export function isComment(line: string): boolean {
 export function stripComments(line: string): string {
   const commentIndex = line.indexOf('#');
   return commentIndex >= 0 ? line.substring(0, commentIndex) : line;
+}
+
+/**
+ * Check the first numeric argument of a rover command against its limits.
+ *
+ * `rover.forward(6300)` was accepted by every other check here, because those
+ * only ask which names appear. It then reached the rover, which refused the
+ * whole mission - and until the watcher learned to read error outcomes, that
+ * refusal was invisible to the operator.
+ *
+ * Deliberately lenient about what it cannot read: a variable, an expression,
+ * or anything non-numeric is left alone. This layer is fast feedback for a
+ * learner, not the safety boundary. The sandbox on the Pi is that.
+ *
+ * @param line - Single line of Python code
+ * @param lineNumber - Line number for error reporting
+ * @returns Findings for this line
+ */
+function checkArgumentRanges(line: string, lineNumber: number): AllowlistFinding[] {
+  const findings: AllowlistFinding[] = [];
+  const withoutComment = line.replace(/#.*$/, '');
+
+  for (const [command, limit] of Object.entries(ROVER_ARGUMENT_LIMITS)) {
+    // Escape the dot so 'rover.forward' cannot match 'roverXforward'.
+    const pattern = new RegExp(
+      `\\b${command.replace('.', '\\.')}\\s*\\(\\s*(-?\\d+(?:\\.\\d+)?)\\s*[,)]`,
+      'g',
+    );
+
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(withoutComment)) !== null) {
+      const value = Number(match[1]);
+      if (Number.isNaN(value) || (value >= limit.min && value <= limit.max)) {
+        continue;
+      }
+
+      findings.push({
+        ruleId: 'argument-out-of-range',
+        message:
+          `${command}() takes a ${limit.label} between ${limit.min} and ${limit.max}, ` +
+          `but got ${match[1]}`,
+        line: lineNumber,
+      });
+    }
+  }
+
+  return findings;
 }
