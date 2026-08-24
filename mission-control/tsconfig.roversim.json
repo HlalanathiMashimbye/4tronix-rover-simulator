@@ -5,7 +5,12 @@
   // code mission-control renders with, rather than a second implementation of
   // it that has to be kept in step by hand.
   //
-  // Deliberately tsc and not a bundler: these four files import almost nothing
+  // roverBlockly.ts is here too, and it is the reason the yard editor and the
+  // hub editor cannot drift: both load THIS file's blocks, toolbox and Python
+  // generator. It used to be duplicated by hand into code.html, with a comment
+  // in each copy asking humans to mirror changes into the other.
+  //
+  // Deliberately tsc and not a bundler: these files import almost nothing
   // at runtime (rover-physics and roverSimRender have zero imports; the other
   // two have one local import and one type-only import that is erased), so a
   // bundler would buy nothing and add a dependency to a satellite that is
@@ -25,11 +30,6 @@
     "removeComments": false,
     "baseUrl": "src",
     "paths": {
-      // Redirected to a type-only shim: the real roverBlockly.ts also exports
-      // runtime functions and imports the whole Blockly package, which tsc
-      // would then pull into this build. The only thing borrowed from it here
-      // is the SimulationCommand interface, which is erased at compile time.
-      "@/components/mission/roverBlockly": ["./lib/roversim-shim"],
       "@/*": ["./*"]
     },
     "outDir": "../yard/satellite/static/roversim",
@@ -39,6 +39,7 @@
     "src/lib/rover-physics.ts",
     "src/lib/simulateCommands.ts",
     "src/lib/parseRoverCode.ts",
-    "src/lib/roverSimRender.ts"
+    "src/lib/roverSimRender.ts",
+    "src/lib/roverBlockly.ts"
   ]
 }

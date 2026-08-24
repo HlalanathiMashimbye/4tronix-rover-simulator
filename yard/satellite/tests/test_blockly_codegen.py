@@ -1,7 +1,10 @@
 """
 Tests for the Blockly -> Python code generator in code.html.
 
-Drives the real generatePythonCode() in the page via Playwright.
+Drives the real generator in the page via Playwright. Since the extraction
+that generator is mission-control/src/lib/roverBlockly.ts, compiled into
+static/roversim and imported by code.html, so these tests now cover the
+shared module both editors use rather than a yard-only copy of it.
 Note: /code/ loads Blockly from the unpkg CDN, so these tests need
 internet access.
 """
@@ -20,7 +23,7 @@ def _generate(page: Page, live_server, build_js: str) -> str:
     return page.evaluate(f'''() => {{
         workspace.clear();
         {build_js}
-        return generatePythonCode();
+        return workspaceToPython(workspace);
     }}''')
 
 

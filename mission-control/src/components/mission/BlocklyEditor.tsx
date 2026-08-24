@@ -11,7 +11,7 @@ import {
   workspaceToPython,
   workspaceToCommands,
   type SimulationCommand,
-} from './roverBlockly';
+} from '@/lib/roverBlockly';
 
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;

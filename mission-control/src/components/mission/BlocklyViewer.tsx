@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { loadBlockly } from '@/lib/loadBlockly';
-import { defineRoverBlocks } from './roverBlockly';
+import { defineRoverBlocks } from '@/lib/roverBlockly';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).

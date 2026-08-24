@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, AlertTriangle } from 'lucide-react';
-import { type SimulationCommand } from './roverBlockly';
+import { type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 
 interface MonacoCodeEditorProps {

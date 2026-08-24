@@ -1,4 +1,4 @@
-import type { SimulationCommand } from '@/components/mission/roverBlockly';
+import type { SimulationCommand } from './roverBlockly';
 
 /**
  * Parse rover Python into 2D-simulator commands.

@@ -14,8 +14,13 @@
  *   2. rewrites tsc's extensionless relative imports ('./rover-physics') to
  *      './rover-physics.js', which is what a browser's native module loader
  *      requires and what tsc does not emit for a "module": "ES2020" target
- *   3. checks the type-only shim still matches the real SimulationCommand
- *   4. stamps a header saying the files are generated
+ *   3. stamps a header saying the files are generated
+ *
+ * roverBlockly.ts is built here too. The yard editor (code.html) used to carry
+ * its own copy of all 16 block definitions, the toolbox and the Python
+ * generator - byte-identical to the TypeScript, kept in step by a comment in
+ * each copy asking humans to mirror their changes. It now imports this output,
+ * so a block can only be defined once.
  *
  * The output IS committed, so the satellite stays deployable by git-pull with
  * no Node toolchain on the Pi. `npm run check:roversim` re-runs the build and
@@ -37,38 +42,7 @@ const HEADER = `// GENERATED FILE - DO NOT EDIT.
 // Edit the TypeScript source and re-run \`npm run build:roversim\`.
 `;
 
-// --- 1. Guard the type-only shim against drift ------------------------------
-// The shim exists so this build does not pull Blockly in (see the tsconfig).
-// That is only safe while it still describes the same shape as the real type;
-// if someone adds a field to SimulationCommand, the simulator would silently
-// ignore it here. Compare the two interface bodies rather than trusting a
-// comment to be obeyed.
-function interfaceBody(source, name) {
-  const m = source.match(new RegExp(`interface\\s+${name}\\s*\\{([^}]*)\\}`));
-  if (!m) return null;
-  return m[1].replace(/\/\/.*$/gm, '').replace(/\s+/g, ' ').trim();
-}
-
-const realSrc = readFileSync(join(root, 'src/components/mission/roverBlockly.ts'), 'utf8');
-const shimSrc = readFileSync(join(root, 'src/lib/roversim-shim.d.ts'), 'utf8');
-const real = interfaceBody(realSrc, 'SimulationCommand');
-const shim = interfaceBody(shimSrc, 'SimulationCommand');
-
-if (!real || !shim) {
-  console.error('build-roversim: could not locate SimulationCommand in both files');
-  process.exit(1);
-}
-if (real !== shim) {
-  console.error(
-    'build-roversim: SimulationCommand has drifted.\n' +
-    `  roverBlockly.ts   : ${real}\n` +
-    `  roversim-shim.d.ts: ${shim}\n` +
-    'Update the shim to match, then re-run.'
-  );
-  process.exit(1);
-}
-
-// --- 2. Compile -------------------------------------------------------------
+// --- 1. Compile -------------------------------------------------------------
 const before = new Map();
 try {
   for (const f of readdirSync(outDir)) {
