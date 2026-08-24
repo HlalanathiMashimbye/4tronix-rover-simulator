@@ -77,3 +77,51 @@ jobs:
       - name: Run satellite tests
         working-directory: yard/satellite
         run: python -m pytest tests -q
+
+  # The two browser-driven files (test_blockly_codegen, test_status_page) are
+  # skipped by tests/conftest.py whenever playwright is absent, and
+  # requirements-test.txt deliberately leaves it out so a plain `pytest tests`
+  # works anywhere. The consequence was that they ran on nobody's machine
+  # unless someone installed playwright by hand: the yard editor's Blockly
+  # generator, the one thing a learner's program passes through before it
+  # reaches a rover, had no gate at all.
+  #
+  # Caught for real. Moving the block definitions into a shared module turned
+  # code.html's script into an ES module, module scope is not global, and all
+  # seven codegen tests broke. Nothing in CI would have said so.
+  #
+  # A separate job because it is the slow one: it downloads a browser (cached
+  # below) and needs network access for Blockly from unpkg. Keeping it out of
+  # yard-satellite leaves that job's ~2s feedback intact.
+  yard-browser:
+    name: yard browser tests (blockly codegen)
+    runs-on: ubuntu-latest
+    env:
+      # Pinned rather than floating, for the same reason terraform_version is:
+      # a new release should not change what CI does under the team, and the
+      # browser cache below is keyed on this exact value.
+      PLAYWRIGHT_VERSION: "1.62.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install satellite test deps
+        run: |
+          pip install -r yard/satellite/requirements-test.txt
+          pip install "playwright==${PLAYWRIGHT_VERSION}" pytest-playwright
+
+      # Chromium is ~95MB. Keyed on the pinned version so bumping it fetches a
+      # matching browser instead of silently reusing an incompatible one.
+      - uses: actions/cache@v4
+        id: pw-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+      - name: Install chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: python -m playwright install --with-deps chromium
+
+      - name: Run browser tests
+        working-directory: yard/satellite
+        run: python -m pytest tests/test_blockly_codegen.py tests/test_status_page.py -q

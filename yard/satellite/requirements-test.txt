@@ -22,5 +22,12 @@ websockets>=10.0
 # Browser tests (test_status_page.py, test_blockly_codegen.py) additionally
 # need `playwright` plus `playwright install chromium`. They are skipped
 # automatically when it is absent - see tests/conftest.py - so this file
-# leaves it out and the suite still passes; add it locally if you are working
-# on those two files.
+# leaves it out and `pytest tests` still passes on any machine.
+#
+# They are NOT unrun, though: the `yard-browser` job in .github/workflows/ci.yml
+# installs playwright and runs both files on every PR. That job exists because
+# they used to run nowhere at all, and a change that broke all seven codegen
+# tests went unnoticed by CI. If you are working on code.html or on the shared
+# Blockly module, install playwright locally rather than waiting for CI:
+#
+#   pip install playwright pytest-playwright && playwright install chromium
