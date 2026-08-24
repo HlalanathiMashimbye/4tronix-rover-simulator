@@ -166,15 +166,6 @@ class SyncThread:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(autouse=True)
-def _plain_transactional(monkeypatch):
-    """operator_console applies @firestore.transactional lazily at call time so
-    the module imports without firebase-admin. Tests replace it with a
-    pass-through: the fake transaction applies writes directly, and what is
-    under test is the lock decision, not Firestore's transaction machinery."""
-    monkeypatch.setattr(operator_console, '_transactional', lambda fn: fn)
-
-
 # --- Mirror-backed mission fixture ----------------------------------------
 #
 # PR 3 moved the request path off Firestore and onto the SQLite mirror, so the

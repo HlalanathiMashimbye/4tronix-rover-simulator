@@ -468,7 +468,15 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 # were filtered out of the console entirely, so the button had
                 # nothing to render against. They are visible now, so the
                 # action has to actually do something.
-                if status not in ('completed', 'failed', 'cancelled'):
+                # A mission flagged for review is stuck in 'processing' by
+                # definition - the satellite died mid-run and nobody knows
+                # whether the rover finished. Rerun is exactly the action an
+                # operator wants there, and refusing it meant the recovery
+                # flow's own missions were the ones rerun could not touch. The
+                # operator pressing rerun IS the human decision recovery.py
+                # deliberately refuses to make on its own.
+                recoverable = status == 'processing' and mission.get('needs_review')
+                if status not in ('completed', 'failed', 'cancelled') and not recoverable:
                     conn.rollback()
                     return False, 'not-terminal', None
             else:
@@ -511,6 +519,14 @@ def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
                 payload['completedAt'] = None
                 payload['youtubeUrl'] = None
                 payload[_FORCE_KEY] = True
+                # Rerunning IS the operator resolving the ambiguity: they have
+                # decided the previous outcome does not stand and are running
+                # it again. Leaving the flag set kept the mission in the
+                # needs-review list forever, which is how that count got stuck.
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -566,6 +582,17 @@ def release_mission(mission_id, status, now_iso, review_reason=None, operator_de
                 updates['review_reason'] = review_reason
                 payload['needsReview'] = True
                 payload['reviewReason'] = review_reason
+            elif status in ('completed', 'failed', 'cancelled'):
+                # A terminal mission is not ambiguous any more, so it must not
+                # stay in the needs-review list. Until now resolve_review was
+                # the ONLY thing that ever cleared this flag, so a mission that
+                # was flagged, rerun and completed normally stayed flagged
+                # forever - the count never went down and no action available
+                # to the operator could bring it down.
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
             if operator_decision:
                 payload[_FORCE_KEY] = True
 
@@ -688,8 +715,12 @@ def flag_for_review(mission_id, reason):
 def get_needs_review():
     with _db_lock:
         conn = _connect()
+        # Deleted missions are excluded: a soft-deleted mission still carrying
+        # the flag would keep inflating the count with something the operator
+        # cannot open or act on.
         rows = conn.execute(
-            'SELECT * FROM mission_mirror WHERE needs_review = 1 ORDER BY submitted_at DESC'
+            'SELECT * FROM mission_mirror WHERE needs_review = 1 AND deleted = 0'
+            ' ORDER BY submitted_at DESC'
         ).fetchall()
         conn.close()
     return [dict(r) for r in rows]
@@ -768,11 +799,25 @@ def set_meta(key, value):
         conn.close()
 
 
-def newest_submitted_at():
-    """Highest submittedAt in the mirror - the incremental pull cursor."""
+def newest_submitted_at(yard_id=None):
+    """Highest submittedAt in the mirror - the incremental pull cursor.
+
+    Scoped to a yard for the same reason the pull is: a mirror that already
+    holds another yard's missions (every mirror written before the pull was
+    filtered) would otherwise report that yard's newest timestamp as the
+    cursor, and the incremental query would skip every one of this yard's
+    missions submitted before it. The queue would look permanently empty and
+    nothing would say why.
+    """
     with _db_lock:
         conn = _connect()
-        row = conn.execute('SELECT MAX(submitted_at) AS m FROM mission_mirror').fetchone()
+        if yard_id:
+            row = conn.execute(
+                'SELECT MAX(submitted_at) AS m FROM mission_mirror WHERE yard_id = ?',
+                (yard_id,),
+            ).fetchone()
+        else:
+            row = conn.execute('SELECT MAX(submitted_at) AS m FROM mission_mirror').fetchone()
         conn.close()
     return row['m'] if row and row['m'] else None
 

@@ -27,10 +27,19 @@ import threading
 
 import requests
 
-from mission_store import get_mission, release_mission, mission_has_pending
+from mission_store import (
+    flag_for_review,
+    get_mission,
+    mission_has_pending,
+    release_mission,
+)
 
 ROVER_POLL_TIMEOUT = 3.0
 DEFAULT_POLL_INTERVAL = 10  # seconds
+
+# The rover's error text goes on a mission document and into the operator's
+# banner; a runaway traceback should not do either.
+REVIEW_REASON_MAX = 300
 
 
 def _now_iso():
@@ -38,28 +47,54 @@ def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
-def completed_mission_ids(rover_url):
-    """Mission ids the rover reports as completed, from its own history.
+def _mission_id_of(entry):
+    params = entry.get('params')
+    if isinstance(params, dict):
+        return params.get('mission_id')
+    return None
 
-    Returns an empty set on any failure. Never raises: an unreachable rover
-    must not stop the watcher, and "I could not tell" must never be read as
-    "it finished".
+
+def rover_outcomes(rover_url):
+    """What the rover says happened, from its own history.
+
+    Returns (completed_ids, errored) where `errored` maps mission_id -> the
+    rover's own error text. Empty on any failure. Never raises: an unreachable
+    rover must not stop the watcher, and "I could not tell" must never be read
+    as "it finished".
     """
     try:
         resp = requests.get(f'{rover_url}/queue/status', timeout=ROVER_POLL_TIMEOUT)
         if resp.status_code != 200:
-            return set()
+            return set(), {}
         data = resp.json() or {}
     except (requests.exceptions.RequestException, ValueError):
-        return set()
+        return set(), {}
 
     done = set()
+    errored = {}
     for entry in data.get('history') or []:
-        if not isinstance(entry, dict) or entry.get('status') != 'completed':
+        if not isinstance(entry, dict):
             continue
-        params = entry.get('params')
-        if isinstance(params, dict) and params.get('mission_id'):
-            done.add(params['mission_id'])
+        mission_id = _mission_id_of(entry)
+        if not mission_id:
+            continue
+        status = entry.get('status')
+        if status == 'completed':
+            done.add(mission_id)
+        elif status == 'error':
+            # The rover already knows exactly what went wrong - a SyntaxError,
+            # a speed the hardware rejected - and records it on the
+            # instruction. Nothing read it, so a mission whose code could not
+            # run sat in 'processing' forever and the operator was given no
+            # reason at all. Surface it instead of discarding it.
+            errored[mission_id] = str(entry.get('error') or 'rover reported an error')
+    return done, errored
+
+
+def completed_mission_ids(rover_url):
+    """Backwards-compatible view of rover_outcomes for callers that only
+    care about completions (recovery.py asks a narrower question)."""
+    done, _ = rover_outcomes(rover_url)
     return done
 
 
@@ -73,8 +108,26 @@ def autocomplete_finished_missions(rover_url, notify=None):
     Returns the list of mission ids completed.
     """
     completed = []
+    done, errored = rover_outcomes(rover_url)
 
-    for mission_id in completed_mission_ids(rover_url):
+    # A run the rover could not execute is flagged, never marked failed. The
+    # rule in this module has always been that it may not assert an outcome
+    # nobody established - and 'failed' reaches the learner as a run that went
+    # wrong, when the truth is the code never ran. Flagging puts it in front of
+    # an operator with the rover's own reason attached.
+    for mission_id, reason in errored.items():
+        mission = get_mission(mission_id)
+        if mission is None or mission.get('status') != 'processing':
+            continue
+        if mission.get('needs_review'):
+            continue
+        if mission_has_pending(mission_id):
+            continue
+
+        flag_for_review(mission_id, f'rover could not run it: {reason}'[:REVIEW_REASON_MAX])
+        print(f'[watcher] Rover reported an error for {mission_id}: {reason}')
+
+    for mission_id in done:
         mission = get_mission(mission_id)
         if mission is None or mission.get('status') != 'processing':
             continue
