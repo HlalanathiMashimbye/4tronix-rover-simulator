@@ -362,3 +362,54 @@ import os
     });
   });
 });
+
+describe('numeric argument limits', () => {
+  // Regression: mission "Elsje" carried rover.forward(6300). Every check here
+  // asked only which NAMES appeared, never what they were called with, so it
+  // passed validation and reached the rover. The rover refused the whole
+  // mission, and the operator was shown nothing at all.
+  it('rejects a speed far outside what the hardware accepts', () => {
+    const findings = analyzeCodeForAllowlist('rover.forward(6300)');
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].ruleId).toBe('argument-out-of-range');
+    expect(findings[0].message).toContain('between 0 and 100');
+    expect(findings[0].message).toContain('6300');
+  });
+
+  it.each([0, 60, 100])('accepts a speed of %s', (speed) => {
+    expect(analyzeCodeForAllowlist(`rover.forward(${speed})`)).toEqual([]);
+  });
+
+  it('rejects a negative speed', () => {
+    expect(analyzeCodeForAllowlist('rover.spinRight(-5)')).toHaveLength(1);
+  });
+
+  it('rejects a sleep long enough to look like a hang', () => {
+    const findings = analyzeCodeForAllowlist('time.sleep(9999)');
+
+    expect(findings[0].message).toContain('number of seconds');
+  });
+
+  it('leaves arguments it cannot read alone', () => {
+    // This layer is fast feedback for a learner, not the safety boundary - the
+    // sandbox on the Pi is that. Rejecting anything non-literal would fail
+    // valid programs for no safety gain.
+    expect(analyzeCodeForAllowlist('rover.forward(speed)')).toEqual([]);
+    expect(analyzeCodeForAllowlist('rover.forward(base + 10)')).toEqual([]);
+  });
+
+  it('does not misread a multi-argument command', () => {
+    expect(analyzeCodeForAllowlist('rover.setServo(9, 0)')).toEqual([]);
+  });
+
+  it('reports the line the bad value is on', () => {
+    const findings = analyzeCodeForAllowlist('rover.stop()\nrover.forward(500)');
+
+    expect(findings[0].line).toBe(2);
+  });
+
+  it('ignores a value inside a comment', () => {
+    expect(analyzeCodeForAllowlist('rover.forward(60)  # not rover.forward(6300)')).toEqual([]);
+  });
+});

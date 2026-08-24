@@ -249,3 +249,83 @@ def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
         'x', 'sat-1', '2026-07-03T00:00:00Z', '2026-07-03T00:05:00Z', for_rerun=True,
     )
     assert ok, reason
+
+
+# --- Needs-review lifecycle -------------------------------------------------
+#
+# Regression suite for a stuck review count. resolve_review was the ONLY thing
+# that ever cleared needs_review, and it has no UI, so a mission that was
+# flagged and then finished normally stayed flagged forever. The console showed
+# a count that no available action could bring down.
+
+def test_completing_a_flagged_mission_clears_the_review_flag():
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+    mission_store.flag_for_review('m1', 'interrupted')
+
+    mission_store.release_mission('m1', 'completed', '2026-08-02T08:00:00Z')
+
+    row = mission_store.get_mission('m1')
+    assert row['needs_review'] == 0
+    assert row['review_reason'] is None
+    assert mission_store.get_needs_review() == []
+
+
+def test_a_rollback_to_queued_keeps_the_flag():
+    """Requeuing does not answer the question the flag asks. Only a terminal
+    outcome, or the operator resolving it, does."""
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+    mission_store.flag_for_review('m1', 'interrupted')
+
+    mission_store.release_mission('m1', 'queued', '2026-08-02T08:00:00Z')
+
+    assert mission_store.get_mission('m1')['needs_review'] == 1
+
+
+def test_a_flagged_mission_can_be_rerun():
+    """A flagged mission is stuck in 'processing', which rerun used to reject
+    as not-terminal - so the recovery flow's own missions were exactly the ones
+    rerun could not touch."""
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+    mission_store.flag_for_review('m1', 'interrupted')
+
+    ok, reason, _ = mission_store.acquire_mission(
+        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+
+    assert ok, f'rerun refused with {reason}'
+    row = mission_store.get_mission('m1')
+    assert row['needs_review'] == 0, 'rerunning is the operator resolving it'
+    assert row['status'] == 'processing'
+
+
+def test_a_processing_mission_that_is_not_flagged_still_cannot_be_rerun():
+    """The exception is scoped to the recovery case, not a general hole."""
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+
+    ok, reason, _ = mission_store.acquire_mission(
+        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+
+    assert not ok and reason == 'not-terminal'
+
+
+def test_a_deleted_mission_does_not_inflate_the_review_count():
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+    mission_store.flag_for_review('m1', 'interrupted')
+
+    mission_store.delete_mission('m1', '2026-08-02T08:00:00Z')
+
+    assert mission_store.get_needs_review() == []
