@@ -218,7 +218,8 @@ The app moves to Impact's Firebase world. In the Firebase console
    Secret Manager (Part A step 5) and into the yard satellite's env.
 6. **Operator accounts**: create the operator users in the new project's
    Auth, then grant roles with
-   `python yard/satellite/set_operator_claims.py <email> operator`
+   `node mission-control/scripts/set-operator-role.mjs --email <email> --role operator --apply`
+   (dry-run without `--apply`)
    (run with the NEW project's env).
 7. **Data**: decide migrate vs fresh start. To migrate the missions and
    learners collections: `gcloud firestore export` on the old project to a

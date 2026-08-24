@@ -799,11 +799,25 @@ def set_meta(key, value):
         conn.close()
 
 
-def newest_submitted_at():
-    """Highest submittedAt in the mirror - the incremental pull cursor."""
+def newest_submitted_at(yard_id=None):
+    """Highest submittedAt in the mirror - the incremental pull cursor.
+
+    Scoped to a yard for the same reason the pull is: a mirror that already
+    holds another yard's missions (every mirror written before the pull was
+    filtered) would otherwise report that yard's newest timestamp as the
+    cursor, and the incremental query would skip every one of this yard's
+    missions submitted before it. The queue would look permanently empty and
+    nothing would say why.
+    """
     with _db_lock:
         conn = _connect()
-        row = conn.execute('SELECT MAX(submitted_at) AS m FROM mission_mirror').fetchone()
+        if yard_id:
+            row = conn.execute(
+                'SELECT MAX(submitted_at) AS m FROM mission_mirror WHERE yard_id = ?',
+                (yard_id,),
+            ).fetchone()
+        else:
+            row = conn.execute('SELECT MAX(submitted_at) AS m FROM mission_mirror').fetchone()
         conn.close()
     return row['m'] if row and row['m'] else None
 

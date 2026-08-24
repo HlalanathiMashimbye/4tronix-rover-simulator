@@ -395,15 +395,61 @@ def test_a_quiet_cycle_reads_almost_nothing():
 
 def test_only_new_missions_are_pulled():
     _seed_many(5)  # newest submittedAt is 2026-07-05
-    remote = {f'm{i}': {'status': 'completed', 'submittedAt': f'2026-07-{i+1:02d}T08:00:00Z'}
+    remote = {f'm{i}': {'status': 'completed', 'yardId': 'uct-rover-1',
+                        'submittedAt': f'2026-07-{i+1:02d}T08:00:00Z'}
               for i in range(5)}
-    remote['brand-new'] = {'status': 'queued', 'submittedAt': '2026-07-28T10:00:00Z'}
+    remote['brand-new'] = {'status': 'queued', 'yardId': 'uct-rover-1',
+                           'submittedAt': '2026-07-28T10:00:00Z'}
     db = FakeFirestore(remote)
 
     sync_worker.sync_cycle(db, yard_id='uct-rover-1')
 
     assert mission_store.get_mission('brand-new') is not None
     assert db.meter['docs_read'] <= 2, 'only the new mission should have been read'
+
+
+def test_another_yards_missions_are_never_pulled():
+    """The pull is scoped to this satellite's yard.
+
+    Regression: sync_from_firestore accepted a yard_id and never used it, so
+    every yard's missions landed in every mirror - visible in the console and
+    dispatchable from it, on a rover in a different building.
+    """
+    remote = {
+        'ours': {'status': 'queued', 'yardId': 'uct-rover-1',
+                 'submittedAt': '2026-07-28T10:00:00Z'},
+        'theirs': {'status': 'queued', 'yardId': 'durban-rover-1',
+                   'submittedAt': '2026-07-28T11:00:00Z'},
+    }
+    db = FakeFirestore(remote)
+
+    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+
+    assert mission_store.get_mission('ours') is not None
+    assert mission_store.get_mission('theirs') is None
+
+
+def test_a_foreign_yard_row_does_not_poison_the_cursor():
+    """The cursor is yard-scoped too.
+
+    A mirror written before the pull was filtered still holds other yards'
+    rows. If the cursor were MAX(submitted_at) across all of them, a newer
+    foreign row would push it past this yard's real missions and the queue
+    would sit permanently empty with nothing logged to say why.
+    """
+    mission_store.upsert_missions([
+        {'id': 'theirs', 'status': 'queued', 'yardId': 'durban-rover-1',
+         'submittedAt': '2026-09-01T08:00:00Z'},
+    ], '2026-08-01T00:00:00Z')
+
+    remote = {'ours': {'status': 'queued', 'yardId': 'uct-rover-1',
+                       'submittedAt': '2026-08-15T10:00:00Z'}}
+    db = FakeFirestore(remote)
+
+    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+
+    assert mission_store.get_mission('ours') is not None, \
+        "a newer row from another yard must not advance this yard's cursor"
 
 
 def test_an_empty_mirror_does_one_bounded_first_pull():

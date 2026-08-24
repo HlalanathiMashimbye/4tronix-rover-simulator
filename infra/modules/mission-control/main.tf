@@ -149,7 +149,16 @@ resource "google_cloud_run_v2_service" "mission_control" {
       }
 
       dynamic "env" {
-        for_each = merge(local.plain_env, { APP_URL = local.app_urls[each.key] })
+        # APP_ENV names the environment ("staging" / "prod") so the app can
+        # badge anything that is not production. An operator signing in to
+        # dispatch a real rover must never be unsure which environment they are
+        # looking at. Runtime rather than NEXT_PUBLIC_ for the same reason as
+        # APP_URL: prod promotes the image built during the staging deploy, so
+        # a build-time value would label prod as staging.
+        for_each = merge(local.plain_env, {
+          APP_URL = local.app_urls[each.key]
+          APP_ENV = each.key
+        })
         content {
           name  = env.key
           value = env.value

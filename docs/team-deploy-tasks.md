@@ -95,7 +95,7 @@ now. They must come into the repo and then deploy to the new project.
   then grant roles from the repo root:
   ```bash
   set -a && source mission-control/.env && set +a
-  .venv/bin/python3 yard/satellite/set_operator_claims.py <email> operator
+  node mission-control/scripts/set-operator-role.mjs --email <email> --role operator --apply
   ```
 - Verify: sign in at the yard satellite `/operator/login` locally.
 

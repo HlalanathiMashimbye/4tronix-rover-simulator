@@ -3,6 +3,7 @@ import { Inter, Fredoka } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
+import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
@@ -121,6 +122,7 @@ export default function RootLayout({
             {/* Wraps Navbar AND the page: the navbar renders the search UI
                 while each page publishes what is searchable. */}
             <SearchProvider>
+            <EnvironmentBanner />
             <Navbar />
             {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
             <div className="pb-16 md:pb-0">
