@@ -1,3 +1,5 @@
+import { connection } from 'next/server';
+
 import { resolveEnvironment } from '@/infrastructure/config/environment';
 
 /**
@@ -6,8 +8,18 @@ import { resolveEnvironment } from '@/infrastructure/config/environment';
  * Server component, so the environment is read at request time and never baked
  * into the bundle. Renders nothing at all in production rather than rendering
  * a hidden element, so there is no prod markup to leak or mis-style.
+ *
+ * `await connection()` is load-bearing, not ceremony. Without it this sits in a
+ * statically prerendered layout, so resolveEnvironment() runs at BUILD time -
+ * when APP_ENV does not exist yet - and the answer is baked into the HTML. The
+ * live staging site said "LOCAL DEVELOPMENT" for exactly that reason: moving
+ * the value to a runtime variable achieves nothing while the RENDER is still
+ * build-time. connection() opts this into dynamic rendering so the variable is
+ * read per request. See next/docs 01-app/02-guides/environment-variables.md.
  */
-export function EnvironmentBanner() {
+export async function EnvironmentBanner() {
+  await connection();
+
   const environment = resolveEnvironment();
 
   if (environment === 'prod') {
