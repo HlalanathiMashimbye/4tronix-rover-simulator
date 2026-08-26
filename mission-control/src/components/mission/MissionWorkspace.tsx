@@ -21,6 +21,7 @@ interface TrajectoryPoint {
   speedL: number;
   speedR: number;
   servos: Record<string, number>;
+  hitWall?: boolean;
 }
 
 type SimulationCommand = {
@@ -100,6 +101,7 @@ export function MissionWorkspace() {
         '11': state.servos[11],
         '13': state.servos[13],
       },
+      hitWall: state.hitWall,
     }));
     setTrajectory((previousTrajectory) => {
       const startIndex = manualTrajectoryLengthRef.current;
