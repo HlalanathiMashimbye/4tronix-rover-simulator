@@ -8,6 +8,7 @@ export interface TrajectoryPoint {
   speedL: number;
   speedR: number;
   servos: Record<string, number>;
+  hitWall?: boolean;
 }
 
 // Match the canvas playback rate (RoverSimulator advances at 10 fps).
@@ -45,5 +46,6 @@ function toPoint(physics: RoverPhysics): TrajectoryPoint {
     speedL: s.speedL,
     speedR: s.speedR,
     servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
+    hitWall: s.hitWall,
   };
 }

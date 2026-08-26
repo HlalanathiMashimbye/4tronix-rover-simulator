@@ -7,6 +7,10 @@ const FULL_SPEED_CM_PER_SECOND = 10;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 
+const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
+const YARD_HALF_W = 200 - ROVER_MARGIN; // 400 cm wide, origin at centre
+const YARD_HALF_H = 150 - ROVER_MARGIN; // 300 cm tall, origin at centre
+
 const SERVO_FL = 9;
 const SERVO_FR = 15;
 const SERVO_RL = 11;
@@ -19,6 +23,7 @@ export interface RoverState {
   speedL: number;
   speedR: number;
   servos: number[];
+  hitWall: boolean;
 }
 
 export class RoverPhysics {
@@ -33,6 +38,7 @@ export class RoverPhysics {
       speedL: 0,
       speedR: 0,
       servos: new Array(16).fill(0),
+      hitWall: false,
     };
     this.lastUpdate = Date.now();
   }
@@ -170,9 +176,16 @@ export class RoverPhysics {
     const [xBR, yBR, hBR] = calculateSteeredPosition(false, this.state.servos[SERVO_FL], this.state.speedL, dt);
 
     // Average the results
-    this.state.x = (xFL + xFR + xBL + xBR) / 4;
-    this.state.y = (yFL + yFR + yBL + yBR) / 4;
+    let newX = (xFL + xFR + xBL + xBR) / 4;
+    let newY = (yFL + yFR + yBL + yBR) / 4;
     this.state.heading = (hFL + hFR + hBL + hBR) / 4;
+
+    // Clamp to terrain bounds — the rover cannot leave the yard.
+    const clampedX = Math.max(-YARD_HALF_W, Math.min(YARD_HALF_W, newX));
+    const clampedY = Math.max(-YARD_HALF_H, Math.min(YARD_HALF_H, newY));
+    this.state.hitWall = clampedX !== newX || clampedY !== newY;
+    this.state.x = clampedX;
+    this.state.y = clampedY;
 
     return { ...this.state };
   }
@@ -189,6 +202,7 @@ export class RoverPhysics {
       speedL: 0,
       speedR: 0,
       servos: new Array(16).fill(0),
+      hitWall: false,
     };
     this.lastUpdate = Date.now();
   }
