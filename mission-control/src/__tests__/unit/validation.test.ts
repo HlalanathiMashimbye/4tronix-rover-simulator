@@ -15,6 +15,7 @@ describe('Mission Schema Validation', () => {
         learnerId: 'learner-123',
         sessionId: 'test-session-123',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.forward(100)\nrover.wait(2)',
       };
 
@@ -31,6 +32,7 @@ describe('Mission Schema Validation', () => {
         learnerId: 'learner-456',
         sessionId: 'session-456',
         name: 'Turn Left Mission',
+        patch: '/patches/patch2.jpeg',
         code: 'rover.turn_left(50)',  // Updated to use approved command
       };
 
@@ -111,6 +113,7 @@ describe('Mission Schema Validation', () => {
         learnerId: 'learner-123',
         sessionId: 'session-123',
         name: 'Too Long Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'a'.repeat(10001),
       };
 
@@ -178,6 +181,7 @@ describe('Mission Schema Validation', () => {
         learnerId: 'learner_abc123',
         sessionId: 'sess_abc123',
         name: 'Zod Parse Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.forward(100)\nrover.stop()',
       };
 

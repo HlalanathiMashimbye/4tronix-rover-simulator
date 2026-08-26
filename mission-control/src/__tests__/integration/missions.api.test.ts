@@ -75,6 +75,7 @@ describe('POST /api/missions Integration Tests', () => {
         sessionId: 'test-session-123',
         learnerId: 'test-learner',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.forward(100)\nrover.wait(2)',
         challengeId: 'M1-FORWARD',
       };
@@ -108,6 +109,7 @@ describe('POST /api/missions Integration Tests', () => {
         sessionId: 'session-456',
         learnerId: 'test-learner',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.turn_left(50)',  // Updated to use approved command
       };
 
@@ -130,6 +132,7 @@ describe('POST /api/missions Integration Tests', () => {
         sessionId: 'session-789',
         learnerId: 'test-learner',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.backward(75)',
       };
 
@@ -149,6 +152,7 @@ describe('POST /api/missions Integration Tests', () => {
         sessionId: 'session-123',
         learnerId: 'test-learner',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.forward(100)',
       };
 
@@ -177,6 +181,7 @@ describe('POST /api/missions Integration Tests', () => {
         sessionId: 'session-123',
         learnerId: 'test-learner',
         name: 'Test Mission',
+        patch: '/patches/patch1.jpeg',
         code: 'rover.forward(100)',
       };
 

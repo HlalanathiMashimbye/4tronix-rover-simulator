@@ -107,6 +107,7 @@ const makeDto = (
   learnerId: 'learner-123',
   sessionId: 'session-123',
   name: 'Test Mission',
+  patch: '/patches/patch1.jpeg',
   ...overrides,
 });
 

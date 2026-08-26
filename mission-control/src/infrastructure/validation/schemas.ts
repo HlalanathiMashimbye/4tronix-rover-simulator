@@ -50,6 +50,11 @@ export const createMissionSchema = z.object({
     .min(1, 'Mission name is required')
     .max(100, 'Mission name too long'),
 
+  patch: z
+    .string()
+    .min(1, 'Mission patch is required')
+    .max(200, 'Mission patch path too long'),
+
   code: z
     .string()
     .min(1, 'Code cannot be empty')

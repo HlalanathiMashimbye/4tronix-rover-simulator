@@ -54,6 +54,7 @@ export interface Mission {
 
   // Payload
   name?: string;                     // Optional - mission name given by learner
+  patch?: string;                    // Path to the chosen mission patch image
   code: string;                      // Python code submitted by learner
   blocklyState?: string;             // Serialized Blockly workspace JSON (block-built missions only)
 

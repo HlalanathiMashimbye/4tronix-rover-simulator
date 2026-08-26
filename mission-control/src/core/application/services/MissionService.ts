@@ -54,6 +54,7 @@ export class MissionService {
         sessionId: dto.sessionId,
         learnerEmailHash,
         name: dto.name,
+        patch: dto.patch,
         code: dto.code,
         blocklyState: dto.blocklyState,
         status: 'queued',

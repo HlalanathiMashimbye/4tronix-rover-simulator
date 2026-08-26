@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { Play, Rocket } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
@@ -139,14 +140,25 @@ export function MissionCard({ mission }: MissionCardProps) {
       </div>
 
       <div className="flex flex-col gap-3 p-4">
-        <div>
-          <h3 className="truncate font-display text-[15px] font-bold leading-snug text-foreground">
-            {mission.name ?? `Mission-${mission.id.slice(0, 8)}`}
-          </h3>
+        <div className="flex items-center gap-2.5">
+          {mission.patch && (
+            <Image
+              src={mission.patch}
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 rounded-full border border-border/60 object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <h3 className="truncate font-display text-[15px] font-bold leading-snug text-foreground">
+              {mission.name ?? `Mission-${mission.id.slice(0, 8)}`}
+            </h3>
           {/* The yard id used to sit here ("uct-rover-1"). It is internal
               plumbing - a learner has no idea which yard they are on and it was
               the same string on every card. */}
-          <p className="mt-1 text-xs text-muted-foreground">{formatDate(mission.submittedAt)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{formatDate(mission.submittedAt)}</p>
+          </div>
         </div>
 
         {/* Code peek - no fake window chrome. The traffic-light dots were three

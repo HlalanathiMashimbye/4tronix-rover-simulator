@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Rocket, CheckCircle2 } from 'lucide-react';
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
+import { MissionPatchPicker } from '@/components/mission/MissionPatchPicker';
 
 // Deliberately plain CSS, not Motion's AnimatePresence - see NotificationModal
 // for why: verified in a clean production build that AnimatePresence's exit
@@ -29,6 +30,8 @@ const EXIT_MS = 200;
 interface MissionSubmitBarProps {
   missionName: string;
   onMissionNameChange: (name: string) => void;
+  missionPatch: string;
+  onMissionPatchChange: (patch: string) => void;
   onSubmit: () => void;
   submitting: boolean;
   submitSuccess: boolean;
@@ -38,6 +41,8 @@ interface MissionSubmitBarProps {
 export function MissionSubmitBar({
   missionName,
   onMissionNameChange,
+  missionPatch,
+  onMissionPatchChange,
   onSubmit,
   submitting,
   submitSuccess,
@@ -64,6 +69,7 @@ export function MissionSubmitBar({
   return (
     <div className="@container shrink-0 border-t border-border/60 pt-2">
       <div className="flex flex-wrap items-start gap-2">
+        <MissionPatchPicker value={missionPatch} onChange={onMissionPatchChange} />
         <MissionNameInput value={missionName} onChange={onMissionNameChange} />
 
         <button

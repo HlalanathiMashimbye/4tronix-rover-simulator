@@ -7,6 +7,7 @@ import { getLearnerID } from '@/lib/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/lib/missionNameGenerator';
+import { getRandomMissionPatch } from '@/lib/missionPatchGenerator';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -62,6 +63,7 @@ export function MissionWorkspace() {
   // unnamed mission — they can only re-roll it, not type their own, so it is
   // always present and always valid.
   const [missionName, setMissionName] = useState(() => generateRandomMissionName());
+  const [missionPatch, setMissionPatch] = useState(() => getRandomMissionPatch());
   const abortControllerRef = useRef<AbortController | null>(null);
   const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
@@ -165,6 +167,7 @@ export function MissionWorkspace() {
         ...(learnerEmail ? { learnerEmail } : {}),
         ...(editorMode === 'blockly' && blocklyState ? { blocklyState } : {}),
         name: missionName,
+        patch: missionPatch,
       });
 
       if (!validation.success) {
@@ -187,6 +190,7 @@ export function MissionWorkspace() {
 
       setSubmitSuccess(true);
       setMissionName(generateRandomMissionName());
+      setMissionPatch(getRandomMissionPatch());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
       // for that answer rather than racing it: the prompt covers the whole
@@ -253,6 +257,8 @@ export function MissionWorkspace() {
                 <MissionSubmitBar
                   missionName={missionName}
                   onMissionNameChange={setMissionName}
+                  missionPatch={missionPatch}
+                  onMissionPatchChange={setMissionPatch}
                   onSubmit={handleSubmitToQueue}
                   submitting={submitting}
                   submitSuccess={submitSuccess}
