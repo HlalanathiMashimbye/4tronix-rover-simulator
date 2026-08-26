@@ -29,30 +29,19 @@ const EXIT_MS = 200;
 interface MissionSubmitBarProps {
   missionName: string;
   onMissionNameChange: (name: string) => void;
-  missionNameError: string | null;
-  onMissionNameError: (error: string | null) => void;
-  showMissionNameValidation: boolean;
-  onMissionNameValidationChange: (valid: boolean) => void;
-
   onSubmit: () => void;
   submitting: boolean;
   submitSuccess: boolean;
   currentCode: string;
-  isMissionNameValid: boolean;
 }
 
 export function MissionSubmitBar({
   missionName,
   onMissionNameChange,
-  missionNameError,
-  onMissionNameError,
-  showMissionNameValidation,
-  onMissionNameValidationChange,
   onSubmit,
   submitting,
   submitSuccess,
   currentCode,
-  isMissionNameValid,
 }: MissionSubmitBarProps) {
   const [mounted, setMounted] = useState(submitSuccess);
   const [visible, setVisible] = useState(false);
@@ -75,18 +64,11 @@ export function MissionSubmitBar({
   return (
     <div className="@container shrink-0 border-t border-border/60 pt-2">
       <div className="flex flex-wrap items-start gap-2">
-        <MissionNameInput
-          value={missionName}
-          onChange={onMissionNameChange}
-          onError={onMissionNameError}
-          error={missionNameError}
-          showValidationError={showMissionNameValidation}
-          onValidationChange={onMissionNameValidationChange}
-        />
+        <MissionNameInput value={missionName} onChange={onMissionNameChange} />
 
         <button
           onClick={onSubmit}
-          disabled={submitting || !currentCode.trim() || !isMissionNameValid}
+          disabled={submitting || !currentCode.trim()}
           className="clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-mars px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto"
         >
           {submitting ? (

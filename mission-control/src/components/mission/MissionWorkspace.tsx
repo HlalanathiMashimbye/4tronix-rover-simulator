@@ -6,6 +6,7 @@ import { RoverState } from '@/lib/rover-physics';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
+import { generateRandomMissionName } from '@/lib/missionNameGenerator';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -56,10 +57,10 @@ export function MissionWorkspace() {
   // way. A ref, not state: nothing renders from it, and it must be readable by
   // the effect below in the same tick the prompt closes.
   const awaitingEmailChoiceRef = useRef(false);
-  const [missionName, setMissionName] = useState('');
-  const [missionNameError, setMissionNameError] = useState<string | null>(null);
-  const [showMissionNameValidation, setShowMissionNameValidation] = useState(false);
-  const [isMissionNameValid, setIsMissionNameValid] = useState(false);
+  // A name is generated up front so the learner never faces a blank,
+  // unnamed mission — they can only re-roll it, not type their own, so it is
+  // always present and always valid.
+  const [missionName, setMissionName] = useState(() => generateRandomMissionName());
   const abortControllerRef = useRef<AbortController | null>(null);
   const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
@@ -140,17 +141,9 @@ export function MissionWorkspace() {
       return;
     }
 
-    if (!isMissionNameValid) {
-      setError('Mission name is required! Please enter or generate a name.');
-      setMissionNameError('Please enter mission name.');
-      setShowMissionNameValidation(true);
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
     setSubmitSuccess(false);
-    setShowMissionNameValidation(false);
 
     try {
       const learnerId = getLearnerID();
@@ -191,7 +184,7 @@ export function MissionWorkspace() {
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
 
       setSubmitSuccess(true);
-      setMissionName('');
+      setMissionName(generateRandomMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
       // for that answer rather than racing it: the prompt covers the whole
@@ -258,15 +251,10 @@ export function MissionWorkspace() {
                 <MissionSubmitBar
                   missionName={missionName}
                   onMissionNameChange={setMissionName}
-                  missionNameError={missionNameError}
-                  onMissionNameError={setMissionNameError}
-                  showMissionNameValidation={showMissionNameValidation}
-                  onMissionNameValidationChange={setIsMissionNameValid}
                   onSubmit={handleSubmitToQueue}
                   submitting={submitting}
                   submitSuccess={submitSuccess}
                   currentCode={currentCode}
-                  isMissionNameValid={isMissionNameValid}
                 />
               )
             }
