@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertTriangle, Lock } from 'lucide-react';
 
 import { getFirebaseAuth } from '@/lib/firebase';
 
@@ -63,43 +64,73 @@ export function OperatorSignIn() {
   }
 
   return (
-    <main style={styles.wrap}>
-      <form onSubmit={handleSubmit} style={styles.card} noValidate>
-        <h1 style={styles.heading}>Operator sign in</h1>
+    <main className="relative flex h-[calc(100vh-64px)] items-center justify-center px-4 sm:px-6">
+      <form
+        onSubmit={handleSubmit}
+        noValidate
+        className="clay w-full max-w-sm rounded-3xl border border-border/60 bg-card/70 p-7 backdrop-blur-xl"
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="clay flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-mars">
+            <Lock className="h-6 w-6 text-primary-foreground" />
+          </span>
+          <div className="space-y-1">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground">
+              Operator <span className="text-gradient-mars">sign in</span>
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Yard staff only. Learners do not need an account.
+            </p>
+          </div>
+        </div>
 
         {error && (
-          <p role="alert" style={styles.error}>
-            {error}
+          <p
+            role="alert"
+            className="mt-5 flex items-start gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{error}</span>
           </p>
         )}
 
-        <label style={styles.label}>
-          Email
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="username"
-            required
-            style={styles.input}
-          />
-        </label>
+        <div className="mt-6 grid gap-4">
+          <label className="grid gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Email
+            </span>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="username"
+              required
+              className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
+            />
+          </label>
 
-        <label style={styles.label}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            required
-            style={styles.input}
-          />
-        </label>
+          <label className="grid gap-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Password
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+              className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
+            />
+          </label>
 
-        <button type="submit" disabled={busy || !email || !password} style={styles.button}>
-          {busy ? 'Signing in…' : 'Sign in'}
-        </button>
+          <button
+            type="submit"
+            disabled={busy || !email || !password}
+            className="clay-press mt-1 h-11 rounded-lg bg-gradient-mars font-display text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy ? 'Signing in…' : 'Sign in'}
+          </button>
+        </div>
       </form>
     </main>
   );
@@ -130,48 +161,3 @@ function messageFor(err: unknown): string {
       return err instanceof Error && err.message ? err.message : 'Could not sign you in.';
   }
 }
-
-const styles = {
-  wrap: {
-    minHeight: '70vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-  },
-  card: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '1rem',
-    width: '100%',
-    maxWidth: '22rem',
-  },
-  heading: { fontSize: '1.375rem', fontWeight: 700, marginBottom: '0.25rem' },
-  label: { display: 'flex', flexDirection: 'column' as const, gap: '0.35rem', fontSize: '0.875rem' },
-  input: {
-    padding: '0.625rem 0.75rem',
-    borderRadius: '0.5rem',
-    border: '1px solid rgba(128,128,128,0.4)',
-    fontSize: '1rem',
-    background: 'transparent',
-    color: 'inherit',
-  },
-  button: {
-    padding: '0.7rem 1rem',
-    borderRadius: '0.5rem',
-    border: 'none',
-    background: '#2563eb',
-    color: '#fff',
-    fontWeight: 600,
-    fontSize: '1rem',
-    cursor: 'pointer',
-  },
-  error: {
-    margin: 0,
-    padding: '0.625rem 0.75rem',
-    borderRadius: '0.5rem',
-    background: 'rgba(220,38,38,0.12)',
-    color: '#b91c1c',
-    fontSize: '0.875rem',
-  },
-};

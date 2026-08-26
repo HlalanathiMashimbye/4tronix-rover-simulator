@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { LogOut } from 'lucide-react';
 
 /**
  * Ends the server session and revokes it, so signing out takes effect
@@ -23,19 +24,14 @@ export function SignOutButton() {
   }
 
   return (
-    <button type="button" onClick={signOut} disabled={busy} style={style}>
+    <button
+      type="button"
+      onClick={signOut}
+      disabled={busy}
+      className="clay-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+    >
+      <LogOut className="h-3.5 w-3.5" />
       {busy ? 'Signing out…' : 'Sign out'}
     </button>
   );
 }
-
-const style = {
-  marginTop: '0.5rem',
-  padding: '0.5rem 0.9rem',
-  borderRadius: '0.5rem',
-  border: '1px solid rgba(128,128,128,0.4)',
-  background: 'transparent',
-  color: 'inherit',
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-};
