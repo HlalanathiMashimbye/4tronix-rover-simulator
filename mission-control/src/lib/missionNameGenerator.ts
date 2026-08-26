@@ -79,13 +79,3 @@ export function generateMissionNameSuggestions(count: number = 3): string[] {
 
   return Array.from(names);
 }
-
-/**
- * Validate if a string is a valid mission name
- *
- * @param name - Mission name to validate
- * @returns True if valid (non-empty, max 100 chars)
- */
-export function isValidMissionName(name: string): boolean {
-  return name.trim().length > 0 && name.length <= 100;
-}
