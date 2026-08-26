@@ -33,5 +33,6 @@ function toPoint(physics) {
         speedL: s.speedL,
         speedR: s.speedR,
         servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
+        hitWall: s.hitWall,
     };
 }
