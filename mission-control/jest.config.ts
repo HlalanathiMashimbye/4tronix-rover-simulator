@@ -8,6 +8,10 @@ const config: Config = {
     '^@/(.*)$': '<rootDir>/src/$1',
     // nanoid v5 is ESM-only; map to a CJS-compatible mock for ts-jest
     '^nanoid$': '<rootDir>/test-utils/nanoidMock.ts',
+    // `server-only` throws on import outside a server context, which is its
+    // whole job. Every test importing a server module would otherwise have to
+    // remember to mock it; map it to nothing once, here.
+    '^server-only$': '<rootDir>/test-utils/serverOnlyMock.ts',
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',

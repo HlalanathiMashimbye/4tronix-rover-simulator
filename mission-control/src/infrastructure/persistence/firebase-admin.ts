@@ -22,9 +22,11 @@
 
 import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getAuth, Auth } from 'firebase-admin/auth';
 
 let app: App | undefined;
 let firestoreInstance: Firestore | undefined;
+let authInstance: Auth | undefined;
 
 type FirebaseAdminConfig =
   | {
@@ -147,4 +149,26 @@ export function getFirestoreInstance(): Firestore {
   firestoreInstance = getFirestore();
 
   return firestoreInstance;
+}
+
+/**
+ * Firebase Admin Auth, for verifying operator session cookies server-side.
+ *
+ * Restored for AB#341. It was removed when the operator console moved to the
+ * yard satellite and mission-control became learner-only; the console is coming
+ * back as a role-gated route, so the server needs to verify sessions again.
+ *
+ * Shares initializeFirebaseAdmin() with Firestore, so it inherits the same
+ * credential decision: ADC on Cloud Run (no key to store, rotate or leak) and a
+ * service account elsewhere.
+ */
+export function getFirebaseAdminAuth(): Auth {
+  if (authInstance) {
+    return authInstance;
+  }
+
+  initializeFirebaseAdmin();
+  authInstance = getAuth();
+
+  return authInstance;
 }
