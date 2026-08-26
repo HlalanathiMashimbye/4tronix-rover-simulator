@@ -25,6 +25,7 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.18.0",
+    "server-only": "^0.0.1",
     "zod": "^3.25.76"
   },
   "description": "Learner-facing mission authoring platform for Mars Rover",
