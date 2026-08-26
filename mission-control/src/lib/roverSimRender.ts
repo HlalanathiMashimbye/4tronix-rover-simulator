@@ -10,6 +10,7 @@ export interface SimPoint {
   y: number;
   heading: number;
   servos: Record<string, number>;
+  hitWall?: boolean;
 }
 
 export interface SimLayout {
@@ -134,6 +135,7 @@ export function interpolate(traj: SimPoint[], p: number): SimPoint {
     y: lerp(a.y, b.y, f),
     heading: lerp(a.heading, b.heading, f),
     servos: { [FL]: sv(FL), [FR]: sv(FR), [RL]: sv(RL), [RR]: sv(RR) },
+    hitWall: a.hitWall || b.hitWall,
   };
 }
 
@@ -330,6 +332,20 @@ function drawRover(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint) {
   ctx.restore();
 }
 
+function drawWallHit(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint) {
+  const [cx, cy] = worldToScreen(L, st.x, st.y);
+  const radius = 18 * Math.max(0.7, Math.min(1.7, L.s / 1.4));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  glow.addColorStop(0, 'rgba(239,68,68,0.55)');
+  glow.addColorStop(1, 'rgba(239,68,68,0)');
+  ctx.fillStyle = glow;
+  ctx.fill();
+  ctx.restore();
+}
+
 /**
  * Draw a full simulator frame (terrain + trail + rover) for a given playhead.
  * `playhead` may be fractional; the rover position is interpolated for smooth
@@ -353,5 +369,9 @@ export function drawSimFrame(
     return;
   }
   drawTrail(ctx, L, traj, Math.floor(playhead), P);
-  drawRover(ctx, L, interpolate(traj, playhead));
+  const current = interpolate(traj, playhead);
+  drawRover(ctx, L, current);
+  if (current.hitWall) {
+    drawWallHit(ctx, L, current);
+  }
 }
