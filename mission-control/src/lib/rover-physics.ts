@@ -176,8 +176,8 @@ export class RoverPhysics {
     const [xBR, yBR, hBR] = calculateSteeredPosition(false, this.state.servos[SERVO_FL], this.state.speedL, dt);
 
     // Average the results
-    let newX = (xFL + xFR + xBL + xBR) / 4;
-    let newY = (yFL + yFR + yBL + yBR) / 4;
+    const newX = (xFL + xFR + xBL + xBR) / 4;
+    const newY = (yFL + yFR + yBL + yBR) / 4;
     this.state.heading = (hFL + hFR + hBL + hBR) / 4;
 
     // Clamp to terrain bounds — the rover cannot leave the yard.
