@@ -1,32 +1,24 @@
 import { getOperatorSession } from '@/lib/auth/dal';
+import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
+import { SignOutButton } from '@/components/operator/SignOutButton';
 
 /**
- * AB#341 ships the lock; AB#342 ships the key.
+ * One route for the operator surface: sign-in when there is no session, the
+ * console when there is. Nothing to distribute except this URL.
  *
- * Right now this route exists, is verified, and is unreachable: nobody can
- * obtain a session cookie until the sign-in form and the session route land.
- * That is the correct resting state for a locked door, and it means the guard
- * can be reviewed and tested on its own rather than tangled up with a login.
+ * A server component, so the session is verified before anything renders. An
+ * unauthenticated visitor is never sent operator markup at all, rather than
+ * being sent it and having the browser hide it.
  */
 export default async function OperatorPage() {
   const session = await getOperatorSession();
 
   if (!session) {
-    // Rendered in place rather than redirecting to a separate /login: one
-    // route means one thing to distribute to operators, and nothing extra to
-    // stumble across.
-    return (
-      <main style={styles.centre}>
-        <h1 style={styles.heading}>Operator sign in</h1>
-        <p style={styles.body}>
-          Sign in is not available yet. It arrives with AB#342.
-        </p>
-      </main>
-    );
+    return <OperatorSignIn />;
   }
 
   return (
-    <main style={styles.centre}>
+    <main style={styles.wrap}>
       <h1 style={styles.heading}>Operator console</h1>
       <p style={styles.body}>
         Signed in as {session.email ?? session.uid} ({session.role}).
@@ -34,14 +26,16 @@ export default async function OperatorPage() {
       <p style={styles.body}>
         {session.yardIds.length > 0
           ? `Yards: ${session.yardIds.join(', ')}`
-          : 'No yards assigned to this account yet.'}
+          : 'No yards assigned to this account yet, so there is nothing to dispatch to.'}
       </p>
+      <p style={styles.note}>The mission queue arrives in the next story.</p>
+      <SignOutButton />
     </main>
   );
 }
 
 const styles = {
-  centre: {
+  wrap: {
     minHeight: '60vh',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -52,5 +46,6 @@ const styles = {
     textAlign: 'center' as const,
   },
   heading: { fontSize: '1.5rem', fontWeight: 700 },
-  body: { opacity: 0.8, maxWidth: '32rem' },
+  body: { opacity: 0.85, maxWidth: '32rem' },
+  note: { opacity: 0.55, fontSize: '0.875rem' },
 };

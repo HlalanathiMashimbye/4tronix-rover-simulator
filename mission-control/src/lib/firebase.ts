@@ -3,12 +3,22 @@
  *
  * Client-side Firebase configuration for Firestore (mission feed, learner
  * history). Uses NEXT_PUBLIC_* environment variables accessible in the
- * browser. No Firebase Auth here: learners are anonymous, and the operator
- * console lives on the yard satellite, not in this app.
+ * browser.
+ *
+ * Learners remain anonymous and never touch Auth. Auth is here for AB#342 and
+ * exactly one job: an operator signs in, and the resulting ID token is
+ * exchanged once for a server session cookie. After that the SERVER session is
+ * the source of truth, so nothing outside the sign-in form depends on client
+ * auth state. Import getFirebaseAuth() only from the operator sign-in path, so
+ * the Auth SDK stays out of every learner-facing bundle.
+ *
+ * This reverses the note that used to sit here saying there was no Auth in this
+ * app, from when the operator console lived on the yard satellite.
  */
 
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
+import { getAuth, Auth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -73,4 +83,17 @@ export function getFirestoreClient(): Firestore {
     }
   }
   return firestore;
+}
+
+/**
+ * Firebase Auth, for the operator sign-in form only.
+ *
+ * Deliberately not wrapped in a context provider. The old design had one, which
+ * meant every page carried Auth and the console had to wait for context state
+ * to settle before it could decide anything. Here the token is exchanged for a
+ * server session immediately and then discarded, so there is no client auth
+ * state for anything to race against.
+ */
+export function getFirebaseAuth(): Auth {
+  return getAuth(initializeFirebaseClient());
 }
