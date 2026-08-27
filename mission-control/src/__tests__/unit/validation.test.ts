@@ -11,7 +11,7 @@ describe('Mission Schema Validation', () => {
   describe('validateMission', () => {
     it('should accept valid mission data', () => {
       const validData = {
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         learnerId: 'learner-123',
         sessionId: 'test-session-123',
         name: 'Test Mission',

@@ -25,7 +25,7 @@ describe('Video Display Integration', () => {
     it('mission entity supports videoUrl field', () => {
       const mission: Mission = {
         id: 'test-mission-1',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-123',
         learnerRef: 'learner-123',
         code: 'rover.forward(100)',
@@ -44,7 +44,7 @@ describe('Video Display Integration', () => {
     it('mission entity supports youtubeUrl field', () => {
       const mission: Mission = {
         id: 'test-mission-2',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-123',
         learnerRef: 'learner-123',
         code: 'rover.forward(100)',
@@ -63,7 +63,7 @@ describe('Video Display Integration', () => {
     it('mission entity supports both video fields simultaneously', () => {
       const mission: Mission = {
         id: 'test-mission-3',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-123',
         learnerRef: 'learner-123',
         code: 'rover.forward(100)',
@@ -83,7 +83,7 @@ describe('Video Display Integration', () => {
     it('video fields are optional in mission entity', () => {
       const mission: Mission = {
         id: 'test-mission-4',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-123',
         learnerRef: 'learner-123',
         code: 'rover.forward(100)',
@@ -133,7 +133,7 @@ describe('Video Display Integration', () => {
     it('completed mission includes video URL', () => {
       const completedMission: Mission = {
         id: 'completed-1',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-456',
         learnerRef: 'learner-123',
         code: 'rover.forward(100)\nrover.turn_left(90)',
@@ -159,7 +159,7 @@ describe('Video Display Integration', () => {
     it('failed mission includes video URL showing failure', () => {
       const failedMission: Mission = {
         id: 'failed-1',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-789',
         learnerRef: 'learner-123',
         code: 'rover.forward(9999)',
@@ -186,7 +186,7 @@ describe('Video Display Integration', () => {
     it('queued mission does not have video URL', () => {
       const queuedMission: Mission = {
         id: 'queued-1',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-101',
         learnerRef: 'learner-123',
         code: 'rover.forward(50)',
@@ -205,7 +205,7 @@ describe('Video Display Integration', () => {
     it('processing mission does not have video URL', () => {
       const processingMission: Mission = {
         id: 'processing-1',
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'session-202',
         learnerRef: 'learner-123',
         code: 'rover.turn_right(180)',

@@ -250,7 +250,7 @@ def _seed_missions():
     return {
         'q1': {
             'name': 'Sand Observer',
-            'yardId': 'uct-rover-1',
+            'yardId': 'curiosity',
             'code': 'rover.forward(60)\nrover.stop()',
             'blocklyState': '{"blocks":{}}',
             'status': 'queued',
@@ -258,14 +258,14 @@ def _seed_missions():
         },
         'p1': {
             'name': 'Storm Collector',
-            'yardId': 'uct-rover-1',
+            'yardId': 'curiosity',
             'code': 'rover.forward(30)',
             'status': 'processing',
             'submittedAt': '2026-07-14T07:00:00Z',
         },
         'c1': {
             'name': 'Crater Pioneer',
-            'yardId': 'uct-rover-1',
+            'yardId': 'curiosity',
             'code': 'rover.stop()',
             'status': 'completed',
             'submittedAt': '2026-07-14T06:00:00Z',
@@ -729,17 +729,17 @@ def _seed_mirror(synced_at='2026-07-14T09:00:00Z'):
     """
     mission_store.upsert_missions([
         {
-            'id': 'q1', 'name': 'Sand Observer', 'yardId': 'uct-rover-1',
+            'id': 'q1', 'name': 'Sand Observer', 'yardId': 'curiosity',
             'code': 'rover.forward(60)\nrover.stop()', 'blocklyState': '{"blocks":{}}',
             'status': 'queued', 'submittedAt': '2026-07-14T08:00:00Z',
         },
         {
-            'id': 'p1', 'name': 'Storm Collector', 'yardId': 'uct-rover-1',
+            'id': 'p1', 'name': 'Storm Collector', 'yardId': 'curiosity',
             'code': 'rover.forward(30)', 'status': 'processing',
             'submittedAt': '2026-07-14T07:00:00Z',
         },
         {
-            'id': 'c1', 'name': 'Crater Pioneer', 'yardId': 'uct-rover-1',
+            'id': 'c1', 'name': 'Crater Pioneer', 'yardId': 'curiosity',
             'code': 'rover.stop()', 'status': 'completed',
             'submittedAt': '2026-07-14T06:00:00Z',
         },
@@ -759,7 +759,7 @@ def test_missions_endpoint_serialises_documents(client):
     assert q1['status'] == 'queued'
     assert q1['code'].startswith('rover.forward')
     # camelCase API contract must survive the snake_case SQLite round-trip
-    assert q1['yardId'] == 'uct-rover-1'
+    assert q1['yardId'] == 'curiosity'
     assert q1['blocklyState'] == '{"blocks":{}}'
     assert q1['submittedAt'] == '2026-07-14T08:00:00Z'
 
@@ -1677,7 +1677,7 @@ def test_a_deleted_mission_is_not_reconciled_or_dispatchable(client, missions, m
 
     client.post('/operator/api/missions/q1/delete')
 
-    assert 'q1' not in mission_store.active_mission_ids('uct-rover-1')
+    assert 'q1' not in mission_store.active_mission_ids('curiosity')
     _ok_rover(monkeypatch)
     assert client.post('/operator/api/missions/q1/send').status_code == 404
 

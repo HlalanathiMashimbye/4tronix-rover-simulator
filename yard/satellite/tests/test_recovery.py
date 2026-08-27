@@ -27,7 +27,7 @@ def _mirror(tmp_path, monkeypatch):
 
 def _seed(mission_id, status, owner=None, needs_review=0):
     mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': 'uct-rover-1', 'status': status,
+        [{'id': mission_id, 'yardId': 'curiosity', 'status': status,
           'lockOwner': owner, 'needsReview': needs_review,
           'submittedAt': '2026-07-14T08:00:00Z'}],
         '2026-07-14T09:00:00Z',

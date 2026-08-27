@@ -76,7 +76,7 @@ await seed('missions/m_no_email', { name: S('Blank'), code: S('forward(50)'), st
 await seed('missions/m_has_email', { name: S('Taken'), code: S('forward(50)'), status: S('queued'), learnerEmailHash: S(HASH) });
 await seed('missions/m_no_email2', { name: S('Blank2'), code: S('forward(50)'), status: S('queued') });
 await seed('learners/L1', { learnerEmail: S('a@b.com'), displayName: S('Ada') });
-await seed('missions/m_no_email/runs/uct-rover-1', { status: S('completed'), youtubeUrl: S('https://youtu.be/x') });
+await seed('missions/m_no_email/runs/curiosity', { status: S('completed'), youtubeUrl: S('https://youtu.be/x') });
 await seed('missions/m_no_email/audit/e1', { actor: S('op-1'), action: S('dispatch') });
 await seed('users/u1', { role: S('operator'), email: S('op@example.com') });
 
@@ -109,10 +109,10 @@ check('learner: arbitrary field blocked', await attempt('PATCH', 'learners/L1', 
 // --- runs (the run model) ---------------------------------------------------
 // Public read matches the mission itself: a learner has to see which yards ran
 // their program and which produced a video.
-check('run: public read', await attempt('GET', 'missions/m_no_email/runs/uct-rover-1'), 'ALLOW');
+check('run: public read', await attempt('GET', 'missions/m_no_email/runs/curiosity'), 'ALLOW');
 check('run: list for a mission', await attempt('GET', 'missions/m_no_email/runs'), 'ALLOW');
-check('run: browser write blocked', await attempt('PATCH', 'missions/m_no_email/runs/uct-rover-1', { body: { status: S('completed') }, mask: ['status'] }), 'DENY');
-check('run: operator cannot write directly', await attempt('PATCH', 'missions/m_no_email/runs/uct-rover-1', { body: { status: S('completed') }, mask: ['status'], as: OPERATOR }), 'DENY');
+check('run: browser write blocked', await attempt('PATCH', 'missions/m_no_email/runs/curiosity', { body: { status: S('completed') }, mask: ['status'] }), 'DENY');
+check('run: operator cannot write directly', await attempt('PATCH', 'missions/m_no_email/runs/curiosity', { body: { status: S('completed') }, mask: ['status'], as: OPERATOR }), 'DENY');
 
 // Any OTHER mission subcollection is denied outright. The previous catch-all
 // allowed read on all of them, so an audit trail naming which operator

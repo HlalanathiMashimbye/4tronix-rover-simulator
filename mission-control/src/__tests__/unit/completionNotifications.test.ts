@@ -17,7 +17,7 @@ function completion(id: string, completedAt: string, name?: string): Mission {
     name,
     completedAt,
     status: 'completed',
-    yardId: 'uct-rover-1',
+    yardId: 'curiosity',
     learnerRef: 'hash',
     sessionId: 'session',
     code: 'rover.stop()',

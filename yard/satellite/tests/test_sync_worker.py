@@ -127,7 +127,7 @@ def _mirror(tmp_path, monkeypatch):
 
 def _seed_local(mission_id='m1', status='queued'):
     mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': 'uct-rover-1', 'status': status,
+        [{'id': mission_id, 'yardId': 'curiosity', 'status': status,
           'submittedAt': '2026-07-14T08:00:00Z'}],
         '2026-07-14T09:00:00Z',
     )
@@ -320,7 +320,7 @@ def test_a_dirty_row_is_not_overwritten_by_a_pull():
 
     # A pull arrives carrying the stale remote state while the write is pending.
     mission_store.upsert_missions(
-        [{'id': 'm1', 'status': 'queued', 'yardId': 'uct-rover-1'}],
+        [{'id': 'm1', 'status': 'queued', 'yardId': 'curiosity'}],
         '2026-07-14T10:30:00Z',
     )
 
@@ -372,7 +372,7 @@ def test_worker_keeps_running_when_the_client_cannot_be_built_yet(monkeypatch):
 
 def _seed_many(n, status='completed'):
     mission_store.upsert_missions(
-        [{'id': f'm{i}', 'yardId': 'uct-rover-1', 'status': status,
+        [{'id': f'm{i}', 'yardId': 'curiosity', 'status': status,
           'submittedAt': f'2026-07-{(i % 27) + 1:02d}T08:00:00Z'} for i in range(n)],
         '2026-07-28T09:00:00Z',
     )
@@ -386,7 +386,7 @@ def test_a_quiet_cycle_reads_almost_nothing():
               for i in range(200)}
     db = FakeFirestore(remote)
 
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     assert db.meter['docs_read'] <= 2, (
         f"a quiet cycle read {db.meter['docs_read']} documents; it must read ~nothing"
@@ -395,14 +395,14 @@ def test_a_quiet_cycle_reads_almost_nothing():
 
 def test_only_new_missions_are_pulled():
     _seed_many(5)  # newest submittedAt is 2026-07-05
-    remote = {f'm{i}': {'status': 'completed', 'yardId': 'uct-rover-1',
+    remote = {f'm{i}': {'status': 'completed', 'yardId': 'curiosity',
                         'submittedAt': f'2026-07-{i+1:02d}T08:00:00Z'}
               for i in range(5)}
-    remote['brand-new'] = {'status': 'queued', 'yardId': 'uct-rover-1',
+    remote['brand-new'] = {'status': 'queued', 'yardId': 'curiosity',
                            'submittedAt': '2026-07-28T10:00:00Z'}
     db = FakeFirestore(remote)
 
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     assert mission_store.get_mission('brand-new') is not None
     assert db.meter['docs_read'] <= 2, 'only the new mission should have been read'
@@ -416,14 +416,14 @@ def test_another_yards_missions_are_never_pulled():
     dispatchable from it, on a rover in a different building.
     """
     remote = {
-        'ours': {'status': 'queued', 'yardId': 'uct-rover-1',
+        'ours': {'status': 'queued', 'yardId': 'curiosity',
                  'submittedAt': '2026-07-28T10:00:00Z'},
         'theirs': {'status': 'queued', 'yardId': 'durban-rover-1',
                    'submittedAt': '2026-07-28T11:00:00Z'},
     }
     db = FakeFirestore(remote)
 
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     assert mission_store.get_mission('ours') is not None
     assert mission_store.get_mission('theirs') is None
@@ -442,11 +442,11 @@ def test_a_foreign_yard_row_does_not_poison_the_cursor():
          'submittedAt': '2026-09-01T08:00:00Z'},
     ], '2026-08-01T00:00:00Z')
 
-    remote = {'ours': {'status': 'queued', 'yardId': 'uct-rover-1',
+    remote = {'ours': {'status': 'queued', 'yardId': 'curiosity',
                        'submittedAt': '2026-08-15T10:00:00Z'}}
     db = FakeFirestore(remote)
 
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     assert mission_store.get_mission('ours') is not None, \
         "a newer row from another yard must not advance this yard's cursor"
@@ -457,7 +457,7 @@ def test_an_empty_mirror_does_one_bounded_first_pull():
               for i in range(500)}
     db = FakeFirestore(remote)
 
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     assert db.meter['docs_read'] <= sync_worker.FIRST_PULL_LIMIT, 'the first pull must be bounded'
 
@@ -467,32 +467,32 @@ def test_active_missions_are_reconciled_periodically():
     elsewhere, so non-terminal missions are re-read on a slower cadence."""
     _seed_many(3, status='queued')
     remote = {
-        'm0': {'status': 'completed', 'yardId': 'uct-rover-1', 'submittedAt': '2026-07-01T08:00:00Z'},
-        'm1': {'status': 'queued', 'yardId': 'uct-rover-1', 'submittedAt': '2026-07-02T08:00:00Z'},
-        'm2': {'status': 'queued', 'yardId': 'uct-rover-1', 'submittedAt': '2026-07-03T08:00:00Z'},
+        'm0': {'status': 'completed', 'yardId': 'curiosity', 'submittedAt': '2026-07-01T08:00:00Z'},
+        'm1': {'status': 'queued', 'yardId': 'curiosity', 'submittedAt': '2026-07-02T08:00:00Z'},
+        'm2': {'status': 'queued', 'yardId': 'curiosity', 'submittedAt': '2026-07-03T08:00:00Z'},
     }
     db = FakeFirestore(remote)
 
     # Cycles before the reconcile point must not pick the change up...
     for _ in range(sync_worker.RECONCILE_EVERY - 1):
-        sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+        sync_worker.sync_cycle(db, yard_id='curiosity')
     assert mission_store.get_mission('m0')['status'] == 'queued'
 
     # ...and the reconcile cycle must.
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
     assert mission_store.get_mission('m0')['status'] == 'completed'
 
 
 def test_reconcile_does_not_re_read_terminal_missions():
     """Completed missions do not move, so paying to re-read them is waste."""
     _seed_many(3, status='queued')
-    remote = {f'done{i}': {'status': 'completed', 'yardId': 'uct-rover-1',
+    remote = {f'done{i}': {'status': 'completed', 'yardId': 'curiosity',
                            'submittedAt': '2026-07-01T08:00:00Z'} for i in range(100)}
-    remote['live'] = {'status': 'queued', 'yardId': 'uct-rover-1',
+    remote['live'] = {'status': 'queued', 'yardId': 'curiosity',
                       'submittedAt': '2026-07-02T08:00:00Z'}
     db = FakeFirestore(remote)
 
-    sync_worker.reconcile_active(db, yard_id='uct-rover-1')
+    sync_worker.reconcile_active(db, yard_id='curiosity')
 
     assert db.meter['docs_read'] <= 3, (
         f"reconcile read {db.meter['docs_read']} docs; it must only touch active ones"
@@ -505,7 +505,7 @@ def test_freshness_is_still_reported_on_a_cycle_that_pulls_nothing():
     db = FakeFirestore({'m0': {'status': 'completed', 'submittedAt': '2026-07-01T08:00:00Z'}})
 
     mission_store.set_meta('last_synced_at', '2020-01-01T00:00:00Z')
-    sync_worker.sync_cycle(db, yard_id='uct-rover-1')
+    sync_worker.sync_cycle(db, yard_id='curiosity')
 
     _, last_synced, _total = mission_store.get_missions()
     assert last_synced > '2026-01-01', 'last_synced_at must advance on a quiet cycle'
@@ -516,9 +516,9 @@ def test_reconcile_drops_a_mission_deleted_remotely():
     in the console forever - and stay dispatchable."""
     _seed_local('gone', status='queued')
     _seed_local('alive', status='queued')
-    remote = {'alive': {'status': 'queued', 'yardId': 'uct-rover-1'}}
+    remote = {'alive': {'status': 'queued', 'yardId': 'curiosity'}}
 
-    sync_worker.reconcile_active(FakeFirestore(remote), yard_id='uct-rover-1')
+    sync_worker.reconcile_active(FakeFirestore(remote), yard_id='curiosity')
 
     assert mission_store.get_mission('gone') is None
     assert mission_store.get_mission('alive') is not None
@@ -530,7 +530,7 @@ def test_a_mission_with_unflushed_writes_is_never_pruned():
     _seed_local('gone', status='queued')
     mission_store.release_mission('gone', 'completed', '2026-07-28T10:00:00Z')
 
-    sync_worker.reconcile_active(FakeFirestore({}), yard_id='uct-rover-1')
+    sync_worker.reconcile_active(FakeFirestore({}), yard_id='curiosity')
 
     assert mission_store.get_mission('gone') is not None
     assert mission_store.outbox_count() == 1

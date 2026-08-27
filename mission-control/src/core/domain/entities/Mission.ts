@@ -32,7 +32,7 @@ export interface ExecutionMetadata {
 export interface Mission {
   // Identifiers
   id: string;                        // Firestore document ID
-  yardId: string;                    // Which physical rover yard (e.g., "uct-rover-1")
+  yardId: string;                    // Which physical rover yard, named for the rover itself (e.g., "curiosity")
 
   // Learner tracking
   //

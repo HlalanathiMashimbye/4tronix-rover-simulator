@@ -106,13 +106,13 @@ describe('isKnownYard', () => {
 
 describe('what a learner reads', () => {
   it('names the venue and suburb rather than an internal key', () => {
-    // A child reading their own mission page used to see "uct-rover-1".
-    expect(yardLabel('uct-rover-1')).toBe('Cape Town Science Centre, Observatory');
+    // A child reading their own mission page used to see "curiosity".
+    expect(yardLabel('curiosity')).toBe('Cape Town Science Centre, Observatory');
   });
 
   it('gives just the city for short spaces', () => {
     // "where did my mission run" is the question, and the city answers it.
-    expect(yardPlace('uct-rover-1')).toBe('Cape Town');
+    expect(yardPlace('curiosity')).toBe('Cape Town');
   });
 
   it('shows nothing for a yard it does not recognise, never the id', () => {
@@ -127,11 +127,27 @@ describe('what a learner reads', () => {
     expect(findYard(undefined)).toBeUndefined();
   });
 
-  it('keeps the id stable and separate from the name', () => {
-    // The id is stamped on every mission ever submitted and configured on the
-    // satellite. Renaming it to something prettier would be a migration of
-    // live learner data for a string nobody reads.
-    expect(KNOWN_YARDS[0].id).toBe('uct-rover-1');
-    expect(KNOWN_YARDS[0].name).not.toContain('uct-rover');
+  it('uses the rover\'s own network name as the id', () => {
+    // The rover answers to curiosity.local on the yard LAN, so a mission
+    // tagged `curiosity` in Firestore points at a machine you can actually
+    // ssh to. The old `uct-rover-1` matched nothing anyone could see.
+    expect(KNOWN_YARDS[0].id).toBe('curiosity');
+  });
+
+  it('still resolves ids the yard used to have', () => {
+    // Missions submitted before the rename carry `uct-rover-1`, and one stray
+    // carries `cape-town`. A learner must not see a blank location because of
+    // a rename they had nothing to do with.
+    expect(yardLabel('uct-rover-1')).toBe('Cape Town Science Centre, Observatory');
+    expect(yardLabel('cape-town')).toBe('Cape Town Science Centre, Observatory');
+    expect(yardPlace('uct-rover-1')).toBe('Cape Town');
+  });
+
+  it('does not accept a former id as somewhere to write to', () => {
+    // Lenient in what is read, strict in what is written. Displaying an old id
+    // is kindness to existing data; writing a new mission to one would just
+    // recreate the mess the migration cleaned up.
+    expect(isKnownYard('curiosity')).toBe(true);
+    expect(isKnownYard('uct-rover-1')).toBe(false);
   });
 });

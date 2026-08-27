@@ -71,7 +71,7 @@ describe('POST /api/missions Integration Tests', () => {
   describe('Task 40: Valid submission enters queue', () => {
     it('should accept valid mission and return 201 with mission data', async () => {
       const validPayload = {
-        yardId: 'uct-rover-1',
+        yardId: 'curiosity',
         sessionId: 'test-session-123',
         learnerId: 'test-learner',
         name: 'Test Mission',
@@ -91,7 +91,7 @@ describe('POST /api/missions Integration Tests', () => {
       expect(data.success).toBe(true);
       expect(data.mission).toBeDefined();
       expect(data.mission.id).toBeDefined();
-      expect(data.mission.yardId).toBe('uct-rover-1');
+      expect(data.mission.yardId).toBe('curiosity');
       expect(data.mission.sessionId).toBe('test-session-123');
       expect(data.mission.code).toBe('rover.forward(100)\nrover.wait(2)');
       expect(data.mission.status).toBe('queued');

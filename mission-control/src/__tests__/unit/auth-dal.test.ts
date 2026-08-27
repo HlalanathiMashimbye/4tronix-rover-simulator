@@ -91,7 +91,7 @@ describe('getOperatorSession', () => {
   it('ignores a stale yardIds claim rather than carrying it into the session', async () => {
     // Accounts granted before 2026-08-27 still hold this claim. Operators are
     // no longer assigned yards, so it must not resurface as a permission.
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin', yardIds: ['uct-rover-1'] });
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin', yardIds: ['curiosity'] });
     const dal = await freshDal();
 
     expect(await dal.getOperatorSession()).not.toHaveProperty('yardIds');

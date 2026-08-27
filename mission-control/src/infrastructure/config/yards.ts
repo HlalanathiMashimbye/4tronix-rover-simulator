@@ -18,15 +18,31 @@
 
 export interface Yard {
   /**
-   * Stable key. Never shown to anyone, and never changed.
+   * Stable key, and the rover's own name on the network.
    *
-   * It reads like a machine name because that is what it is. It is stamped on
-   * every mission document ever submitted and configured on the satellite
-   * itself, so renaming it would mean migrating live learner data to make an
-   * internal string prettier. The names below are what people read; this is
-   * what the system matches on.
+   * The rover answers to `curiosity.local` on the yard LAN, so the same word
+   * identifies it in Firestore. Someone debugging can see a mission tagged
+   * `curiosity` in the console, ssh to `curiosity.local`, and know it is the
+   * same machine. It used to be `uct-rover-1`, which matched nothing anyone
+   * could see anywhere.
+   *
+   * One rover per yard, so the rover's name is the yard's key. When Durban
+   * gets a rover, its hostname becomes its id the same way.
+   *
+   * Still never shown to a learner. The names below are what people read.
    */
   id: string;
+
+  /**
+   * Ids this yard has previously been known by. Read path only.
+   *
+   * Missions submitted before the rename still carry the old value, and a
+   * satellite running an older config can still write one. Resolving them
+   * here means no learner ever sees a blank location because of a rename
+   * they had nothing to do with. Lenient in what is read, strict in what is
+   * written: `isKnownYard` deliberately does not accept these.
+   */
+  formerIds?: string[];
 
   /** The venue. What an adult would call the place. */
   name: string;
@@ -47,7 +63,8 @@ export interface Yard {
 
 export const KNOWN_YARDS: Yard[] = [
   {
-    id: 'uct-rover-1',
+    id: 'curiosity',
+    formerIds: ['uct-rover-1', 'cape-town'],
     name: 'Cape Town Science Centre',
     area: 'Observatory',
     city: 'Cape Town',
@@ -64,7 +81,10 @@ export function isKnownYard(yardId: string): boolean {
 }
 
 export function findYard(yardId: string | undefined): Yard | undefined {
-  return KNOWN_YARDS.find((y) => y.id === yardId);
+  if (!yardId) return undefined;
+  return KNOWN_YARDS.find(
+    (y) => y.id === yardId || y.formerIds?.includes(yardId),
+  );
 }
 
 /**
