@@ -17,12 +17,41 @@
  */
 
 export interface Yard {
+  /**
+   * Stable key. Never shown to anyone, and never changed.
+   *
+   * It reads like a machine name because that is what it is. It is stamped on
+   * every mission document ever submitted and configured on the satellite
+   * itself, so renaming it would mean migrating live learner data to make an
+   * internal string prettier. The names below are what people read; this is
+   * what the system matches on.
+   */
   id: string;
-  label: string;
+
+  /** The venue. What an adult would call the place. */
+  name: string;
+
+  /** The suburb, for people who know the city. */
+  area: string;
+
+  /**
+   * The city, and the whole point of showing any of this.
+   *
+   * A child wants to know their program ran on a real robot in a real place:
+   * Cape Town, or Durban, or Limpopo. That is the sentence worth telling them,
+   * and it is what makes a rover in a science centre feel bigger than a
+   * simulator in a browser.
+   */
+  city: string;
 }
 
 export const KNOWN_YARDS: Yard[] = [
-  { id: 'uct-rover-1', label: 'Cape Town Science Centre' },
+  {
+    id: 'uct-rover-1',
+    name: 'Cape Town Science Centre',
+    area: 'Observatory',
+    city: 'Cape Town',
+  },
 ];
 
 export const DEFAULT_YARD_ID = KNOWN_YARDS[0].id;
@@ -32,6 +61,34 @@ export const YARD_STORAGE_KEY = 'operator-yard';
 
 export function isKnownYard(yardId: string): boolean {
   return KNOWN_YARDS.some((y) => y.id === yardId);
+}
+
+export function findYard(yardId: string | undefined): Yard | undefined {
+  return KNOWN_YARDS.find((y) => y.id === yardId);
+}
+
+/**
+ * The venue and suburb: "Cape Town Science Centre, Observatory".
+ *
+ * Returns null for a yard we do not recognise, and callers omit the line
+ * rather than substituting the id. Showing a child "uct-rover-1" is worse than
+ * showing them nothing: it is noise they cannot act on, and it leaks an
+ * internal key into a page built for nine-year-olds.
+ */
+export function yardLabel(yardId: string | undefined): string | null {
+  const yard = findYard(yardId);
+  return yard ? `${yard.name}, ${yard.area}` : null;
+}
+
+/**
+ * Just the city: "Cape Town".
+ *
+ * For anywhere short - a card, a chip, a run heading. This is the part a
+ * learner actually cares about once there is more than one yard, because it is
+ * what answers "where did my mission run".
+ */
+export function yardPlace(yardId: string | undefined): string | null {
+  return findYard(yardId)?.city ?? null;
 }
 
 /**

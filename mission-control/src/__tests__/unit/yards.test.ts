@@ -8,6 +8,9 @@
 
 import {
   KNOWN_YARDS,
+  yardLabel,
+  yardPlace,
+  findYard,
   DEFAULT_YARD_ID,
   YARD_STORAGE_KEY,
   isKnownYard,
@@ -98,5 +101,37 @@ describe('isKnownYard', () => {
   it('accepts a configured yard and rejects anything else', () => {
     expect(isKnownYard(DEFAULT_YARD_ID)).toBe(true);
     expect(isKnownYard('not-a-yard')).toBe(false);
+  });
+});
+
+describe('what a learner reads', () => {
+  it('names the venue and suburb rather than an internal key', () => {
+    // A child reading their own mission page used to see "uct-rover-1".
+    expect(yardLabel('uct-rover-1')).toBe('Cape Town Science Centre, Observatory');
+  });
+
+  it('gives just the city for short spaces', () => {
+    // "where did my mission run" is the question, and the city answers it.
+    expect(yardPlace('uct-rover-1')).toBe('Cape Town');
+  });
+
+  it('shows nothing for a yard it does not recognise, never the id', () => {
+    // Falling back to the id would leak an internal key onto a page built for
+    // nine-year-olds, which is worse than showing nothing at all.
+    expect(yardLabel('durban-rover-9')).toBeNull();
+    expect(yardPlace('durban-rover-9')).toBeNull();
+  });
+
+  it('handles a mission with no yard at all', () => {
+    expect(yardLabel(undefined)).toBeNull();
+    expect(findYard(undefined)).toBeUndefined();
+  });
+
+  it('keeps the id stable and separate from the name', () => {
+    // The id is stamped on every mission ever submitted and configured on the
+    // satellite. Renaming it to something prettier would be a migration of
+    // live learner data for a string nobody reads.
+    expect(KNOWN_YARDS[0].id).toBe('uct-rover-1');
+    expect(KNOWN_YARDS[0].name).not.toContain('uct-rover');
   });
 });

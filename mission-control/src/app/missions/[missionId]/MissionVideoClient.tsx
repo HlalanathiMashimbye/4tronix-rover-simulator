@@ -14,6 +14,7 @@ import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
+import { yardLabel, yardPlace } from '@/infrastructure/config/yards';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;
@@ -45,7 +46,18 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   const runs = useMemo<RunOption[]>(() => {
     const list: RunOption[] = [{ id: 'sim', label: 'Simulated run', kind: 'sim' }];
     const realId = getYouTubeId(mission?.youtubeUrl || mission?.videoUrl);
-    if (realId) list.push({ id: 'real-1', label: 'Real run', kind: 'real', youtubeId: realId });
+    if (realId) {
+      // Name the city, not "Real run". Once Durban and Limpopo have rovers this
+      // selector is how a learner tells the runs apart, and "which yard" only
+      // means something to them as a place they could point to on a map.
+      const place = yardPlace(mission?.yardId);
+      list.push({
+        id: 'real-1',
+        label: place ? `Real run · ${place}` : 'Real run',
+        kind: 'real',
+        youtubeId: realId,
+      });
+    }
     return list;
   }, [mission]);
 
@@ -142,8 +154,13 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 className={`h-5 w-5 transition-colors ${starred ? 'fill-amber-400 text-amber-400' : ''}`}
               />
             </button>
-            <span className="hidden shrink-0 font-mono text-xs text-muted-foreground sm:inline">
-              {mission.yardId} · {dateLabel}
+            {/* Where it ran, in words. This printed the raw yardId - a child
+                reading their own mission page saw "uct-rover-1", which is an
+                internal key and means nothing to them. An unrecognised yard
+                shows nothing rather than falling back to the id. */}
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+              {yardLabel(mission.yardId) ? `${yardLabel(mission.yardId)} · ` : ''}
+              {dateLabel}
             </span>
           </div>
           <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

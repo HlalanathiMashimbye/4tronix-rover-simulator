@@ -36,7 +36,7 @@ export function YardPicker({ onChange }: { onChange?: (yardId: string) => void }
     return (
       <span className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground">
         <MapPin className="h-3.5 w-3.5 text-primary" />
-        {KNOWN_YARDS[0].label}
+        {KNOWN_YARDS[0].name}, {KNOWN_YARDS[0].area}
       </span>
     );
   }
@@ -53,7 +53,7 @@ export function YardPicker({ onChange }: { onChange?: (yardId: string) => void }
         >
           {KNOWN_YARDS.map((yard) => (
             <option key={yard.id} value={yard.id}>
-              {yard.label}
+              {yard.name}, {yard.area}
             </option>
           ))}
         </select>
