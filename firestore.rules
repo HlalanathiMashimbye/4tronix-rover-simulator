@@ -18,14 +18,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Roles come from the token's custom claim, not from a users/{uid}
+    // document.
+    //
+    // There used to be two stores. These rules read users/{uid}.role while the
+    // yard console read claims.role, so set-operator-role.mjs had to write both
+    // and they still disagreed: it accepted operator OR admin, while this
+    // accepted "operator" only, so an admin passed the console and was denied
+    // here. That was a documented KNOWN GAP rather than an accident, and this
+    // closes it.
+    //
+    // A claim also costs nothing to read. The get() below billed a document
+    // read on every rule evaluation.
+    //
+    // The trade: claims refresh with the token, so a revoked role can linger up
+    // to an hour here. set-operator-role.mjs calls revokeRefreshTokens on
+    // revoke, and the operator console verifies its session cookie with
+    // checkRevoked, so a removed operator loses the console immediately and
+    // direct Firestore access shortly after.
+    function role() {
+      return request.auth != null ? request.auth.token.role : null;
+    }
+
+    // Admin is a superset of operator. Anything an operator may do, an admin
+    // may do.
     function isOperator() {
-      return request.auth != null
-        && exists(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        )
-        && get(
-          /databases/$(database)/documents/users/$(request.auth.uid)
-        ).data.role == "operator";
+      return role() == "operator" || role() == "admin";
+    }
+
+    function isAdmin() {
+      return role() == "admin";
+    }
+
+    // Which yards this account may act on. Absent means NO yards, never all:
+    // an account with no yard has nothing to dispatch to, and defaulting the
+    // other way would make a misconfigured operator the most powerful one.
+    function yardIds() {
+      return request.auth != null && "yardIds" in request.auth.token
+        ? request.auth.token.yardIds
+        : [];
+    }
+
+    function canActOnYard(yardId) {
+      return isOperator() && yardId in yardIds();
     }
 
     // Keys this write would add, change or remove.
@@ -33,12 +68,14 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    match /rover-configs/{configId} {
-      allow read, create, update, delete: if isOperator();
-    }
-
+    // Kept as a human-readable ledger of who holds which role, written by
+    // set-operator-role.mjs. Nothing enforces access from it any more, so it is
+    // documentation rather than a control.
+    //
+    // Read is narrowed from "any signed-in user" to admins: the list of
+    // everyone with operator access is not something a signed-in learner needs.
     match /users/{userId} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow write: if false;
     }
 
@@ -66,10 +103,24 @@ service cloud.firestore {
                     && request.resource.data.learnerEmailHash.matches('^[0-9a-f]{64}$');
     }
 
-    // Mission subcollections: nothing writes these from a browser today.
-    match /missions/{missionId}/{document=**} {
-      allow read: if true;
+    // Runs: one per yard that attempted this mission, written only by the
+    // Admin SDK (the satellite's outbox and the operator routes).
+    //
+    // Public read is deliberate and matches the mission itself. A learner has
+    // to see which yards ran their program and which produced a video, and the
+    // feed is public by design.
+    match /missions/{missionId}/runs/{yardId} {
+      allow get, list: if true;
       allow write: if false;
+    }
+
+    // Everything else under a mission is denied outright rather than left to
+    // a catch-all read. The previous rule allowed read on ANY subcollection,
+    // so a future audit trail recording which operator dispatched what would
+    // have been world-readable the moment it was created, with nothing in
+    // review to flag it.
+    match /missions/{missionId}/{document=**} {
+      allow read, write: if false;
     }
 
     // Learner records hold profile fields and an optional display name.
@@ -86,9 +137,15 @@ service cloud.firestore {
     // only the Admin SDK reaches (POST /api/learners/[id]/email writes it,
     // MissionNotificationService reads it).
     //
-    // `learnerEmail` is therefore no longer an accepted key on create, and on
-    // update it may only be written as null - that is the API route clearing
-    // a legacy address off an existing document, never setting one.
+    // `learnerEmail` is therefore not an accepted key on create OR on update:
+    // it is absent from both allowlists below, so a browser can neither set one
+    // nor clear one. Clearing a legacy address is the API route's job, through
+    // the Admin SDK, which bypasses these rules.
+    //
+    // (This comment previously said update accepted a null value. It never
+    // did - the key is simply not in the update allowlist. The rules test
+    // asserted the same wrong thing and had been failing unnoticed, because
+    // nothing ran it.)
     //
     // NOTE: possession of a learner id still proves nothing, because those ids
     // are public. These rules stop the bulk READ; they cannot stop a forged
