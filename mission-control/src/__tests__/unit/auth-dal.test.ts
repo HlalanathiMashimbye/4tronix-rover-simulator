@@ -19,7 +19,6 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
 // goes through freshDal() below, because getOperatorSession is memoised with
 // React cache and would otherwise carry a result between tests.
 import {
-  canActOnYard,
   SESSION_COOKIE,
   UnauthorizedError,
   ForbiddenError,
@@ -47,7 +46,7 @@ describe('getOperatorSession', () => {
   });
 
   it('checks for revocation, so removing an operator takes effect immediately', async () => {
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator', yardIds: ['uct-rover-1'] });
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator' });
     const dal = await freshDal();
 
     await dal.getOperatorSession();
@@ -57,12 +56,12 @@ describe('getOperatorSession', () => {
 
   it('returns the session for a valid operator cookie', async () => {
     verifySessionCookie.mockResolvedValue({
-      uid: 'u1', email: 'op@example.com', role: 'operator', yardIds: ['uct-rover-1'],
+      uid: 'u1', email: 'op@example.com', role: 'operator',
     });
     const dal = await freshDal();
 
     expect(await dal.getOperatorSession()).toEqual({
-      uid: 'u1', email: 'op@example.com', role: 'operator', yardIds: ['uct-rover-1'],
+      uid: 'u1', email: 'op@example.com', role: 'operator',
     });
   });
 
@@ -89,11 +88,13 @@ describe('getOperatorSession', () => {
     expect(await dal.getOperatorSession()).toBeNull();
   });
 
-  it('treats a missing or malformed yardIds claim as no yards, not all yards', async () => {
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin', yardIds: 'uct-rover-1' });
+  it('ignores a stale yardIds claim rather than carrying it into the session', async () => {
+    // Accounts granted before 2026-08-27 still hold this claim. Operators are
+    // no longer assigned yards, so it must not resurface as a permission.
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin', yardIds: ['curiosity'] });
     const dal = await freshDal();
 
-    expect((await dal.getOperatorSession())?.yardIds).toEqual([]);
+    expect(await dal.getOperatorSession()).not.toHaveProperty('yardIds');
   });
 });
 
@@ -106,7 +107,7 @@ describe('requireOperator / requireAdmin', () => {
   });
 
   it('lets an operator through', async () => {
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator', yardIds: [] });
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator' });
     const dal = await freshDal();
 
     expect((await dal.requireOperator()).role).toBe('operator');
@@ -115,29 +116,17 @@ describe('requireOperator / requireAdmin', () => {
   it('refuses an operator on an admin-only action', async () => {
     // Delete and dispatch are admin. An operator reaching them is a bug, not a
     // permission to widen.
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator', yardIds: [] });
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'operator' });
     const dal = await freshDal();
 
     await expect(dal.requireAdmin()).rejects.toThrow('Forbidden');
   });
 
   it('lets an admin through', async () => {
-    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin', yardIds: [] });
+    verifySessionCookie.mockResolvedValue({ uid: 'u1', role: 'admin' });
     const dal = await freshDal();
 
     expect((await dal.requireAdmin()).role).toBe('admin');
-  });
-});
-
-describe('canActOnYard', () => {
-  it('allows a yard the operator holds', () => {
-    expect(canActOnYard({ uid: 'u1', role: 'operator', yardIds: ['a', 'b'] }, 'b')).toBe(true);
-  });
-
-  it('refuses a yard they do not hold, admin included', () => {
-    // Admin is a wider ROLE, not a wider set of yards. An admin for Cape Town
-    // is still not an admin for Durban.
-    expect(canActOnYard({ uid: 'u1', role: 'admin', yardIds: ['a'] }, 'durban')).toBe(false);
   });
 });
 

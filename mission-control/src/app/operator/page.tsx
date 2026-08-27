@@ -1,8 +1,9 @@
-import { ShieldCheck, MapPin } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 import { getOperatorSession } from '@/lib/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
 import { SignOutButton } from '@/components/operator/SignOutButton';
+import { YardPicker } from '@/components/operator/YardPicker';
 
 /**
  * One route for the operator surface: sign-in when there is no session, the
@@ -18,8 +19,6 @@ export default async function OperatorPage() {
   if (!session) {
     return <OperatorSignIn />;
   }
-
-  const hasYards = session.yardIds.length > 0;
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
@@ -38,27 +37,19 @@ export default async function OperatorPage() {
             <ShieldCheck className="h-3.5 w-3.5 text-primary" />
             {session.role}
           </span>
-          <span
-            className={`clay inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium ${
-              hasYards
-                ? 'border-border/60 bg-card text-foreground'
-                : 'border-destructive/30 bg-destructive/10 text-destructive'
-            }`}
-          >
-            <MapPin className="h-3.5 w-3.5" />
-            {hasYards ? session.yardIds.join(', ') : 'No yard assigned'}
-          </span>
+          {/* A choice, not a permission. An operator is an operator anywhere;
+              the yard decides which queue they are looking at. */}
+          <YardPicker />
         </div>
 
         <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
           <div className="max-w-sm space-y-2">
             <p className="font-display text-lg font-bold text-foreground">
-              {hasYards ? 'The mission queue lands here next' : 'Nothing to dispatch to yet'}
+              The mission queue lands here next
             </p>
             <p className="text-sm text-muted-foreground">
-              {hasYards
-                ? 'Sign-in and route protection are in place. The live queue arrives with the next story.'
-                : 'This account has no yard assigned, so there is nowhere to send a mission. An admin can grant one.'}
+              Sign-in, route protection and yard selection are in place. The live
+              queue arrives with the next story.
             </p>
           </div>
         </div>

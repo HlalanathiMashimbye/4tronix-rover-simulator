@@ -25,7 +25,7 @@ describe('unsafe import blocking (integration)', () => {
    */
   it('accepts mission with safe rover commands', () => {
     const safeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-001',
@@ -50,7 +50,7 @@ rover.forward(50)
    */
   it('rejects mission with os module import', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-002',
@@ -75,7 +75,7 @@ os.system('rm -rf /')
    */
   it('rejects mission with subprocess import', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-003',
@@ -98,7 +98,7 @@ subprocess.run(['echo', 'hacked'])
    */
   it('rejects mission with socket import', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-004',
@@ -120,7 +120,7 @@ s = socket.socket()
    */
   it('rejects mission with from...import pattern', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-005',
@@ -142,7 +142,7 @@ print(path.exists('/'))
    */
   it('rejects mission with non-approved rover commands', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-006',
@@ -165,7 +165,7 @@ rover.delete_all_files()
    */
   it('rejects mission with eval() built-in', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-007',
@@ -187,7 +187,7 @@ eval(code)
    */
   it('rejects mission with exec() built-in', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-008',
@@ -208,7 +208,7 @@ exec("import os; os.system('ls')")
    */
   it('rejects mission with open() built-in', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-009',
@@ -230,7 +230,7 @@ with open('/etc/passwd', 'r') as f:
    */
   it('reports multiple violations in single mission', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-010',
@@ -255,7 +255,7 @@ eval("print('test')")
    */
   it('accepts mission with loops and conditionals', () => {
     const safeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-011',
@@ -281,7 +281,7 @@ for i in range(4):
    */
   it('accepts mission with print statements for debugging', () => {
     const safeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-012',
@@ -303,7 +303,7 @@ print("Mission complete")
    */
   it('includes line numbers in error messages', () => {
     const unsafeMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-013',
@@ -346,7 +346,7 @@ rover.backward(50)
    */
   it('rejects empty code', () => {
     const invalidMissionData = {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       learnerId: 'test-learner',
       name: 'Test Mission',
       sessionId: 'test-session-015',

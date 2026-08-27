@@ -33,13 +33,13 @@ function adminFirestore(runDocs: Array<{ id: string; data: Record<string, unknow
 describe('findRuns', () => {
   it('reads every yard that attempted the mission', async () => {
     const { firestore } = adminFirestore([
-      { id: 'uct-rover-1', data: { status: 'completed', youtubeUrl: 'https://youtu.be/a' } },
+      { id: 'curiosity', data: { status: 'completed', youtubeUrl: 'https://youtu.be/a' } },
       { id: 'durban-1', data: { status: 'processing' } },
     ]);
 
     const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
 
-    expect(runs.map((r) => r.yardId)).toEqual(['uct-rover-1', 'durban-1']);
+    expect(runs.map((r) => r.yardId)).toEqual(['curiosity', 'durban-1']);
     expect(runs[0].youtubeUrl).toBe('https://youtu.be/a');
   });
 
@@ -47,12 +47,12 @@ describe('findRuns', () => {
     // The id IS the yard. A stale or wrong yardId field must never win, or a
     // run could claim to belong to a yard that never ran it.
     const { firestore } = adminFirestore([
-      { id: 'uct-rover-1', data: { yardId: 'somewhere-else', status: 'completed' } },
+      { id: 'curiosity', data: { yardId: 'somewhere-else', status: 'completed' } },
     ]);
 
     const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
 
-    expect(runs[0].yardId).toBe('uct-rover-1');
+    expect(runs[0].yardId).toBe('curiosity');
   });
 
   it('returns an empty list for a mission nobody has run', async () => {
@@ -64,7 +64,7 @@ describe('findRuns', () => {
   });
 
   it('defaults a run with no status to queued rather than throwing', async () => {
-    const { firestore } = adminFirestore([{ id: 'uct-rover-1', data: {} }]);
+    const { firestore } = adminFirestore([{ id: 'curiosity', data: {} }]);
 
     expect((await new FirestoreMissionRepository(firestore).findRuns('m1'))[0].status).toBe('queued');
   });
@@ -77,22 +77,22 @@ describe('upsertRun', () => {
     const { firestore, set, runDoc } = adminFirestore([]);
 
     await new FirestoreMissionRepository(firestore).upsertRun('m1', {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       status: 'completed',
       completedAt: '2026-08-27T10:00:00Z',
     });
 
-    expect(runDoc).toHaveBeenCalledWith('uct-rover-1');
+    expect(runDoc).toHaveBeenCalledWith('curiosity');
     const [payload, options] = set.mock.calls[0];
     expect(options).toEqual({ merge: true });
-    expect(payload).toMatchObject({ yardId: 'uct-rover-1', status: 'completed' });
+    expect(payload).toMatchObject({ yardId: 'curiosity', status: 'completed' });
   });
 
   it('strips undefined fields so they do not land in Firestore', async () => {
     const { firestore, set } = adminFirestore([]);
 
     await new FirestoreMissionRepository(firestore).upsertRun('m1', {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       status: 'queued',
       youtubeUrl: undefined,
       completedAt: undefined,
@@ -109,9 +109,9 @@ describe('upsertRun', () => {
     const { firestore, runDoc } = adminFirestore([]);
     const repository = new FirestoreMissionRepository(firestore);
 
-    await repository.upsertRun('m1', { yardId: 'uct-rover-1', status: 'processing' });
+    await repository.upsertRun('m1', { yardId: 'curiosity', status: 'processing' });
     await repository.upsertRun('m1', { yardId: 'durban-1', status: 'processing' });
 
-    expect(runDoc.mock.calls.map((c) => c[0])).toEqual(['uct-rover-1', 'durban-1']);
+    expect(runDoc.mock.calls.map((c) => c[0])).toEqual(['curiosity', 'durban-1']);
   });
 });

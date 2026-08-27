@@ -30,7 +30,15 @@ CONFIG_FILE = os.environ.get(
 )
 
 # Missions carry yardId; a satellite only ever manages its own yard's missions.
-DEFAULT_YARD_ID = 'uct-rover-1'
+#
+# Named after the rover itself, which answers to `curiosity.local` on the yard
+# LAN. The id a mission carries in Firestore is then the same word you ssh to,
+# rather than `uct-rover-1`, which matched nothing anyone could see anywhere.
+#
+# This must equal the id in mission-control's KNOWN_YARDS. A mismatch shows up
+# as an empty queue, not as an error, so it is worth checking first when the
+# satellite syncs cleanly but nothing arrives.
+DEFAULT_YARD_ID = 'curiosity'
 
 _lock = threading.Lock()
 _cached = {}

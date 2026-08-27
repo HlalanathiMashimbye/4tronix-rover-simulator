@@ -180,7 +180,7 @@ and `api_missions` returns every mission regardless of yard.
 Add two values, read at startup and persisted into `satellite_config.json` if absent:
 
 - `satellite_id`: generate a UUID once on first boot. Used as `lockOwner`.
-- `yard_id`: must match the `yardId` on missions (e.g. `uct-rover-1`). Configured, not generated.
+- `yard_id`: must match the `yardId` on missions (e.g. `curiosity`, the rover's own hostname). Configured, not generated.
 
 Filter the mission list by `yard_id`. Missions already carry `yardId`, so locks are only
 ever contended *within* a yard. Cross-yard contention is close to theoretical until the

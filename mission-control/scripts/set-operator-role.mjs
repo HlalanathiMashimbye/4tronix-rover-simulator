@@ -7,7 +7,7 @@
  * Roles and yards live on the Firebase Auth CUSTOM CLAIM, carried on the ID
  * token. One store, read by everything that enforces:
  *
- *   firestore.rules                     ->  request.auth.token.role / .yardIds
+ *   firestore.rules                     ->  request.auth.token.role
  *   mission-control lib/auth/dal.ts     ->  the verified session cookie
  *   yard/satellite/operator_console.py  ->  claims.get('role')
  *
@@ -22,9 +22,14 @@
  * because the list of everyone with operator access is not something a
  * signed-in learner needs.
  *
- * `role` decides WHAT an account may do; `yardIds` decides WHERE. Admin is a
- * superset of operator, but it is a wider ROLE and not a wider set of yards:
- * an admin for Cape Town is still not an admin for Durban.
+ * `role` decides what an account may do. It does NOT decide where: operators
+ * choose their yard when they sign in rather than being assigned one, which
+ * the sponsor was explicit about on 2026-08-27. A yardIds claim briefly
+ * existed here and has been removed.
+ *
+ * This script is itself on the way out. Manual role grants are being replaced
+ * by an apply-to-be-an-operator flow that emails an admin for one-click
+ * approval, so nobody has to run a backend script to onboard a facilitator.
  *
  * The user must already exist in Firebase Auth: sign in once through the app
  * or the operator console first. Roles are granted TO an account, they do not
@@ -33,8 +38,8 @@
  * Usage (dry run prints what would change and writes nothing):
  *   cd mission-control
  *   set -a && source .env && set +a
- *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --yards uct-rover-1
- *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --yards uct-rover-1 --apply
+ *   node scripts/set-operator-role.mjs --email someone@example.com --role operator
+ *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --apply
  *   node scripts/set-operator-role.mjs --email someone@example.com --revoke --apply
  *
  * To act on a different project, source that project's env first. The script
@@ -58,15 +63,6 @@ const email = argValue('--email');
 const uidArg = argValue('--uid');
 const role = argValue('--role') ?? 'operator';
 
-// Which yards this account may act on. `role` decides WHAT they may do,
-// `yardIds` decides WHERE. Absent means no yards rather than all of them: an
-// operator with no yard has nothing to dispatch to, which is a safe and
-// obvious failure, whereas defaulting to every yard would quietly make a
-// misconfigured account the most powerful one in the system.
-const yardIds = (argValue('--yards') ?? '')
-  .split(',')
-  .map((y) => y.trim())
-  .filter(Boolean);
 
 const VALID_ROLES = ['operator', 'admin'];
 
@@ -128,7 +124,7 @@ const existingClaims = user.customClaims ?? {};
 
 console.log(`user:          ${user.email ?? '(no email)'}`);
 console.log(`uid:           ${user.uid}`);
-console.log(`current claim: role=${existingClaims.role ?? '(none)'} yardIds=[${(existingClaims.yardIds ?? []).join(', ')}]`);
+console.log(`current claim: role=${existingClaims.role ?? '(none)'}`);
 
 const userDocRef = db.collection('users').doc(user.uid);
 const userDocSnap = await userDocRef.get();
@@ -155,22 +151,13 @@ if (REVOKE) {
 } else {
   console.log(`action: GRANT '${role}'`);
   console.log('  - custom claim  role=' + role + '   (read by firestore.rules and the operator console)');
-  console.log('  - custom claim  yardIds=[' + yardIds.join(', ') + ']');
   console.log('  - users/' + user.uid + '   (human-readable ledger only, nothing enforces from it)');
 
-  if (yardIds.length === 0) {
-    console.log(
-      '\nNOTE: no --yards given, so this account can sign in but has no yard to\n' +
-      '      act on. Pass --yards uct-rover-1 (comma-separated for several).'
-    );
-  }
-
   if (APPLY) {
-    await auth.setCustomUserClaims(user.uid, { ...existingClaims, role, yardIds });
+    await auth.setCustomUserClaims(user.uid, { ...existingClaims, role });
     await userDocRef.set(
       {
         role,
-        yardIds,
         email: user.email ?? null,
         grantedAt: new Date().toISOString(),
         grantedBy: process.env.USER ?? 'unknown',

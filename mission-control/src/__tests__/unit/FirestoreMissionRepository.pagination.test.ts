@@ -54,7 +54,7 @@ function makeFirestore(rows: Row[], meter = { docsRead: 0 }) {
 
 const row = (id: string, submittedAt: string): Row => ({
   id,
-  data: { yardId: 'uct-rover-1', status: 'completed', code: 'forward(50)', submittedAt },
+  data: { yardId: 'curiosity', status: 'completed', code: 'forward(50)', submittedAt },
 });
 
 describe('findRecent pagination', () => {
@@ -131,7 +131,7 @@ describe('soft-deleted missions', () => {
   const deletedRow = (id: string, submittedAt: string): Row => ({
     id,
     data: {
-      yardId: 'uct-rover-1',
+      yardId: 'curiosity',
       status: 'completed',
       code: 'forward(50)',
       submittedAt,

@@ -50,18 +50,16 @@ service cloud.firestore {
       return role() == "admin";
     }
 
-    // Which yards this account may act on. Absent means NO yards, never all:
-    // an account with no yard has nothing to dispatch to, and defaulting the
-    // other way would make a misconfigured operator the most powerful one.
-    function yardIds() {
-      return request.auth != null && "yardIds" in request.auth.token
-        ? request.auth.token.yardIds
-        : [];
-    }
-
-    function canActOnYard(yardId) {
-      return isOperator() && yardId in yardIds();
-    }
+    // There is deliberately no per-yard check here.
+    //
+    // A yardIds claim briefly existed, granted per account. The sponsor
+    // rejected it on 2026-08-27: an operator logs in and CHOOSES a yard rather
+    // than being assigned one, because which yard someone is standing next to
+    // is a fact about this afternoon and not a property of their account.
+    //
+    // So an operator is an operator anywhere. The yard is a runtime selection
+    // held client-side (infrastructure/config/yards.ts) and decides which queue
+    // they are looking at, not what they are permitted to do.
 
     // Keys this write would add, change or remove.
     function touchedKeys() {

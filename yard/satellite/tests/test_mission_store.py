@@ -25,7 +25,7 @@ def _mission(mission_id, status='queued', **overrides):
     m = {
         'id': mission_id,
         'name': f'Mission {mission_id}',
-        'yardId': 'uct-rover-1',
+        'yardId': 'curiosity',
         'code': 'rover.forward(10)',
         'blocklyState': '{"blocks":{}}',
         'status': status,
@@ -93,11 +93,11 @@ def test_upsert_stores_last_synced_at_in_sync_meta():
 
 def test_upsert_maps_camel_case_firestore_fields_to_snake_case_columns():
     mission_store.upsert_missions(
-        [_mission('a', yardId='uct-rover-1', blocklyState='{"x":1}')],
+        [_mission('a', yardId='curiosity', blocklyState='{"x":1}')],
         '2026-07-14T09:00:00Z',
     )
     row = mission_store.get_mission('a')
-    assert row['yard_id'] == 'uct-rover-1'
+    assert row['yard_id'] == 'curiosity'
     assert row['blockly_state'] == '{"x":1}'
 
 
@@ -184,11 +184,11 @@ def test_get_missions_scopes_to_a_yard(tmp_path, monkeypatch):
     mission_store.init_db()
 
     mission_store.upsert_missions([
-        {'id': 'a', 'yardId': 'uct-rover-1', 'status': 'queued', 'submittedAt': '2026-01-02'},
+        {'id': 'a', 'yardId': 'curiosity', 'status': 'queued', 'submittedAt': '2026-01-02'},
         {'id': 'b', 'yardId': 'durban-rover-1', 'status': 'queued', 'submittedAt': '2026-01-01'},
     ], '2026-01-03T00:00:00Z')
 
-    scoped, _, _total = mission_store.get_missions(yard_id='uct-rover-1')
+    scoped, _, _total = mission_store.get_missions(yard_id='curiosity')
     assert [m['id'] for m in scoped] == ['a']
 
     unscoped, _, _total = mission_store.get_missions()
@@ -204,14 +204,14 @@ def test_actionable_missions_are_never_capped(tmp_path, monkeypatch):
 
     # 30 finished missions, all newer than the queued one.
     mission_store.upsert_missions(
-        [{'id': f'done{i}', 'yardId': 'uct-rover-1', 'status': 'completed',
+        [{'id': f'done{i}', 'yardId': 'curiosity', 'status': 'completed',
           'submittedAt': f'2026-07-{i+1:02d}T08:00:00Z'} for i in range(30)]
-        + [{'id': 'old-queued', 'yardId': 'uct-rover-1', 'status': 'queued',
+        + [{'id': 'old-queued', 'yardId': 'curiosity', 'status': 'queued',
             'submittedAt': '2020-01-01T08:00:00Z'}],
         '2026-07-31T00:00:00Z',
     )
 
-    rows, _, _total = mission_store.get_missions(limit=5, yard_id='uct-rover-1')
+    rows, _, _total = mission_store.get_missions(limit=5, yard_id='curiosity')
     ids = {r['id'] for r in rows}
 
     assert 'old-queued' in ids, 'a queued mission must never fall off the list'
@@ -224,13 +224,13 @@ def test_cancelled_missions_are_reachable_and_scoped_to_the_yard(tmp_path, monke
     mission_store.init_db()
     mission_store.upsert_missions(
         [
-            {'id': 'x', 'yardId': 'uct-rover-1', 'status': 'cancelled', 'submittedAt': '2026-07-01'},
+            {'id': 'x', 'yardId': 'curiosity', 'status': 'cancelled', 'submittedAt': '2026-07-01'},
             {'id': 'y', 'yardId': 'other-yard', 'status': 'cancelled', 'submittedAt': '2026-07-01'},
         ],
         '2026-07-02',
     )
 
-    rows, _, _total = mission_store.get_missions(yard_id='uct-rover-1')
+    rows, _, _total = mission_store.get_missions(yard_id='curiosity')
     assert [r['id'] for r in rows] == ['x']
 
 
@@ -241,7 +241,7 @@ def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
     monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
     mission_store.upsert_missions(
-        [{'id': 'x', 'yardId': 'uct-rover-1', 'status': 'cancelled', 'submittedAt': '2026-07-01'}],
+        [{'id': 'x', 'yardId': 'curiosity', 'status': 'cancelled', 'submittedAt': '2026-07-01'}],
         '2026-07-02',
     )
 
