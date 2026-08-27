@@ -16,7 +16,14 @@ export interface Learner {
   sessionId: string;                 // Browser fingerprint for device linking
 
   // Optional profile (user-provided, not required)
-  displayName?: string;              // Optional nickname (e.g., "RoverPilot123")
+  // Read-only now, and absent on every record. Nothing can set it: the writer
+  // and its sanitiser were removed because no screen ever offered a learner a
+  // way to name themselves, and a dormant one is what gets wired to a "name
+  // yourself" box without anyone weighing what it undoes. Learners are
+  // anonymous here by design. MissionNotificationService still reads this when
+  // personalising a completion email to the learner's own address, and handles
+  // it being absent.
+  displayName?: string;
   avatarColor?: string;              // Random color for UI personalization
   learnerEmail?: string;             // Optional email for notifications / reminders
 
@@ -86,13 +93,3 @@ export function isActiveLearner(learner: Learner): boolean {
   return learner.missionCount > 0;
 }
 
-/**
- * Sanitizes display name input (removes PII patterns)
- */
-export function sanitizeDisplayName(input: string): string {
-  // Remove email patterns
-  const noEmail = input.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '');
-
-  // Limit length and trim
-  return noEmail.trim().substring(0, 20);
-}
