@@ -1,4 +1,5 @@
-import { ShieldCheck } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldCheck, Users } from 'lucide-react';
 
 import { getOperatorSession } from '@/lib/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
@@ -40,6 +41,18 @@ export default async function OperatorPage() {
           {/* A choice, not a permission. An operator is an operator anywhere;
               the yard decides which queue they are looking at. */}
           <YardPicker />
+
+          {/* Admins only. An operator has no use for it and the page redirects
+              them anyway, so showing it would be an invitation to a dead end. */}
+          {session.role === 'admin' && (
+            <Link
+              href="/operator/team"
+              className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
+            >
+              <Users className="h-3.5 w-3.5 text-primary" />
+              Manage access
+            </Link>
+          )}
         </div>
 
         <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
