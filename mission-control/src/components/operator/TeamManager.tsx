@@ -215,6 +215,28 @@ export function TeamManager({
                     </button>
                   )}
 
+                  {/* The other direction. Without it, stepping someone down from
+                      admin means Remove followed by a fresh grant, which signs
+                      them out to achieve something that need not touch their
+                      session at all. Same guards as removal: the last admin and
+                      your own account are both refused. */}
+                  {account.role === 'admin' && account.email && (
+                    <button
+                      onClick={() => submit(account.email!, 'operator', `demote-${account.uid}`)}
+                      disabled={busy !== null || locked}
+                      title={
+                        isSelf
+                          ? 'You cannot change your own access'
+                          : isLastAdmin
+                            ? 'The only admin cannot be stepped down'
+                            : 'Step down to operator'
+                      }
+                      className="rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:border-border/60"
+                    >
+                      {busy === `demote-${account.uid}` ? 'Working' : 'Make operator'}
+                    </button>
+                  )}
+
                   <button
                     onClick={() => account.email && submit(account.email, null, `revoke-${account.uid}`)}
                     disabled={busy !== null || locked || !account.email}

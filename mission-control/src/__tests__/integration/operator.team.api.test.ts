@@ -216,6 +216,36 @@ describe('revoking', () => {
     expect(setCustomUserClaims).not.toHaveBeenCalled();
   });
 
+  it('steps an admin down to operator without signing them out', async () => {
+    // Demotion is a role change, not a removal. Rotating their refresh tokens
+    // would sign someone out of a session they are still entitled to.
+    population([
+      authUser('admin-uid', 'admin@rover.com', 'admin'),
+      authUser('a2', 'second@rover.com', 'admin'),
+    ]);
+    getUserByEmail.mockResolvedValue(authUser('a2', 'second@rover.com', 'admin'));
+
+    const response = await post({ email: 'second@rover.com', role: 'operator' });
+
+    expect(response.status).toBe(200);
+    expect(setCustomUserClaims).toHaveBeenCalledWith('a2', { role: 'operator' });
+    expect(revokeRefreshTokens).not.toHaveBeenCalled();
+  });
+
+  it('refuses to step down the only admin', async () => {
+    population([
+      authUser('admin-uid', 'admin@rover.com', 'admin'),
+      authUser('op-uid', 'op@rover.com', 'operator'),
+    ]);
+    requireAdmin.mockResolvedValue({ uid: 'other', email: 'other@rover.com', role: 'admin' });
+    getUserByEmail.mockResolvedValue(authUser('admin-uid', 'admin@rover.com', 'admin'));
+
+    const response = await post({ email: 'admin@rover.com', role: 'operator' });
+
+    expect(response.status).toBe(409);
+    expect(setCustomUserClaims).not.toHaveBeenCalled();
+  });
+
   it('allows removing an admin when another remains', async () => {
     population([
       authUser('admin-uid', 'admin@rover.com', 'admin'),
