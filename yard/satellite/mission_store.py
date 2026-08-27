@@ -97,6 +97,45 @@ def init_db():
                 resolution   TEXT NOT NULL,
                 logged_at    TEXT NOT NULL
             );
+
+            -- Run mirror: execution state for each (mission, yard) pair.
+            -- A mission is a program; a run is one yard's attempt to execute it.
+            -- Keyed by (mission_id, yard_id) so multiple yards can attempt the same
+            -- mission concurrently without contention or overwrites.
+            CREATE TABLE IF NOT EXISTS runs_mirror (
+                mission_id        TEXT NOT NULL,
+                yard_id           TEXT NOT NULL,
+                status            TEXT NOT NULL,
+                started_at        TEXT,
+                completed_at      TEXT,
+                youtube_url       TEXT,
+                needs_review      INTEGER DEFAULT 0,
+                review_reason     TEXT,
+                status_updated_at TEXT,
+                lock_owner        TEXT,
+                locked_at         TEXT,
+                lease_expires_at  TEXT,
+                deleted           INTEGER DEFAULT 0,
+                deleted_at        TEXT,
+                synced_at         TEXT,
+                local_dirty       INTEGER DEFAULT 0,
+                PRIMARY KEY (mission_id, yard_id)
+            );
+
+            -- Run outbox: execution state changes queued for Firestore.
+            -- Separate from mission outbox so run updates flush independently.
+            CREATE TABLE IF NOT EXISTS run_outbox (
+                seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+                uuid       TEXT UNIQUE NOT NULL,
+                mission_id TEXT NOT NULL,
+                yard_id    TEXT NOT NULL,
+                op         TEXT NOT NULL,
+                payload    TEXT NOT NULL,
+                event_at   TEXT NOT NULL,
+                attempts   INTEGER DEFAULT 0,
+                last_error TEXT,
+                created_at TEXT NOT NULL
+            );
         """)
         _migrate(conn)
         conn.commit()
@@ -905,6 +944,434 @@ def delete_mission(mission_id, now_iso):
             _enqueue(conn, mission_id, 'delete', payload)
             conn.commit()
         except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+# --- Run operations (User Story 361: Mission = program, Run = execution) ----
+#
+# Runs separate execution state from missions, keyed by (mission_id, yard_id).
+# Multiple yards can run the same mission concurrently without contention: each
+# holds its own lock, has its own status, recording, and timestamps.
+
+def get_run(mission_id, yard_id):
+    """A single run from the mirror, or None if it isn't there."""
+    with _db_lock:
+        conn = _connect()
+        row = conn.execute(
+            'SELECT * FROM runs_mirror WHERE mission_id = ? AND yard_id = ?',
+            (mission_id, yard_id),
+        ).fetchone()
+        conn.close()
+    return dict(row) if row else None
+
+
+def get_runs(mission_id):
+    """All runs for a mission."""
+    with _db_lock:
+        conn = _connect()
+        rows = conn.execute(
+            'SELECT * FROM runs_mirror WHERE mission_id = ? ORDER BY yard_id',
+            (mission_id,),
+        ).fetchall()
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_active_runs(yard_id=None):
+    """Runs this yard still considers non-terminal.
+
+    Used for reconciliation and for the yard selector in the console.
+    """
+    with _db_lock:
+        conn = _connect()
+        sql = "SELECT * FROM runs_mirror WHERE deleted = 0 AND status IN ('queued','processing')"
+        params = []
+        if yard_id:
+            sql += ' AND yard_id = ?'
+            params.append(yard_id)
+        rows = conn.execute(sql + ' ORDER BY mission_id', params).fetchall()
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def upsert_runs(runs, synced_at):
+    """Write a batch of runs from Firestore into the runs mirror.
+
+    Mirrors upsert_missions: pulls read runs where `runs_mirror.local_dirty = 0`.
+    A pending outbox entry blocks the pull (push-before-pull at the row level).
+    """
+    with _db_lock:
+        conn = _connect()
+        for r in runs:
+            conn.execute("""
+                INSERT INTO runs_mirror
+                    (mission_id, yard_id, status, started_at, completed_at,
+                     youtube_url, needs_review, review_reason, status_updated_at,
+                     lock_owner, locked_at, lease_expires_at, deleted, deleted_at,
+                     synced_at, local_dirty)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+                ON CONFLICT(mission_id, yard_id) DO UPDATE SET
+                    status=excluded.status,
+                    started_at=excluded.started_at,
+                    completed_at=excluded.completed_at,
+                    youtube_url=excluded.youtube_url,
+                    needs_review=excluded.needs_review,
+                    review_reason=excluded.review_reason,
+                    status_updated_at=excluded.status_updated_at,
+                    lock_owner=excluded.lock_owner,
+                    locked_at=excluded.locked_at,
+                    lease_expires_at=excluded.lease_expires_at,
+                    deleted=excluded.deleted,
+                    deleted_at=excluded.deleted_at,
+                    synced_at=excluded.synced_at
+                WHERE local_dirty = 0
+            """, (
+                r.get('missionId') or r.get('mission_id'),
+                r.get('yardId') or r.get('yard_id'),
+                r.get('status'), r.get('startedAt'), r.get('completedAt'),
+                r.get('youtubeUrl'), r.get('needsReview', 0), r.get('reviewReason'),
+                r.get('statusUpdatedAt'),
+                r.get('lockOwner'), r.get('lockedAt'), r.get('leaseExpiresAt'),
+                1 if r.get('deleted') else 0, r.get('deletedAt'),
+                synced_at,
+            ))
+        conn.commit()
+        conn.close()
+
+
+def acquire_run(mission_id, yard_id, owner, now_iso, expires_iso):
+    """Atomically claim a run and queue the claim for Firestore.
+
+    Returns (ok, reason, run_dict). Mirrors acquire_mission but for runs:
+    concurrency is scoped to (mission_id, yard_id) instead of globally.
+
+    Reasons: 'not-found', 'not-queued', 'locked-by-other'.
+    """
+    with _db_lock:
+        conn = _connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+
+            # Read or create the run
+            row = conn.execute(
+                'SELECT * FROM runs_mirror WHERE mission_id = ? AND yard_id = ?',
+                (mission_id, yard_id),
+            ).fetchone()
+
+            if row is None:
+                # First run for this (mission, yard): create it from queued state
+                run = {
+                    'mission_id': mission_id,
+                    'yard_id': yard_id,
+                    'status': 'queued',
+                    'lock_owner': None,
+                    'locked_at': None,
+                    'lease_expires_at': None,
+                }
+                conn.execute("""
+                    INSERT INTO runs_mirror
+                        (mission_id, yard_id, status, lock_owner, locked_at,
+                         lease_expires_at, local_dirty)
+                    VALUES (?,?,?,?,?,?,1)
+                """, (mission_id, yard_id, 'queued', None, None, None))
+            else:
+                run = dict(row)
+
+            status = run.get('status')
+            holder = run.get('lock_owner')
+            lease = run.get('lease_expires_at')
+            lease_live = bool(lease) and lease > now_iso
+
+            # Check if this run is already processing
+            if status == 'processing' and holder and lease_live:
+                conn.rollback()
+                return False, 'locked-by-other', None
+
+            if status not in ('queued', 'completed', 'failed', 'cancelled'):
+                conn.rollback()
+                return False, 'not-queued', None
+
+            # Claim it
+            updates = {
+                'status': 'processing',
+                'started_at': now_iso,
+                'status_updated_at': now_iso,
+                'lock_owner': owner,
+                'locked_at': now_iso,
+                'lease_expires_at': expires_iso,
+                'local_dirty': 1,
+            }
+            payload = {
+                'status': 'processing',
+                'startedAt': now_iso,
+                'statusUpdatedAt': now_iso,
+                'lockOwner': owner,
+                'lockedAt': now_iso,
+                'leaseExpiresAt': expires_iso,
+            }
+
+            sets = ', '.join(f'{k} = ?' for k in updates)
+            conn.execute(
+                f'UPDATE runs_mirror SET {sets} WHERE mission_id = ? AND yard_id = ?',
+                list(updates.values()) + [mission_id, yard_id],
+            )
+            _enqueue_run(conn, mission_id, yard_id, 'lock', payload)
+            conn.commit()
+
+            run.update(updates)
+            return True, None, run
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def release_run(mission_id, yard_id, status, now_iso, review_reason=None, operator_decision=False):
+    """Drop the lock and set a run status, queueing both for Firestore.
+
+    Mirrors release_mission for runs: handles terminal transitions and rollbacks.
+    """
+    with _db_lock:
+        conn = _connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            updates = {
+                'status': status,
+                'status_updated_at': now_iso,
+                'lock_owner': None,
+                'locked_at': None,
+                'lease_expires_at': None,
+                'local_dirty': 1,
+            }
+            payload = {
+                'status': status,
+                'statusUpdatedAt': now_iso,
+                'lockOwner': None,
+                'lockedAt': None,
+                'leaseExpiresAt': None,
+            }
+
+            if status == 'completed':
+                updates['completed_at'] = now_iso
+                payload['completedAt'] = now_iso
+
+            if review_reason is not None:
+                updates['needs_review'] = 1
+                updates['review_reason'] = review_reason
+                payload['needsReview'] = True
+                payload['reviewReason'] = review_reason
+            elif status in ('completed', 'failed', 'cancelled'):
+                # Clear review flag on terminal transitions
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
+
+            if operator_decision:
+                payload[_FORCE_KEY] = True
+
+            sets = ', '.join(f'{k} = ?' for k in updates)
+            conn.execute(
+                f'UPDATE runs_mirror SET {sets} WHERE mission_id = ? AND yard_id = ?',
+                list(updates.values()) + [mission_id, yard_id],
+            )
+            _enqueue_run(conn, mission_id, yard_id, 'release', payload)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def renew_run_lease(mission_id, yard_id, expires_iso, now_iso):
+    """Extend a live run lease. Mirror-only, like mission renewal."""
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            'UPDATE runs_mirror SET lease_expires_at = ?, status_updated_at = ? WHERE mission_id = ? AND yard_id = ?',
+            (expires_iso, now_iso, mission_id, yard_id),
+        )
+        conn.commit()
+        conn.close()
+
+
+def set_run_field(mission_id, yard_id, updates, payload):
+    """Generic run mirror write + run outbox enqueue (e.g., YouTube URL)."""
+    with _db_lock:
+        conn = _connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            updates_dict = dict(updates)
+            updates_dict['local_dirty'] = 1
+            sets = ', '.join(f'{k} = ?' for k in updates_dict)
+            conn.execute(
+                f'UPDATE runs_mirror SET {sets} WHERE mission_id = ? AND yard_id = ?',
+                list(updates_dict.values()) + [mission_id, yard_id],
+            )
+            _enqueue_run(conn, mission_id, yard_id, 'youtube', payload)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def peek_run_outbox():
+    """The oldest unflushed run entry, or None."""
+    with _db_lock:
+        conn = _connect()
+        row = conn.execute('SELECT * FROM run_outbox ORDER BY seq ASC LIMIT 1').fetchone()
+        conn.close()
+    return dict(row) if row else None
+
+
+def delete_run_outbox(seq):
+    """Drop an entry once Firestore has confirmed the write."""
+    with _db_lock:
+        conn = _connect()
+        conn.execute('DELETE FROM run_outbox WHERE seq = ?', (seq,))
+        conn.commit()
+        conn.close()
+
+
+def mark_run_attempt(seq, error_msg):
+    """Record a failed flush so a stuck entry is visible."""
+    with _db_lock:
+        conn = _connect()
+        conn.execute(
+            'UPDATE run_outbox SET attempts = attempts + 1, last_error = ? WHERE seq = ?',
+            (error_msg, seq),
+        )
+        conn.commit()
+        conn.close()
+
+
+def clear_run_dirty(mission_id, yard_id):
+    """Release a run row once nothing is queued for it."""
+    with _db_lock:
+        conn = _connect()
+        still_queued = conn.execute(
+            'SELECT 1 FROM run_outbox WHERE mission_id = ? AND yard_id = ? LIMIT 1',
+            (mission_id, yard_id),
+        ).fetchone()
+        if not still_queued:
+            conn.execute(
+                'UPDATE runs_mirror SET local_dirty = 0 WHERE mission_id = ? AND yard_id = ?',
+                (mission_id, yard_id),
+            )
+            conn.commit()
+        conn.close()
+
+
+def run_has_pending(mission_id, yard_id):
+    """True if the run outbox holds an unflushed entry for this run."""
+    with _db_lock:
+        conn = _connect()
+        row = conn.execute(
+            'SELECT 1 FROM run_outbox WHERE mission_id = ? AND yard_id = ? LIMIT 1',
+            (mission_id, yard_id),
+        ).fetchone()
+        conn.close()
+    return row is not None
+
+
+def _enqueue_run(conn, mission_id, yard_id, op, payload):
+    """Append to the run outbox on an already-open transaction."""
+    now = _now_iso()
+    conn.execute(
+        'INSERT INTO run_outbox (uuid, mission_id, yard_id, op, payload, event_at, created_at)'
+        ' VALUES (?,?,?,?,?,?,?)',
+        (str(uuid_mod.uuid4()), mission_id, yard_id, op, json.dumps(payload), now, now),
+    )
+
+
+# --- Backfill: migrate existing missions to implicit runs (User Story 361) ----
+
+# --- Backward compatibility (deprecated, routed to runs) ----
+
+def acquire_mission_compat(mission_id, owner, now_iso, expires_iso, yard_id, for_rerun=False):
+    """DEPRECATED: Routes to acquire_run. Kept for gradual migration.
+
+    This wrapper allows existing code to call acquire_mission and get run-based
+    locking. The for_rerun logic is handled in acquire_run.
+    """
+    return acquire_run(mission_id, yard_id, owner, now_iso, expires_iso)
+
+
+def release_mission_compat(mission_id, status, now_iso, yard_id, review_reason=None, operator_decision=False):
+    """DEPRECATED: Routes to release_run. Kept for gradual migration."""
+    return release_run(mission_id, yard_id, status, now_iso, review_reason, operator_decision)
+
+
+def backfill_missions_to_runs():
+    """Create one implicit run per mission with existing execution state.
+
+    Idempotent: skips missions that already have a run, and skips missions
+    without a yardId (no claiming yard means nobody established that a rover
+    attempted it).
+
+    Returns (created, skipped, errors) for logging and verification.
+    """
+    with _db_lock:
+        conn = _connect()
+        try:
+            created = 0
+            skipped = 0
+            errors = []
+
+            # Find missions with execution state and a yard
+            missions = conn.execute("""
+                SELECT id, yard_id, status, started_at, completed_at, youtube_url,
+                       needs_review, review_reason, status_updated_at, lock_owner,
+                       locked_at, lease_expires_at
+                FROM mission_mirror
+                WHERE yard_id IS NOT NULL AND yard_id != ''
+            """).fetchall()
+
+            for mission in missions:
+                mission_id = mission['id']
+                yard_id = mission['yard_id']
+
+                try:
+                    # Check if run already exists
+                    existing = conn.execute(
+                        'SELECT 1 FROM runs_mirror WHERE mission_id = ? AND yard_id = ?',
+                        (mission_id, yard_id),
+                    ).fetchone()
+
+                    if existing:
+                        skipped += 1
+                        continue
+
+                    # Create implicit run with mission's execution state
+                    conn.execute("""
+                        INSERT INTO runs_mirror
+                            (mission_id, yard_id, status, started_at, completed_at,
+                             youtube_url, needs_review, review_reason, status_updated_at,
+                             lock_owner, locked_at, lease_expires_at, synced_at, local_dirty)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+                    """, (
+                        mission_id, yard_id,
+                        mission['status'], mission['started_at'], mission['completed_at'],
+                        mission['youtube_url'],
+                        mission['needs_review'], mission['review_reason'],
+                        mission['status_updated_at'],
+                        mission['lock_owner'], mission['locked_at'], mission['lease_expires_at'],
+                        _now_iso(),
+                    ))
+                    created += 1
+                except Exception as e:
+                    errors.append((mission_id, str(e)))
+
+            conn.commit()
+            return created, skipped, errors
+        except Exception as e:
             conn.rollback()
             raise
         finally:
