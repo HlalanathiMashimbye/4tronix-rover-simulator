@@ -47,8 +47,8 @@ function tokenFor(claims) {
 /** No claims at all: exactly what a learner's browser sends. */
 const ANON = undefined;
 const LEARNER = { uid: 'learner-1' };
-const OPERATOR = { uid: 'op-1', role: 'operator', yardIds: ['uct-rover-1'] };
-const ADMIN = { uid: 'admin-1', role: 'admin', yardIds: ['uct-rover-1'] };
+const OPERATOR = { uid: 'op-1', role: 'operator' };
+const ADMIN = { uid: 'admin-1', role: 'admin' };
 
 async function attempt(method, path, { body, mask, as } = {}) {
   let url = `${BASE}/${path}`;

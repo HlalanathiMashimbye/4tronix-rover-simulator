@@ -28,8 +28,6 @@ export interface OperatorSession {
   uid: string;
   email?: string;
   role: OperatorRole;
-  /** Yards this operator may act on. Empty means none, not all. */
-  yardIds: string[];
 }
 
 function isRole(value: unknown): value is OperatorRole {
@@ -62,15 +60,10 @@ export const getOperatorSession = cache(async (): Promise<OperatorSession | null
       return null;
     }
 
-    const yardIds = Array.isArray(claims.yardIds)
-      ? claims.yardIds.filter((y): y is string => typeof y === 'string')
-      : [];
-
     return {
       uid: claims.uid,
       email: typeof claims.email === 'string' ? claims.email : undefined,
       role: claims.role,
-      yardIds,
     };
   } catch {
     // Expired, revoked, malformed, or signed for another project. All of them
@@ -79,10 +72,19 @@ export const getOperatorSession = cache(async (): Promise<OperatorSession | null
   }
 });
 
-/** True when this session may act on the given yard. Admins are not exempt. */
-export function canActOnYard(session: OperatorSession, yardId: string): boolean {
-  return session.yardIds.includes(yardId);
-}
+/*
+ * There is deliberately no canActOnYard() here.
+ *
+ * A yardIds claim briefly existed, granted per account, and the sponsor
+ * rejected it outright on 2026-08-27: an operator logs in and CHOOSES a yard,
+ * they are not assigned one. Which yard someone is standing next to is a fact
+ * about this afternoon, not a property of their account, and needing an admin
+ * to re-issue a claim before a facilitator can help at a different venue is
+ * exactly the friction the platform is supposed to remove.
+ *
+ * The yard is therefore a runtime selection, held client-side. See
+ * infrastructure/config/yards.ts.
+ */
 
 /**
  * The session, or throw. For API routes, which turn this into a 401.
@@ -98,7 +100,15 @@ export async function requireOperator(): Promise<OperatorSession> {
   return session;
 }
 
-/** As requireOperator, but the admin tier: delete and dispatch. */
+/**
+ * As requireOperator, but the admin tier.
+ *
+ * NARROWER THAN IT WAS. Admin no longer gates missions, deletion or dispatch:
+ * the sponsor dismissed administrators as a concept for operator work on
+ * 2026-08-27, on the grounds that a facilitator should just get on with it. It
+ * survives for approving operator applications and reading the operator ledger,
+ * which is a different job from running a rover.
+ */
 export async function requireAdmin(): Promise<OperatorSession> {
   const session = await requireOperator();
 
