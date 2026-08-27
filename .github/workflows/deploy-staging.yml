@@ -96,7 +96,32 @@ jobs:
             exit 1
           fi
           echo "Staging URL: $URL"
-          # Learner home must serve via the load balancer; the operator surface must NOT exist.
+
+          # Learner home must serve via the load balancer.
           curl -sSf -o /dev/null "$URL/"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/operator")" = "404"
+
+          # The operator surface used to be asserted absent (404). It shipped in
+          # AB#341/342, so that assertion went stale and every deploy since has
+          # been red on a passing deploy. A permanently failing check is worse
+          # than no check: it hides the real failure it exists to catch.
+          #
+          # What matters now is not that /operator is missing, but that an
+          # anonymous request cannot get anything behind it. So assert the
+          # boundary itself.
+
+          # The page renders its own sign-in form rather than redirecting.
+          operator_status="$(curl -s -o /tmp/operator.html -w '%{http_code}' "$URL/operator")"
+          test "$operator_status" = "200"
+          grep -qi 'password' /tmp/operator.html
+
+          # ...and it must be sign-in, not the console. If the queue ever renders
+          # to an anonymous visitor, this is the line that catches it.
+          if grep -qiE 'dispatch|needs review|mission queue' /tmp/operator.html; then
+            echo "Operator console content served to an anonymous request" >&2
+            exit 1
+          fi
+
+          # The real boundary: operator APIs reject anonymous callers outright.
+          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/api/operator/missions")" = "401"
+
           echo "Smoke check passed"
