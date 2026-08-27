@@ -30,6 +30,8 @@ steps:
       - --build-arg=NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${_FB_SENDER_ID}
       - --build-arg=NEXT_PUBLIC_FIREBASE_APP_ID=${_FB_APP_ID}
       - --build-arg=NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${_FB_MEASUREMENT_ID}
+      - --build-arg=NEXT_PUBLIC_POSTHOG_KEY=${_POSTHOG_KEY}
+      - --build-arg=NEXT_PUBLIC_POSTHOG_HOST=${_POSTHOG_HOST}
       - -t
       - ${_IMAGE}
       - .

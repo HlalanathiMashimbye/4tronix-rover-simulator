@@ -21,6 +21,8 @@ name: Deploy staging
 #                           (NOT the Cloud Run *.run.app URI — that 403s without allUsers)
 #   NEXT_PUBLIC_FIREBASE_*  public web config for the staging Firebase app
 #   NEXT_PUBLIC_APP_URL     same as STAGING_URL (baked into the image at build time)
+#   NEXT_PUBLIC_POSTHOG_KEY   PostHog project key (optional; unset disables PostHog)
+#   NEXT_PUBLIC_POSTHOG_HOST  PostHog ingestion host, e.g. https://us.i.posthog.com
 #
 # Server secrets (FIREBASE_* admin credentials) are NOT here: Terraform wires
 # them from Secret Manager onto the Cloud Run service itself.
@@ -74,6 +76,8 @@ jobs:
             --build-arg NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID='${{ vars.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}' \
             --build-arg NEXT_PUBLIC_FIREBASE_APP_ID='${{ vars.NEXT_PUBLIC_FIREBASE_APP_ID }}' \
             --build-arg NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID='${{ vars.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}' \
+            --build-arg NEXT_PUBLIC_POSTHOG_KEY='${{ vars.NEXT_PUBLIC_POSTHOG_KEY }}' \
+            --build-arg NEXT_PUBLIC_POSTHOG_HOST='${{ vars.NEXT_PUBLIC_POSTHOG_HOST }}' \
             -t "$IMAGE" .
 
       - name: Push image

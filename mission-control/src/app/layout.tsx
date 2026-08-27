@@ -8,6 +8,7 @@ import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { PageTransition } from "@/components/layout/PageTransition";
+import { PostHogAnalytics } from "@/components/analytics/PostHogAnalytics";
 import { resolveAppUrl } from "@/infrastructure/config/appUrl";
 
 // Runs before hydration (next/script's beforeInteractive: "injected into the
@@ -117,20 +118,22 @@ export default function RootLayout({
         {/* One restrained Mars glow anchored in a corner for warmth (no neon). */}
         <div className="pointer-events-none fixed -bottom-72 -right-52 h-[560px] w-[560px] rounded-full bg-gradient-mars opacity-[0.14] blur-3xl" />
 
-        <ThemeProvider>
-          <LearnerProvider>
-            {/* Wraps Navbar AND the page: the navbar renders the search UI
-                while each page publishes what is searchable. */}
-            <SearchProvider>
-            <EnvironmentBanner />
-            <Navbar />
-            {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
-            <div className="pb-16 md:pb-0">
-              <PageTransition>{children}</PageTransition>
-            </div>
-            </SearchProvider>
-          </LearnerProvider>
-        </ThemeProvider>
+        <PostHogAnalytics>
+          <ThemeProvider>
+            <LearnerProvider>
+              {/* Wraps Navbar AND the page: the navbar renders the search UI
+                  while each page publishes what is searchable. */}
+              <SearchProvider>
+              <EnvironmentBanner />
+              <Navbar />
+              {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
+              <div className="pb-16 md:pb-0">
+                <PageTransition>{children}</PageTransition>
+              </div>
+              </SearchProvider>
+            </LearnerProvider>
+          </ThemeProvider>
+        </PostHogAnalytics>
       </body>
     </html>
   );
