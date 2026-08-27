@@ -21,18 +21,18 @@ const run = (over: Partial<MissionRun> & { yardId: string }): MissionRun => ({
 describe('watchableRuns', () => {
   it('lists only yards whose attempt produced a video', () => {
     const runs = [
-      run({ yardId: 'uct-rover-1', youtubeUrl: 'https://youtu.be/a' }),
+      run({ yardId: 'curiosity', youtubeUrl: 'https://youtu.be/a' }),
       run({ yardId: 'durban-1' }),
     ];
 
-    expect(watchableRuns(runs).map((r) => r.yardId)).toEqual(['uct-rover-1']);
+    expect(watchableRuns(runs).map((r) => r.yardId)).toEqual(['curiosity']);
   });
 
   it('leaves a failed run out rather than showing it as failed', () => {
     // A learner never sees "Failed". Under per-yard runs that rule survives by
     // omission: the yard that went wrong is simply not in the selector.
     const runs = [
-      run({ yardId: 'uct-rover-1', status: 'failed' }),
+      run({ yardId: 'curiosity', status: 'failed' }),
       run({ yardId: 'durban-1', youtubeUrl: 'https://youtu.be/b' }),
     ];
 
@@ -81,9 +81,9 @@ describe('isCompletedAnywhere', () => {
 describe('isRunningAt', () => {
   it('is true when this yard already has an attempt in flight', () => {
     // The entire duplicate-dispatch guard, and the reason no lock is needed.
-    const runs = [run({ yardId: 'uct-rover-1', status: 'processing' })];
+    const runs = [run({ yardId: 'curiosity', status: 'processing' })];
 
-    expect(isRunningAt(runs, 'uct-rover-1')).toBe(true);
+    expect(isRunningAt(runs, 'curiosity')).toBe(true);
   });
 
   it('is false when a DIFFERENT yard is running it', () => {
@@ -91,12 +91,12 @@ describe('isRunningAt', () => {
     // assertion that stops someone reintroducing a cross-yard lock.
     const runs = [run({ yardId: 'durban-1', status: 'processing' })];
 
-    expect(isRunningAt(runs, 'uct-rover-1')).toBe(false);
+    expect(isRunningAt(runs, 'curiosity')).toBe(false);
   });
 
   it('is false once this yard finished, so a rerun is allowed', () => {
-    const runs = [run({ yardId: 'uct-rover-1', status: 'completed' })];
+    const runs = [run({ yardId: 'curiosity', status: 'completed' })];
 
-    expect(isRunningAt(runs, 'uct-rover-1')).toBe(false);
+    expect(isRunningAt(runs, 'curiosity')).toBe(false);
   });
 });
