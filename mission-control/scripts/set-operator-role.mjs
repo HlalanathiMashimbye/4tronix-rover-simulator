@@ -27,9 +27,21 @@
  * the sponsor was explicit about on 2026-08-27. A yardIds claim briefly
  * existed here and has been removed.
  *
- * This script is itself on the way out. Manual role grants are being replaced
- * by an apply-to-be-an-operator flow that emails an admin for one-click
- * approval, so nobody has to run a backend script to onboard a facilitator.
+ * THIS IS NO LONGER THE NORMAL WAY TO GRANT ACCESS.
+ *
+ * An admin does it in the app now, at /operator/team. That page calls the same
+ * Admin SDK operations this script does, so the two cannot drift, and it
+ * records WHICH ADMIN granted the access rather than $USER from whatever shell
+ * happened to run this.
+ *
+ * What this script is still for is the one job the page cannot do: creating the
+ * FIRST admin. /operator/team requires an admin to already exist, so a fresh
+ * project has to be bootstrapped from here. It is also the break-glass path if
+ * every admin account is ever lost, which is exactly why that page refuses to
+ * revoke the last one.
+ *
+ * Still ahead: an apply-to-be-an-operator flow that emails an admin for
+ * one-click approval, so a facilitator can ask rather than being added.
  *
  * The user must already exist in Firebase Auth: sign in once through the app
  * or the operator console first. Roles are granted TO an account, they do not
