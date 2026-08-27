@@ -1,0 +1,117 @@
+/**
+ * Reading and writing per-yard runs.
+ *
+ * The repository is dual-SDK: the browser reads runs to build the learner's
+ * yard selector, the server writes them. These exercise the admin path, which
+ * is the one that writes.
+ */
+
+import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import type { Firestore as AdminFirestore } from 'firebase-admin/firestore';
+
+jest.mock('nanoid', () => ({ nanoid: jest.fn(() => 'testmissionid12345') }));
+
+function adminFirestore(runDocs: Array<{ id: string; data: Record<string, unknown> }>) {
+  const set = jest.fn(
+    async (_payload: Record<string, unknown>, _options?: { merge?: boolean }) => undefined,
+  );
+  const runsGet = jest.fn(async () => ({
+    docs: runDocs.map((d) => ({ id: d.id, data: () => d.data })),
+  }));
+  const runDoc = jest.fn((_yardId: string) => ({ set }));
+  const runsCollection = jest.fn(() => ({ get: runsGet, doc: runDoc }));
+
+  const firestore = {
+    collection: jest.fn(() => ({
+      doc: jest.fn(() => ({ collection: runsCollection })),
+    })),
+  } as unknown as AdminFirestore;
+
+  return { firestore, set, runDoc, runsCollection };
+}
+
+describe('findRuns', () => {
+  it('reads every yard that attempted the mission', async () => {
+    const { firestore } = adminFirestore([
+      { id: 'uct-rover-1', data: { status: 'completed', youtubeUrl: 'https://youtu.be/a' } },
+      { id: 'durban-1', data: { status: 'processing' } },
+    ]);
+
+    const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
+
+    expect(runs.map((r) => r.yardId)).toEqual(['uct-rover-1', 'durban-1']);
+    expect(runs[0].youtubeUrl).toBe('https://youtu.be/a');
+  });
+
+  it('takes the yard from the document id, not a stored field', async () => {
+    // The id IS the yard. A stale or wrong yardId field must never win, or a
+    // run could claim to belong to a yard that never ran it.
+    const { firestore } = adminFirestore([
+      { id: 'uct-rover-1', data: { yardId: 'somewhere-else', status: 'completed' } },
+    ]);
+
+    const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
+
+    expect(runs[0].yardId).toBe('uct-rover-1');
+  });
+
+  it('returns an empty list for a mission nobody has run', async () => {
+    // Ordinary, not missing data: every mission submitted before runs existed
+    // is in exactly this state until the backfill runs.
+    const { firestore } = adminFirestore([]);
+
+    expect(await new FirestoreMissionRepository(firestore).findRuns('m1')).toEqual([]);
+  });
+
+  it('defaults a run with no status to queued rather than throwing', async () => {
+    const { firestore } = adminFirestore([{ id: 'uct-rover-1', data: {} }]);
+
+    expect((await new FirestoreMissionRepository(firestore).findRuns('m1'))[0].status).toBe('queued');
+  });
+});
+
+describe('upsertRun', () => {
+  it('writes to the yard document and merges', async () => {
+    // Merge matters: the video is attached minutes after the run finishes, so
+    // a later status write must not wipe a youtubeUrl set earlier.
+    const { firestore, set, runDoc } = adminFirestore([]);
+
+    await new FirestoreMissionRepository(firestore).upsertRun('m1', {
+      yardId: 'uct-rover-1',
+      status: 'completed',
+      completedAt: '2026-08-27T10:00:00Z',
+    });
+
+    expect(runDoc).toHaveBeenCalledWith('uct-rover-1');
+    const [payload, options] = set.mock.calls[0];
+    expect(options).toEqual({ merge: true });
+    expect(payload).toMatchObject({ yardId: 'uct-rover-1', status: 'completed' });
+  });
+
+  it('strips undefined fields so they do not land in Firestore', async () => {
+    const { firestore, set } = adminFirestore([]);
+
+    await new FirestoreMissionRepository(firestore).upsertRun('m1', {
+      yardId: 'uct-rover-1',
+      status: 'queued',
+      youtubeUrl: undefined,
+      completedAt: undefined,
+    });
+
+    const [payload] = set.mock.calls[0];
+    expect(payload).not.toHaveProperty('youtubeUrl');
+    expect(payload).not.toHaveProperty('completedAt');
+  });
+
+  it('writes each yard to its own document, so two yards never collide', async () => {
+    // The reason no lock is needed: separate documents, so a concurrent write
+    // from another yard cannot overwrite this one.
+    const { firestore, runDoc } = adminFirestore([]);
+    const repository = new FirestoreMissionRepository(firestore);
+
+    await repository.upsertRun('m1', { yardId: 'uct-rover-1', status: 'processing' });
+    await repository.upsertRun('m1', { yardId: 'durban-1', status: 'processing' });
+
+    expect(runDoc.mock.calls.map((c) => c[0])).toEqual(['uct-rover-1', 'durban-1']);
+  });
+});
