@@ -2,25 +2,29 @@
 /**
  * Grant or revoke operator / admin access.
  *
- * WHY THIS WRITES IN TWO PLACES. This codebase currently checks the role two
- * different ways, and they read from different stores:
+ * WHAT THIS WRITES, AND WHERE IT IS READ.
  *
+ * Roles and yards live on the Firebase Auth CUSTOM CLAIM, carried on the ID
+ * token. One store, read by everything that enforces:
+ *
+ *   firestore.rules                     ->  request.auth.token.role / .yardIds
+ *   mission-control lib/auth/dal.ts     ->  the verified session cookie
  *   yard/satellite/operator_console.py  ->  claims.get('role')
- *       a Firebase Auth CUSTOM CLAIM, carried on the ID token
  *
- *   firestore.rules  ->  users/{uid}.role == "operator"
- *       a Firestore DOCUMENT, read with get() inside the rule
+ * It used to be two stores. These rules read a users/{uid} DOCUMENT while the
+ * console read the claim, so this script had to write both and they still
+ * disagreed: the console accepted operator OR admin, the rule accepted
+ * "operator" only, so an admin passed one and was denied by the other. That
+ * was documented here as a KNOWN GAP for months. Claim-based rules closed it.
  *
- * Set only the claim and the yard console lets you in while Firestore rules
- * deny you. Set only the document and the reverse happens. So this script
- * writes both, keeping them consistent, and clears both on revoke.
+ * users/{uid} is still written, but only as a human-readable ledger of who
+ * holds what. Nothing enforces from it. It is readable by admins alone,
+ * because the list of everyone with operator access is not something a
+ * signed-in learner needs.
  *
- * KNOWN GAP, not fixed here: firestore.rules' isOperator() compares against
- * "operator" ONLY, while the yard accepts 'operator' or 'admin'. An admin can
- * therefore use the operator console but is denied by Firestore rules (on
- * rover-configs, for instance). Granting 'admin' below will warn about this.
- * Fixing it means changing the rule to accept both roles - a deliberate
- * decision, not something a grant script should do behind your back.
+ * `role` decides WHAT an account may do; `yardIds` decides WHERE. Admin is a
+ * superset of operator, but it is a wider ROLE and not a wider set of yards:
+ * an admin for Cape Town is still not an admin for Durban.
  *
  * The user must already exist in Firebase Auth: sign in once through the app
  * or the operator console first. Roles are granted TO an account, they do not
@@ -29,8 +33,8 @@
  * Usage (dry run prints what would change and writes nothing):
  *   cd mission-control
  *   set -a && source .env && set +a
- *   node scripts/set-operator-role.mjs --email someone@example.com --role operator
- *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --apply
+ *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --yards uct-rover-1
+ *   node scripts/set-operator-role.mjs --email someone@example.com --role operator --yards uct-rover-1 --apply
  *   node scripts/set-operator-role.mjs --email someone@example.com --revoke --apply
  *
  * To act on a different project, source that project's env first. The script
@@ -53,6 +57,16 @@ function argValue(name) {
 const email = argValue('--email');
 const uidArg = argValue('--uid');
 const role = argValue('--role') ?? 'operator';
+
+// Which yards this account may act on. `role` decides WHAT they may do,
+// `yardIds` decides WHERE. Absent means no yards rather than all of them: an
+// operator with no yard has nothing to dispatch to, which is a safe and
+// obvious failure, whereas defaulting to every yard would quietly make a
+// misconfigured account the most powerful one in the system.
+const yardIds = (argValue('--yards') ?? '')
+  .split(',')
+  .map((y) => y.trim())
+  .filter(Boolean);
 
 const VALID_ROLES = ['operator', 'admin'];
 
@@ -114,7 +128,7 @@ const existingClaims = user.customClaims ?? {};
 
 console.log(`user:          ${user.email ?? '(no email)'}`);
 console.log(`uid:           ${user.uid}`);
-console.log(`current claim: ${existingClaims.role ?? '(none)'}`);
+console.log(`current claim: role=${existingClaims.role ?? '(none)'} yardIds=[${(existingClaims.yardIds ?? []).join(', ')}]`);
 
 const userDocRef = db.collection('users').doc(user.uid);
 const userDocSnap = await userDocRef.get();
@@ -140,22 +154,23 @@ if (REVOKE) {
   }
 } else {
   console.log(`action: GRANT '${role}'`);
-  console.log('  - custom claim  role=' + role + '   (read by the yard operator console)');
-  console.log('  - users/' + user.uid + '.role=' + role + '   (read by firestore.rules)');
+  console.log('  - custom claim  role=' + role + '   (read by firestore.rules and the operator console)');
+  console.log('  - custom claim  yardIds=[' + yardIds.join(', ') + ']');
+  console.log('  - users/' + user.uid + '   (human-readable ledger only, nothing enforces from it)');
 
-  if (role === 'admin') {
+  if (yardIds.length === 0) {
     console.log(
-      '\nWARNING: firestore.rules isOperator() compares against "operator" only, so\n' +
-      "         this account will pass the yard console but be DENIED by Firestore\n" +
-      '         rules. Grant "operator" as well, or widen the rule.'
+      '\nNOTE: no --yards given, so this account can sign in but has no yard to\n' +
+      '      act on. Pass --yards uct-rover-1 (comma-separated for several).'
     );
   }
 
   if (APPLY) {
-    await auth.setCustomUserClaims(user.uid, { ...existingClaims, role });
+    await auth.setCustomUserClaims(user.uid, { ...existingClaims, role, yardIds });
     await userDocRef.set(
       {
         role,
+        yardIds,
         email: user.email ?? null,
         grantedAt: new Date().toISOString(),
         grantedBy: process.env.USER ?? 'unknown',
