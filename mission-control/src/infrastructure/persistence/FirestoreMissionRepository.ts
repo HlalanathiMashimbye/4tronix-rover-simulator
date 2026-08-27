@@ -30,6 +30,7 @@ import {
 } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
 import { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import {
   IMissionRepository,
   MissionCursor,
@@ -37,6 +38,7 @@ import {
 } from '@/core/domain/repositories/IMissionRepository';
 
 const MISSIONS_COLLECTION = 'missions';
+const RUNS_SUBCOLLECTION = 'runs';
 
 type FirestoreLike = AdminFirestore | ClientFirestore;
 
@@ -183,6 +185,82 @@ export class FirestoreMissionRepository implements IMissionRepository {
 
   private clientDb(): ClientFirestore {
     return this.firestore as ClientFirestore;
+  }
+
+  /**
+   * Every yard's attempt at a mission, from `missions/{id}/runs`.
+   *
+   * Dual-SDK like everything else here: the browser reads these to build the
+   * learner's yard selector, the server writes them.
+   *
+   * Returns [] for a mission nobody has run, and for every mission submitted
+   * before runs existed. Callers must treat "no runs" as ordinary rather than
+   * missing data - most missions in the archive are in exactly that state
+   * until the backfill runs.
+   */
+  async findRuns(missionId: string): Promise<MissionRun[]> {
+    if (this.isAdminFirestore()) {
+      const snapshot = await this.adminDb()
+        .collection(MISSIONS_COLLECTION)
+        .doc(missionId)
+        .collection(RUNS_SUBCOLLECTION)
+        .get();
+
+      return snapshot.docs.map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
+    }
+
+    const snapshot = await getDocs(
+      collection(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION)
+    );
+
+    return snapshot.docs.map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
+  }
+
+  /**
+   * Create or replace one yard's run.
+   *
+   * Server-side only in practice: `firestore.rules` denies every browser write
+   * under a mission. Merged rather than overwritten so a later status change
+   * does not wipe a youtubeUrl attached earlier, which is the ordering the
+   * satellite actually produces - the video is linked minutes after the run
+   * finishes.
+   *
+   * No transaction and no lock: only one yard ever writes this document, so
+   * there is nothing to contend with. That is the point of keying by yard.
+   */
+  async upsertRun(missionId: string, run: MissionRun): Promise<void> {
+    const { yardId, ...fields } = run;
+    const payload = this.removeUndefinedValues({ ...fields, yardId }) as Record<string, unknown>;
+
+    if (this.isAdminFirestore()) {
+      await this.adminDb()
+        .collection(MISSIONS_COLLECTION)
+        .doc(missionId)
+        .collection(RUNS_SUBCOLLECTION)
+        .doc(yardId)
+        .set(payload, { merge: true });
+      return;
+    }
+
+    await setDoc(
+      doc(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION, yardId),
+      payload,
+      { merge: true }
+    );
+  }
+
+  /** The document id IS the yard, so it is authoritative over any stored field. */
+  private toRun(yardId: string, data: Partial<MissionRun>): MissionRun {
+    return {
+      yardId,
+      status: data.status ?? 'queued',
+      startedAt: data.startedAt,
+      completedAt: data.completedAt,
+      youtubeUrl: data.youtubeUrl,
+      needsReview: data.needsReview,
+      reviewReason: data.reviewReason ?? null,
+      statusUpdatedAt: data.statusUpdatedAt ?? null,
+    };
   }
 
   private async getMissionDoc(id: string): Promise<DocSnapshotLike> {
