@@ -91,13 +91,60 @@ locals {
 resource "google_service_account" "runtime" {
   for_each     = var.environments
   account_id   = "mission-control-${each.key}"
-  display_name = "Mission Control runtime (${each.key}): Firestore + secrets only"
+  display_name = "Mission Control runtime (${each.key}): Firestore, secrets, operator auth"
 }
 
 resource "google_project_iam_member" "runtime_firestore" {
   for_each = var.environments
   project  = var.project_id
   role     = "roles/datastore.user"
+  member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
+}
+
+# --- Operator authentication ---------------------------------------------
+#
+# This identity was "Firestore + secrets only", which was accurate when it was
+# written. Operator sign-in shipped afterwards (AB#341/342) and needs the
+# Firebase Auth admin API, which was never granted, so operator login has
+# never worked on a deployed environment. It failed as a bare 401 from
+# /api/auth/session: the token is valid, and the server cannot look up the
+# account to finish checking it.
+#
+# It went unnoticed because the staging smoke check asserted that /operator
+# returned 404, so nothing ever exercised sign-in there until the check was
+# corrected.
+#
+# A CUSTOM ROLE RATHER THAN roles/firebaseauth.admin. That predefined role can
+# create and delete user accounts and read the password hash config. This
+# service needs to read accounts, mint session cookies, and set the role claim.
+# Nothing it does requires the power to delete an operator outright, so it does
+# not get it.
+resource "google_project_iam_custom_role" "operator_auth" {
+  role_id     = "missionControlOperatorAuth"
+  title       = "Mission Control operator auth"
+  description = "Read accounts, mint session cookies, and set the role claim. No create or delete."
+
+  permissions = [
+    # verifyIdToken(checkRevoked) and verifySessionCookie(checkRevoked) both
+    # read the user record to compare auth_time against tokensValidAfterTime.
+    # This is also what getUserByEmail and listUsers need for /operator/team.
+    "firebaseauth.users.get",
+
+    # createSessionCookie, in POST /api/auth/session. A separate permission
+    # from users.get, so granting only the read would leave sign-in failing
+    # one step later for a different reason.
+    "firebaseauth.users.createSession",
+
+    # setCustomUserClaims and revokeRefreshTokens, which are how /operator/team
+    # grants access and how removing it takes effect immediately.
+    "firebaseauth.users.update",
+  ]
+}
+
+resource "google_project_iam_member" "runtime_operator_auth" {
+  for_each = var.environments
+  project  = var.project_id
+  role     = google_project_iam_custom_role.operator_auth.name
   member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
 }
 
