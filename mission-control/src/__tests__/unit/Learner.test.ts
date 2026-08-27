@@ -5,7 +5,6 @@
 import {
   createAnonymousLearner,
   isActiveLearner,
-  sanitizeDisplayName,
 } from '@/core/domain/entities/Learner';
 
 describe('Learner Entity', () => {
@@ -77,63 +76,6 @@ describe('Learner Entity', () => {
     });
   });
 
-  describe('sanitizeDisplayName', () => {
-    it('removes email addresses', () => {
-      const input = 'contact me at test@example.com';
-      const sanitized = sanitizeDisplayName(input);
-
-      expect(sanitized).not.toContain('test@example.com');
-      expect(sanitized).toBe('contact me at');
-    });
-
-    it('trims whitespace', () => {
-      const input = '  RoverPilot  ';
-      const sanitized = sanitizeDisplayName(input);
-
-      expect(sanitized).toBe('RoverPilot');
-    });
-
-    it('limits length to 20 characters', () => {
-      const input = 'ThisIsAVeryLongNicknameThatExceedsTheLimit';
-      const sanitized = sanitizeDisplayName(input);
-
-      expect(sanitized).toHaveLength(20);
-      expect(sanitized).toBe('ThisIsAVeryLongNickn');
-    });
-
-    it('handles multiple emails', () => {
-      const input = 'email test@example.com or admin@site.org';
-      const sanitized = sanitizeDisplayName(input);
-
-      expect(sanitized).not.toContain('@');
-    });
-
-    it('preserves valid nicknames', () => {
-      const validNames = [
-        'RoverPilot123',
-        'Mars_Explorer',
-        'Commander_X',
-        'Pilot-42',
-      ];
-
-      validNames.forEach((name) => {
-        const sanitized = sanitizeDisplayName(name);
-        expect(sanitized).toBe(name);
-      });
-    });
-
-    it('handles empty string', () => {
-      const sanitized = sanitizeDisplayName('');
-
-      expect(sanitized).toBe('');
-    });
-
-    it('handles only whitespace', () => {
-      const sanitized = sanitizeDisplayName('   ');
-
-      expect(sanitized).toBe('');
-    });
-  });
 
   describe('Learner statistics', () => {
     it('calculates success rate correctly', () => {

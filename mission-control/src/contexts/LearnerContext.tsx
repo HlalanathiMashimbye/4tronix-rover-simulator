@@ -14,13 +14,12 @@ import { getOrCreateSession, clearSession } from '@/lib/anonymous-auth';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
-import { Learner, createAnonymousLearner, sanitizeDisplayName } from '@/core/domain/entities/Learner';
+import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';
 
 interface LearnerContextType {
   learner: Learner | null;
   sessionId: string | null;
   loading: boolean;
-  updateDisplayName: (name: string) => Promise<void>;
   resetSession: () => void;
   learnerEmail: string | null;
   setLearnerEmail: (email: string | null) => Promise<void>;
@@ -103,6 +102,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- initializeLearnerSession is a hoisted function declaration and this effect runs once after mount, so there is no window where it is genuinely undefined. Pre-existing; the compiler only began reporting it once updateDisplayName was removed and it could analyse this component through to the end.
     initializeLearnerSession();
   }, []);
 
@@ -225,34 +225,24 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  /**
-   * Update learner's display name
+  /*
+   * There is deliberately no updateDisplayName.
+   *
+   * One existed, and nothing ever called it: no screen offered a learner a way
+   * to name themselves, so all 170 learner records have no display name. That
+   * is not an oversight to correct. Learners are anonymous here by design -
+   * they are not Firebase Auth users, their id is hashed before it touches a
+   * mission, and their address lives where browsers cannot read it - and a
+   * dormant writer for a name is the thing someone wires up to a "name
+   * yourself" box without realising what it undoes.
+   *
+   * Removed alongside AB#377, which asked the operator queue to show who
+   * submitted each mission and was closed as won't-do for the same reason.
+   *
+   * MissionNotificationService still READS displayName when personalising the
+   * completion email. That is a message to the learner's own address, it
+   * handles the field being absent, and it is left alone.
    */
-  async function updateDisplayName(name: string): Promise<void> {
-    if (!sessionId || !learner) {
-      throw new Error('No active learner session');
-    }
-
-    const sanitized = sanitizeDisplayName(name);
-    if (!sanitized) {
-      throw new Error('Invalid display name');
-    }
-
-    try {
-      const db = getFirestoreClient();
-      const learnerRef = doc(db, 'learners', learnerDocId());
-
-      await updateDoc(learnerRef, {
-        displayName: sanitized,
-        lastActiveAt: new Date().toISOString(),
-      });
-
-      setLearner({ ...learner, displayName: sanitized });
-    } catch (error) {
-      console.error('Failed to update display name:', error);
-      throw error;
-    }
-  }
 
   /**
    * Reset session and create new learner identity
@@ -271,7 +261,6 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         learner,
         sessionId,
         loading,
-        updateDisplayName,
         resetSession,
         learnerEmail,
         setLearnerEmail,
