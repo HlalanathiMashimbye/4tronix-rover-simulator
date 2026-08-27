@@ -138,3 +138,39 @@ describe('failure is reported, never rendered as quiet', () => {
     expect(onMissions).not.toHaveBeenCalled();
   });
 });
+
+describe('anonymity', () => {
+  it('carries no learner field at all, not even the hash', () => {
+    // AB#377 asked the queue to show who submitted. That cuts against the
+    // model the platform has held to from the start, so the queue takes
+    // nothing about the learner off the document - including learnerRef, which
+    // is a one-way hash and would have been harmless. If a future change wants
+    // it, this test should make them argue for it first.
+    let got: Record<string, unknown>[] = [];
+    subscribeToYardQueue('curiosity', (m) => { got = m as unknown as Record<string, unknown>[]; }, () => {});
+
+    emit([doc('m1', {
+      status: 'queued',
+      code: 'x',
+      name: 'Rock Lover',
+      learnerRef: 'a-one-way-hash',
+      sessionId: 'a-session-id',
+      learnerEmailHash: 'an-email-hash',
+    })]);
+
+    const keys = Object.keys(got[0]);
+    expect(keys).not.toContain('learnerRef');
+    expect(keys).not.toContain('sessionId');
+    expect(keys).not.toContain('learnerEmailHash');
+    expect(keys.some((k) => /learner|session|email/i.test(k))).toBe(false);
+  });
+
+  it('keeps the mission name, which is the handle an operator needs', () => {
+    // A child says "mine is Rock Lover" and the operator finds that row,
+    // having learned nothing about them.
+    let got: { name?: string }[] = [];
+    subscribeToYardQueue('curiosity', (m) => { got = m; }, () => {});
+    emit([doc('m1', { status: 'queued', code: 'x', name: 'Rock Lover' })]);
+    expect(got[0].name).toBe('Rock Lover');
+  });
+});

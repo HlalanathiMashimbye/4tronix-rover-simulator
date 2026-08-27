@@ -42,7 +42,16 @@ export const ACTIVE_STATUSES: MissionStatus[] = ['queued', 'processing'];
  */
 export const QUEUE_LIMIT = 50;
 
-/** Only what the queue renders. Mission documents carry a good deal more. */
+/**
+ * Only what the queue renders. Mission documents carry a good deal more.
+ *
+ * NO LEARNER FIELD, DELIBERATELY. Not even `learnerRef`, which is a one-way
+ * hash and therefore harmless in itself. AB#377 asked the queue to show who
+ * submitted each mission, and that cuts against the anonymity the platform has
+ * held to from the start: learners are not Auth users, ids are hashed before
+ * they touch a mission, and addresses live where browsers cannot read them.
+ * The mission NAME is the handle an operator needs, and it identifies nobody.
+ */
 export interface QueueMission {
   id: string;
   name?: string;
@@ -50,7 +59,6 @@ export interface QueueMission {
   blocklyState?: string;
   status: MissionStatus;
   submittedAt?: string;
-  learnerRef?: string;
   needsReview?: boolean;
   reviewReason?: string | null;
 }
@@ -100,7 +108,6 @@ export function subscribeToYardQueue(
           blocklyState: data.blocklyState,
           status: data.status,
           submittedAt: data.submittedAt,
-          learnerRef: data.learnerRef,
           needsReview: data.needsReview,
           reviewReason: data.reviewReason ?? null,
         });

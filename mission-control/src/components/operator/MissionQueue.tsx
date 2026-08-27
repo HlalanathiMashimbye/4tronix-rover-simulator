@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Blocks, Code2, Loader2, Radio, User } from 'lucide-react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AlertTriangle, Blocks, Code2, Loader2, Radio } from 'lucide-react';
 
 import {
   subscribeToYardQueue,
   type QueueMission,
 } from '@/lib/services/operatorQueueService';
-import type { LearnerProfile } from '@/app/api/operator/learners/route';
 import {
   readStoredYard,
   serverYardSnapshot,
@@ -22,6 +21,22 @@ import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
  * The yard comes from the same store YardPicker writes, so changing the picker
  * tears this subscription down and opens one against the new yard. That is the
  * whole reason the yard is a runtime selection rather than a claim.
+ *
+ * NOTHING HERE IDENTIFIES THE LEARNER, ON PURPOSE.
+ *
+ * AB#377 asked for "who submitted each mission". That was written against the
+ * grain of the entire platform: learners are not Firebase Auth users, missions
+ * carry `learnerRef` (a one-way hash) rather than an id, email addresses are
+ * hashed and kept in a subcollection browsers cannot reach, and no learner has
+ * a display name because nothing offers to set one. Those are not gaps to fill.
+ * They are the anonymity model the project has held to since the beginning, and
+ * a queue screen that may be facing a room of children is the last place to
+ * start eroding it.
+ *
+ * A build of this did briefly exist, with an operator-only route joining
+ * learnerRef back to a learner record. It is deleted. The mission NAME is the
+ * handle: a child says "mine is Rock Lover" and the operator finds that row.
+ * That works without anyone knowing whose it is.
  */
 export function MissionQueue() {
   const yardId = useSyncExternalStore(subscribeToYard, readStoredYard, serverYardSnapshot);
@@ -36,34 +51,7 @@ export function MissionQueue() {
 function YardQueue({ yardId }: { yardId: string }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [profiles, setProfiles] = useState<Record<string, LearnerProfile>>({});
-
-  // Refs already asked about, including ones that resolved to nothing. Held in
-  // a ref rather than derived from `profiles` so the snapshot callback cannot
-  // see a stale copy, and so resolving cannot feed back into a re-render that
-  // triggers another resolve.
-  const askedRefs = useRef<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
-
-  const resolveProfiles = useCallback(async (refs: string[]) => {
-    try {
-      const response = await fetch('/api/operator/learners', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refs }),
-      });
-      const data = await response.json();
-      if (!data.success || !data.profiles) return;
-
-      // Record a blank for anything that resolved to nothing, so it is not
-      // asked for again on the next snapshot.
-      const merged: Record<string, LearnerProfile> = {};
-      for (const ref of refs) merged[ref] = data.profiles[ref] ?? {};
-      setProfiles((prev) => ({ ...prev, ...merged }));
-    } catch {
-      // Identity is a nicety. A queue that cannot name anyone is still a queue.
-    }
-  }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -71,15 +59,6 @@ function YardQueue({ yardId }: { yardId: string }) {
       (next) => {
         setMissions(next);
         setError(null);
-
-        const unknown = [
-          ...new Set(next.map((m) => m.learnerRef).filter((r): r is string => !!r)),
-        ].filter((ref) => !askedRefs.current.has(ref));
-
-        if (unknown.length) {
-          unknown.forEach((ref) => askedRefs.current.add(ref));
-          resolveProfiles(unknown);
-        }
       },
       () => {
         // Never leave a failed listener looking like an empty queue. An
@@ -91,7 +70,7 @@ function YardQueue({ yardId }: { yardId: string }) {
     );
 
     return unsubscribe;
-  }, [yardId, resolveProfiles]);
+  }, [yardId]);
 
   if (error) {
     return (
@@ -144,7 +123,6 @@ function YardQueue({ yardId }: { yardId: string }) {
 
       <ol className="mt-3 grid gap-2">
         {missions.map((mission, index) => {
-          const profile = mission.learnerRef ? profiles[mission.learnerRef] : undefined;
           const isOpen = expanded === mission.id;
 
           return (
@@ -170,36 +148,12 @@ function YardQueue({ yardId }: { yardId: string }) {
                   {mission.status}
                 </span>
 
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {mission.name || 'Untitled mission'}
-                  </p>
-                  <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                    {/* HOW LITTLE THIS CAN SAY, AND WHY.
-                        The avatar colour is what the learner sees on their own
-                        screen, so it is the only shared token between a queue
-                        row and a child in the room. It is weak: 7 colours
-                        across 170 learners. displayName would be the real
-                        answer, and every learner record has none, because
-                        updateDisplayName exists in LearnerContext and no UI
-                        calls it. missionCount is 0 on every record for the
-                        same kind of reason: nothing increments it. Both are
-                        read here so this lights up the day either is filled,
-                        rather than needing this component changed. */}
-                    {profile?.avatarColor && (
-                      <span
-                        aria-hidden
-                        className="inline-block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-border"
-                        style={{ backgroundColor: profile.avatarColor }}
-                      />
-                    )}
-                    <User className="h-3 w-3 shrink-0" />
-                    {profile?.displayName ??
-                      (profile?.missionCount
-                        ? `mission ${profile.missionCount} for this learner`
-                        : 'a learner')}
-                  </p>
-                </div>
+                {/* The mission name is the only handle, and the only one
+                    needed: a child says "mine is Rock Lover" and the operator
+                    finds that row without learning anything about them. */}
+                <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {mission.name || 'Untitled mission'}
+                </p>
 
                 {mission.needsReview && (
                   <span
