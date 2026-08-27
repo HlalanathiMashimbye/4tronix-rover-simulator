@@ -5,6 +5,7 @@ import { getOperatorSession } from '@/lib/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
 import { SignOutButton } from '@/components/operator/SignOutButton';
 import { YardPicker } from '@/components/operator/YardPicker';
+import { MissionQueue } from '@/components/operator/MissionQueue';
 
 /**
  * One route for the operator surface: sign-in when there is no session, the
@@ -55,17 +56,7 @@ export default async function OperatorPage() {
           )}
         </div>
 
-        <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
-          <div className="max-w-sm space-y-2">
-            <p className="font-display text-lg font-bold text-foreground">
-              The mission queue lands here next
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Sign-in, route protection and yard selection are in place. The live
-              queue arrives with the next story.
-            </p>
-          </div>
-        </div>
+        <MissionQueue />
 
         <div className="flex justify-end">
           <SignOutButton />
