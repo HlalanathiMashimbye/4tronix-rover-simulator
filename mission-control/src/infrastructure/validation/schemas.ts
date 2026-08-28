@@ -17,6 +17,8 @@
 
 import { z } from 'zod';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
+import { calculatePythonDuration, findMaxSpeedInPython } from '@/lib/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED } from '@/infrastructure/config/limits';
 
 /**
  * Schema for creating a new mission (anonymous submission)
@@ -91,9 +93,11 @@ export type UpdateMissionDto = z.infer<typeof updateMissionSchema>;
 /**
  * Validation helper that returns formatted error messages
  *
- * Performs two-phase validation:
+ * Performs four-phase validation:
  * 1. Schema validation (Zod)
  * 2. Allowlist validation (User Story 21)
+ * 3. Mission time limit validation (User Story 401)
+ * 4. Speed limit validation (User Story 401)
  *
  * @param data - Mission submission data
  * @returns Validation result with errors if any
@@ -138,6 +142,28 @@ export function validateMission(data: unknown): {
     return { success: false, errors: allowlistErrors };
   }
 
-  // Both validations passed
+  // Phase 3: Mission time limit validation (User Story 401)
+  const duration = calculatePythonDuration(result.data.code);
+  if (duration > MISSION_TIME_LIMIT_SECONDS) {
+    return {
+      success: false,
+      errors: [
+        `code: Mission time limit exceeded. A mission cannot exceed ${MISSION_TIME_LIMIT_SECONDS} seconds. Please reduce the time values in your mission.`,
+      ],
+    };
+  }
+
+  // Phase 4: Speed limit validation (User Story 401)
+  const maxSpeed = findMaxSpeedInPython(result.data.code);
+  if (maxSpeed > MAX_ROVER_SPEED) {
+    return {
+      success: false,
+      errors: [
+        `code: Speed limit exceeded. The maximum rover speed is ${MAX_ROVER_SPEED}.`,
+      ],
+    };
+  }
+
+  // All validations passed
   return { success: true, data: result.data };
 }
