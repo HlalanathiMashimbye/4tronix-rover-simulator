@@ -5,18 +5,29 @@ This is a thin adapter that translates HTTP requests to service calls.
 All business logic is in the RoverQueueService.
 """
 
+import atexit
 import os
 import re
 import logging
 import subprocess
+from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, stream_with_context, send_file
+from posthog import Posthog
+from werkzeug.exceptions import HTTPException
 import queue as queue_module
 
 from drivers import create_driver
 from service import RoverQueueService, PHOTO_PATH
 
+# Load the rover's own configuration without traversing into a parent app.
+load_dotenv(Path(__file__).resolve().parent / '.env')
+
 app = Flask(__name__)
+
+posthog_client = None
+_error_handler_registered = False
 
 # Mast-camera detection is fixed at boot (the CSI sensor is probed once), so
 # we detect on first request and cache it for the process lifetime. A reboot
@@ -48,8 +59,26 @@ service: RoverQueueService = None
 
 
 def create_app(queue_service: RoverQueueService = None) -> Flask:
-    """Create Flask app with optional injected service (for testing)"""
-    global service
+    """Create Flask app with optional injected service (for testing)."""
+    global posthog_client, service, _error_handler_registered
+
+    if posthog_client is None:
+        project_token = os.environ.get('POSTHOG_PROJECT_TOKEN')
+        host = os.environ.get('POSTHOG_HOST')
+        if project_token and host:
+            posthog_client = Posthog(
+                project_token,
+                host=host,
+                enable_exception_autocapture=True,
+            )
+            atexit.register(posthog_client.shutdown)
+        elif app.debug or os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true'):
+            missing_variable = 'POSTHOG_PROJECT_TOKEN' if not project_token else 'POSTHOG_HOST'
+            raise RuntimeError(
+                f'{missing_variable} variable required by PostHog is missing or un-configured, '
+                f'this causes events to be silently missed. This error stops appearing once '
+                f'{missing_variable} is configured'
+            )
 
     if queue_service:
         service = queue_service
@@ -58,6 +87,19 @@ def create_app(queue_service: RoverQueueService = None) -> Flask:
         driver = create_driver()
         service = RoverQueueService(driver)
         service.start_processor()
+
+    if not _error_handler_registered:
+        @app.errorhandler(Exception)
+        def capture_unhandled_exception(error):
+            if isinstance(error, HTTPException):
+                return error
+
+            if posthog_client is not None:
+                posthog_client.capture_exception(error)
+
+            return jsonify({'error': 'Internal server error'}), 500
+
+        _error_handler_registered = True
 
     return app
 
@@ -75,6 +117,12 @@ def queue_add():
     if result.get('status') == 'error':
         return jsonify(result), 400
 
+    if posthog_client is not None:
+        posthog_client.capture(
+            'instruction_queue_submitted',
+            properties={'instruction_count': result['added']},
+        )
+
     return jsonify(result)
 
 
@@ -82,6 +130,13 @@ def queue_add():
 def queue_clear():
     """Clear the queue and emergency stop"""
     result = service.clear_queue()
+
+    if posthog_client is not None:
+        posthog_client.capture(
+            'rover_emergency_stop_requested',
+            properties={'cleared_instruction_count': result['cleared']},
+        )
+
     return jsonify(result)
 
 
@@ -134,9 +189,9 @@ def photo():
 def main():
     global service
 
-    # Create driver and service
     driver = create_driver()
     service = RoverQueueService(driver)
+    create_app(service)
 
     driver_name = driver.__class__.__name__
     if driver_name == 'FakeRoverDriver':
