@@ -42,6 +42,11 @@ export function PostHogProvider({
       capture_exceptions: true,
     });
     posthog.register({ environment });
+
+    // The npm import above only gives a module-scoped reference - unlike the
+    // hosted snippet, it never touches `window` on its own. Exposing it here
+    // is what makes `posthog.capture(...)` work from the browser console.
+    (window as unknown as { posthog: typeof posthog }).posthog = posthog;
     // Runs once per full page load. RootLayout (and this provider with it)
     // stays mounted across client-side navigation in the App Router, so an
     // empty dep array - not [environment] - is what keeps this a single init.
