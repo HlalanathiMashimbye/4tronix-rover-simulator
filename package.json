@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "postinstall": "npm install --prefix mission-control",
-    "dev:control": "node scripts/free-port.js 3000 && npm run dev --prefix mission-control -- -p 3000",
+    "dev:control": "node scripts/free-port.js 3000 && npm run dev --prefix mission-control",
     "dev:satellite": "node scripts/dev-satellite.js",
     "dev:yard": "node scripts/dev-yard.js",
     "dev:all": "node scripts/dev-launcher.js",
