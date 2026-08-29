@@ -1,6 +1,7 @@
 // GENERATED FILE - DO NOT EDIT.
 // Built from mission-control/src/lib by scripts/build-roversim.mjs.
 // Edit the TypeScript source and re-run `npm run build:roversim`.
+import { LED_COUNT } from './roverBlockly.js';
 /**
  * Parse rover Python into 2D-simulator commands.
  *
@@ -66,6 +67,8 @@ function parseLinear(lines) {
     // Front-left wheel servo (9) tells us whether a forward move is steering.
     const servos = { 9: 0, 11: 0, 13: 0, 15: 0 };
     let motion = null;
+    /** Colours set but not yet shown. Cleared by each rover.show(). */
+    let staged = Array(LED_COUNT).fill(null);
     const emitSleep = (seconds) => {
         if (!motion || motion.speed <= 0)
             return; // a bare wait keeps the rover still
@@ -99,6 +102,29 @@ function parseLinear(lines) {
         }
         if ((m = line.match(/rover\.steerRight\(\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
             commands.push({ command: 'steerRight', degrees: parseInt(m[1]), speed: parseInt(m[2]), duration: parseFloat(m[3]) });
+            continue;
+        }
+        // --- Lights ------------------------------------------------------------
+        //
+        // setColor and setPixel STAGE a colour; show() commits it. That is how the
+        // real API works, and the editor's own help says so ("Nothing changes until
+        // you call this"), so the simulator has to behave the same way or it would
+        // be teaching a child something untrue about their own rover.
+        if ((m = line.match(/rover\.setColor\(\s*rover\.fromRGB\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*\)/))) {
+            staged = Array(LED_COUNT).fill(`${m[1]}, ${m[2]}, ${m[3]}`);
+            continue;
+        }
+        if ((m = line.match(/rover\.setPixel\(\s*(\d+)\s*,\s*rover\.fromRGB\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)\s*\)/))) {
+            const which = parseInt(m[1]);
+            if (which >= 0 && which < LED_COUNT) {
+                staged = [...staged];
+                staged[which] = `${m[2]}, ${m[3]}, ${m[4]}`;
+            }
+            continue;
+        }
+        if (/rover\.show\(\s*\)/.test(line)) {
+            commands.push({ command: 'leds', leds: staged });
+            staged = Array(LED_COUNT).fill(null);
             continue;
         }
         // --- Real low-level form (blocks + real rover) ------------------------

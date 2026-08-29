@@ -11,6 +11,8 @@ export interface SimPoint {
   heading: number;
   servos: Record<string, number>;
   hitWall?: boolean;
+  /** The four corner lamps: 'r, g, b' or null for off. */
+  leds?: (string | null)[];
 }
 
 export interface SimLayout {
@@ -87,10 +89,18 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
 };
 
 // The physical yard (matches the Qt simulator: 400 x 300 cm).
-export const YARD_W = 400;
-export const YARD_H = 300;
+/**
+ * The driveable yard, in centimetres.
+ *
+ * Grown from 400x300. At the old size a couple of forward blocks put the rover
+ * against a wall, which is a dull thing to discover when the whole point of a
+ * simulator is to give a child room to play. rover-physics.ts bounds the rover
+ * to the same numbers, and the two must not drift.
+ */
+export const YARD_W = 640;
+export const YARD_H = 480;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
-const MARGIN = 14; // px inset so the rover never clips the panel edge
+const MARGIN = 10; // px inset so the rover never clips the panel edge
 
 // Servo ids for the four steerable wheels (front/rear, left/right).
 const FL = '9';
@@ -101,12 +111,20 @@ const RR = '13';
 // Deterministic crater field (world cm) so the terrain reads as Mars without a
 // muddy photo. Each is [x, y, radius].
 const CRATERS: [number, number, number][] = [
-  [-130, 80, 34],
-  [90, 60, 26],
-  [140, -70, 40],
-  [-90, -90, 22],
-  [20, 120, 18],
-  [-160, -30, 16],
+  [-210, 130, 46],
+  [150, 95, 34],
+  [235, -110, 52],
+  [-150, -145, 30],
+  [30, 190, 24],
+  [-265, -55, 22],
+  [95, -35, 16],
+  [-60, 55, 13],
+  // Outside the fence. The ground carries on past the play area, which is what
+  // stops the panel looking like a small box floating in the dark.
+  [-430, 250, 60],
+  [420, 210, 44],
+  [-390, -260, 38],
+  [400, -240, 56],
 ];
 
 export function computeLayout(w: number, h: number): SimLayout {
@@ -136,6 +154,9 @@ export function interpolate(traj: SimPoint[], p: number): SimPoint {
     heading: lerp(a.heading, b.heading, f),
     servos: { [FL]: sv(FL), [FR]: sv(FR), [RL]: sv(RL), [RR]: sv(RR) },
     hitWall: a.hitWall || b.hitWall,
+    // Lamps do not blend between two colours: they are on or off at a given
+    // frame. Take the frame the playhead is actually on.
+    leds: a.leds,
   };
 }
 
@@ -144,30 +165,30 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette)
   const yardW = YARD_W * s;
   const yardH = YARD_H * s;
 
-  // Opaque base behind the (possibly letterboxed) yard.
-  ctx.fillStyle = P.backdrop;
+  /**
+   * THE GROUND COVERS THE WHOLE PANEL, not just the driveable yard.
+   *
+   * The yard is 4:3 and the panel rarely is, so fitting one inside the other
+   * left bars of dead background above and below: a small box floating in the
+   * dark, which is what made the arena feel cramped however large the numbers
+   * were. Mars now runs to every edge and the fence sits on top of it, so the
+   * play area reads as part of a bigger place rather than the whole world.
+   */
+  const ground = ctx.createRadialGradient(
+    w / 2, h * 0.38, Math.min(w, h) * 0.05,
+    w / 2, h * 0.5, Math.max(w, h) * 0.75,
+  );
+  ground.addColorStop(0, P.groundInner);
+  ground.addColorStop(0.5, P.groundMid);
+  ground.addColorStop(1, P.groundOuter);
+  ctx.fillStyle = ground;
   ctx.fillRect(0, 0, w, h);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.roundRect(ox, oy, yardW, yardH, 16);
-  ctx.clip();
-
-  // Warm Mars ground: a soft radial wash, lighter in the middle.
-  const grad = ctx.createRadialGradient(
-    ox + yardW / 2, oy + yardH * 0.42, yardW * 0.1,
-    ox + yardW / 2, oy + yardH / 2, yardW * 0.75
-  );
-  grad.addColorStop(0, P.groundInner);
-  grad.addColorStop(0.55, P.groundMid);
-  grad.addColorStop(1, P.groundOuter);
-  ctx.fillStyle = grad;
-  ctx.fillRect(ox, oy, yardW, yardH);
-
-  // Craters: a darker bowl with a faint sunlit rim for depth.
+  // Craters, including the ones beyond the fence.
   for (const [cx, cy, cr] of CRATERS) {
     const [px, py] = worldToScreen(L, cx, cy);
     const r = cr * s;
+    if (r <= 0) continue;
     const cg = ctx.createRadialGradient(px, py - r * 0.2, r * 0.2, px, py, r);
     cg.addColorStop(0, P.craterCore);
     cg.addColorStop(0.8, P.craterMid);
@@ -178,17 +199,32 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette)
     ctx.fill();
   }
 
-  // Faint measurement grid every 50 cm.
+  // Everything past the fence is dimmed, so the eye still knows where the rover
+  // is allowed to go without the ground stopping dead at a line.
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.beginPath();
+  ctx.rect(0, 0, w, h);
+  ctx.roundRect(ox, oy, yardW, yardH, 18);
+  ctx.fill('evenodd');
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(ox, oy, yardW, yardH, 18);
+  ctx.clip();
+
+  // Measurement grid, every 80 cm now the yard is larger.
   ctx.strokeStyle = P.grid;
   ctx.lineWidth = 1;
-  for (let gx = -YARD_W / 2; gx <= YARD_W / 2; gx += 50) {
+  for (let gx = -YARD_W / 2; gx <= YARD_W / 2; gx += 80) {
     const [sx] = worldToScreen(L, gx, 0);
     ctx.beginPath();
     ctx.moveTo(sx, oy);
     ctx.lineTo(sx, oy + yardH);
     ctx.stroke();
   }
-  for (let gy = -YARD_H / 2; gy <= YARD_H / 2; gy += 50) {
+  for (let gy = -YARD_H / 2; gy <= YARD_H / 2; gy += 80) {
     const [, sy] = worldToScreen(L, 0, gy);
     ctx.beginPath();
     ctx.moveTo(ox, sy);
@@ -196,7 +232,6 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette)
     ctx.stroke();
   }
 
-  // Top/bottom edge shadow for a subtle "arena" depth.
   const vg = ctx.createLinearGradient(0, oy, 0, oy + yardH);
   vg.addColorStop(0, P.vignetteTop);
   vg.addColorStop(0.15, 'rgba(0,0,0,0)');
@@ -206,21 +241,35 @@ function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette)
   ctx.fillRect(ox, oy, yardW, yardH);
   ctx.restore();
 
-  // Start pad at the origin (where every run begins).
+  // Start pad at the origin, where every run begins.
   const [hx, hy] = worldToScreen(L, 0, 0);
-  ctx.strokeStyle = 'rgba(52,211,153,0.9)';
+  ctx.save();
+  ctx.strokeStyle = 'rgba(52,211,153,0.85)';
   ctx.lineWidth = 2;
+  ctx.setLineDash([5, 4]);
   ctx.beginPath();
-  ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+  ctx.arc(hx, hy, 13, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.fillStyle = 'rgba(52,211,153,0.18)';
+  ctx.restore();
+  ctx.fillStyle = 'rgba(52,211,153,0.14)';
+  ctx.beginPath();
+  ctx.arc(hx, hy, 13, 0, Math.PI * 2);
   ctx.fill();
 
-  // Frame the play area.
+  // The fence. Drawn twice: a soft wide pass for glow, a crisp one on top.
+  ctx.save();
+  ctx.strokeStyle = P.border;
+  ctx.globalAlpha = 0.35;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.roundRect(ox, oy, yardW, yardH, 18);
+  ctx.stroke();
+  ctx.restore();
+
   ctx.strokeStyle = P.border;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(ox, oy, yardW, yardH, 16);
+  ctx.roundRect(ox, oy, yardW, yardH, 18);
   ctx.stroke();
 }
 
@@ -328,6 +377,65 @@ function drawRover(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint) {
   ctx.beginPath();
   ctx.arc(0, -halfH - 2 * scale, 2.4 * scale, 0, Math.PI * 2);
   ctx.fill();
+
+  /**
+   * The four corner lamps.
+   *
+   * The real chassis has one at each corner, and the blocks have always let a
+   * child choose a colour for any of them - it simply never showed up here, so
+   * "Set all LEDs to green" did nothing a learner could see. Index order
+   * matches LED_POSITIONS in roverBlockly: 0 rear-left, 1 front-left,
+   * 2 front-right, 3 rear-right.
+   *
+   * Drawn last so the glow sits over the chassis rather than under it.
+   */
+  const lampR = 3.1 * scale;
+  const lampPositions: [number, number][] = [
+    [-halfW + lampR * 0.6, halfH - lampR * 0.6],
+    [-halfW + lampR * 0.6, -halfH + lampR * 0.6],
+    [halfW - lampR * 0.6, -halfH + lampR * 0.6],
+    [halfW - lampR * 0.6, halfH - lampR * 0.6],
+  ];
+
+  lampPositions.forEach(([lx, ly], i) => {
+    const rgb = st.leds?.[i];
+
+    if (!rgb) {
+      // An unlit lamp is still a lamp: a dark bead, so the child can see there
+      // is something there to turn on.
+      ctx.fillStyle = 'rgba(15,23,42,0.85)';
+      ctx.strokeStyle = 'rgba(148,163,184,0.55)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(lx, ly, lampR * 0.75, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      return;
+    }
+
+    const colour = `rgb(${rgb})`;
+
+    // Halo first, so several lit lamps pool their light like the real thing.
+    const glow = ctx.createRadialGradient(lx, ly, 0, lx, ly, lampR * 4.5);
+    glow.addColorStop(0, `rgba(${rgb}, 0.55)`);
+    glow.addColorStop(0.5, `rgba(${rgb}, 0.16)`);
+    glow.addColorStop(1, `rgba(${rgb}, 0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(lx, ly, lampR * 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = colour;
+    ctx.beginPath();
+    ctx.arc(lx, ly, lampR, 0, Math.PI * 2);
+    ctx.fill();
+
+    // A white centre reads as "lit" rather than "painted".
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(lx - lampR * 0.2, ly - lampR * 0.2, lampR * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+  });
 
   ctx.restore();
 }
