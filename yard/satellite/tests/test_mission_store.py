@@ -245,8 +245,8 @@ def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
         '2026-07-02',
     )
 
-    ok, reason, _mission = mission_store.acquire_mission(
-        'x', 'sat-1', '2026-07-03T00:00:00Z', '2026-07-03T00:05:00Z', for_rerun=True,
+    ok, reason, _run = mission_store.acquire_run(
+        'x', 'curiosity', '2026-07-03T00:00:00Z', for_rerun=True,
     )
     assert ok, reason
 
@@ -295,15 +295,17 @@ def test_a_flagged_mission_can_be_rerun():
         {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
          'submittedAt': '2026-08-01T08:00:00Z'},
     ], '2026-08-01T08:00:00Z')
+    mission_store.backfill_missions_to_runs()
     mission_store.flag_for_review('m1', 'interrupted')
 
-    ok, reason, _ = mission_store.acquire_mission(
-        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+    ok, reason, _ = mission_store.acquire_run(
+        'm1', 'y1', '2026-08-02T08:00:00Z', for_rerun=True,
+    )
 
     assert ok, f'rerun refused with {reason}'
-    row = mission_store.get_mission('m1')
-    assert row['needs_review'] == 0, 'rerunning is the operator resolving it'
-    assert row['status'] == 'processing'
+    run = mission_store.get_run('m1', 'y1')
+    assert run['needs_review'] == 0, 'rerunning is the operator resolving it'
+    assert run['status'] == 'processing'
 
 
 def test_a_processing_mission_that_is_not_flagged_still_cannot_be_rerun():
@@ -313,10 +315,15 @@ def test_a_processing_mission_that_is_not_flagged_still_cannot_be_rerun():
          'submittedAt': '2026-08-01T08:00:00Z'},
     ], '2026-08-01T08:00:00Z')
 
-    ok, reason, _ = mission_store.acquire_mission(
-        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+    mission_store.backfill_missions_to_runs()
 
-    assert not ok and reason == 'not-terminal'
+    ok, reason, _ = mission_store.acquire_run(
+        'm1', 'y1', '2026-08-02T08:00:00Z', for_rerun=True,
+    )
+
+    # Not flagged, so nothing says the run is abandoned. Restarting it could
+    # mean two dispatches for one rover.
+    assert not ok and reason == 'already-running'
 
 
 def test_a_deleted_mission_does_not_inflate_the_review_count():

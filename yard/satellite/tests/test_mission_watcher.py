@@ -25,10 +25,26 @@ def _mirror(tmp_path, monkeypatch):
 
 
 def _seed(mission_id, status, needs_review=0, owner='sat-1'):
+    """Seed a mission and create a run for it in the given status.
+
+    Missions are programs only and must still have a status field (for now),
+    set to 'queued' as the default. The execution status is in the run.
+    """
     mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': 'curiosity', 'status': status,
-          'lockOwner': owner, 'needsReview': needs_review,
+        [{'id': mission_id, 'yardId': 'curiosity', 'status': 'queued',
           'submittedAt': '2026-07-14T08:00:00Z'}],
+        '2026-07-14T09:00:00Z',
+    )
+    # Create run in the specified status (use camelCase like Firestore)
+    yard_id = 'curiosity'
+    mission_store.upsert_runs(
+        [{
+            'missionId': mission_id,
+            'yardId': yard_id,
+            'status': status,
+            'needsReview': needs_review,
+            'statusUpdatedAt': '2026-07-14T09:00:00Z',
+        }],
         '2026-07-14T09:00:00Z',
     )
 
@@ -51,21 +67,22 @@ def test_a_confirmed_mission_is_completed(monkeypatch):
     _seed('m1', 'processing')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['m1']
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == ['m1']
 
-    row = mission_store.get_mission('m1')
-    assert row['status'] == 'completed'
-    assert row['completed_at']
-    assert row['lock_owner'] is None, 'the lease must be released too'
+    run = mission_store.get_run('m1', 'curiosity')
+    assert run['status'] == 'completed'
+    assert run['completed_at']
+    # No lease to release any more (AB#364): reaching a terminal status is
+    # the whole of finishing a run.
 
 
 def test_completion_is_queued_for_firestore(monkeypatch):
     _seed('m1', 'processing')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
 
-    entry = mission_store.peek_outbox()
+    entry = mission_store.peek_run_outbox()
     assert entry and entry['mission_id'] == 'm1'
 
 
@@ -74,7 +91,7 @@ def test_the_learner_notification_fires(monkeypatch):
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
     calls = []
 
-    mission_watcher.autocomplete_finished_missions(ROVER, notify=lambda i, s: calls.append((i, s)))
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity', notify=lambda i, s: calls.append((i, s)))
 
     assert calls == [('m1', 'completed')]
 
@@ -86,9 +103,9 @@ def test_a_failing_notify_does_not_lose_the_completion(monkeypatch):
     def boom(*a):
         raise RuntimeError('mission-control down')
 
-    mission_watcher.autocomplete_finished_missions(ROVER, notify=boom)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity', notify=boom)
 
-    assert mission_store.get_mission('m1')['status'] == 'completed'
+    assert mission_store.get_run('m1', 'curiosity')['status'] == 'completed'
 
 
 def test_a_rover_error_does_not_mark_the_mission_failed(monkeypatch):
@@ -99,8 +116,8 @@ def test_a_rover_error_does_not_mark_the_mission_failed(monkeypatch):
         {'cmd': 'run_python', 'status': 'error', 'params': {'mission_id': 'm1'}},
     ]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] == 'processing'
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
+    assert mission_store.get_run('m1', 'curiosity')['status'] == 'processing'
 
 
 def test_an_unreachable_rover_changes_nothing(monkeypatch):
@@ -110,8 +127,8 @@ def test_an_unreachable_rover_changes_nothing(monkeypatch):
         raise mission_watcher.requests.exceptions.ConnectionError('offline')
     monkeypatch.setattr(mission_watcher.requests, 'get', boom)
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] == 'processing'
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
+    assert mission_store.get_run('m1', 'curiosity')['status'] == 'processing'
 
 
 def test_missions_awaiting_human_review_are_left_alone(monkeypatch):
@@ -119,17 +136,17 @@ def test_missions_awaiting_human_review_are_left_alone(monkeypatch):
     _seed('m1', 'processing', needs_review=1)
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['needs_review'] == 1
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
+    assert mission_store.get_run('m1', 'curiosity')['needs_review'] == 1
 
 
 def test_a_mission_with_pending_writes_is_skipped(monkeypatch):
-    """Do not race a flush that is already carrying a change for this row."""
+    """Do not race a flush that is already carrying a change for this run."""
     _seed('m1', 'processing')
-    mission_store.write_and_enqueue('m1', {'youtube_url': 'u'}, 'youtube', {'youtubeUrl': 'u'})
+    mission_store.set_run_field('m1', 'curiosity', {'youtube_url': 'u'}, {'youtubeUrl': 'u'})
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
 
 
 def test_already_terminal_missions_are_not_touched(monkeypatch):
@@ -137,8 +154,8 @@ def test_already_terminal_missions_are_not_touched(monkeypatch):
     _seed('q1', 'queued')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('c1'), _done('q1')]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('q1')['status'] == 'queued', 'a queued mission never ran'
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
+    assert mission_store.get_run('q1', 'curiosity')['status'] == 'queued', 'a queued run never ran'
 
 
 def test_manual_drive_history_is_ignored(monkeypatch):
@@ -149,7 +166,7 @@ def test_manual_drive_history_is_ignored(monkeypatch):
         {'cmd': 'stop', 'status': 'completed', 'params': {}},
     ]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
 
 
 def test_the_watcher_never_sends_anything_to_the_rover(monkeypatch):
@@ -161,7 +178,7 @@ def test_the_watcher_never_sends_anything_to_the_rover(monkeypatch):
         raise AssertionError('the watcher POSTed to the rover')
     monkeypatch.setattr(mission_watcher.requests, 'post', no_post)
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
 
 
 def test_the_rover_url_is_read_each_cycle(monkeypatch):
@@ -201,12 +218,12 @@ def test_a_run_the_rover_rejected_is_flagged_with_the_reason(monkeypatch):
         _errored('m1', 'SyntaxError: invalid syntax (line 1)'),
     ]))
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
 
-    row = mission_store.get_mission('m1')
-    assert row['needs_review'] == 1
-    assert 'SyntaxError' in row['review_reason'], row['review_reason']
-    assert row['status'] == 'processing', 'the watcher must not invent an outcome'
+    run = mission_store.get_run('m1', 'curiosity')
+    assert run['needs_review'] == 1
+    assert 'SyntaxError' in run['review_reason'], run['review_reason']
+    assert run['status'] == 'processing', 'the watcher must not invent an outcome'
 
 
 def test_an_errored_run_is_never_marked_failed(monkeypatch):
@@ -217,8 +234,8 @@ def test_an_errored_run_is_never_marked_failed(monkeypatch):
         _errored('m1', 'boom'),
     ]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] != 'failed'
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == []
+    assert mission_store.get_run('m1', 'curiosity')['status'] != 'failed'
 
 
 def test_an_errored_run_does_not_re_flag_an_already_flagged_mission(monkeypatch):
@@ -227,11 +244,11 @@ def test_an_errored_run_does_not_re_flag_an_already_flagged_mission(monkeypatch)
         _errored('m1', 'second complaint'),
     ]))
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
 
-    reason = mission_store.get_mission('m1')['review_reason']
+    reason = mission_store.get_run('m1', 'curiosity')['review_reason']
     assert reason != 'rover could not run it: second complaint', \
-        'a mission awaiting a human decision is theirs, not the watcher to restamp'
+        'a run awaiting a human decision is theirs, not the watcher to restamp'
 
 
 def test_a_long_rover_error_is_truncated(monkeypatch):
@@ -240,9 +257,9 @@ def test_a_long_rover_error_is_truncated(monkeypatch):
         _errored('m1', 'x' * 5000),
     ]))
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
 
-    assert len(mission_store.get_mission('m1')['review_reason']) <= \
+    assert len(mission_store.get_run('m1', 'curiosity')['review_reason']) <= \
         mission_watcher.REVIEW_REASON_MAX
 
 
@@ -253,6 +270,6 @@ def test_completions_still_work_alongside_errors(monkeypatch):
         _done('ok'), _errored('bad', 'SyntaxError'),
     ]))
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['ok']
-    assert mission_store.get_mission('ok')['status'] == 'completed'
-    assert mission_store.get_mission('bad')['needs_review'] == 1
+    assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == ['ok']
+    assert mission_store.get_run('ok', 'curiosity')['status'] == 'completed'
+    assert mission_store.get_run('bad', 'curiosity')['needs_review'] == 1

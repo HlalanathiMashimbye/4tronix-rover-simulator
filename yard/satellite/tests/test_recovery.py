@@ -15,8 +15,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import mission_store  # noqa: E402
 import recovery  # noqa: E402
 
-OWNER = 'sat-under-test'
-OTHER = 'some-other-satellite'
+# Recovery is scoped by YARD now, not by lock owner: the lease went with
+# AB#364, and one satellite serves one yard, so "processing here" identifies
+# exactly the runs this satellite was executing.
+OWNER = 'curiosity'
+OTHER = 'durban-yard'
 
 
 @pytest.fixture(autouse=True)
@@ -26,12 +29,20 @@ def _mirror(tmp_path, monkeypatch):
 
 
 def _seed(mission_id, status, owner=None, needs_review=0):
+    """Seed a mission and the run its status implies, at yard `owner`.
+
+    `owner` is a yard id. The backfill is what creates runs from missions in
+    production, so using it here keeps the fixture honest rather than hand
+    building a row shape that could drift.
+    """
+    yard = owner or 'curiosity'
     mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': 'curiosity', 'status': status,
-          'lockOwner': owner, 'needsReview': needs_review,
+        [{'id': mission_id, 'yardId': yard, 'status': status,
+          'needsReview': needs_review,
           'submittedAt': '2026-07-14T08:00:00Z'}],
         '2026-07-14T09:00:00Z',
     )
+    mission_store.backfill_missions_to_runs()
 
 
 class NoRover:
@@ -118,7 +129,6 @@ def test_rover_confirmation_resolves_without_a_human(monkeypatch):
     row = mission_store.get_mission('m1')
     assert row['status'] == 'completed'
     assert row['needs_review'] == 0
-    assert row['lock_owner'] is None, 'the lock must be released'
 
 
 def test_an_unreachable_rover_falls_back_to_review_not_completion(monkeypatch):

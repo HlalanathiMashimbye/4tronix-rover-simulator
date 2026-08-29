@@ -21,16 +21,22 @@ from datetime import datetime, timezone
 
 from mission_store import (
     clear_dirty,
+    clear_run_dirty,
     delete_outbox,
+    delete_run_outbox,
     get_meta,
     log_conflict,
     mark_attempt,
+    mark_run_attempt,
     active_mission_ids,
+    get_active_runs,
     forget_mission,
     newest_submitted_at,
     peek_outbox,
+    peek_run_outbox,
     set_meta,
     upsert_missions,
+    upsert_runs,
 )
 
 # Read-cost budget. Firestore's free tier allows 50,000 document reads a day,
@@ -242,6 +248,47 @@ def flush_one(firestore_client, entry, collection_name='missions'):
         return False
 
 
+def flush_run_one(firestore_client, entry):
+    """Apply one run outbox entry to Firestore. Returns True only on confirmation.
+
+    Mirrors flush_one but writes to the runs subcollection at
+    missions/{missionId}/runs/{yardId}. No merge rule applied - runs are
+    scoped to one yard so only that yard ever writes them.
+    """
+    from firebase_admin import firestore
+
+    mission_id = entry['mission_id']
+    yard_id = entry['yard_id']
+    ref = (
+        firestore_client
+        .collection('missions')
+        .document(mission_id)
+        .collection('runs')
+        .document(yard_id)
+    )
+
+    try:
+        @firestore.transactional
+        def _apply(transaction):
+            snap = ref.get(transaction=transaction)
+            remote = (snap.to_dict() or {}) if getattr(snap, 'exists', False) else {}
+            local_payload = json.loads(entry['payload'])
+
+            # No merge rule: only this yard writes this run, so local always wins
+            # if we got here. Just merge in the fields (don't overwrite unrelated ones).
+            transaction.set(ref, local_payload, merge=True)
+
+        _apply(firestore_client.transaction())
+
+        delete_run_outbox(entry['seq'])
+        clear_run_dirty(mission_id, yard_id)
+        return True
+
+    except Exception as e:
+        mark_run_attempt(entry['seq'], str(e))
+        return False
+
+
 def sync_from_firestore(firestore_client, collection_name='missions', yard_id=None):
     """Pull only what changed, rather than the whole collection every cycle.
 
@@ -337,19 +384,26 @@ def reconcile_active(firestore_client, collection_name='missions', yard_id=None)
 
 
 def sync_cycle(firestore_client, collection_name='missions', yard_id=None):
-    """One cycle: flush the outbox completely, and only then pull.
+    """One cycle: flush runs BEFORE missions, then pull both.
 
-    A failed flush stops the whole cycle rather than skipping ahead. Entries
-    apply in `seq` order because the Pi has no real-time clock, so its
-    wall-clock timestamps cannot be trusted for ordering (plan 7.2).
+    Push-before-pull ordering: runs are the execution source of truth, so they
+    flush first. A failed flush stops the whole cycle. Entries apply in `seq`
+    order (the Pi's wall-clock timestamps cannot be trusted for ordering).
     """
+    # Flush run outbox first: runs are the execution ground truth
+    while True:
+        entry = peek_run_outbox()
+        if entry is None:
+            break
+        if not flush_run_one(firestore_client, entry):
+            return False
+
+    # Then flush mission outbox (program-only data)
     while True:
         entry = peek_outbox()
         if entry is None:
             break
         if not flush_one(firestore_client, entry, collection_name):
-            # Retry the same entry next cycle. Do NOT pull: the mirror would be
-            # overwritten with a Firestore state that predates this entry.
             return False
 
     ok = sync_from_firestore(firestore_client, collection_name, yard_id=yard_id)

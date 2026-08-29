@@ -71,9 +71,6 @@ IDENTITY_TOOLKIT_SIGN_IN = (
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'
 )
 
-# Active lease renewals: mission_id -> threading.Timer
-_active_leases = {}
-
 # Lazily initialised firebase_admin handles. Kept behind functions so tests
 # can monkeypatch _firestore / _verify_id_token without firebase-admin or
 # real credentials.
@@ -207,45 +204,6 @@ def _notify_mission_control_async(mission_id, status):
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-
-def _expires_iso():
-    from datetime import timedelta
-    return (datetime.now(timezone.utc) + timedelta(seconds=LEASE_TTL_SECONDS)).isoformat().replace('+00:00', 'Z')
-
-LEASE_RENEW_INTERVAL = 60  # seconds
-
-
-def _start_lease_renewal(mission_id):
-    """Keep the lease alive locally while a mission runs.
-
-    Mirror-only by design: a renewal carries no new information for Firestore
-    (the lease is re-sent with the next real status change), and queueing one
-    every 60 seconds would fill the outbox with entries that mean nothing.
-    """
-    def _renew():
-        try:
-            from mission_store import renew_lease
-            renew_lease(mission_id, _expires_iso(), _now_iso())
-        except Exception as e:
-            print(f'[lease] Failed to renew lease for {mission_id}: {e}')
-
-        timer = threading.Timer(LEASE_RENEW_INTERVAL, _renew)
-        timer.daemon = True
-        _active_leases[mission_id] = timer
-        timer.start()
-
-    timer = threading.Timer(LEASE_RENEW_INTERVAL, _renew)
-    timer.daemon = True
-    _active_leases[mission_id] = timer
-    timer.start()
-
-
-def _stop_lease_renewal(mission_id):
-    """Cancel the renewal timer for a mission."""
-    timer = _active_leases.pop(mission_id, None)
-    if timer:
-        timer.cancel()
-
 
 # Event-day escape hatch: OPERATOR_AUTH=off skips login entirely. Firebase
 # sign-in needs internet, and venue wifi (science centre) can be too flaky to
@@ -478,43 +436,49 @@ def _dispatch_to_rover(mission, mission_id=None):
 @operator_bp.route('/api/missions/<mission_id>/send', methods=['POST'])
 @require_operator
 def api_send_to_rover(mission_id):
-    """Claim the mission locally, then push its Python onto the rover queue.
+    """Claim the run for this mission+yard locally, then push Python to rover queue.
 
     Firestore is deliberately NOT touched here (plan PR 3): the request path
     runs entirely off SQLite so the console keeps working with no internet, and
     the sync worker is the only thing that talks to Firestore. The lock is
-    still atomic - acquire_mission uses BEGIN IMMEDIATE - so two simultaneous
-    taps still produce exactly one dispatch.
-    """
-    from mission_store import acquire_mission, release_mission
-    from satellite_identity import satellite_id
+    still atomic - acquire_run uses BEGIN IMMEDIATE - so two simultaneous
+    taps still produce exactly one dispatch to this yard's rover.
 
-    owner = satellite_id()
+    Concurrency is scoped to (mission_id, yard_id): the same mission can run
+    simultaneously on different yards.
+    """
+    from mission_store import acquire_run, release_run, get_mission
+    from satellite_identity import yard_id
+
     now = _now_iso()
-    expires = _expires_iso()
+    yard = yard_id()
 
     # The SQLite transaction serialises across processes; this serialises the
     # rover dispatch that follows it within this process.
     with _acquire_lock:
-        ok, reason, mission = acquire_mission(mission_id, owner, now, expires)
+        ok, reason, run = acquire_run(mission_id, yard, now)
 
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
             'not-queued': ('Only queued missions can be sent to the rover', 400),
-            'locked-by-other': ('Mission is locked by another operator', 409),
+            'already-running': ('Mission is already running at this yard', 409),
         }
         msg, code = messages.get(reason, ('Lock failed', 500))
         return jsonify({'error': msg}), code
 
+    mission = get_mission(mission_id)
+    if not mission:
+        release_run(mission_id, yard, 'queued', _now_iso())
+        return jsonify({'error': 'Mission not found'}), 404
+
     ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
         # Nothing reached the rover, so put it back rather than holding the
-        # lock for a full lease period.
-        release_mission(mission_id, 'queued', _now_iso())
+        # run stuck in 'processing' with nothing driving it.
+        release_run(mission_id, yard, 'queued', _now_iso())
         return err
 
-    _start_lease_renewal(mission_id)
     _notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -522,38 +486,48 @@ def api_send_to_rover(mission_id):
 @operator_bp.route('/api/missions/<mission_id>/rerun', methods=['POST'])
 @require_operator
 def api_rerun(mission_id):
-    """Re-run a finished mission. Clears the previous run's completion and
-    video so the mission reflects the new run, not stale data."""
-    from mission_store import acquire_mission, release_mission
-    from satellite_identity import satellite_id
+    """Re-run a finished mission at this yard. Clears the run's completion
+    and video so the new run starts fresh without stale data."""
+    from mission_store import acquire_run, release_run, get_mission, get_run
+    from satellite_identity import yard_id
 
-    owner = satellite_id()
     now = _now_iso()
-    expires = _expires_iso()
+    yard = yard_id()
 
     with _acquire_lock:
-        ok, reason, mission = acquire_mission(mission_id, owner, now, expires, for_rerun=True)
+        existing_run = get_run(mission_id, yard)
+        if existing_run and existing_run.get('status') not in ('completed', 'failed', 'cancelled'):
+            return jsonify({'error': 'Run is still processing at this yard'}), 409
 
-    previous_status = (mission or {}).get('status', 'completed')
+        # What to go back to if the rover never takes it. NOT 'queued': this
+        # mission already finished once, and rolling a failed re-dispatch back
+        # to 'queued' would erase that. The learner reads the mission's status
+        # as Completed or Pending, so the wrong rollback tells a child their
+        # finished mission is waiting again.
+        previous = existing_run.get('status') if existing_run else 'queued'
+
+        ok, reason, run = acquire_run(mission_id, yard, now, for_rerun=True)
 
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
-            'not-terminal': ('Only finished or cancelled missions can be rerun', 400),
-            'locked-by-other': ('Mission is locked by another operator', 409),
+            'not-queued': ('Unable to queue run at this yard', 400),
+            'already-running': ('Run is already going at this yard', 409),
         }
-        msg, code = messages.get(reason, ('Lock failed', 500))
+        msg, code = messages.get(reason, ('Could not start the run', 500))
         return jsonify({'error': msg}), code
+
+    mission = get_mission(mission_id)
+    if not mission:
+        release_run(mission_id, yard, previous, _now_iso())
+        return jsonify({'error': 'Mission not found'}), 404
 
     ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
-        # Nothing ran, so restore what the mission was before the lock. Marking
-        # it 'failed' would misreport an unreachable rover as a failed run, and
-        # 'failed' reaches the learner as a run that went wrong.
-        release_mission(mission_id, previous_status, _now_iso())
+        # Nothing reached the rover, so restore what was there before.
+        release_run(mission_id, yard, previous, _now_iso())
         return err
 
-    _start_lease_renewal(mission_id)
     _notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -597,12 +571,16 @@ def api_stop_mission(mission_id):
     not the running one, the rover is still cleared and only the status write
     is skipped.
     """
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    was_running = mission.get('status') == 'processing'
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    was_running = run and run.get('status') == 'processing' if run else False
 
     try:
         resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
@@ -620,10 +598,10 @@ def api_stop_mission(mission_id):
 
     if not was_running:
         # Rover cleared, nothing to record: this mission was not the one on it.
-        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': mission.get('status')})
+        run_status = run.get('status') if run else 'queued'
+        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': run_status})
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'queued', _now_iso(), operator_decision=True)
+    release_run(mission_id, yard, 'queued', _now_iso(), operator_decision=True)
     _notify_mission_control_async(mission_id, 'queued')
     return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
 
@@ -631,16 +609,19 @@ def api_stop_mission(mission_id):
 @operator_bp.route('/api/missions/<mission_id>/complete', methods=['POST'])
 @require_operator
 def api_mark_complete(mission_id):
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') not in ('queued', 'processing'):
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be marked complete'}), 400
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'completed', _now_iso())
+    release_run(mission_id, yard, 'completed', _now_iso())
     _notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -653,22 +634,27 @@ def api_attach_youtube(mission_id):
     if not url or not any(p.match(url) for p in YOUTUBE_URL_PATTERNS):
         return jsonify({'error': 'Use a youtube.com/watch?v=... or youtu.be/... URL'}), 400
 
-    from mission_store import get_mission, set_mission_field
+    from mission_store import get_mission, get_run, set_run_field
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') != 'completed':
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') != 'completed':
         return jsonify({'error': 'Attach the video after the mission is marked complete'}), 400
 
-    set_mission_field(mission_id, {'youtube_url': url}, {'youtubeUrl': url})
+    set_run_field(mission_id, yard, {'youtube_url': url}, {'youtubeUrl': url},
+                  mirror_to_mission=('youtube_url',))
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
 @operator_bp.route('/api/missions/<mission_id>/cancel', methods=['POST'])
 @require_operator
 def api_cancel_mission(mission_id):
-    """Take a mission out of the queue without running it.
+    """Take a run out of the queue without executing it at this yard.
 
     The gap this fills: a learner submits a duplicate, or code that is never
     going to do anything, and today the only options are run it or leave it in
@@ -678,16 +664,19 @@ def api_cancel_mission(mission_id):
     the record of it should survive; 'cancelled' also reads as "Pending" on the
     learner's side (discoveryStatus.ts), so nobody is shown a rejection.
     """
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') not in ('queued', 'processing'):
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be cancelled'}), 400
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'cancelled', _now_iso())
+    release_run(mission_id, yard, 'cancelled', _now_iso())
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
@@ -823,7 +812,6 @@ def api_delete_mission(mission_id):
     if mission.get('deleted'):
         return jsonify({'error': 'This mission is already deleted'}), 400
 
-    _stop_lease_renewal(mission_id)
     delete_mission(mission_id, _now_iso())
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -987,7 +975,6 @@ def api_resolve_review(mission_id):
         return jsonify({'error': 'This mission is not awaiting review'}), 400
 
     status = 'completed' if outcome == 'completed' else 'queued'
-    _stop_lease_renewal(mission_id)
     resolve_review(mission_id, status, _now_iso())
 
     if status == 'completed':
