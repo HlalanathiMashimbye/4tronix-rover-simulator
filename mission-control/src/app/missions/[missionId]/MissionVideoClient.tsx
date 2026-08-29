@@ -6,8 +6,6 @@ import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { getFirestoreClient } from '@/lib/firebase';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { RoverSimulator } from '@/components/mission/RoverSimulator';
-import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
@@ -17,12 +15,12 @@ import { SplitPane } from '@/components/ui/SplitPane';
 import { yardLabel } from '@/infrastructure/config/yards';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
-import { RunStrip } from '@/components/mission/RunStrip';
+import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
   const [mission, setMission] = useState<Mission | null>(null);
-  // Every yard's attempt, so the strip can show more than the one video the
+  // Every yard's attempt, so the carousel can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
   const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +59,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
         setMission(loadedMission);
 
         // Runs are a separate read, and a failure here is not a failure to
-        // show the mission: the strip falls back to the video on the mission
+        // show the mission: the carousel falls back to the video on the mission
         // document, and worst case to the simulation alone.
         try {
           setMissionRuns(await repository.findRuns(missionId));
@@ -165,42 +163,33 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
           </div>
         </div>
 
-        {/* Body fills the remaining viewport height; nothing scrolls except the
-            code. Same draggable divider as Create Mission - a fixed 2/5 - 3/5
-            split meant a long mission's code and its footage both stayed
-            cramped with no way to trade space between them. height="100%"
-            because this sits inside an already-sized flex parent, unlike
-            Create Mission which owns the viewport. */}
+        {/* Fixed at 70/30, video to code. The draggable divider was ambition:
+            a video player wants one shape and looks better holding it, and a
+            handle beside it invites fiddling with a layout that was already
+            right. Create Mission keeps its drag, where trading space between
+            an editor and a preview is a real working need.
+
+            height="100%" because this sits inside an already-sized flex
+            parent, unlike Create Mission which owns the viewport. */}
         <SplitPane
-          ariaLabel="Resize footage and code panels"
-          defaultSplit={40}
+          ariaLabel="Footage and code panels"
+          defaultSplit={70}
+          resizable={false}
           height="100%"
           left={
             <div className="flex min-h-0 flex-col gap-2">
-            {/* Above the player, not in the header: the strip needs the full
-                width to show more than two cards on a phone, and the header
-                already carries the title, status and date. */}
-            <RunStrip runs={runs} selectedId={selectedRun.id} onSelect={setSelectedRunId} />
-            <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/30">
-              {selectedRun.kind === 'real' && selectedRun.youtubeId ? (
-                <div className="flex h-full w-full items-center justify-center p-2">
-                  <YouTubeEmbed
-                    key={selectedRun.id}
-                    youtubeId={selectedRun.youtubeId}
-                    title={missionName}
-                  />
-                </div>
-              ) : (
-                <div className="h-full w-full p-2">
-                  <RoverSimulator trajectory={simTrajectory} isPlaying editorMode="code" />
-                </div>
-              )}
-            </div>
-            <div className="grid shrink-0 grid-cols-3 gap-2">
-              <Stat label="Status" value={discoveryStatus} />
-              <Stat label="Duration" value={durationLabel} mono />
-              <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
-            </div>
+              <RunStackCarousel
+                runs={runs}
+                selectedId={selectedRun.id}
+                onSelect={setSelectedRunId}
+                missionName={missionName}
+                trajectory={simTrajectory}
+              />
+              <div className="grid shrink-0 grid-cols-3 gap-2">
+                <Stat label="Status" value={discoveryStatus} />
+                <Stat label="Duration" value={durationLabel} mono />
+                <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
+              </div>
             </div>
           }
           /* Code (scrolls internally) + remix */

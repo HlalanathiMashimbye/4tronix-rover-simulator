@@ -26,6 +26,8 @@ export interface RunOption {
   /** The line under it, saying what kind of run this is. */
   sublabel: string;
   kind: RunKind;
+  /** Platform-hosted video. This is the primary viewing surface when present. */
+  videoUrl?: string;
   youtubeId?: string;
   /** Poster frame for a real run, straight from YouTube. */
   thumbnailUrl?: string;
@@ -98,15 +100,19 @@ export function buildRunOptions(
   // document. Only used when no run supplied one, so a backfilled mission does
   // not appear twice.
   if (options.length === 0) {
-    const legacyId = getYouTubeId(mission.youtubeUrl || mission.videoUrl);
-    if (legacyId) {
+    const legacyId = getYouTubeId(mission.youtubeUrl);
+    const legacyVideoId = getYouTubeId(mission.videoUrl);
+    const hostedVideoUrl = mission.videoUrl && !legacyVideoId ? mission.videoUrl : undefined;
+    const youtubeId = legacyId ?? legacyVideoId ?? undefined;
+    if (youtubeId || hostedVideoUrl) {
       options.push({
         id: 'real-legacy',
         label: yardPlace(mission.yardId) ?? 'Real rover',
         sublabel: 'Real rover',
         kind: 'real',
-        youtubeId: legacyId,
-        thumbnailUrl: thumbnailFor(legacyId),
+        videoUrl: hostedVideoUrl,
+        youtubeId,
+        thumbnailUrl: youtubeId ? thumbnailFor(youtubeId) : undefined,
       });
     }
   }

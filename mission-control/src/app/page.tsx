@@ -7,6 +7,7 @@ import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-r
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
+import { MobileSearch } from '@/components/layout/MobileSearch';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
@@ -140,6 +141,12 @@ export default function LandingPage() {
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
+      {/* Phone-only. The navbar's search is hidden below md, so without this a
+          learner on a phone had no way to search or filter the feed at all. */}
+      <div className="mx-auto w-full max-w-page pt-3">
+        <MobileSearch />
+      </div>
+
       {/* Feed: the only thing that scrolls */}
       <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pt-4 pb-5">
         {loading ? (
