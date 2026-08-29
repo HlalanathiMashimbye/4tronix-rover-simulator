@@ -9,30 +9,18 @@
  */
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE = {
-    backdrop: '#3a1a10',
-    // Proper Mars red, not brown. The old ground read as mud; this is regolith.
-    groundInner: '#a0492d',
-    groundMid: '#8a3b22',
-    groundOuter: '#5c2413',
-    craterCore: 'rgba(30,12,7,0.60)', // dark basin
-    craterMid: 'rgba(40,18,10,0.45)', // shadowed rim ring
-    craterRim: 'rgba(150,75,45,0.55)', // sunlit inner wall
-    grid: 'rgba(255,190,150,0.045)',
+    backdrop: '#1a0f0a',
+    groundInner: '#7c4a2b',
+    groundMid: '#5a3320',
+    groundOuter: '#34190d',
+    craterCore: 'rgba(0,0,0,0.28)',
+    craterMid: 'rgba(0,0,0,0.10)',
+    craterRim: 'rgba(255,210,170,0.05)',
+    grid: 'rgba(255,190,150,0.08)',
     vignetteTop: 'rgba(0,0,0,0.30)',
     vignetteBottom: 'rgba(0,0,0,0.35)',
     border: 'rgba(255,109,0,0.55)',
     trail: '#2196f3',
-    rockLit: 'rgba(190,138,100,0.95)',
-    rockMid: 'rgba(126,80,52,0.95)',
-    rockDark: 'rgba(64,35,20,0.95)',
-    rockShadow: 'rgba(24,10,4,0.42)',
-    rockHighlight: 'rgba(255,230,200,0.28)',
-    craterLip: 'rgba(210,130,90,0.30)',
-    dustLight: 'rgba(255,225,190,0.10)',
-    dustDark: 'rgba(60,25,10,0.16)',
-    mottleLight: 'rgba(255,205,160,0.055)',
-    mottleDark: 'rgba(30,12,4,0.075)',
-    rippleInk: 'rgba(45,16,6,0.11)',
 };
 /**
  * Paper & Ink: sunlit regolith rather than night. Tuned to sit inside the
@@ -45,26 +33,14 @@ export const LIGHT_SIM_PALETTE = {
     groundInner: '#e3d5bf',
     groundMid: '#cfbda2',
     groundOuter: '#b6a086',
-    craterCore: 'rgba(88,66,42,0.34)',
-    craterMid: 'rgba(88,66,42,0.24)',
-    craterRim: 'rgba(255,246,228,0.38)',
-    grid: 'rgba(88,66,42,0.08)',
+    craterCore: 'rgba(88,66,42,0.20)',
+    craterMid: 'rgba(88,66,42,0.08)',
+    craterRim: 'rgba(255,252,245,0.55)',
+    grid: 'rgba(88,66,42,0.12)',
     vignetteTop: 'rgba(88,66,42,0.16)',
     vignetteBottom: 'rgba(88,66,42,0.20)',
     border: 'rgba(45,38,30,0.28)',
     trail: '#1668c9',
-    // Sunlit stone, not night stone. The dark-theme browns read as mud here.
-    rockLit: 'rgba(214,192,163,0.98)',
-    rockMid: 'rgba(178,150,118,0.98)',
-    rockDark: 'rgba(126,101,74,0.98)',
-    rockShadow: 'rgba(96,72,46,0.30)',
-    rockHighlight: 'rgba(255,253,246,0.55)',
-    craterLip: 'rgba(255,253,246,0.60)',
-    dustLight: 'rgba(255,252,244,0.18)',
-    dustDark: 'rgba(96,72,46,0.14)',
-    mottleLight: 'rgba(255,253,246,0.11)',
-    mottleDark: 'rgba(122,96,66,0.07)',
-    rippleInk: 'rgba(96,72,46,0.13)',
 };
 // The physical yard (matches the Qt simulator: 400 x 300 cm).
 /**
@@ -86,21 +62,17 @@ const RL = '11';
 const RR = '13';
 // Deterministic crater field (world cm) so the terrain reads as Mars without a
 // muddy photo. Each is [x, y, radius].
+/**
+ * The original six craters, positions and radii scaled 1.6x with the yard so
+ * they sit and read exactly as they did at 400x300.
+ */
 const CRATERS = [
-    [-210, 130, 46],
-    [150, 95, 34],
-    [235, -110, 52],
-    [-150, -145, 30],
-    [30, 190, 24],
-    [-265, -55, 22],
-    [95, -35, 16],
-    [-60, 55, 13],
-    // Outside the fence. The ground carries on past the play area, which is what
-    // stops the panel looking like a small box floating in the dark.
-    [-430, 250, 60],
-    [420, 210, 44],
-    [-390, -260, 38],
-    [400, -240, 56],
+    [-208, 128, 54],
+    [144, 96, 42],
+    [224, -112, 64],
+    [-144, -144, 35],
+    [32, 192, 29],
+    [-256, -48, 26],
 ];
 /**
  * One light direction for the whole scene, up and to the left.
@@ -111,33 +83,6 @@ const CRATERS = [
  * of it.
  */
 const LIGHT = { x: -0.55, y: -0.83 };
-/**
- * Boulders, in world cm as [x, y, radius, roundness].
- *
- * Hand-placed rather than random, and deterministic: the terrain has to be
- * identical on every frame and every reload, or the ground would shimmer as
- * the rover drives over it and a learner would never recognise their own yard.
- * Placed off the centre line so the start pad stays clear.
- */
-const ROCKS = [
-    [-245, 60, 13, 0.8], [178, 150, 10, 0.7], [-108, -182, 15, 0.85],
-    [262, 28, 9, 0.75], [-60, 152, 7, 0.9], [118, -158, 12, 0.7],
-    [-292, -128, 8, 0.8], [72, 88, 6, 0.85], [-172, 12, 9, 0.72],
-    [228, -186, 14, 0.78], [-24, -96, 7, 0.88], [152, -62, 8, 0.8],
-    [-368, 178, 17, 0.75], [352, 132, 13, 0.82], [-338, -212, 11, 0.78],
-];
-/** Seeded 0..1, so scenery is identical on every frame and every reload. */
-function rand(i, salt = 1) {
-    const v = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
-    return v - Math.floor(v);
-}
-/** Deterministic speckle, so the dust does not crawl between frames. */
-function dustAt(i) {
-    const a = Math.sin(i * 12.9898) * 43758.5453;
-    const b = Math.sin(i * 78.233) * 24634.6345;
-    const c = Math.sin(i * 39.425) * 15731.743;
-    return [(a - Math.floor(a)), (b - Math.floor(b)), (c - Math.floor(c))];
-}
 export function computeLayout(w, h) {
     // Clamp to >= 0: a container briefly smaller than the margins (mid-layout)
     // would otherwise yield a negative scale and an illegal gradient radius.
@@ -201,66 +146,38 @@ function drawTerrain(ctx, L, P) {
 }
 function paintTerrain(ctx, L, P) {
     const { w, h, s } = L;
-    // Base wash, lit from the same corner as everything else.
-    const ground = ctx.createRadialGradient(w * 0.42, h * 0.34, Math.min(w, h) * 0.05, w / 2, h / 2, Math.max(w, h) * 0.8);
+    /**
+     * The original ground, simply stretched to the whole panel.
+     *
+     * A previous pass layered mottled drifts, wind ripples, grit and boulders on
+     * top of this. It was busier, not better: the yard is the backdrop a child
+     * reads their rover's path against, and every extra mark competed with the
+     * one thing that matters on the canvas. Simple wash, six craters, faint
+     * grid - as it was.
+     */
+    const ground = ctx.createRadialGradient(w / 2, h * 0.42, Math.min(w, h) * 0.1, w / 2, h / 2, Math.max(w, h) * 0.75);
     ground.addColorStop(0, P.groundInner);
-    ground.addColorStop(0.5, P.groundMid);
+    ground.addColorStop(0.55, P.groundMid);
     ground.addColorStop(1, P.groundOuter);
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, w, h);
-    /**
-     * Mottling: broad soft patches of lighter and darker sand.
-     *
-     * This is most of the difference between "brown rectangle" and "ground".
-     * Real regolith is blotchy at every scale, so two sizes of patch are layered
-     * - wide drifts first, smaller variation on top.
-     */
-    for (let i = 1; i <= 150; i++) {
-        const px = rand(i, 2) * w;
-        const py = rand(i, 3) * h;
-        const r = (i <= 60 ? 40 + rand(i, 4) * 90 : 12 + rand(i, 4) * 30) * Math.max(0.6, s / 1.2);
-        const light = rand(i, 5) > 0.5;
-        const blob = ctx.createRadialGradient(px, py, 0, px, py, r);
-        blob.addColorStop(0, light ? P.mottleLight : P.mottleDark);
-        blob.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = blob;
+    // Craters: a darker bowl with a faint sunlit rim for depth.
+    for (const [cx, cy, cr] of CRATERS) {
+        const [px, py] = worldToScreen(L, cx, cy);
+        const r = cr * s;
+        if (r <= 0.5)
+            continue;
+        const cg = ctx.createRadialGradient(px, py - r * 0.2, r * 0.2, px, py, r);
+        cg.addColorStop(0, P.craterCore);
+        cg.addColorStop(0.8, P.craterMid);
+        cg.addColorStop(1, P.craterRim);
+        ctx.fillStyle = cg;
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    /**
-     * Wind ripples: short, near-horizontal curved strokes, all bowing the same
-     * way, as if one prevailing wind combed the sand. Random directions here
-     * would read as scratches.
-     */
-    ctx.strokeStyle = P.rippleInk;
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = 'round';
-    for (let i = 1; i <= 22; i++) {
-        const px = rand(i, 6) * w;
-        const py = rand(i, 7) * h;
-        const r = (18 + rand(i, 8) * 36) * Math.max(0.6, s / 1.2);
-        ctx.save();
-        ctx.translate(px, py);
-        // One prevailing wind: every dune leans the same way, with only a little
-        // scatter. Random rotations made them read as scratches.
-        ctx.rotate(0.35 + (rand(i, 9) - 0.5) * 0.4);
-        for (let k = 0; k < 3; k++) {
-            ctx.beginPath();
-            ctx.ellipse(0, 0, r * (0.5 + k * 0.25), r * 0.15, 0, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-        ctx.restore();
-    }
-    // Fine grit on top of the ripples.
-    for (let i = 1; i <= 420; i++) {
-        const [rx, ry, rv] = dustAt(i);
-        ctx.fillStyle = rv > 0.55 ? P.dustLight : P.dustDark;
-        ctx.beginPath();
-        ctx.arc(rx * w, ry * h, 0.6 + rv * 1.7, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    // Grid: runs off every edge, like the ground it is drawn on.
+    // Faint measurement grid. 80cm rather than the old 50, so the bigger yard
+    // shows the same number of lines and reads just as calm.
     ctx.strokeStyle = P.grid;
     ctx.lineWidth = 1;
     for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 80) {
@@ -281,105 +198,22 @@ function paintTerrain(ctx, L, P) {
         ctx.lineTo(w, sy);
         ctx.stroke();
     }
-    /**
-     * Craters, dug rather than drawn: raised rim, a bowl offset toward the
-     * light, a bright lip on the near edge, and a few flecks of rubble in the
-     * bowl so the floor is not a perfect gradient.
-     */
-    let craterIndex = 0;
-    for (const [cx, cy, cr] of CRATERS) {
-        craterIndex++;
-        const [px, py] = worldToScreen(L, cx, cy);
-        const r = cr * s;
-        if (r <= 0.5)
-            continue;
-        // Four concentric passes: shadow rim, sunlit inner wall offset toward the
-        // light, dark basin, highlight lip. Offset rings carry the depth; a single
-        // gradient never did.
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fillStyle = P.craterMid;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(px + LIGHT.x * r * 0.12, py + LIGHT.y * r * 0.12, r * 0.82, 0, Math.PI * 2);
-        ctx.fillStyle = P.craterRim;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(px, py, r * 0.62, 0, Math.PI * 2);
-        ctx.fillStyle = P.craterCore;
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.strokeStyle = P.craterLip;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Rubble on the basin floor.
-        for (let f = 1; f <= 4; f++) {
-            const fa = rand(craterIndex * 13 + f, 14) * Math.PI * 2;
-            const fr = rand(craterIndex * 13 + f, 15) * r * 0.5;
-            ctx.fillStyle = P.dustDark;
-            ctx.beginPath();
-            ctx.arc(px + Math.cos(fa) * fr, py + Math.sin(fa) * fr, 1 + rand(f, 16) * r * 0.06, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-    /**
-     * Boulders. Irregular outlines - eight points at wobbling radii - because an
-     * ellipse reads as a sticker and a lumpy polygon reads as a rock. Shadow,
-     * body and highlight all agree on where the light is.
-     */
-    let rockIndex = 0;
-    for (const [cx, cy, cr, round] of ROCKS) {
-        rockIndex++;
-        const [px, py] = worldToScreen(L, cx, cy);
-        const r = cr * s;
-        if (r <= 0.5)
-            continue;
-        ctx.fillStyle = P.rockShadow;
-        ctx.beginPath();
-        ctx.ellipse(px - LIGHT.x * r * 1.5, py - LIGHT.y * r * 1.5, r * 1.15, r * 0.72, 0, 0, Math.PI * 2);
-        ctx.fill();
-        const outline = [];
-        for (let k = 0; k < 8; k++) {
-            const a = (k / 8) * Math.PI * 2;
-            const wobble = 0.72 + rand(rockIndex * 8 + k, 17) * 0.38;
-            outline.push([px + Math.cos(a) * r * wobble, py + Math.sin(a) * r * wobble * round]);
-        }
-        const body = ctx.createRadialGradient(px + LIGHT.x * r * 0.5, py + LIGHT.y * r * 0.5, r * 0.15, px, py, r);
-        body.addColorStop(0, P.rockLit);
-        body.addColorStop(0.6, P.rockMid);
-        body.addColorStop(1, P.rockDark);
-        ctx.fillStyle = body;
-        ctx.beginPath();
-        outline.forEach(([ox2, oy2], k) => (k === 0 ? ctx.moveTo(ox2, oy2) : ctx.lineTo(ox2, oy2)));
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = P.rockHighlight;
-        ctx.beginPath();
-        ctx.ellipse(px + LIGHT.x * r * 0.42, py + LIGHT.y * r * 0.42, r * 0.34, r * 0.22 * round, 0, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    // Vignette over the whole panel, which is what frames the scene now.
+    // Edge shadow, over the whole panel since nothing frames it now.
     const vg = ctx.createLinearGradient(0, 0, 0, h);
     vg.addColorStop(0, P.vignetteTop);
-    vg.addColorStop(0.18, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.82, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.15, 'rgba(0,0,0,0)');
+    vg.addColorStop(0.85, 'rgba(0,0,0,0)');
     vg.addColorStop(1, P.vignetteBottom);
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, h);
     // Start pad at the origin, where every run begins.
     const [hx, hy] = worldToScreen(L, 0, 0);
-    ctx.save();
-    ctx.strokeStyle = 'rgba(52,211,153,0.85)';
+    ctx.strokeStyle = 'rgba(52,211,153,0.9)';
     ctx.lineWidth = 2;
-    ctx.setLineDash([5, 4]);
     ctx.beginPath();
-    ctx.arc(hx, hy, 13, 0, Math.PI * 2);
+    ctx.arc(hx, hy, 10, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = 'rgba(52,211,153,0.14)';
-    ctx.beginPath();
-    ctx.arc(hx, hy, 13, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(52,211,153,0.18)';
     ctx.fill();
 }
 function drawTrail(ctx, L, traj, endIdx, P) {
