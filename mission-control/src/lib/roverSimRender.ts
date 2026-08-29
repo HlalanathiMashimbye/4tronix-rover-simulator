@@ -92,13 +92,27 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
 /**
  * The driveable yard, in centimetres.
  *
- * Grown from 400x300. At the old size a couple of forward blocks put the rover
- * against a wall, which is a dull thing to discover when the whole point of a
- * simulator is to give a child room to play. rover-physics.ts bounds the rover
- * to the same numbers, and the two must not drift.
+ * SIZED SO THE ROVER'S REAL SPEED READS AS MOVEMENT.
+ *
+ * The rover covers 6cm a second at speed 60, which is what the hardware
+ * actually does. In a 640cm yard that made a default square about 4% of the
+ * width - smaller than the rover icon - so a child drew a perfect square and
+ * saw nothing happen.
+ *
+ * The fix is the yard, not the speed. FULL_SPEED_CM_PER_SECOND is tied to real
+ * hardware, and inflating it would make the simulator trace a neat square on
+ * screen while the real rover traced something else, which destroys the only
+ * thing a simulator is for. The old 400x300 was inherited from the 4tronix Qt
+ * simulator rather than measured from anything, so the yard was always the
+ * free parameter.
+ *
+ * At 160x120 a default square fills about a sixth of the yard, a ten-second
+ * one about half, and 1.6m x 1.2m is a believable floor mat for a robot this
+ * slow. rover-physics.ts bounds the rover to the same numbers, and the two
+ * must not drift.
  */
-export const YARD_W = 640;
-export const YARD_H = 480;
+export const YARD_W = 160;
+export const YARD_H = 120;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
 const MARGIN = 10; // px inset so the rover never clips the panel edge
 
@@ -111,16 +125,16 @@ const RR = '13';
 // Deterministic crater field (world cm) so the terrain reads as Mars without a
 // muddy photo. Each is [x, y, radius].
 /**
- * The original six craters, positions and radii scaled 1.6x with the yard so
- * they sit and read exactly as they did at 400x300.
+ * The original six craters, scaled with the yard so they sit exactly where they
+ * always did as a fraction of the ground.
  */
 const CRATERS: [number, number, number][] = [
-  [-208, 128, 54],
-  [144, 96, 42],
-  [224, -112, 64],
-  [-144, -144, 35],
-  [32, 192, 29],
-  [-256, -48, 26],
+  [-52, 32, 14],
+  [36, 24, 10],
+  [56, -28, 16],
+  [-36, -36, 9],
+  [8, 48, 7],
+  [-64, -12, 6],
 ];
 
 /**
@@ -241,11 +255,11 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
     ctx.fill();
   }
 
-  // Faint measurement grid. 80cm rather than the old 50, so the bigger yard
-  // shows the same number of lines and reads just as calm.
+  // Faint measurement grid every 20cm, which gives the same handful of
+  // divisions the original had at 50cm in a 400cm yard.
   ctx.strokeStyle = P.grid;
   ctx.lineWidth = 1;
-  for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 80) {
+  for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 20) {
     const [sx] = worldToScreen(L, gx, 0);
     if (sx < -2 || sx > w + 2) continue;
     ctx.beginPath();
@@ -253,7 +267,7 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
     ctx.lineTo(sx, h);
     ctx.stroke();
   }
-  for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 80) {
+  for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 20) {
     const [, sy] = worldToScreen(L, 0, gy);
     if (sy < -2 || sy > h + 2) continue;
     ctx.beginPath();
@@ -343,12 +357,19 @@ function drawTrail(
 function drawRover(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint, t = 0, odo = 0) {
   const [cx, cy] = worldToScreen(L, st.x, st.y);
   /**
-   * Deliberately bigger than scale. A true-to-scale rover in a 640cm yard is a
-   * speck: the learner has to see which way it points, whether the wheels have
-   * turned, and which lamps are lit. The yard is the honest measurement; the
-   * rover is a character standing in the right place.
+   * TRUE SCALE, near enough, now the yard is 160cm rather than 640.
+   *
+   * This used to be inflated about 2.5x, because a real 20cm rover in a 640cm
+   * yard came out three pixels long and a learner could not see which way it
+   * pointed. Shrinking the yard removed the reason for the lie: the body is
+   * drawn from its actual size in centimetres, so distance, rover and walls are
+   * all finally in the same units.
+   *
+   * The floor keeps it legible on a small panel, where the whole yard might
+   * only be 200px wide.
    */
-  const scale = Math.max(1.15, Math.min(2.6, L.s / 0.85));
+  const ROVER_LENGTH_CM = 20;
+  const scale = Math.max(0.75, (ROVER_LENGTH_CM * L.s) / 38);
   const bw = 30 * scale;
   const bh = 38 * scale;
   const halfW = bw / 2;
