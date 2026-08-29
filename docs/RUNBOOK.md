@@ -19,17 +19,19 @@ guessable. **There are three separate identities and they do not overlap.**
 | To do this | You need | Notes |
 |---|---|---|
 | Read/write Firestore, read Firebase Auth | `gcloud auth application-default login` | Any team member with project access |
-| Deploy Firestore **rules and indexes** | Firebase CLI, signed in as **`mshhla017@myuct.ac.za`** | The gmail account gets 403. See below. |
+| Deploy Firestore **rules and indexes** | Firebase CLI, signed in as the account that holds Firestore admin | Often *not* the one that is active. See below. |
 | Grant an IAM role, run Terraform, read Cloud Run logs | Werner or Gavin | Nobody on the student team holds these |
 
 ### The Firebase CLI account trap
 
-`firebase` has its own auth, separate from `gcloud`. Both accounts are usually
-logged in, and **only the UCT one has Firestore admin access**:
+`firebase` has its own auth, separate from `gcloud`, and it is common to have
+more than one account logged in. **They do not have the same access** — on
+this project the UCT account can deploy rules and indexes and the personal one
+cannot. Check which is active before assuming a permissions problem is real:
 
 ```bash
-firebase login:list                       # see who is available
-firebase login:use mshhla017@myuct.ac.za  # the one that works
+firebase login:list          # who is available, and who is active
+firebase login:use <account> # switch to the one with Firestore admin
 ```
 
 Symptom when it is wrong: `HTTP Error: 403, The caller does not have
@@ -142,7 +144,7 @@ Both live in the repo (`firestore.rules`, `firestore.indexes.json`) and are
 **not** deployed by CI. Someone has to run this after changing either:
 
 ```bash
-firebase login:use mshhla017@myuct.ac.za
+firebase login:use your email
 firebase deploy --only firestore --project bt-impact-academy
 ```
 
