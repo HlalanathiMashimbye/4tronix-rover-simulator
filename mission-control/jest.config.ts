@@ -12,6 +12,9 @@ const config: Config = {
     // whole job. Every test importing a server module would otherwise have to
     // remember to mock it; map it to nothing once, here.
     '^server-only$': '<rootDir>/test-utils/serverOnlyMock.ts',
+    // firebase-admin/auth transitively requires jose (pure ESM); see
+    // firebaseAdminAuthMock.ts for why this is safe to stub globally.
+    '^firebase-admin/auth$': '<rootDir>/test-utils/firebaseAdminAuthMock.ts',
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',

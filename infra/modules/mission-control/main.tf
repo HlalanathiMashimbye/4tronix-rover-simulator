@@ -91,13 +91,60 @@ locals {
 resource "google_service_account" "runtime" {
   for_each     = var.environments
   account_id   = "mission-control-${each.key}"
-  display_name = "Mission Control runtime (${each.key}): Firestore + secrets only"
+  display_name = "Mission Control runtime (${each.key}): Firestore, secrets, operator auth"
 }
 
 resource "google_project_iam_member" "runtime_firestore" {
   for_each = var.environments
   project  = var.project_id
   role     = "roles/datastore.user"
+  member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
+}
+
+# --- Operator authentication ---------------------------------------------
+#
+# This identity was "Firestore + secrets only", which was accurate when it was
+# written. Operator sign-in shipped afterwards (AB#341/342) and needs the
+# Firebase Auth admin API, which was never granted, so operator login has
+# never worked on a deployed environment. It failed as a bare 401 from
+# /api/auth/session: the token is valid, and the server cannot look up the
+# account to finish checking it.
+#
+# It went unnoticed because the staging smoke check asserted that /operator
+# returned 404, so nothing ever exercised sign-in there until that check was
+# corrected.
+#
+# This matters here rather than only locally because impact.tfvars sets
+# firebase_credential_source = "adc". With ADC there is no mounted key, so the
+# Admin SDK authenticates as THIS service account and its roles are what
+# decide whether verifyIdToken can complete.
+#
+# WHY THE PREDEFINED ROLE AND NOT A NARROWER CUSTOM ONE.
+#
+# A custom role with just users.get, users.createSession and users.update
+# would be tighter, and it was the first thing written here. It is the wrong
+# trade for this project. The failure mode of a hand-listed permission set is
+# that some later Admin SDK call needs a permission nobody predicted, and it
+# surfaces as an unexplained 401 on login - which is exactly the bug this
+# commit exists to fix, and it took a token-by-token comparison against a
+# working environment to find. Getting that list right was already close: the
+# separate users.createSession permission is easy to miss, and missing it
+# breaks sign-in one step later than the obvious read.
+#
+# It also cuts against how this project is meant to be handed over. Werner and
+# David have both been clear about preferring stock configuration, Werner's
+# team reviews this Terraform, and a predefined role is one they can recognise
+# without reading a permission list. Creating a project custom role also needs
+# iam.roles.create, which the apply operator may not hold.
+#
+# The privilege this concedes is that the service could delete an account
+# rather than only read and update one. It is already trusted to mint session
+# cookies and set the role claim, so that is a small step, and it is worth
+# paying for a configuration that fails loudly and reads plainly.
+resource "google_project_iam_member" "runtime_firebase_auth" {
+  for_each = var.environments
+  project  = var.project_id
+  role     = "roles/firebaseauth.admin"
   member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
 }
 

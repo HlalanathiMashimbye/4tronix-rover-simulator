@@ -1,0 +1,204 @@
+'use client';
+
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { AlertTriangle, Blocks, Code2, Loader2, Radio } from 'lucide-react';
+
+import {
+  subscribeToYardQueue,
+  type QueueMission,
+} from '@/lib/services/operatorQueueService';
+import {
+  readStoredYard,
+  serverYardSnapshot,
+  subscribeToYard,
+  yardLabel,
+} from '@/infrastructure/config/yards';
+import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
+
+/**
+ * The live queue for the yard this operator has selected (AB#375/376/377).
+ *
+ * The yard comes from the same store YardPicker writes, so changing the picker
+ * tears this subscription down and opens one against the new yard. That is the
+ * whole reason the yard is a runtime selection rather than a claim.
+ *
+ * NOTHING HERE IDENTIFIES THE LEARNER, ON PURPOSE.
+ *
+ * AB#377 asked for "who submitted each mission". That was written against the
+ * grain of the entire platform: learners are not Firebase Auth users, missions
+ * carry `learnerRef` (a one-way hash) rather than an id, email addresses are
+ * hashed and kept in a subcollection browsers cannot reach, and no learner has
+ * a display name because nothing offers to set one. Those are not gaps to fill.
+ * They are the anonymity model the project has held to since the beginning, and
+ * a queue screen that may be facing a room of children is the last place to
+ * start eroding it.
+ *
+ * A build of this did briefly exist, with an operator-only route joining
+ * learnerRef back to a learner record. It is deleted. The mission NAME is the
+ * handle: a child says "mine is Rock Lover" and the operator finds that row.
+ * That works without anyone knowing whose it is.
+ */
+export function MissionQueue() {
+  const yardId = useSyncExternalStore(subscribeToYard, readStoredYard, serverYardSnapshot);
+
+  // Keyed by yard, so switching yards REMOUNTS rather than resetting state
+  // inside an effect. React's own answer to "reset all state when a prop
+  // changes", and it means there is no window where the previous yard's queue
+  // is on screen under the new yard's heading.
+  return <YardQueue key={yardId} yardId={yardId} />;
+}
+
+function YardQueue({ yardId }: { yardId: string }) {
+  const [missions, setMissions] = useState<QueueMission[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToYardQueue(
+      yardId,
+      (next) => {
+        setMissions(next);
+        setError(null);
+      },
+      () => {
+        // Never leave a failed listener looking like an empty queue. An
+        // operator has to be able to tell "nothing waiting" from "this is
+        // broken", because the two call for opposite actions.
+        setMissions(null);
+        setError('The live queue lost its connection. Missions may still be running at the yard.');
+      },
+    );
+
+    return unsubscribe;
+  }, [yardId]);
+
+  if (error) {
+    return (
+      <div
+        role="alert"
+        className="clay flex flex-1 items-center justify-center rounded-3xl border border-destructive/30 bg-destructive/5 p-8 text-center"
+      >
+        <div className="max-w-sm space-y-2">
+          <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
+          <p className="font-display text-lg font-bold text-foreground">Queue disconnected</p>
+          <p className="text-sm text-muted-foreground">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (missions === null) {
+    return (
+      <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (missions.length === 0) {
+    return (
+      <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
+        <div className="max-w-sm space-y-2">
+          <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
+          <p className="text-sm text-muted-foreground">
+            No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
+            appear here as learners send them.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
+      <div className="flex items-center gap-2">
+        <Radio className="h-4 w-4 animate-pulse text-primary" />
+        <h2 className="font-display text-sm font-bold text-foreground">
+          Queue{' '}
+          <span className="font-sans text-xs font-medium text-muted-foreground">
+            ({missions.length} at {yardLabel(yardId) ?? yardId})
+          </span>
+        </h2>
+      </div>
+
+      <ol className="mt-3 grid gap-2">
+        {missions.map((mission, index) => {
+          const isOpen = expanded === mission.id;
+
+          return (
+            <li
+              key={mission.id}
+              className="rounded-2xl border border-border/50 bg-background/40 px-3.5 py-3"
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
+                  {index + 1}
+                </span>
+
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    mission.status === 'processing'
+                      ? 'bg-primary/15 text-primary'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {mission.status === 'processing' && (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
+                  {mission.status}
+                </span>
+
+                {/* The mission name is the only handle, and the only one
+                    needed: a child says "mine is Rock Lover" and the operator
+                    finds that row without learning anything about them. */}
+                <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {mission.name || 'Untitled mission'}
+                </p>
+
+                {mission.needsReview && (
+                  <span
+                    title={mission.reviewReason ?? 'Flagged for review'}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-600"
+                  >
+                    <AlertTriangle className="h-3 w-3" />
+                    review
+                  </span>
+                )}
+
+                <button
+                  onClick={() => setExpanded(isOpen ? null : mission.id)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
+                >
+                  {mission.blocklyState ? (
+                    <Blocks className="h-3 w-3" />
+                  ) : (
+                    <Code2 className="h-3 w-3" />
+                  )}
+                  {isOpen ? 'Hide' : mission.blocklyState ? 'Blocks' : 'Code'}
+                </button>
+              </div>
+
+              {isOpen && (
+                <div className="mt-3 border-t border-border/50 pt-3">
+                  {/* The blocks the learner actually built, which the Flask
+                      console structurally cannot show: the satellite's SQLite
+                      mirror has no blocklyState column. Falling back to Python
+                      for missions typed rather than built. */}
+                  {mission.blocklyState ? (
+                    <div className="h-64 overflow-hidden rounded-xl border border-border/50">
+                      <BlocklyViewer state={mission.blocklyState} />
+                    </div>
+                  ) : (
+                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/50 bg-background/60 p-3 text-xs text-foreground">
+                      {mission.code || 'No code on this mission.'}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
