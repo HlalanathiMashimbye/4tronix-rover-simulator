@@ -116,7 +116,10 @@ function YardQueue({ yardId, role }: { yardId: string; role: 'operator' | 'admin
     { key: 'done', label: 'Done', count: done?.length ?? 0, icon: CheckCircle2 },
   ]);
 
-  const source = activeFilter === 'done' ? (done ?? []) : (missions ?? []);
+  const source = useMemo(
+    () => (activeFilter === 'done' ? (done ?? []) : (missions ?? [])),
+    [activeFilter, done, missions],
+  );
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
