@@ -89,16 +89,16 @@ export function RunStackCarousel({
           was two thirds empty, and RoverSimulator - which sets canvas.height
           from a ResizeObserver on its wrapper - collapsed to a 41px sliver
           because nothing above it had a definite height to inherit. */}
-      <div className="grid min-h-0 flex-1 grid-cols-2 items-stretch gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
         <CarouselButton
           direction="previous"
           disabled={!canNavigate}
           onClick={() => move(-1)}
-          className="order-2 justify-self-start self-center sm:order-none"
+          className="order-2 hidden justify-self-start self-center sm:order-none sm:inline-flex"
         />
 
         <div
-          className="relative col-span-2 min-h-[280px] w-full touch-pan-y px-1 pb-4 pt-1 sm:order-none sm:col-span-1 sm:min-h-[360px] sm:px-3"
+          className="relative min-h-[280px] w-full touch-pan-y px-1 pb-4 pt-1 sm:order-none sm:min-h-[360px] sm:px-3"
           onPointerDown={(event) => {
             if (!canNavigate) return;
             setDragStart(event.clientX);
@@ -119,7 +119,7 @@ export function RunStackCarousel({
                 aria-hidden="true"
                 className="absolute inset-0 rounded-2xl border border-border/50 bg-card/70 shadow-card"
                 style={{
-                  transform: `translateY(${depth * 13}px) scale(${1 - depth * 0.045}) rotate(${depth % 2 === 0 ? -1 : 1}deg)`,
+                  transform: `translate(${depth * 9}px, ${depth * 11}px) scale(${1 - depth * 0.045}) rotate(${depth % 2 === 0 ? -1 : 1}deg)`,
                   opacity: 0.58 - depth * 0.12,
                   zIndex: 4 - depth,
                 }}
@@ -204,7 +204,7 @@ export function RunStackCarousel({
           direction="next"
           disabled={!canNavigate}
           onClick={() => move(1)}
-          className="order-3 justify-self-end self-center sm:order-none"
+          className="order-3 hidden justify-self-end self-center sm:order-none sm:inline-flex"
         />
       </div>
 
@@ -247,7 +247,11 @@ function CarouselButton({
       aria-label={direction === 'previous' ? 'Show previous rover run' : 'Show next rover run'}
       disabled={disabled}
       onClick={onClick}
-      className={`clay clay-press inline-flex h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card/90 text-foreground backdrop-blur transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-35 ${className}`}
+      // No display utility here on purpose. It used to hardcode inline-flex,
+      // which collided with the `hidden` its callers pass on mobile - two
+      // display utilities where the winner depends on Tailwind's stylesheet
+      // order, not on the class string. The caller decides.
+      className={`clay clay-press h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card/90 text-foreground backdrop-blur transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-35 ${className}`}
     >
       <Icon className="h-5 w-5" />
     </button>
