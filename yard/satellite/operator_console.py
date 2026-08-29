@@ -90,15 +90,36 @@ def _web_api_key():
     )
 
 
+# Remembered so the login page and the status page do not each retry a broken
+# credential, and so the reason is printed once rather than per request.
+_admin_config_error = None
+
+
 def _admin_configured():
-    return bool(
-        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        or (
-            os.environ.get('FIREBASE_PROJECT_ID')
-            and os.environ.get('FIREBASE_CLIENT_EMAIL')
-            and os.environ.get('FIREBASE_PRIVATE_KEY')
-        )
-    )
+    """Whether this satellite can actually authenticate, not whether some
+    variables happen to be set.
+
+    This used to require GOOGLE_APPLICATION_CREDENTIALS or all three
+    FIREBASE_* key variables, which meant it reported "not configured" for a
+    satellite running on Application Default Credentials - the mode staging,
+    prod and now local dev all use. Sign-in was refused while the credential
+    underneath it worked perfectly.
+
+    Asking the real question instead: try to build the Firebase app, and say
+    yes if it built. _init_firebase memoises, so this costs one attempt and
+    then nothing.
+    """
+    global _admin_config_error
+    try:
+        _init_firebase()
+        _admin_config_error = None
+        return True
+    except Exception as error:
+        message = str(error)
+        if message != _admin_config_error:
+            _admin_config_error = message
+            print(f'[operator] Firebase credentials unavailable: {message}')
+        return False
 
 
 def _clean_env(name):
