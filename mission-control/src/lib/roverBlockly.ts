@@ -370,6 +370,20 @@ export function mergeUplinkHats(workspace: any): boolean {
  * Generate rover Python from the workspace. Only blocks inside an
  * `rover_on_receive` hat are emitted - matching the yard exactly.
  */
+/**
+ * The four wheel servos, explained once.
+ *
+ * They are the least readable thing the generator emits: four numbered calls
+ * with no clue that 9, 11, 13 and 15 are wheels. A learner moving from Blocks
+ * to Python meets them in the first program they ever look at.
+ */
+const STRAIGHTEN_NOTE = '# Point all four wheels straight ahead';
+
+/** "1 second", not "1 seconds". This card is about language, so it matters. */
+function seconds(value: unknown): string {
+  return `${value} second${String(value) === '1' ? '' : 's'}`;
+}
+
 export function workspaceToPython(workspace: any): string {
   const lines: string[] = [];
 
@@ -385,6 +399,8 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_forward': {
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Drive forward for ${seconds(t)}`);
+        lines.push(`${pad}${STRAIGHTEN_NOTE}`);
         lines.push(`${pad}rover.setServo(9, 0)`);
         lines.push(`${pad}rover.setServo(11, 0)`);
         lines.push(`${pad}rover.setServo(13, 0)`);
@@ -396,6 +412,8 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_backward': {
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Drive backwards for ${seconds(t)}`);
+        lines.push(`${pad}${STRAIGHTEN_NOTE}`);
         lines.push(`${pad}rover.setServo(9, 0)`);
         lines.push(`${pad}rover.setServo(11, 0)`);
         lines.push(`${pad}rover.setServo(13, 0)`);
@@ -407,7 +425,9 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_spin_left': {
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Spin left on the spot for ${seconds(t)}`);
         lines.push(`${pad}rover.stop()`);
+        lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
         lines.push(`${pad}rover.setServo(9, 50)`);
         lines.push(`${pad}rover.setServo(15, -50)`);
         lines.push(`${pad}rover.setServo(11, -50)`);
@@ -419,7 +439,9 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_spin_right': {
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Spin right on the spot for ${seconds(t)}`);
         lines.push(`${pad}rover.stop()`);
+        lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
         lines.push(`${pad}rover.setServo(9, 50)`);
         lines.push(`${pad}rover.setServo(15, -50)`);
         lines.push(`${pad}rover.setServo(11, -50)`);
@@ -430,11 +452,14 @@ export function workspaceToPython(workspace: any): string {
         break;
       }
       case 'rover_stop':
+        lines.push(`${pad}# Stop moving`);
         lines.push(`${pad}rover.stop()`);
         break;
       case 'rover_steer_left': {
         const d = block.getFieldValue('DEGREES');
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Steer left ${d} degrees while driving for ${seconds(t)}`);
+        lines.push(`${pad}# Angle the wheels, drive, then straighten up again`);
         lines.push(`${pad}rover.setServo(9, -${d})`);
         lines.push(`${pad}rover.setServo(15, -${d})`);
         lines.push(`${pad}rover.setServo(11, ${d})`);
@@ -451,6 +476,8 @@ export function workspaceToPython(workspace: any): string {
       case 'rover_steer_right': {
         const d = block.getFieldValue('DEGREES');
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Steer right ${d} degrees while driving for ${seconds(t)}`);
+        lines.push(`${pad}# Angle the wheels, drive, then straighten up again`);
         lines.push(`${pad}rover.setServo(9, ${d})`);
         lines.push(`${pad}rover.setServo(15, ${d})`);
         lines.push(`${pad}rover.setServo(11, -${d})`);
@@ -466,6 +493,7 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_wait': {
         const t = block.getFieldValue('TIME');
+        lines.push(`${pad}# Wait ${seconds(t)} before the next step`);
         lines.push(`${pad}time.sleep(${t})`);
         break;
       }
@@ -474,20 +502,24 @@ export function workspaceToPython(workspace: any): string {
         const dir = block.getFieldValue('DIR');
         const deg = block.getFieldValue('DEGREES');
         const angle = dir === 'LEFT' ? deg : dir === 'RIGHT' ? -deg : 0;
+        lines.push(`${pad}# Turn the camera mast to ${angle} degrees`);
         lines.push(`${pad}rover.setServo(0, ${angle})`);
         lines.push(`${pad}time.sleep(0.5)`);
         break;
       }
       case 'rover_read_distance': {
+        lines.push(`${pad}# Measure how far away the nearest thing is, and print it`);
         lines.push(`${pad}print('Distance: ' + str(round(rover.getDistance())) + ' cm')`);
         break;
       }
       case 'rover_take_photo': {
+        lines.push(`${pad}# Take a photo with the rover camera`);
         lines.push(`${pad}take_photo()`);
         break;
       }
       case 'rover_leds_all': {
         const rgb = block.getFieldValue('COLOUR');
+        lines.push(`${pad}# Light up every LED in this colour`);
         lines.push(`${pad}rover.setColor(rover.fromRGB(${rgb}))`);
         lines.push(`${pad}rover.show()`);
         break;
@@ -495,12 +527,14 @@ export function workspaceToPython(workspace: any): string {
       case 'rover_led_one': {
         const led = block.getFieldValue('LED');
         const rgb = block.getFieldValue('COLOUR');
+        lines.push(`${pad}# Light up LED number ${led} in this colour`);
         lines.push(`${pad}rover.setPixel(${led}, rover.fromRGB(${rgb}))`);
         lines.push(`${pad}rover.show()`);
         break;
       }
       case 'rover_repeat': {
         const times = block.getFieldValue('TIMES');
+        lines.push(`${pad}# Do the next steps ${times} times over`);
         lines.push(`${pad}for _ in range(${times}):`);
         const inner = block.getInputTargetBlock('DO');
         if (inner) {

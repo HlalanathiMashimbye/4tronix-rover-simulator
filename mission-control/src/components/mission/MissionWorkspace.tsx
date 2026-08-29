@@ -65,6 +65,16 @@ export function MissionWorkspace() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
+  /**
+   * The Python the learner's BLOCKS produce, kept apart from currentCode.
+   *
+   * currentCode is whatever the active editor last reported, and switching to
+   * the Python tab immediately overwrites it with that tab's own draft. So the
+   * blocks' version has to be held separately or it is lost the moment the
+   * learner goes to look at it - which is exactly what they do after building
+   * something (AB#413).
+   */
+  const [blocklyCode, setBlocklyCode] = useState('');
 
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
@@ -88,6 +98,22 @@ export function MissionWorkspace() {
       abortControllerRef.current = null;
     }
   }, []);
+
+  /**
+   * Take the blocks' Python to the Python tab and show it.
+   *
+   * Overwrites the draft on purpose. The learner has just asked to see their
+   * blocks as code, so anything already sitting there is not what they wanted
+   * to look at, and quietly showing them something else would be the bug this
+   * replaces.
+   */
+  const handleShowAsPython = useCallback(() => {
+    if (blocklyCode.trim()) {
+      localStorage.setItem('rover_monaco_code', blocklyCode);
+      setCurrentCode(blocklyCode);
+    }
+    setEditorMode('code');
+  }, [blocklyCode]);
 
   const handleManualTrajectory = useCallback((realtimeTrajectory: RoverState[]) => {
     const converted: TrajectoryPoint[] = realtimeTrajectory.map((state) => ({
@@ -234,6 +260,9 @@ export function MissionWorkspace() {
             manualResetVersion={manualResetVersion}
             onGenerateCommands={runSimulation}
             onCodeChange={setCurrentCode}
+            onBlocklyCode={setBlocklyCode}
+            blocklyCode={blocklyCode}
+            onShowAsPython={handleShowAsPython}
             onBlocklyStateChange={setBlocklyState}
           />
         }

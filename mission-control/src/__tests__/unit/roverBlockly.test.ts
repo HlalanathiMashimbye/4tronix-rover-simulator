@@ -112,29 +112,70 @@ function mergeWorkspace(...top: MergeMockBlock[]): { getTopBlocks: () => MergeMo
   return { getTopBlocks: () => top };
 }
 
+/** Just the lines the rover actually runs. */
+function executable(python: string): string[] {
+  return python
+    .split('\n')
+    .filter((l) => l.trim() && !l.trim().startsWith('#'));
+}
+
 describe('workspaceToPython', () => {
   it('emits the rover servo + forward + sleep + stop sequence', () => {
     const ws = workspace(onReceive(block('rover_forward', { TIME: 2 })));
-    expect(workspaceToPython(ws)).toBe(
-      [
-        'rover.setServo(9, 0)',
-        'rover.setServo(11, 0)',
-        'rover.setServo(13, 0)',
-        'rover.setServo(15, 0)',
-        'rover.forward(60)',
-        'time.sleep(2)',
-        'rover.stop()',
-      ].join('\n') + '\n'
-    );
+
+    // THE PROGRAM IS UNCHANGED. Comments were added for AB#413, and the whole
+    // point is that they explain the code without altering it: the rover
+    // ignores them, parseRoverCode skips them, and the allowlist analyser
+    // strips them. Asserting on the executable lines separately is what keeps
+    // a future comment change from quietly editing a child's program.
+    expect(executable(workspaceToPython(ws))).toEqual([
+      'rover.setServo(9, 0)',
+      'rover.setServo(11, 0)',
+      'rover.setServo(13, 0)',
+      'rover.setServo(15, 0)',
+      'rover.forward(60)',
+      'time.sleep(2)',
+      'rover.stop()',
+    ]);
+  });
+
+  it('says what the block does, and what the servo lines are for', () => {
+    const python = workspaceToPython(workspace(onReceive(block('rover_forward', { TIME: 2 }))));
+
+    // A learner opening the Python tab for the first time meets four numbered
+    // servo calls with no clue that 9, 11, 13 and 15 are wheels.
+    expect(python).toContain('# Drive forward for 2 seconds');
+    expect(python).toContain('# Point all four wheels straight ahead');
   });
 
   it('indents a repeat loop body with range()', () => {
     const ws = workspace(
       onReceive(block('rover_repeat', { TIMES: 3 }, { DO: block('rover_stop') }))
     );
-    expect(workspaceToPython(ws)).toBe(
-      ['for _ in range(3):', '    rover.stop()'].join('\n') + '\n'
+
+    expect(executable(workspaceToPython(ws))).toEqual([
+      'for _ in range(3):',
+      '    rover.stop()',
+    ]);
+  });
+
+  it('writes "1 second", not "1 seconds"', () => {
+    // A card about language for nine-year-olds is the wrong place to ship a
+    // plural bug in the very first line they read.
+    const python = workspaceToPython(workspace(onReceive(block('rover_forward', { TIME: 1 }))));
+
+    expect(python).toContain('# Drive forward for 1 second\n');
+    expect(python).not.toContain('1 seconds');
+  });
+
+  it('indents a comment to match the code it describes', () => {
+    // A comment at the wrong indent inside a loop is a Python error, not just
+    // untidy.
+    const ws = workspace(
+      onReceive(block('rover_repeat', { TIMES: 3 }, { DO: block('rover_stop') }))
     );
+
+    expect(workspaceToPython(ws)).toContain('    # Stop moving');
   });
 
   it('emits mast/LED/photo actions', () => {
@@ -147,14 +188,13 @@ describe('workspaceToPython', () => {
         )
       )
     );
-    expect(workspaceToPython(ws)).toBe(
-      [
-        'rover.setColor(rover.fromRGB(255, 0, 0))',
-        'rover.show()',
-        'take_photo()',
-        "print('Distance: ' + str(round(rover.getDistance())) + ' cm')",
-      ].join('\n') + '\n'
-    );
+
+    expect(executable(workspaceToPython(ws))).toEqual([
+      'rover.setColor(rover.fromRGB(255, 0, 0))',
+      'rover.show()',
+      'take_photo()',
+      "print('Distance: ' + str(round(rover.getDistance())) + ' cm')",
+    ]);
   });
 
   it('only generates code inside an On uplink hat (loose blocks ignored)', () => {
@@ -228,5 +268,30 @@ describe('workspaceToCommands', () => {
       onReceive(block('rover_repeat', { TIMES: 2 }, { DO: block('rover_stop') }))
     );
     expect(workspaceToCommands(ws)).toEqual([{ command: 'stop' }, { command: 'stop' }]);
+  });
+});
+
+/**
+ * The comments have to be somewhere a learner will actually look.
+ *
+ * They were generated correctly and then never shown. The Python tab loads
+ * only its own localStorage draft, while the blocks' Python went straight to
+ * the submission, so building blocks and opening the Python tab - the exact
+ * thing this story is for - showed a default snippet instead of the learner's
+ * own program. Caught by the user testing it, not by any of these tests.
+ */
+describe('the blocks reaching the Python tab', () => {
+  it('generates something worth showing', () => {
+    const python = workspaceToPython(workspace(onReceive(block('rover_forward', { TIME: 1 }))));
+
+    // The two properties the editor depends on: non-empty, and commented.
+    expect(python.trim()).not.toBe('');
+    expect(python.split('\n').filter((l) => l.trim().startsWith('#')).length).toBeGreaterThan(0);
+  });
+
+  it('produces nothing to show when there are no blocks', () => {
+    // The editor treats empty as "leave the draft alone", so an empty
+    // workspace must not produce whitespace that looks like content.
+    expect(workspaceToPython(workspace()).trim()).toBe('');
   });
 });
