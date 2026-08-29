@@ -67,8 +67,12 @@ export function MobileSearch() {
           words here, and a filter whose meaning has to be guessed from a glyph
           is one a child will not use. The count comes too, so "Completed 12"
           says how much is behind it before it is tapped. */}
+      {/* Content-width and scrollable on a phone, where four labelled chips
+          cannot share 375px without truncating to nonsense. From sm they
+          stretch to fill instead, so the row lines up with the field above it
+          rather than stopping short and reading as unfinished. */}
       <div
-        className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none]"
+        className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] sm:overflow-visible"
         role="group"
         aria-label="Filter missions by status"
       >
@@ -80,7 +84,11 @@ export function MobileSearch() {
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
               aria-pressed={active}
-              className={`relative isolate inline-flex shrink-0 items-center gap-1.5 overflow-hidden rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              // whitespace-nowrap matters with flex-1: equal shares ignore
+              // label length, so the longest one wrapped to two lines and made
+              // the whole row ragged. Nowrap holds each chip's content width as
+              // its floor, and the spare width is shared from there.
+              className={`relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-1 sm:shrink ${
                 active
                   ? 'border-transparent text-primary-foreground'
                   : 'border-border/60 bg-card/50 text-muted-foreground'

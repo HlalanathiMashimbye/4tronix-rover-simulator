@@ -591,6 +591,15 @@
       minmax(320px, var(--workspace-right, 40fr));
   }
 
+  /* No divider, so no middle track. Without this the right panel falls into
+     the auto track meant for the divider and the third track sits empty - the
+     code panel ends up centred with dead space beside it. */
+  .workspaceSplitGrid--fixed {
+    grid-template-columns:
+      minmax(0, var(--workspace-left, 70fr))
+      minmax(320px, var(--workspace-right, 30fr));
+  }
+
   .workspaceSplitDivider {
     display: flex;
     align-items: center;

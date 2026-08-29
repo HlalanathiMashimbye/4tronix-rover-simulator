@@ -84,16 +84,21 @@ export function RunStackCarousel({
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 items-center gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+      {/* items-STRETCH, not center. Centring left the card at its content
+          height inside a 780px row, so two things went wrong at once: the panel
+          was two thirds empty, and RoverSimulator - which sets canvas.height
+          from a ResizeObserver on its wrapper - collapsed to a 41px sliver
+          because nothing above it had a definite height to inherit. */}
+      <div className="grid min-h-0 flex-1 grid-cols-2 items-stretch gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
         <CarouselButton
           direction="previous"
           disabled={!canNavigate}
           onClick={() => move(-1)}
-          className="order-2 justify-self-start sm:order-none"
+          className="order-2 justify-self-start self-center sm:order-none"
         />
 
         <div
-          className="relative col-span-2 min-h-[280px] w-full touch-pan-y px-3 pb-5 pt-1 sm:order-none sm:col-span-1 sm:min-h-[360px] sm:px-6"
+          className="relative col-span-2 min-h-[280px] w-full touch-pan-y px-1 pb-4 pt-1 sm:order-none sm:col-span-1 sm:min-h-[360px] sm:px-3"
           onPointerDown={(event) => {
             if (!canNavigate) return;
             setDragStart(event.clientX);
@@ -107,7 +112,7 @@ export function RunStackCarousel({
           }}
           onPointerCancel={() => setDragStart(null)}
         >
-          <div className="absolute inset-x-8 bottom-0 top-7 sm:inset-x-16">
+          <div className="absolute inset-x-4 bottom-0 top-7 sm:inset-x-8">
             {visibleStack.map(({ run, depth }) => (
               <div
                 key={`${run.id}-${depth}`}
@@ -199,7 +204,7 @@ export function RunStackCarousel({
           direction="next"
           disabled={!canNavigate}
           onClick={() => move(1)}
-          className="order-3 justify-self-end sm:order-none"
+          className="order-3 justify-self-end self-center sm:order-none"
         />
       </div>
 

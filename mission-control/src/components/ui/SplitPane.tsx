@@ -143,7 +143,16 @@ export function SplitPane({
   };
 
   return (
-    <div className="workspaceSplitGrid" ref={containerRef}>
+    <div
+      // Two tracks when there is no divider. The lg grid declares three -
+      // left, an auto track for the divider, then right - so with the divider
+      // gone the right panel landed in the AUTO track: sized to its content,
+      // sitting in the middle of the screen, with the third track empty beside
+      // it. A class rather than an inline style, because below lg the grid must
+      // still collapse to one column and an inline rule would outrank that.
+      className={`workspaceSplitGrid${resizable ? '' : ' workspaceSplitGrid--fixed'}`}
+      ref={containerRef}
+    >
       {left}
 
       {/* No divider when the split is fixed. Rendering an inert one would
