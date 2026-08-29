@@ -6,6 +6,20 @@
  * Renders nothing at all when no page has registered filters, which is how it
  * disappears on Create Mission and the mission detail pages - see
  * SearchContext for why that is a registry rather than a route check.
+ *
+ * SHOWN FROM lg, NOT md, AND THE THRESHOLD WAS MEASURED.
+ *
+ * The chips sit overlaid inside the field, so the field needs room for both.
+ * Rendered at a range of widths, the space actually left to type in:
+ *
+ *     768px  ->  -102px   chips overlap the text outright
+ *     900px  ->    30px   not overlapping, and not usable either
+ *    1024px  ->   154px   workable
+ *
+ * 768 is an iPad Mini in portrait, which is the worst possible place to put
+ * the boundary: the layout is broken at exactly the width a common device
+ * reports. Below lg the page renders MobileSearch instead, which stacks the
+ * chips under a full-width field and has room to label them.
  */
 
 import { useReducedMotion } from 'motion/react';
@@ -24,7 +38,7 @@ export function NavbarSearch() {
 
   return (
     // Keep the search centered and only adjust the input's own width.
-    <div className="hidden min-w-0 md:flex">
+    <div className="hidden min-w-0 lg:flex">
     {!hasSearch ? null : (
     // Nudged left of true centre to balance the busier right-hand cluster, but
     // only a little: at 15% the filter chips slid underneath the nav pill and

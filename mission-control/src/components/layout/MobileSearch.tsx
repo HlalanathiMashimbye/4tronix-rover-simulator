@@ -3,9 +3,15 @@
 /**
  * Search and status filters on a phone.
  *
- * NavbarSearch is `hidden md:flex`, so below that breakpoint there was no
+ * NavbarSearch is `hidden lg:flex`, so below that breakpoint there was no
  * search and no filters at all - on the device most learners use, and on the
  * pages whose whole job is finding one mission among a hundred.
+ *
+ * The boundary is lg rather than md because the navbar's field only has room
+ * to type in from about 1024px: at 768, an iPad Mini in portrait, its overlaid
+ * chips cover the text by 102px. This is therefore the DEFAULT search, not the
+ * small-screen exception - phones, both iPad Mini orientations and a tablet in
+ * portrait all get it, and only laptops and landscape tablets get the other.
  *
  * It is a separate component rather than the navbar one unhidden, for two
  * reasons. The navbar field carries min-w-[20rem] and pr-40 so the chips can
@@ -35,7 +41,7 @@ export function MobileSearch() {
   if (filters.length === 0) return null;
 
   return (
-    <div className="flex shrink-0 flex-col gap-2 pb-2 md:hidden">
+    <div className="flex shrink-0 flex-col gap-2 pb-2 lg:hidden">
       <div className="relative">
         <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
