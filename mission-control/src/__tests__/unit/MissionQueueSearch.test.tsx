@@ -39,7 +39,7 @@ function renderQueue(missions = QUEUE) {
   });
   return render(
     <SearchProvider>
-      <MissionQueue />
+      <MissionQueue role="operator" />
     </SearchProvider>,
   );
 }
