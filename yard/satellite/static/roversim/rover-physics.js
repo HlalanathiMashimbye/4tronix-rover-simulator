@@ -10,8 +10,8 @@ const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
 // Must match YARD_W/YARD_H in roverSimRender.ts, which explains the size.
-const YARD_HALF_W = 60 - ROVER_MARGIN; // 120 cm wide, origin at centre
-const YARD_HALF_H = 45 - ROVER_MARGIN; // 90 cm tall, origin at centre
+const YARD_HALF_W = 120 - ROVER_MARGIN; // 240 cm wide, origin at centre
+const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
 const SERVO_FL = 9;
 const SERVO_FR = 15;
 const SERVO_RL = 11;

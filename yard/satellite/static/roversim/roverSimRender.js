@@ -60,20 +60,22 @@ export const LIGHT_SIM_PALETTE = {
  * simulator rather than measured from anything, so the yard was always the
  * free parameter.
  *
- * At 120x90 a default square fills about a fifth of the yard and a ten-second
- * one most of it. 1.2m x 0.9m is a believable floor mat for a robot this slow.
+ * CHOSEN FOR HOW IT LOOKS, not to match a room anyone has measured. 400x300
+ * came from the old Qt simulator and nothing since has been a physical fact, so
+ * this is the one number here free to be picked.
  *
- * NOTE THE TRADE. With the rover drawn at its true 20cm, its size on screen IS
- * the yard size: it is a sixth of the width here, an eighth at 160, a twelfth
- * at 240. Wanting a bigger square and a smaller rover pulls this number in
- * opposite directions, and the way out is longer default drive times rather
- * than a smaller world.
+ * With the rover drawn at its true 20cm, its size on screen IS the yard size:
+ * an eighth of the width at 240, a sixth at 120. Wanting a small rover and a
+ * big square pulls this in opposite directions, and the way out is a larger
+ * world with longer default drives - which is why the drive blocks default to
+ * 5 seconds rather than 1. Together they give a rover at 8% and a default
+ * square at 18%, so the shape is comfortably bigger than the thing drawing it.
  *
  * rover-physics.ts bounds the rover to the same numbers, and the two must not
  * drift.
  */
-export const YARD_W = 120;
-export const YARD_H = 90;
+export const YARD_W = 240;
+export const YARD_H = 180;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
 const MARGIN = 10; // px inset so the rover never clips the panel edge
 // Servo ids for the four steerable wheels (front/rear, left/right).
@@ -88,12 +90,12 @@ const RR = '13';
  * always did as a fraction of the ground.
  */
 const CRATERS = [
-    [-39, 24, 10],
-    [27, 18, 8],
-    [42, -21, 12],
-    [-27, -27, 7],
-    [6, 36, 5],
-    [-48, -9, 5],
+    [-78, 48, 20],
+    [54, 36, 16],
+    [84, -42, 24],
+    [-54, -54, 13],
+    [12, 72, 11],
+    [-96, -18, 10],
 ];
 /**
  * One light direction for the whole scene, up and to the left.
@@ -197,10 +199,10 @@ function paintTerrain(ctx, L, P) {
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    // Faint measurement grid every 15cm, keeping the same handful of divisions.
+    // Faint measurement grid every 30cm, keeping the same handful of divisions.
     ctx.strokeStyle = P.grid;
     ctx.lineWidth = 1;
-    for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 15) {
+    for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 30) {
         const [sx] = worldToScreen(L, gx, 0);
         if (sx < -2 || sx > w + 2)
             continue;
@@ -209,7 +211,7 @@ function paintTerrain(ctx, L, P) {
         ctx.lineTo(sx, h);
         ctx.stroke();
     }
-    for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 15) {
+    for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 30) {
         const [, sy] = worldToScreen(L, 0, gy);
         if (sy < -2 || sy > h + 2)
             continue;
