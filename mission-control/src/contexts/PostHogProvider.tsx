@@ -40,6 +40,16 @@ export function PostHogProvider({
       person_profiles: 'identified_only',
       capture_pageview: true,
       capture_exceptions: true,
+      defaults: '2026-05-30',
+      // Session replay only records once "Record user sessions" is also
+      // turned on in PostHog's project settings - that toggle is the actual
+      // gate, this client never disables it. maskAllInputs is worth being
+      // explicit about though: this app has real auth (OperatorSignIn) and
+      // PII (EmailPrompt, TeamManager) input fields that replay shouldn't
+      // capture verbatim.
+      session_recording: {
+        maskAllInputs: true,
+      },
     });
     posthog.register({ environment });
 
