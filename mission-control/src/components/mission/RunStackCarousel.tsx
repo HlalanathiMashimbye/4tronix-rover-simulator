@@ -1,13 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useSyncExternalStore } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, ExternalLink, Film, Play } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Film, Play, Volume2, VolumeX } from 'lucide-react';
 
 import { describeRuns, type RunOption } from '@/lib/missionRuns';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
+import {
+  readStoredSound,
+  serverSoundSnapshot,
+  setMuted,
+  subscribeToSound,
+} from '@/lib/soundPreference';
 
 export function RunStackCarousel({
   runs,
@@ -23,6 +29,7 @@ export function RunStackCarousel({
   trajectory: TrajectoryPoint[];
 }) {
   const reduceMotion = useReducedMotion();
+  const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [dragStart, setDragStart] = useState<number | null>(null);
   const selectedIndex = Math.max(0, runs.findIndex((run) => run.id === selectedId));
@@ -79,9 +86,24 @@ export function RunStackCarousel({
             {selectedRun.label} · {selectedRun.sublabel} · {positionLabel}
           </h2>
         </div>
-        <span className="shrink-0 rounded-full border border-border/70 bg-card/60 px-2.5 py-1 font-mono text-[11px] font-bold text-muted-foreground">
-          {positionLabel}
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* Sits in the header rather than on the card, because the choice is
+              about the learner's surroundings, not about one run: it holds for
+              whichever video they play next, and for their next visit. */}
+          <button
+            type="button"
+            onClick={() => setMuted(!muted)}
+            aria-pressed={muted}
+            aria-label={muted ? 'Unmute rover videos' : 'Mute rover videos'}
+            title={muted ? 'Sound off. Videos will stay muted.' : 'Sound on'}
+            className="clay clay-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-card/60 text-muted-foreground transition-colors hover:border-primary/70 hover:text-foreground"
+          >
+            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
+          <span className="rounded-full border border-border/70 bg-card/60 px-2.5 py-1 font-mono text-[11px] font-bold text-muted-foreground">
+            {positionLabel}
+          </span>
+        </div>
       </div>
 
       {/* items-STRETCH, not center. Centring left the card at its content
@@ -150,6 +172,7 @@ export function RunStackCarousel({
                 <video
                   key={selectedRun.videoUrl}
                   controls
+                  muted={muted}
                   preload="metadata"
                   poster={selectedRun.thumbnailUrl}
                   className="h-full min-h-[210px] w-full bg-black object-contain"
@@ -163,6 +186,7 @@ export function RunStackCarousel({
                     youtubeId={selectedRun.youtubeId}
                     title={`${missionName}: ${selectedRun.label}`}
                     showFallbackLink={false}
+                    muted={muted}
                   />
                 </div>
               ) : (

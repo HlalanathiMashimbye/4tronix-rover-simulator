@@ -146,6 +146,22 @@ export function RoverSimulator({
     });
   }, [isManual]);
 
+  // A fresh non-manual run starts from the beginning and plays.
+  //
+  // DECLARED BEFORE THE PLAYBACK LOOP ON PURPOSE. Effects run in declaration
+  // order, so this parks the playhead at 0 before the loop below is scheduled.
+  // The other way round, the loop starts from the PREVIOUS run's final frame,
+  // immediately decides it has already finished, and stops - and then this
+  // effect rewinds to 0, leaving the rover frozen at the start.
+  useEffect(() => {
+    if (isManual) return;
+    playheadRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restart playback when a new trajectory arrives (external event)
+    setIsPaused(false);
+    drawScene();
+    syncHud();
+  }, [trajectory, isManual, drawScene, syncHud]);
+
   // Continuous rAF only while a non-manual run is actively playing.
   useEffect(() => {
     if (isManual || isPaused || !isPlaying) return;
@@ -182,17 +198,19 @@ export function RoverSimulator({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isManual, isPaused, isPlaying, trajectory.length, drawScene, syncHud]);
-
-  // A fresh non-manual run starts from the beginning and plays.
-  useEffect(() => {
-    if (isManual) return;
-    playheadRef.current = 0;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- restart playback when a new trajectory arrives (external event)
-    setIsPaused(false);
-    drawScene();
-    syncHud();
-  }, [trajectory, isManual, drawScene, syncHud]);
+    // TRAJECTORY IDENTITY, NOT ITS LENGTH.
+    //
+    // Keyed on length, pressing Run twice on the same program changed nothing
+    // this effect could see: same length, isPlaying already true, isPaused
+    // already false. So no frame loop was scheduled, while the effect above
+    // rewound the playhead to 0. The rover sat at the start with the button
+    // reading "Pause", and only Reset - which empties the trajectory and so
+    // does change the length - brought it back.
+    //
+    // That is why it looked intermittent. Editing the code usually changes the
+    // frame count, which hid the bug; re-running the same program, or any edit
+    // that kept the same duration, exposed it.
+  }, [isManual, isPaused, isPlaying, trajectory, drawScene, syncHud]);
 
   // Manual mode is live: keep the rover on the newest point as it streams in.
   useEffect(() => {
