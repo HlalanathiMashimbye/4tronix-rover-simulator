@@ -175,6 +175,53 @@ def should_local_win(local_payload, remote_data):
     return local_payload.get('statusUpdatedAt', '') >= remote_data.get('statusUpdatedAt', '')
 
 
+# Fields an operator's decision owns. A satellite replaying stale machine events
+# must not write these over the top of a human's choice.
+_DECIDED_FIELDS = ('status', 'statusUpdatedAt', 'completedAt', 'needsReview', 'reviewReason')
+
+
+def merge_run_payload(local_payload, remote_data):
+    """Which fields of a queued run write may still be applied. Returns a dict.
+
+    RUNS USED TO HAVE NO MERGE RULE AT ALL, and the comment saying so was
+    correct at the time: only the yard that owned a run ever wrote it, so there
+    was nothing to arbitrate.
+
+    Operator bookkeeping ended that. Complete, cancel, attach-video and resolve
+    now happen in Mission Control, because they are desk jobs and tying them to
+    a Pi on venue wifi meant a yard losing signal made the record unsettleable
+    from anywhere. So a run document has two writers, and they meet here.
+
+    THE CASE THIS EXISTS FOR, which is not hypothetical. The yard is offline all
+    afternoon and its outbox fills up. An operator settles missions from the
+    desk in the meantime. The yard gets signal back that evening and replays
+    hours of stale machine events over decisions a human already made, and every
+    one of them silently wins, because a merge with no rule always does.
+
+    The rule: a human decision outranks a replayed machine event, and the later
+    human wins. Nothing else changes, so a yard that was simply online and
+    working behaves exactly as it did before.
+
+    Non-status fields survive regardless. A video the satellite attached locally
+    is not in conflict with a status somebody set in the cloud, and dropping the
+    whole entry would lose it for good.
+    """
+    decided_at = remote_data.get('decidedAt')
+
+    # No remote decision: nothing to defer to, so this is the old behaviour.
+    if not decided_at:
+        return dict(local_payload)
+
+    # A local event that happened AFTER the operator decided is news, not a
+    # replay. The rover really did finish after they cancelled it, and the run
+    # should say so.
+    local_stamp = local_payload.get('statusUpdatedAt') or ''
+    if local_stamp > decided_at:
+        return dict(local_payload)
+
+    return {k: v for k, v in local_payload.items() if k not in _DECIDED_FIELDS}
+
+
 def _maybe_log_conflict(mission_id, local_payload, remote_data, local_won):
     """Record a merge only when the LOSING side was already terminal.
 
@@ -267,6 +314,8 @@ def flush_run_one(firestore_client, entry):
         .document(yard_id)
     )
 
+    outcome = {'suppressed': None}
+
     try:
         @firestore.transactional
         def _apply(transaction):
@@ -274,11 +323,33 @@ def flush_run_one(firestore_client, entry):
             remote = (snap.to_dict() or {}) if getattr(snap, 'exists', False) else {}
             local_payload = json.loads(entry['payload'])
 
-            # No merge rule: only this yard writes this run, so local always wins
-            # if we got here. Just merge in the fields (don't overwrite unrelated ones).
-            transaction.set(ref, local_payload, merge=True)
+            # Evaluated INSIDE the transaction, so a decision made in Mission
+            # Control between the read and the write cannot be missed.
+            writable = merge_run_payload(local_payload, remote)
+
+            if len(writable) < len(local_payload):
+                outcome['suppressed'] = remote.get('decidedBy') or 'an operator'
+
+            # FORCE_KEY is an instruction to the merge, not part of a run. It
+            # used to be written straight through to Firestore here, where run
+            # documents are world-readable, because this function never had the
+            # strip that flush_one has always had.
+            writable.pop(FORCE_KEY, None)
+
+            if writable:
+                transaction.set(ref, writable, merge=True)
 
         _apply(firestore_client.transaction())
+
+        if outcome['suppressed']:
+            # Never silent. A dropped write that nobody can see is exactly how
+            # the old no-rule merge hid, and an operator who watches a status
+            # revert deserves a line in the log naming the reason.
+            print(
+                f'[sync] {mission_id}/{yard_id}: kept the decision '
+                f'{outcome["suppressed"]} made in Mission Control; '
+                'the local status change was older'
+            )
 
         delete_run_outbox(entry['seq'])
         clear_run_dirty(mission_id, yard_id)

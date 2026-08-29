@@ -18,6 +18,7 @@ import {
   orderBy,
   limit,
   onSnapshot,
+  type Query,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -43,6 +44,13 @@ export const ACTIVE_STATUSES: MissionStatus[] = ['queued', 'processing'];
 export const QUEUE_LIMIT = 50;
 
 /**
+ * Smaller than the queue on purpose. This view exists to get back to a mission
+ * finished minutes ago, not to browse a yard's history, which the learner feed
+ * already does properly with pagination.
+ */
+export const DONE_LIMIT = 25;
+
+/**
  * Only what the queue renders. Mission documents carry a good deal more.
  *
  * NO LEARNER FIELD, DELIBERATELY. Not even `learnerRef`, which is a one-way
@@ -61,6 +69,8 @@ export interface QueueMission {
   submittedAt?: string;
   needsReview?: boolean;
   reviewReason?: string | null;
+  /** Present once an operator has attached the recording. */
+  youtubeUrl?: string;
 }
 
 /**
@@ -88,6 +98,52 @@ export function subscribeToYardQueue(
     limit(QUEUE_LIMIT),
   );
 
+  return listen(q, onMissions, onError, 'queue');
+}
+
+/**
+ * Recently completed missions at one yard.
+ *
+ * WHY THIS EXISTS SEPARATELY FROM THE QUEUE. Attaching a video is a desk job
+ * that happens AFTER a mission is marked complete: the operator settles the
+ * run, downloads the recording from the satellite, uploads it, and comes back
+ * with a link. By then the mission has left the queue, so without this there is
+ * no way back to it and the attach action is unreachable.
+ *
+ * Newest first, because the mission somebody just finished is the one they are
+ * coming back to. That ordering needs its own composite index; the queue's
+ * ascending twin cannot be scanned backwards for it.
+ *
+ * SUBSCRIBE ONLY WHEN THE OPERATOR ASKS FOR IT. A listener reads every matching
+ * document when it attaches, and completed missions only ever accumulate, so
+ * attaching this alongside the queue would add a growing read bill to every
+ * console session for a view most of them never open.
+ */
+export function subscribeToYardCompleted(
+  yardId: string,
+  onMissions: (missions: QueueMission[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const db = getFirestoreClient();
+
+  const q = query(
+    collection(db, 'missions'),
+    where('yardId', '==', yardId),
+    where('status', '==', 'completed'),
+    orderBy('submittedAt', 'desc'),
+    limit(DONE_LIMIT),
+  );
+
+  return listen(q, onMissions, onError, 'completed');
+}
+
+/** Shared by both subscriptions: the same documents, read the same way. */
+function listen(
+  q: Query,
+  onMissions: (missions: QueueMission[]) => void,
+  onError: (error: Error) => void,
+  label: string,
+): Unsubscribe {
   return onSnapshot(
     q,
     (snapshot) => {
@@ -110,13 +166,14 @@ export function subscribeToYardQueue(
           submittedAt: data.submittedAt,
           needsReview: data.needsReview,
           reviewReason: data.reviewReason ?? null,
+          youtubeUrl: data.youtubeUrl,
         });
       }
 
       onMissions(missions);
     },
     (error) => {
-      console.error('[operator queue] listener failed:', error);
+      console.error(`[operator ${label}] listener failed:`, error);
       onError(error);
     },
   );
