@@ -27,6 +27,7 @@ jest.mock('@/components/mission/BlocklyViewer', () => ({
 }));
 
 import { MissionQueue } from '@/components/operator/MissionQueue';
+import { SearchProvider } from '@/contexts/SearchContext';
 
 const MISSION = {
   id: 'm1',
@@ -53,7 +54,7 @@ describe('copying a mission to paste into the yard', () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<MissionQueue />);
+    render(<SearchProvider><MissionQueue /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     // waitFor, not a bare assertion: the copy is async and sets state after it
@@ -68,7 +69,7 @@ describe('copying a mission to paste into the yard', () => {
   it('confirms, so the operator knows to switch tabs', async () => {
     Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
 
-    render(<MissionQueue />);
+    render(<SearchProvider><MissionQueue /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument());
@@ -82,7 +83,7 @@ describe('copying a mission to paste into the yard', () => {
     });
     const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
 
-    render(<MissionQueue />);
+    render(<SearchProvider><MissionQueue /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() =>
@@ -94,7 +95,7 @@ describe('copying a mission to paste into the yard', () => {
   it('cannot copy a mission with no code', async () => {
     emitQueue([{ ...MISSION, code: '' }]);
 
-    render(<MissionQueue />);
+    render(<SearchProvider><MissionQueue /></SearchProvider>);
 
     expect(await screen.findByRole('button', { name: /copy/i })).toBeDisabled();
   });
