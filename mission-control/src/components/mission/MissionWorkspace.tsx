@@ -63,7 +63,6 @@ export function MissionWorkspace() {
   // always present and always valid.
   const [missionName, setMissionName] = useState(() => generateRandomMissionName());
   const abortControllerRef = useRef<AbortController | null>(null);
-  const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
   /**
    * The Python the learner's BLOCKS produce, kept apart from currentCode.
@@ -92,7 +91,6 @@ export function MissionWorkspace() {
     setTrajectory([]);
     setIsPlaying(false);
     setError(null);
-    manualTrajectoryLengthRef.current = 0;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -115,30 +113,38 @@ export function MissionWorkspace() {
     setEditorMode('code');
   }, [blocklyCode]);
 
+  /**
+   * The manual controller owns the whole path; take it as given.
+   *
+   * This used to treat the child's array as append-only and track a cursor
+   * into it, copying across only what was new. That assumption broke the moment
+   * the child hit its own cap: past 1000 points it slides a window, so the
+   * length stops growing, and "nothing new since the cursor" became true
+   * forever. The parent then returned the previous trajectory on every frame
+   * and the rover froze on screen while its physics carried on underneath.
+   *
+   * Driving into a wall was the usual way to notice, because reaching one took
+   * long enough to fill the buffer. Reset appeared to fix it only because it
+   * zeroed the cursor.
+   */
   const handleManualTrajectory = useCallback((realtimeTrajectory: RoverState[]) => {
-    const converted: TrajectoryPoint[] = realtimeTrajectory.map((state) => ({
-      x: state.x,
-      y: state.y,
-      heading: state.heading,
-      speedL: state.speedL,
-      speedR: state.speedR,
-      servos: {
-        '9': state.servos[9],
-        '15': state.servos[15],
-        '11': state.servos[11],
-        '13': state.servos[13],
-      },
-      hitWall: state.hitWall,
-    }));
-    setTrajectory((previousTrajectory) => {
-      const startIndex = manualTrajectoryLengthRef.current;
-      if (converted.length <= startIndex) {
-        return previousTrajectory;
-      }
-
-      manualTrajectoryLengthRef.current = converted.length;
-      return [...previousTrajectory, ...converted.slice(startIndex)];
-    });
+    setTrajectory(
+      realtimeTrajectory.map((state) => ({
+        x: state.x,
+        y: state.y,
+        heading: state.heading,
+        speedL: state.speedL,
+        speedR: state.speedR,
+        servos: {
+          '9': state.servos[9],
+          '15': state.servos[15],
+          '11': state.servos[11],
+          '13': state.servos[13],
+        },
+        hitWall: state.hitWall,
+        leds: [null, null, null, null],
+      })),
+    );
     setIsPlaying(true);
   }, []);
 
@@ -147,8 +153,7 @@ export function MissionWorkspace() {
       // Clear the drawn path and park the rover back at the start. The reset
       // version bump tells ManualControlRealtime to reset its physics too, so
       // the next tap drives from the centre again.
-      manualTrajectoryLengthRef.current = 0;
-      setTrajectory([]);
+        setTrajectory([]);
       setManualResetVersion((version) => version + 1);
       setIsPlaying(false);
       return;
@@ -160,7 +165,6 @@ export function MissionWorkspace() {
     }
     setTrajectory([]);
     setIsPlaying(false);
-    manualTrajectoryLengthRef.current = 0;
   }, [editorMode]);
 
   const handleSubmitToQueue = async () => {
