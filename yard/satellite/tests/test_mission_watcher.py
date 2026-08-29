@@ -49,6 +49,15 @@ def _seed(mission_id, status, needs_review=0, owner='sat-1'):
     )
 
 
+def _recording(mission_id, yard_id='curiosity'):
+    """Mark a run as actively filming, which _seed deliberately does not do."""
+    mission_store.set_run_recording_state(
+        mission_id, yard_id, 'recording',
+        path=f'/tmp/{mission_id}__{yard_id}.mp4',
+        started_at='2026-07-14T09:00:00Z',
+    )
+
+
 def _rover(history):
     class Resp:
         status_code = 200
@@ -99,6 +108,7 @@ def test_the_learner_notification_fires(monkeypatch):
 def test_a_confirmed_mission_stops_and_keeps_its_recording(monkeypatch):
     """BACKLOG 335/336: the ordinary successful-run path keeps the video."""
     _seed('m1', 'processing')
+    _recording('m1')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
     calls = []
     monkeypatch.setattr(mission_watcher, 'stop_recording', lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
@@ -243,6 +253,7 @@ def test_a_run_the_rover_rejected_stops_and_keeps_its_recording_pending_review(m
     Capturing stops (there is nothing left to film), but the file is kept so
     an operator can review it; only their own resolve decision discards it."""
     _seed('m1', 'processing')
+    _recording('m1')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
         _errored('m1', 'SyntaxError: invalid syntax (line 1)'),
     ]))
@@ -304,3 +315,85 @@ def test_completions_still_work_alongside_errors(monkeypatch):
     assert mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity') == ['ok']
     assert mission_store.get_run('ok', 'curiosity')['status'] == 'completed'
     assert mission_store.get_run('bad', 'curiosity')['needs_review'] == 1
+
+
+# --- The camera must not depend on the network ------------------------------
+#
+# These pin the fix for a bug found by running the real thing rather than a
+# mock: on a yard with no network, recordings never stopped.
+#
+# The outbox cannot flush while Firestore is unreachable, so run_has_pending
+# stays true, so the completion loops below skip the run on every pass. The
+# stop_recording calls used to live INSIDE those loops, so the writer was never
+# released. Measured on a live camera: ~87KB/s, about 7.5GB a day per stuck
+# run, on a 64GB card, and every file unplayable because no moov atom is
+# written until the writer closes.
+#
+# That is the platform's primary scenario, not an edge case. The yard is
+# expected to work with no network at all.
+
+def test_a_recording_stops_offline_even_though_the_run_cannot_settle(monkeypatch):
+    """The rover finished. Firestore is unreachable. Stop filming anyway.
+
+    The run itself correctly stays 'processing': its status write is still
+    sitting in the outbox and the guard against racing a flush is right. But
+    whether there is anything left to film is a question the ROVER answers,
+    and it needs no network to answer it.
+    """
+    _seed('m1', 'processing')
+    _recording('m1')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
+    monkeypatch.setattr(mission_watcher, 'run_has_pending', lambda *a: True)
+    calls = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording',
+                        lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
+
+    completed = mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
+
+    assert calls == [('m1', 'curiosity', True)], 'the camera kept running while offline'
+    # Unchanged, and correct: settling the run is a separate question.
+    assert completed == []
+    assert mission_store.get_run('m1', 'curiosity')['status'] == 'processing'
+
+
+def test_an_errored_run_stops_its_recording_offline_too(monkeypatch):
+    """Same rule for a run the rover could not execute.
+
+    keep=True, because BACKLOG 338 leaves the judgement to a human: it may
+    still have filmed something worth seeing, and only api_resolve_review
+    throws it away.
+    """
+    _seed('m1', 'processing')
+    _recording('m1')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        {'cmd': 'run_python', 'status': 'error', 'params': {'mission_id': 'm1'}},
+    ]))
+    monkeypatch.setattr(mission_watcher, 'run_has_pending', lambda *a: True)
+    calls = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording',
+                        lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
+
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
+
+    assert calls == [('m1', 'curiosity', True)]
+
+
+def test_a_recording_already_stopped_is_not_stopped_again(monkeypatch):
+    """The watcher polls on a timer and the rover keeps its history.
+
+    Without a guard, every pass forever would re-stop the same finished
+    recording, rewriting recording_stopped_at each time and churning the
+    mirror for nothing.
+    """
+    _seed('m1', 'completed')
+    mission_store.set_run_recording_state('m1', 'curiosity', 'kept',
+                                          stopped_at='2026-07-14T09:05:00Z')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
+    calls = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording',
+                        lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
+
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
+
+    assert calls == []
+    assert mission_store.get_run('m1', 'curiosity')['recording_stopped_at'] == '2026-07-14T09:05:00Z'

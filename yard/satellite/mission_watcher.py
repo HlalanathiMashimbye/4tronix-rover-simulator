@@ -122,6 +122,35 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
     completed = []
     done, errored = rover_outcomes(rover_url)
 
+    # STOP FILMING AS SOON AS THE ROVER SAYS THE RUN IS OVER.
+    #
+    # Deliberately ahead of everything below, and deliberately outside the
+    # run_has_pending guard those loops use.
+    #
+    # Whether there is anything left to film is a question the ROVER answers,
+    # and it can answer it with no internet at all. Whether Firestore has
+    # caught up is a different question, and it has no business keeping a
+    # camera running.
+    #
+    # Tying the two together meant that on a yard with no network the recording
+    # never stopped. The outbox cannot flush while offline, so run_has_pending
+    # stayed true, so both loops below skipped the run on every pass, so the
+    # writer was never released: the file grew at ~87KB/s (about 7.5GB a day,
+    # on a 64GB card) and had no moov atom, which means every one of them was
+    # unplayable. An operator marking the mission complete by hand still
+    # rescued it, which is the only reason this was survivable.
+    #
+    # keep=True for errors as well as successes. A run the rover could not
+    # execute may still have filmed something worth seeing, and BACKLOG 338
+    # leaves that judgement to a human: only api_resolve_review discards it.
+    for mission_id in set(done) | set(errored):
+        run = get_run(mission_id, yard_id)
+        if run is None:
+            continue
+        if run.get('recording_status') != 'recording':
+            continue
+        stop_recording(mission_id, yard_id, keep=True)
+
     # A run the rover could not execute is flagged, never marked failed. The
     # rule in this module has always been that it may not assert an outcome
     # nobody established - and 'failed' reaches the learner as a run that went
@@ -142,10 +171,6 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
         # Flag the run for review
         release_run(mission_id, yard_id, 'processing', _now_iso(),
                    review_reason=f'rover could not run it: {reason}'[:REVIEW_REASON_MAX])
-        # Stop capturing - there is nothing left to film - but keep the file
-        # (BACKLOG 338). It stays 'processing'/needs_review until a human
-        # decides; only that decision (api_resolve_review) discards it.
-        stop_recording(mission_id, yard_id, keep=True)
         print(f'[watcher] Rover reported an error for {mission_id}: {reason}')
 
     for mission_id in done:
@@ -163,7 +188,6 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
             continue
 
         release_run(mission_id, yard_id, 'completed', _now_iso())
-        stop_recording(mission_id, yard_id, keep=True)
         completed.append(mission_id)
         print(f'[watcher] Rover confirmed {mission_id}; marked complete')
 
