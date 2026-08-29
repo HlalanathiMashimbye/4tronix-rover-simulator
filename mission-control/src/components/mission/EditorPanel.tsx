@@ -35,6 +35,9 @@ interface EditorPanelProps {
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
+  onBlocklyCode: (code: string) => void;
+  blocklyCode: string;
+  onShowAsPython: () => void;
   onBlocklyStateChange?: (state: string) => void;
 }
 
@@ -47,6 +50,9 @@ export function EditorPanel({
   manualResetVersion,
   onGenerateCommands,
   onCodeChange,
+  onBlocklyCode,
+  blocklyCode,
+  onShowAsPython,
   onBlocklyStateChange,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
@@ -96,8 +102,8 @@ export function EditorPanel({
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} onBlocklyStateChange={onBlocklyStateChange} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} />}
+        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} />}
+        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} />}
       </div>
 
     </div>
