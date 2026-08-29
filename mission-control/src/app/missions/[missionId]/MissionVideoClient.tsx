@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, MonitorPlay, Rocket, Star, Video, Zap } from 'lucide-react';
+import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { getFirestoreClient } from '@/lib/firebase';
@@ -16,10 +16,15 @@ import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { yardLabel } from '@/infrastructure/config/yards';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { RunStrip } from '@/components/mission/RunStrip';
 
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
   const [mission, setMission] = useState<Mission | null>(null);
+  // Every yard's attempt, so the strip can show more than the one video the
+  // mission document carries. Empty is ordinary - a mission nobody has run.
+  const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   // Null until the mission loads, then the first run - which is the real one
@@ -39,15 +44,30 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
   // Real runs come FIRST, which is the point: a child needs to see that an
   // actual rover drove their code. See lib/missionRuns for the reasoning.
-  const runs = useMemo<RunOption[]>(() => buildRunOptions(mission), [mission]);
+  const runs = useMemo<RunOption[]>(
+    () => buildRunOptions(mission, missionRuns),
+    [mission, missionRuns],
+  );
 
   useEffect(() => {
     const fetchMission = async () => {
       try {
         const repository = new FirestoreMissionRepository(getFirestoreClient());
         const loadedMission = await repository.findById(missionId);
-        if (loadedMission) setMission(loadedMission);
-        else setError('Mission not found');
+        if (!loadedMission) {
+          setError('Mission not found');
+          return;
+        }
+        setMission(loadedMission);
+
+        // Runs are a separate read, and a failure here is not a failure to
+        // show the mission: the strip falls back to the video on the mission
+        // document, and worst case to the simulation alone.
+        try {
+          setMissionRuns(await repository.findRuns(missionId));
+        } catch (runError) {
+          console.warn('Could not load runs for this mission:', runError);
+        }
       } catch (err) {
         console.error('Fetch mission error:', err);
         setError('Failed to load mission');
@@ -143,52 +163,6 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
               {dateLabel}
             </span>
           </div>
-          {/* WAS A DROPDOWN, AND THAT WAS THE PROBLEM.
-              A closed <select> showed one option, so a child had no way to
-              know a real rover had driven their code - the single most
-              exciting thing this platform does was behind a control that
-              looked like it had nothing in it. Every run is a visible chip
-              now, the real one first and selected by default. */}
-          {runs.length > 1 && (
-            <div
-              role="tablist"
-              aria-label="Choose a run to watch"
-              className="flex shrink-0 items-center gap-1.5"
-            >
-              {runs.map((r) => {
-                const active = r.id === selectedRun.id;
-                return (
-                  <button
-                    key={r.id}
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setSelectedRunId(r.id)}
-                    className={`clay-press flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-left transition-colors ${
-                      active
-                        ? 'border-primary/60 bg-gradient-mars text-primary-foreground'
-                        : 'border-border/60 bg-card text-foreground hover:border-primary/50'
-                    }`}
-                  >
-                    {r.kind === 'real' ? (
-                      <Video className="h-3.5 w-3.5 shrink-0" />
-                    ) : (
-                      <MonitorPlay className="h-3.5 w-3.5 shrink-0" />
-                    )}
-                    <span className="leading-tight">
-                      <span className="block text-xs font-bold">{r.label}</span>
-                      <span
-                        className={`block text-[10px] ${
-                          active ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                        }`}
-                      >
-                        {r.sublabel}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
 
         {/* Body fills the remaining viewport height; nothing scrolls except the
@@ -203,6 +177,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
           height="100%"
           left={
             <div className="flex min-h-0 flex-col gap-2">
+            {/* Above the player, not in the header: the strip needs the full
+                width to show more than two cards on a phone, and the header
+                already carries the title, status and date. */}
+            <RunStrip runs={runs} selectedId={selectedRun.id} onSelect={setSelectedRunId} />
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/30">
               {selectedRun.kind === 'real' && selectedRun.youtubeId ? (
                 <div className="flex h-full w-full items-center justify-center p-2">
