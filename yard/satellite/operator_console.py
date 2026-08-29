@@ -101,6 +101,21 @@ def _admin_configured():
     )
 
 
+def _clean_env(name):
+    """An env value with surrounding quotes and whitespace removed, or None.
+
+    .env files keep their quotes when a shell is not doing the parsing, and a
+    quoted empty string is still empty.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1]
+    return value or None
+
+
 def _init_firebase():
     """Initialise firebase_admin once, from env credentials."""
     global _firebase_app
@@ -117,23 +132,55 @@ def _init_firebase():
         if _firebase_app is not None:
             return _firebase_app
 
-        if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
-            cred = credentials.ApplicationDefault()
-        else:
-            # \n in the private key survives .env files as the two characters
-            # backslash-n; decode them back to newlines (mission-control does
-            # the same in its firebase-admin bootstrap).
-            private_key = os.environ['FIREBASE_PRIVATE_KEY'].strip().strip('"').replace('\\n', '\n')
+        # Same three-way choice as mission-control's firebase-admin.ts, and
+        # deliberately so: the two used to disagree, and the satellite quietly
+        # talked to a different Firebase project for weeks.
+        #
+        #   both key variables set   -> that service account
+        #   neither set              -> Application Default Credentials
+        #   exactly one set          -> refuse, because it is a broken .env
+        client_email = _clean_env('FIREBASE_CLIENT_EMAIL')
+        private_key = _clean_env('FIREBASE_PRIVATE_KEY')
+
+        if client_email and private_key:
             cred = credentials.Certificate({
                 'type': 'service_account',
-                'project_id': os.environ['FIREBASE_PROJECT_ID'],
-                'client_email': os.environ['FIREBASE_CLIENT_EMAIL'],
-                'private_key': private_key,
+                'project_id': _clean_env('FIREBASE_PROJECT_ID'),
+                'client_email': client_email,
+                # \n in the private key survives .env files as the two
+                # characters backslash-n; decode them back to newlines.
+                'private_key': private_key.replace('\\n', '\n'),
                 'token_uri': 'https://oauth2.googleapis.com/token',
             })
+        elif client_email or private_key:
+            # Falling back to ADC here would authenticate as a DIFFERENT
+            # identity than the one intended, silently. Fail instead.
+            missing = 'FIREBASE_PRIVATE_KEY' if client_email else 'FIREBASE_CLIENT_EMAIL'
+            raise RuntimeError(
+                f'Incomplete Firebase service account config: {missing} is not '
+                f'set while the other half is. Set both, or unset both to use '
+                f'Application Default Credentials.'
+            )
+        else:
+            cred = credentials.ApplicationDefault()
+
+        # Pass the project EXPLICITLY, as mission-control does.
+        #
+        # Without it firebase_admin infers the project from the credential, and
+        # under ADC that is whatever `gcloud config get-value project` happens
+        # to say - which on this machine was still the retired project. The
+        # satellite would then report one project while FIREBASE_PROJECT_ID
+        # said another, which is exactly the kind of disagreement that hid the
+        # env drift in the first place.
+        options = {}
+        project_id = _clean_env('FIREBASE_PROJECT_ID')
+        if project_id:
+            options['projectId'] = project_id
 
         try:
-            _firebase_app = firebase_admin.initialize_app(cred, name='operator-console')
+            _firebase_app = firebase_admin.initialize_app(
+                cred, options, name='operator-console',
+            )
         except ValueError:
             # Already registered by something this lock didn't cover (e.g. a
             # prior dev-server run that left firebase_admin's process-wide
