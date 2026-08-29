@@ -322,32 +322,38 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
 
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
-      <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground">
+      {/* The buttons are ONE GROUP, pinned right.
+          Adding "Show as Python" as a third child of a justify-between row made
+          it the middle item, so it parked in the centre of whatever space was
+          left and drifted on its own as the panel resized. Grouping the two
+          buttons and pushing the pair right with ml-auto keeps them together at
+          every width; the hint text yields first, then hides. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground sm:block">
           Stack blocks inside “On uplink”, tune the numbers, then run it.
         </p>
-        {/* Lives HERE, not in the Python tab, because this is where the
-            question occurs to a learner: they are looking at their blocks and
-            want to know what they look like as code. Putting it on the other
-            side meant going to the Python tab first and finding somebody
-            else's snippet there. */}
-        {onShowAsPython && (
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Lives on the BLOCKS side, not in the Python tab, because this is
+              where the question occurs to a learner: they are looking at their
+              blocks and want to know what they look like as code. */}
+          {onShowAsPython && (
+            <button
+              onClick={onShowAsPython}
+              title="See the Python your blocks make"
+              className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
+            >
+              <Code2 className="h-3.5 w-3.5 text-primary" />
+              Show as Python
+            </button>
+          )}
           <button
-            onClick={onShowAsPython}
-            title="See the Python your blocks make"
-            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
+            onClick={handleRun}
+            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
           >
-            <Code2 className="h-3.5 w-3.5 text-primary" />
-            Show as Python
+            <Play className="h-3.5 w-3.5" fill="currentColor" />
+            Run blocks
           </button>
-        )}
-        <button
-          onClick={handleRun}
-          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
-        >
-          <Play className="h-3.5 w-3.5" fill="currentColor" />
-          Run blocks
-        </button>
+        </div>
       </div>
 
       {mergedNotice && (
