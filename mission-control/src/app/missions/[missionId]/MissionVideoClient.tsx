@@ -163,17 +163,32 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
           </div>
         </div>
 
-        {/* Fixed at 70/30, video to code. The draggable divider was ambition:
-            a video player wants one shape and looks better holding it, and a
-            handle beside it invites fiddling with a layout that was already
-            right. Create Mission keeps its drag, where trading space between
-            an editor and a preview is a real working need.
+        {/* Fixed at 60/40, video to code, and the number came from the
+            simulator's geometry rather than taste.
+
+            The yard is a 400x300 world - 4:3 - letterboxed by computeLayout
+            inside whatever canvas it gets. So a WIDER panel makes it worse,
+            not better. Measured, at a 1400px viewport:
+
+              70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
+              65/35  canvas 716x469 (1.53)  64px each side
+              60/40  canvas 664x490 (1.35)  24px each side
+
+            The two media want opposite shapes and no split serves both: 16:9
+            video wants width, the 4:3 yard wants less of it. 60/40 is chosen
+            because the failures are not equivalent. A letterboxed video is
+            what every player does and nobody remarks on it; a yard floating in
+            grey with a hand's width of nothing down each side reads as a
+            rendering fault, which is exactly how it was reported.
+
+            The 320px floor on the right track keeps the code readable, so this
+            does not squeeze the editor to buy the change.
 
             height="100%" because this sits inside an already-sized flex
             parent, unlike Create Mission which owns the viewport. */}
         <SplitPane
           ariaLabel="Footage and code panels"
-          defaultSplit={70}
+          defaultSplit={60}
           resizable={false}
           height="100%"
           left={

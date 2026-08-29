@@ -596,8 +596,8 @@
      code panel ends up centred with dead space beside it. */
   .workspaceSplitGrid--fixed {
     grid-template-columns:
-      minmax(0, var(--workspace-left, 70fr))
-      minmax(320px, var(--workspace-right, 30fr));
+      minmax(0, var(--workspace-left, 60fr))
+      minmax(320px, var(--workspace-right, 40fr));
   }
 
   .workspaceSplitDivider {
