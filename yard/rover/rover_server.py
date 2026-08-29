@@ -15,39 +15,20 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, stream_with_context, send_file
 from werkzeug.exceptions import HTTPException
-
-try:
-    from posthog import Posthog
-except ImportError:
-    # Analytics must never be what stops a rover starting.
-    #
-    # This was a hard top-level import, so a machine without the posthog
-    # package could not run the rover server at all - it failed with a bare
-    # ModuleNotFoundError before Flask was even built. `npm run dev` inherited
-    # that: the launcher kills every service when one dies, so a missing
-    # analytics library took Mission Control and the satellite down with it and
-    # opened no browser tabs, with the actual cause buried in a dead child
-    # process.
-    #
-    # On a Pi in a science centre the stakes are higher than a broken dev
-    # script. A dependency that failed to install must not be the reason a
-    # child's mission cannot run.
-    #
-    # Every use site already guards with `if posthog_client is not None`, so
-    # None here degrades to exactly what an unconfigured deployment does:
-    # the rover runs, and no events are sent.
-    Posthog = None
 import queue as queue_module
 
 from drivers import create_driver
 from service import RoverQueueService, PHOTO_PATH
+from telemetry import Telemetry, NullTelemetry, create_telemetry
 
 # Load the rover's own configuration without traversing into a parent app.
 load_dotenv(Path(__file__).resolve().parent / '.env')
 
 app = Flask(__name__)
 
-posthog_client = None
+# Never None. NullTelemetry until create_app picks something, so a call on
+# this is always safe - see telemetry.py.
+telemetry: Telemetry = NullTelemetry()
 _error_handler_registered = False
 
 # Mast-camera detection is fixed at boot (the CSI sensor is probed once), so
@@ -79,27 +60,22 @@ def get_camera_status():
 service: RoverQueueService = None
 
 
-def create_app(queue_service: RoverQueueService = None) -> Flask:
-    """Create Flask app with optional injected service (for testing)."""
-    global posthog_client, service, _error_handler_registered
+def create_app(queue_service: RoverQueueService = None,
+               telemetry_backend: Telemetry = None) -> Flask:
+    """Create Flask app with optional injected service and telemetry.
 
-    if posthog_client is None and Posthog is not None:
-        project_token = os.environ.get('POSTHOG_PROJECT_TOKEN')
-        host = os.environ.get('POSTHOG_HOST')
-        if project_token and host:
-            posthog_client = Posthog(
-                project_token,
-                host=host,
-                enable_exception_autocapture=True,
-            )
-            atexit.register(posthog_client.shutdown)
-        elif app.debug or os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true'):
-            missing_variable = 'POSTHOG_PROJECT_TOKEN' if not project_token else 'POSTHOG_HOST'
-            raise RuntimeError(
-                f'{missing_variable} variable required by PostHog is missing or un-configured, '
-                f'this causes events to be silently missed. This error stops appearing once '
-                f'{missing_variable} is configured'
-            )
+    Both are injected the same way and for the same reason: the server should
+    not decide what drives the rover, nor what records it.
+    """
+    global telemetry, service, _error_handler_registered
+
+    if telemetry_backend is not None:
+        telemetry = telemetry_backend
+    elif isinstance(telemetry, NullTelemetry):
+        telemetry = create_telemetry(debug=bool(
+            app.debug or os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true')
+        ))
+        atexit.register(telemetry.shutdown)
 
     if queue_service:
         service = queue_service
@@ -115,8 +91,7 @@ def create_app(queue_service: RoverQueueService = None) -> Flask:
             if isinstance(error, HTTPException):
                 return error
 
-            if posthog_client is not None:
-                posthog_client.capture_exception(error)
+            telemetry.capture_exception(error)
 
             return jsonify({'error': 'Internal server error'}), 500
 
@@ -138,11 +113,10 @@ def queue_add():
     if result.get('status') == 'error':
         return jsonify(result), 400
 
-    if posthog_client is not None:
-        posthog_client.capture(
-            'instruction_queue_submitted',
-            properties={'instruction_count': result['added']},
-        )
+    telemetry.capture(
+        'instruction_queue_submitted',
+        properties={'instruction_count': result['added']},
+    )
 
     return jsonify(result)
 
@@ -152,11 +126,10 @@ def queue_clear():
     """Clear the queue and emergency stop"""
     result = service.clear_queue()
 
-    if posthog_client is not None:
-        posthog_client.capture(
-            'rover_emergency_stop_requested',
-            properties={'cleared_instruction_count': result['cleared']},
-        )
+    telemetry.capture(
+        'rover_emergency_stop_requested',
+        properties={'cleared_instruction_count': result['cleared']},
+    )
 
     return jsonify(result)
 
