@@ -359,6 +359,24 @@ function drawRover(ctx, L, st, t = 0, odo = 0) {
         ctx.lineTo(x, rearY);
         ctx.stroke();
     }
+    /**
+     * Servo wiring: the orange looms that run from the deck out to each corner
+     * servo. Straight off the product photos - the real rover is threaded with
+     * orange and brown wire - and the warmest thing on an otherwise white robot.
+     * Drawn before the body so they emerge from underneath the deck.
+     */
+    ctx.strokeStyle = '#ff8a3c';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    for (const [wx, wy] of [
+        [-halfW - 1, frontY], [halfW + 1, frontY],
+        [-halfW - 1, rearY], [halfW + 1, rearY],
+    ]) {
+        ctx.beginPath();
+        ctx.moveTo(wx * 0.35, wy * 0.55);
+        ctx.quadraticCurveTo(wx * 0.9, wy * 0.7, wx, wy);
+        ctx.stroke();
+    }
     wheel(-halfW - 1, frontY, st.servos?.[FL] ?? 0);
     wheel(halfW + 1, frontY, st.servos?.[FR] ?? 0);
     wheel(-halfW - 2, 0, 0);
@@ -378,6 +396,23 @@ function drawRover(ctx, L, st, t = 0, odo = 0) {
     ctx.roundRect(-halfW, -halfH, bw, bh, 6 * scale);
     ctx.fill();
     ctx.stroke();
+    /**
+     * Mars-orange band across the deck.
+     *
+     * The white PCB alone read as dull, and this is the platform's own colour -
+     * the same #ff6d00 the original rover icon used for its top plate, and the
+     * orange 4tronix print the photos show on the real board. One warm stripe is
+     * enough; the rover still reads as the white robot it is.
+     */
+    ctx.fillStyle = '#ff6d00';
+    ctx.beginPath();
+    ctx.roundRect(-halfW + 3 * scale, -halfH + 4.5 * scale, bw - 6 * scale, bh * 0.16, 2.5 * scale);
+    ctx.fill();
+    // A darker lower lip, so the band has a little depth rather than sitting flat.
+    ctx.fillStyle = 'rgba(150,55,0,0.45)';
+    ctx.beginPath();
+    ctx.roundRect(-halfW + 3 * scale, -halfH + 4.5 * scale + bh * 0.115, bw - 6 * scale, bh * 0.045, 1.6 * scale);
+    ctx.fill();
     // PCB mounting holes along the edges.
     ctx.fillStyle = 'rgba(90,95,100,0.5)';
     for (let i = 0; i < 5; i++) {
