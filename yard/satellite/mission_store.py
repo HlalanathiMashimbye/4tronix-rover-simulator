@@ -451,18 +451,16 @@ def get_conflicts(limit=50):
     return [dict(r) for r in rows]
 
 
-# --- Local mission locking (plan PR 1 semantics, PR 3 storage) -------------
+# --- Mission-level writes, review flow, and sync metadata -------------------
 #
-# PR 1 acquired the lock with a Firestore transaction inside the request. PR 3
-# takes Firestore out of the request path entirely so the console works with no
-# internet, which means the lock has to move here. Losing the lock in the move
-# would reintroduce the plan's defect A - two operators both read 'queued',
-# both dispatch, and the rover runs the mission twice.
+# This header used to describe mission locking, which no longer exists: the
+# lease went with AB#364, and per-yard runs removed what it arbitrated. What
+# remains here writes mission-level state and drives the needs-review flow.
 #
-# So this keeps the same decision logic, made atomic by SQLite instead:
-# BEGIN IMMEDIATE takes a write lock before the read, so a second caller waits
-# rather than reading stale state. Contention is within one satellite, which is
-# the only contention that exists (plan section 9: one yard, yardId-scoped).
+# The one piece of that reasoning still worth keeping: BEGIN IMMEDIATE takes a
+# write lock before the read, so a second caller waits rather than acting on
+# stale state. That is what makes a duplicate Send safe now that the guard is
+# simply "is this run already processing" - see acquire_run.
 
 def _enqueue(conn, mission_id, op, payload):
     """Append to the outbox on an already-open transaction."""
@@ -1234,7 +1232,7 @@ def _enqueue_run(conn, mission_id, yard_id, op, payload):
 
 # --- Backfill: migrate existing missions to implicit runs (User Story 361) ----
 
-# --- Backward compatibility (deprecated, routed to runs) ----
+# --- Backfill: missions that predate the run model --------------------------
 
 def backfill_missions_to_runs():
     """Create one implicit run per mission with existing execution state.
