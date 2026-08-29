@@ -106,13 +106,20 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
  * simulator rather than measured from anything, so the yard was always the
  * free parameter.
  *
- * At 160x120 a default square fills about a sixth of the yard, a ten-second
- * one about half, and 1.6m x 1.2m is a believable floor mat for a robot this
- * slow. rover-physics.ts bounds the rover to the same numbers, and the two
- * must not drift.
+ * At 120x90 a default square fills about a fifth of the yard and a ten-second
+ * one most of it. 1.2m x 0.9m is a believable floor mat for a robot this slow.
+ *
+ * NOTE THE TRADE. With the rover drawn at its true 20cm, its size on screen IS
+ * the yard size: it is a sixth of the width here, an eighth at 160, a twelfth
+ * at 240. Wanting a bigger square and a smaller rover pulls this number in
+ * opposite directions, and the way out is longer default drive times rather
+ * than a smaller world.
+ *
+ * rover-physics.ts bounds the rover to the same numbers, and the two must not
+ * drift.
  */
-export const YARD_W = 160;
-export const YARD_H = 120;
+export const YARD_W = 120;
+export const YARD_H = 90;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
 const MARGIN = 10; // px inset so the rover never clips the panel edge
 
@@ -129,12 +136,12 @@ const RR = '13';
  * always did as a fraction of the ground.
  */
 const CRATERS: [number, number, number][] = [
-  [-52, 32, 14],
-  [36, 24, 10],
-  [56, -28, 16],
-  [-36, -36, 9],
-  [8, 48, 7],
-  [-64, -12, 6],
+  [-39, 24, 10],
+  [27, 18, 8],
+  [42, -21, 12],
+  [-27, -27, 7],
+  [6, 36, 5],
+  [-48, -9, 5],
 ];
 
 /**
@@ -255,11 +262,10 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
     ctx.fill();
   }
 
-  // Faint measurement grid every 20cm, which gives the same handful of
-  // divisions the original had at 50cm in a 400cm yard.
+  // Faint measurement grid every 15cm, keeping the same handful of divisions.
   ctx.strokeStyle = P.grid;
   ctx.lineWidth = 1;
-  for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 20) {
+  for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 15) {
     const [sx] = worldToScreen(L, gx, 0);
     if (sx < -2 || sx > w + 2) continue;
     ctx.beginPath();
@@ -267,7 +273,7 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
     ctx.lineTo(sx, h);
     ctx.stroke();
   }
-  for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 20) {
+  for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 15) {
     const [, sy] = worldToScreen(L, 0, gy);
     if (sy < -2 || sy > h + 2) continue;
     ctx.beginPath();
@@ -368,8 +374,12 @@ function drawRover(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint, t 
    * The floor keeps it legible on a small panel, where the whole yard might
    * only be 200px wide.
    */
+  // 200mm long, 185mm wide, per the 4tronix spec. Divided by the DRAWN extent
+  // rather than the chassis: the ultrasonic head adds about 6.4 units past the
+  // body, so mapping 20cm onto bh alone drew the whole rover a third too large.
   const ROVER_LENGTH_CM = 20;
-  const scale = Math.max(0.75, (ROVER_LENGTH_CM * L.s) / 38);
+  const DRAWN_LENGTH_UNITS = 44.4; // body (38) + head overhang (~6.4)
+  const scale = Math.max(0.7, (ROVER_LENGTH_CM * L.s) / DRAWN_LENGTH_UNITS);
   const bw = 30 * scale;
   const bh = 38 * scale;
   const halfW = bw / 2;
