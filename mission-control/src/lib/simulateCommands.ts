@@ -12,7 +12,9 @@ export interface TrajectoryPoint {
 }
 
 // Match the canvas playback rate (RoverSimulator advances at 10 fps).
-const STEP_SECONDS = 0.1;
+/** Seconds of simulated time per trajectory point. Exported so the
+ * mission page can turn a trajectory length back into a duration. */
+export const STEP_SECONDS = 0.1;
 
 /**
  * Run a list of generated rover commands through the client-side physics model

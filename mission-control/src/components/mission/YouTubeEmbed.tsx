@@ -25,9 +25,10 @@ import { Play, ExternalLink } from 'lucide-react';
 interface YouTubeEmbedProps {
   youtubeId: string;
   title: string;
+  showFallbackLink?: boolean;
 }
 
-export function YouTubeEmbed({ youtubeId, title }: YouTubeEmbedProps) {
+export function YouTubeEmbed({ youtubeId, title, showFallbackLink = true }: YouTubeEmbedProps) {
   const [playing, setPlaying] = useState(false);
   const watchUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
 
@@ -63,15 +64,17 @@ export function YouTubeEmbed({ youtubeId, title }: YouTubeEmbedProps) {
           </button>
         )}
       </div>
-      <a
-        href={watchUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 self-end text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-      >
-        Watch on YouTube
-        <ExternalLink className="h-3 w-3" />
-      </a>
+      {showFallbackLink && (
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 self-end text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Open on YouTube
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
     </div>
   );
 }

@@ -1,7 +1,18 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Blocks, Code2, Loader2, Radio } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  AlertTriangle,
+  Blocks,
+  Check,
+  Code2,
+  Copy,
+  Hourglass,
+  Loader2,
+  Radio,
+  Rocket,
+  Layers,
+} from 'lucide-react';
 
 import {
   subscribeToYardQueue,
@@ -14,6 +25,8 @@ import {
   yardLabel,
 } from '@/infrastructure/config/yards';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
+import { MobileSearch } from '@/components/layout/MobileSearch';
+import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
 
 /**
  * The live queue for the yard this operator has selected (AB#375/376/377).
@@ -52,6 +65,57 @@ function YardQueue({ yardId }: { yardId: string }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function copyCode(mission: QueueMission) {
+    try {
+      await navigator.clipboard.writeText(mission.code);
+      setCopiedId(mission.id);
+      // Long enough to read, short enough that the next copy is unambiguous.
+      window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
+    } catch {
+      // Clipboard access can be refused (insecure origin, denied permission).
+      // Say so rather than showing "Copied" over an empty clipboard, which
+      // would send an operator to paste nothing into the yard.
+      window.prompt('Copy this, then paste it into the yard code editor:', mission.code);
+    }
+  }
+
+  const { query, activeFilter } = useSearch();
+
+  // The same control the learner feed uses, for the same reason: an operator
+  // at a busy event is looking for one mission among a queue, and asking them
+  // to read down a list is the thing search exists to avoid. Registered here
+  // so the navbar renders it, exactly as the feed does.
+  const counts = useMemo(() => {
+    const all = missions ?? [];
+    return {
+      all: all.length,
+      queued: all.filter((m) => m.status === 'queued').length,
+      processing: all.filter((m) => m.status === 'processing').length,
+      review: all.filter((m) => m.needsReview).length,
+    };
+  }, [missions]);
+
+  useRegisterSearchFilters([
+    { key: 'all', label: 'All in queue', count: counts.all, icon: Layers },
+    { key: 'queued', label: 'Waiting', count: counts.queued, icon: Hourglass },
+    { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
+    { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
+  ]);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return (missions ?? []).filter((m) => {
+      if (activeFilter === 'review' && !m.needsReview) return false;
+      if (activeFilter === 'queued' && m.status !== 'queued') return false;
+      if (activeFilter === 'processing' && m.status !== 'processing') return false;
+      if (!q) return true;
+      // Name and code, the same two fields the learner feed searches. There is
+      // deliberately nothing about the learner to search on - see above.
+      return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
+    });
+  }, [missions, query, activeFilter]);
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -97,32 +161,48 @@ function YardQueue({ yardId }: { yardId: string }) {
 
   if (missions.length === 0) {
     return (
-      <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
-        <div className="max-w-sm space-y-2">
-          <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
-          <p className="text-sm text-muted-foreground">
-            No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
-            appear here as learners send them.
-          </p>
+      <>
+        <MobileSearch />
+        <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
+          <div className="max-w-sm space-y-2">
+            <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
+            <p className="text-sm text-muted-foreground">
+              No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
+              appear here as learners send them.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
+    <>
+    <MobileSearch />
     <div className="clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
           Queue{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
-            ({missions.length} at {yardLabel(yardId) ?? yardId})
+            ({visible.length === missions.length
+              ? `${missions.length} at ${yardLabel(yardId) ?? yardId}`
+              : `${visible.length} of ${missions.length} at ${yardLabel(yardId) ?? yardId}`})
           </span>
         </h2>
       </div>
 
+      {/* A filter that matches nothing is not an empty yard, and saying so
+          stops an operator concluding the queue broke. */}
+      {visible.length === 0 && (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          No mission in this queue matches that. Clear the search or pick a
+          different filter.
+        </p>
+      )}
+
       <ol className="mt-3 grid gap-2">
-        {missions.map((mission, index) => {
+        {visible.map((mission, index) => {
           const isOpen = expanded === mission.id;
 
           return (
@@ -165,6 +245,30 @@ function YardQueue({ yardId }: { yardId: string }) {
                   </span>
                 )}
 
+                {/* The manual bridge to the yard, and deliberately manual.
+                    Mission Control cannot reach the satellite: it is behind
+                    carrier NAT with no inbound path, which is why Firestore is
+                    the only channel between them. So the operator keeps both
+                    open in tabs, copies the Python here, and pastes it into
+                    the yard's /code/ editor to run.
+
+                    This is a fallback that should survive automated dispatch
+                    rather than be replaced by it - it is the path that works
+                    when the venue's internet does not. */}
+                <button
+                  onClick={() => copyCode(mission)}
+                  disabled={!mission.code}
+                  title="Copy the Python, then paste it into the yard's code editor"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {copiedId === mission.id ? (
+                    <Check className="h-3 w-3 text-primary" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedId === mission.id ? 'Copied' : 'Copy'}
+                </button>
+
                 <button
                   onClick={() => setExpanded(isOpen ? null : mission.id)}
                   className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
@@ -200,5 +304,6 @@ function YardQueue({ yardId }: { yardId: string }) {
         })}
       </ol>
     </div>
+    </>
   );
 }

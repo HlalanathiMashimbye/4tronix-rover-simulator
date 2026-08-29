@@ -104,19 +104,44 @@ export default function RootLayout({
             kept subtle so the UI reads like a punchy video feed, not a glow.
             Hidden under light mode - see [data-theme="light"] .starfield in
             globals.css. */}
-        <div className="pointer-events-none fixed -inset-[1200px] -z-10 starfield opacity-40 animate-drift" />
+        {/* One clipping layer for every decorative element.
 
-        {/* Planets and shooting stars for a livelier backdrop */}
-        <div className="pointer-events-none fixed top-12 left-8 -z-5 planet planet--small animate-orbit" />
-        <div className="pointer-events-none fixed top-32 right-24 -z-5 planet planet--large" />
-        <div className="pointer-events-none fixed -z-5">
-          <div className="shooting-star animate-shoot" style={{ top: '14vh', left: '6vw', animationDelay: '0s' }} />
-          <div className="shooting-star animate-shoot" style={{ top: '28vh', left: '40vw', animationDelay: '2s' }} />
-          <div className="shooting-star animate-shoot" style={{ top: '8vh', left: '72vw', animationDelay: '4s' }} />
+            All of these bleed past the viewport on purpose - a starfield at
+            -inset-[1200px], a 560px glow anchored beyond the bottom-right
+            corner, shooting stars starting at 72vw. Nothing clipped them, so
+            they grew the document's scroll width and a phone could be swiped
+            26px sideways into empty space.
+
+            The children are `absolute`, not `fixed`. A fixed element is
+            positioned against the viewport rather than against an
+            overflow-hidden ancestor, so the clip would simply never have
+            applied. This layer is already viewport-sized, so absolute puts
+            them in exactly the same place and makes them clippable.
+
+            overflow-hidden here rather than on the body: this clips exactly
+            the things that are meant to be clipped, and leaves a real content
+            overflow still able to show itself rather than being silently
+            swallowed. pointer-events-none is repeated on the children, but
+            having it on the layer means nothing new added inside can
+            accidentally intercept a tap. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 -z-10 overflow-hidden"
+        >
+          <div className="pointer-events-none absolute -inset-[1200px] -z-10 starfield opacity-40 animate-drift" />
+
+          {/* Planets and shooting stars for a livelier backdrop */}
+          <div className="pointer-events-none absolute top-12 left-8 -z-5 planet planet--small animate-orbit" />
+          <div className="pointer-events-none absolute top-32 right-24 -z-5 planet planet--large" />
+          <div className="pointer-events-none absolute -z-5">
+            <div className="shooting-star animate-shoot" style={{ top: '14vh', left: '6vw', animationDelay: '0s' }} />
+            <div className="shooting-star animate-shoot" style={{ top: '28vh', left: '40vw', animationDelay: '2s' }} />
+            <div className="shooting-star animate-shoot" style={{ top: '8vh', left: '72vw', animationDelay: '4s' }} />
+          </div>
+
+          {/* One restrained Mars glow anchored in a corner for warmth (no neon). */}
+          <div className="pointer-events-none absolute -bottom-72 -right-52 h-[560px] w-[560px] rounded-full bg-gradient-mars opacity-[0.14] blur-3xl" />
         </div>
-
-        {/* One restrained Mars glow anchored in a corner for warmth (no neon). */}
-        <div className="pointer-events-none fixed -bottom-72 -right-52 h-[560px] w-[560px] rounded-full bg-gradient-mars opacity-[0.14] blur-3xl" />
 
         <PostHogAnalytics>
           <ThemeProvider>
