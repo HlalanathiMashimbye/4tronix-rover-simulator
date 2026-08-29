@@ -14,6 +14,7 @@ import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { yardLabel } from '@/infrastructure/config/yards';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
+import { durationLabel } from '@/lib/missionDuration';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 
@@ -106,8 +107,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   const starred = isFavorite(mission.id);
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
-  const durationMs = mission.executionMetadata?.duration_ms;
-  const durationLabel = durationMs ? `${Math.round(durationMs / 1000)}s` : 'Not yet';
+  // Was mission.executionMetadata?.duration_ms - a key no mission document
+  // has ever carried, so this always read "Not yet", including under footage
+  // of a rover that had clearly finished. See lib/missionDuration.
+  const duration = durationLabel(simTrajectory, selectedRun);
   const dateLabel = new Date(mission.completedAt || mission.submittedAt).toLocaleDateString();
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
@@ -202,7 +205,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
               />
               <div className="grid shrink-0 grid-cols-3 gap-2">
                 <Stat label="Status" value={discoveryStatus} />
-                <Stat label="Duration" value={durationLabel} mono />
+                <Stat label="Duration" value={duration} mono />
                 <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
               </div>
             </div>

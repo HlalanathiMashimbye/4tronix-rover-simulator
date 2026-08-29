@@ -31,6 +31,9 @@ export interface RunOption {
   youtubeId?: string;
   /** Poster frame for a real run, straight from YouTube. */
   thumbnailUrl?: string;
+  /** Carried so the Duration stat can describe the run being watched. */
+  startedAt?: string | null;
+  completedAt?: string | null;
 }
 
 /** The YouTube id in a watch/share/embed URL, or null if there isn't one. */
@@ -93,6 +96,8 @@ export function buildRunOptions(
       kind: 'real',
       youtubeId,
       thumbnailUrl: thumbnailFor(youtubeId),
+      startedAt: run.startedAt,
+      completedAt: run.completedAt,
     });
   }
 
