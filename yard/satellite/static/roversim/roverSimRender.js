@@ -9,14 +9,15 @@
  */
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE = {
-    backdrop: '#1a0f0a',
-    groundInner: '#7c4a2b',
-    groundMid: '#5a3320',
-    groundOuter: '#34190d',
-    craterCore: 'rgba(0,0,0,0.28)',
-    craterMid: 'rgba(0,0,0,0.10)',
-    craterRim: 'rgba(255,210,170,0.05)',
-    grid: 'rgba(255,190,150,0.08)',
+    backdrop: '#3a1a10',
+    // Proper Mars red, not brown. The old ground read as mud; this is regolith.
+    groundInner: '#a0492d',
+    groundMid: '#8a3b22',
+    groundOuter: '#5c2413',
+    craterCore: 'rgba(30,12,7,0.60)', // dark basin
+    craterMid: 'rgba(40,18,10,0.45)', // shadowed rim ring
+    craterRim: 'rgba(150,75,45,0.55)', // sunlit inner wall
+    grid: 'rgba(255,190,150,0.045)',
     vignetteTop: 'rgba(0,0,0,0.30)',
     vignetteBottom: 'rgba(0,0,0,0.35)',
     border: 'rgba(255,109,0,0.55)',
@@ -26,9 +27,12 @@ export const DARK_SIM_PALETTE = {
     rockDark: 'rgba(64,35,20,0.95)',
     rockShadow: 'rgba(24,10,4,0.42)',
     rockHighlight: 'rgba(255,230,200,0.28)',
-    craterLip: 'rgba(255,226,190,0.22)',
+    craterLip: 'rgba(210,130,90,0.30)',
     dustLight: 'rgba(255,225,190,0.10)',
     dustDark: 'rgba(60,25,10,0.16)',
+    mottleLight: 'rgba(255,205,160,0.055)',
+    mottleDark: 'rgba(30,12,4,0.075)',
+    rippleInk: 'rgba(45,16,6,0.11)',
 };
 /**
  * Paper & Ink: sunlit regolith rather than night. Tuned to sit inside the
@@ -41,10 +45,10 @@ export const LIGHT_SIM_PALETTE = {
     groundInner: '#e3d5bf',
     groundMid: '#cfbda2',
     groundOuter: '#b6a086',
-    craterCore: 'rgba(88,66,42,0.20)',
-    craterMid: 'rgba(88,66,42,0.08)',
-    craterRim: 'rgba(255,252,245,0.55)',
-    grid: 'rgba(88,66,42,0.12)',
+    craterCore: 'rgba(88,66,42,0.34)',
+    craterMid: 'rgba(88,66,42,0.24)',
+    craterRim: 'rgba(255,246,228,0.38)',
+    grid: 'rgba(88,66,42,0.08)',
     vignetteTop: 'rgba(88,66,42,0.16)',
     vignetteBottom: 'rgba(88,66,42,0.20)',
     border: 'rgba(45,38,30,0.28)',
@@ -56,8 +60,11 @@ export const LIGHT_SIM_PALETTE = {
     rockShadow: 'rgba(96,72,46,0.30)',
     rockHighlight: 'rgba(255,253,246,0.55)',
     craterLip: 'rgba(255,253,246,0.60)',
-    dustLight: 'rgba(255,252,244,0.35)',
+    dustLight: 'rgba(255,252,244,0.18)',
     dustDark: 'rgba(96,72,46,0.14)',
+    mottleLight: 'rgba(255,253,246,0.11)',
+    mottleDark: 'rgba(122,96,66,0.07)',
+    rippleInk: 'rgba(96,72,46,0.13)',
 };
 // The physical yard (matches the Qt simulator: 400 x 300 cm).
 /**
@@ -119,6 +126,11 @@ const ROCKS = [
     [228, -186, 14, 0.78], [-24, -96, 7, 0.88], [152, -62, 8, 0.8],
     [-368, 178, 17, 0.75], [352, 132, 13, 0.82], [-338, -212, 11, 0.78],
 ];
+/** Seeded 0..1, so scenery is identical on every frame and every reload. */
+function rand(i, salt = 1) {
+    const v = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+    return v - Math.floor(v);
+}
 /** Deterministic speckle, so the dust does not crawl between frames. */
 function dustAt(i) {
     const a = Math.sin(i * 12.9898) * 43758.5453;
@@ -155,104 +167,102 @@ export function interpolate(traj, p) {
         leds: a.leds,
     };
 }
+/**
+ * The terrain is painted ONCE and cached.
+ *
+ * Everything on the ground is static, and the playback loop redraws at 10fps -
+ * paying for gradients, four hundred grains of dust and every crater on every
+ * frame bought nothing. Caching it to an offscreen canvas means the per-frame
+ * cost is one drawImage, and in exchange the ground can afford to be rich:
+ * mottled sand, wind ripples, rocks with actual shapes.
+ *
+ * Keyed on size and palette, so a resize or a theme flip repaints it and
+ * nothing else does.
+ */
+let terrainCache = null;
 function drawTerrain(ctx, L, P) {
+    const key = `${L.w}x${L.h}@${L.s.toFixed(4)}:${P.groundInner}`;
+    if (terrainCache?.key !== key) {
+        const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+        const off = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+        const g = off?.getContext('2d');
+        if (!off || !g) {
+            // No offscreen canvas (test environments) - paint straight through.
+            paintTerrain(ctx, L, P);
+            return;
+        }
+        off.width = Math.max(1, Math.round(L.w * dpr));
+        off.height = Math.max(1, Math.round(L.h * dpr));
+        g.scale(dpr, dpr);
+        paintTerrain(g, L, P);
+        terrainCache = { key, canvas: off };
+    }
+    ctx.drawImage(terrainCache.canvas, 0, 0, L.w, L.h);
+}
+function paintTerrain(ctx, L, P) {
     const { w, h, s } = L;
-    /**
-     * THE GROUND COVERS THE WHOLE PANEL, not just the driveable yard.
-     *
-     * The yard is 4:3 and the panel rarely is, so fitting one inside the other
-     * left bars of dead background above and below: a small box floating in the
-     * dark, which is what made the arena feel cramped however large the numbers
-     * were. Mars now runs to every edge and the fence sits on top of it, so the
-     * play area reads as part of a bigger place rather than the whole world.
-     */
-    const ground = ctx.createRadialGradient(w / 2, h * 0.38, Math.min(w, h) * 0.05, w / 2, h * 0.5, Math.max(w, h) * 0.75);
+    // Base wash, lit from the same corner as everything else.
+    const ground = ctx.createRadialGradient(w * 0.42, h * 0.34, Math.min(w, h) * 0.05, w / 2, h / 2, Math.max(w, h) * 0.8);
     ground.addColorStop(0, P.groundInner);
     ground.addColorStop(0.5, P.groundMid);
     ground.addColorStop(1, P.groundOuter);
     ctx.fillStyle = ground;
     ctx.fillRect(0, 0, w, h);
-    // Dust and grit, thickest toward the edges where the light falls off.
-    for (let i = 1; i <= 420; i++) {
-        const [rx, ry, rv] = dustAt(i);
-        const px = rx * w;
-        const py = ry * h;
-        const size = 0.6 + rv * 1.7;
-        ctx.fillStyle = rv > 0.55 ? P.dustLight : P.dustDark;
-        ctx.beginPath();
-        ctx.arc(px, py, size, 0, Math.PI * 2);
-        ctx.fill();
-    }
     /**
-     * Craters, dug rather than drawn.
+     * Mottling: broad soft patches of lighter and darker sand.
      *
-     * Three passes: a shadow crescent on the far side of the light, the bowl
-     * itself, and a lit rim on the near side. A single radial gradient reads as a
-     * smudge; this reads as a hole.
+     * This is most of the difference between "brown rectangle" and "ground".
+     * Real regolith is blotchy at every scale, so two sizes of patch are layered
+     * - wide drifts first, smaller variation on top.
      */
-    for (const [cx, cy, cr] of CRATERS) {
-        const [px, py] = worldToScreen(L, cx, cy);
-        const r = cr * s;
-        if (r <= 0.5)
-            continue;
-        // Raised rim, catching the light on one side.
-        const rim = ctx.createRadialGradient(px, py, r * 0.82, px, py, r * 1.12);
-        rim.addColorStop(0, 'rgba(0,0,0,0)');
-        rim.addColorStop(0.5, P.craterLip);
-        rim.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = rim;
-        ctx.beginPath();
-        ctx.arc(px, py, r * 1.12, 0, Math.PI * 2);
-        ctx.fill();
-        // The bowl, offset toward the light so the far wall stays dark.
-        const cg = ctx.createRadialGradient(px - LIGHT.x * r * 0.45, py - LIGHT.y * r * 0.45, r * 0.12, px, py, r);
-        cg.addColorStop(0, P.craterCore);
-        cg.addColorStop(0.72, P.craterMid);
-        cg.addColorStop(1, P.craterRim);
-        ctx.fillStyle = cg;
+    for (let i = 1; i <= 150; i++) {
+        const px = rand(i, 2) * w;
+        const py = rand(i, 3) * h;
+        const r = (i <= 60 ? 40 + rand(i, 4) * 90 : 12 + rand(i, 4) * 30) * Math.max(0.6, s / 1.2);
+        const light = rand(i, 5) > 0.5;
+        const blob = ctx.createRadialGradient(px, py, 0, px, py, r);
+        blob.addColorStop(0, light ? P.mottleLight : P.mottleDark);
+        blob.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = blob;
         ctx.beginPath();
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
-        // Bright lip on the lit edge, the detail that sells the depth.
-        ctx.save();
-        ctx.strokeStyle = P.craterLip;
-        ctx.lineWidth = Math.max(1, r * 0.08);
-        ctx.beginPath();
-        ctx.arc(px, py, r * 0.96, Math.PI * 0.85, Math.PI * 1.85);
-        ctx.stroke();
-        ctx.restore();
     }
     /**
-     * Boulders. Each one is a shadow, a body, and a highlight, all agreeing on
-     * where the light is.
+     * Wind ripples: short, near-horizontal curved strokes, all bowing the same
+     * way, as if one prevailing wind combed the sand. Random directions here
+     * would read as scratches.
      */
-    for (const [cx, cy, cr, round] of ROCKS) {
-        const [px, py] = worldToScreen(L, cx, cy);
-        const r = cr * s;
-        if (r <= 0.5)
-            continue;
-        ctx.fillStyle = P.rockShadow;
+    ctx.strokeStyle = P.rippleInk;
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = 'round';
+    for (let i = 1; i <= 22; i++) {
+        const px = rand(i, 6) * w;
+        const py = rand(i, 7) * h;
+        const r = (18 + rand(i, 8) * 36) * Math.max(0.6, s / 1.2);
+        ctx.save();
+        ctx.translate(px, py);
+        // One prevailing wind: every dune leans the same way, with only a little
+        // scatter. Random rotations made them read as scratches.
+        ctx.rotate(0.35 + (rand(i, 9) - 0.5) * 0.4);
+        for (let k = 0; k < 3; k++) {
+            ctx.beginPath();
+            ctx.ellipse(0, 0, r * (0.5 + k * 0.25), r * 0.15, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    // Fine grit on top of the ripples.
+    for (let i = 1; i <= 420; i++) {
+        const [rx, ry, rv] = dustAt(i);
+        ctx.fillStyle = rv > 0.55 ? P.dustLight : P.dustDark;
         ctx.beginPath();
-        ctx.ellipse(px - LIGHT.x * r * 1.5, py - LIGHT.y * r * 1.5, r * 1.15, r * 0.72, 0, 0, Math.PI * 2);
-        ctx.fill();
-        const body = ctx.createRadialGradient(px + LIGHT.x * r * 0.5, py + LIGHT.y * r * 0.5, r * 0.15, px, py, r);
-        body.addColorStop(0, P.rockLit);
-        body.addColorStop(0.6, P.rockMid);
-        body.addColorStop(1, P.rockDark);
-        ctx.fillStyle = body;
-        ctx.beginPath();
-        ctx.ellipse(px, py, r, r * round, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = P.rockHighlight;
-        ctx.beginPath();
-        ctx.ellipse(px + LIGHT.x * r * 0.42, py + LIGHT.y * r * 0.42, r * 0.34, r * 0.22 * round, 0, 0, Math.PI * 2);
+        ctx.arc(rx * w, ry * h, 0.6 + rv * 1.7, 0, Math.PI * 2);
         ctx.fill();
     }
-    // Measurement grid, every 80 cm now the yard is larger.
+    // Grid: runs off every edge, like the ground it is drawn on.
     ctx.strokeStyle = P.grid;
     ctx.lineWidth = 1;
-    // Runs off every edge, like the ground it is drawn on. Stopping the lines at
-    // the yard would put the box straight back.
     for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 80) {
         const [sx] = worldToScreen(L, gx, 0);
         if (sx < -2 || sx > w + 2)
@@ -271,8 +281,85 @@ function drawTerrain(ctx, L, P) {
         ctx.lineTo(w, sy);
         ctx.stroke();
     }
-    // Vignette over the whole panel, which is what frames the scene now that
-    // nothing else does.
+    /**
+     * Craters, dug rather than drawn: raised rim, a bowl offset toward the
+     * light, a bright lip on the near edge, and a few flecks of rubble in the
+     * bowl so the floor is not a perfect gradient.
+     */
+    let craterIndex = 0;
+    for (const [cx, cy, cr] of CRATERS) {
+        craterIndex++;
+        const [px, py] = worldToScreen(L, cx, cy);
+        const r = cr * s;
+        if (r <= 0.5)
+            continue;
+        // Four concentric passes: shadow rim, sunlit inner wall offset toward the
+        // light, dark basin, highlight lip. Offset rings carry the depth; a single
+        // gradient never did.
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.fillStyle = P.craterMid;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px + LIGHT.x * r * 0.12, py + LIGHT.y * r * 0.12, r * 0.82, 0, Math.PI * 2);
+        ctx.fillStyle = P.craterRim;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, r * 0.62, 0, Math.PI * 2);
+        ctx.fillStyle = P.craterCore;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.strokeStyle = P.craterLip;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Rubble on the basin floor.
+        for (let f = 1; f <= 4; f++) {
+            const fa = rand(craterIndex * 13 + f, 14) * Math.PI * 2;
+            const fr = rand(craterIndex * 13 + f, 15) * r * 0.5;
+            ctx.fillStyle = P.dustDark;
+            ctx.beginPath();
+            ctx.arc(px + Math.cos(fa) * fr, py + Math.sin(fa) * fr, 1 + rand(f, 16) * r * 0.06, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    /**
+     * Boulders. Irregular outlines - eight points at wobbling radii - because an
+     * ellipse reads as a sticker and a lumpy polygon reads as a rock. Shadow,
+     * body and highlight all agree on where the light is.
+     */
+    let rockIndex = 0;
+    for (const [cx, cy, cr, round] of ROCKS) {
+        rockIndex++;
+        const [px, py] = worldToScreen(L, cx, cy);
+        const r = cr * s;
+        if (r <= 0.5)
+            continue;
+        ctx.fillStyle = P.rockShadow;
+        ctx.beginPath();
+        ctx.ellipse(px - LIGHT.x * r * 1.5, py - LIGHT.y * r * 1.5, r * 1.15, r * 0.72, 0, 0, Math.PI * 2);
+        ctx.fill();
+        const outline = [];
+        for (let k = 0; k < 8; k++) {
+            const a = (k / 8) * Math.PI * 2;
+            const wobble = 0.72 + rand(rockIndex * 8 + k, 17) * 0.38;
+            outline.push([px + Math.cos(a) * r * wobble, py + Math.sin(a) * r * wobble * round]);
+        }
+        const body = ctx.createRadialGradient(px + LIGHT.x * r * 0.5, py + LIGHT.y * r * 0.5, r * 0.15, px, py, r);
+        body.addColorStop(0, P.rockLit);
+        body.addColorStop(0.6, P.rockMid);
+        body.addColorStop(1, P.rockDark);
+        ctx.fillStyle = body;
+        ctx.beginPath();
+        outline.forEach(([ox2, oy2], k) => (k === 0 ? ctx.moveTo(ox2, oy2) : ctx.lineTo(ox2, oy2)));
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = P.rockHighlight;
+        ctx.beginPath();
+        ctx.ellipse(px + LIGHT.x * r * 0.42, py + LIGHT.y * r * 0.42, r * 0.34, r * 0.22 * round, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    // Vignette over the whole panel, which is what frames the scene now.
     const vg = ctx.createLinearGradient(0, 0, 0, h);
     vg.addColorStop(0, P.vignetteTop);
     vg.addColorStop(0.18, 'rgba(0,0,0,0)');
@@ -294,27 +381,51 @@ function drawTerrain(ctx, L, P) {
     ctx.beginPath();
     ctx.arc(hx, hy, 13, 0, Math.PI * 2);
     ctx.fill();
-    /*
-     * NO FENCE.
-     *
-     * There used to be a rounded rectangle around the driveable area, which put
-     * a square inside a square: a box floating on a panel that is itself a box.
-     * The ground now simply carries on to every edge, which is what a yard on
-     * Mars would actually look like from above.
-     *
-     * The boundary still exists in the physics, and the rover still cannot leave
-     * it. When it reaches the edge, drawWallHit says so at the point of contact -
-     * which is a better way to learn where the edge is than a line drawn around
-     * everything for the whole run.
-     */
 }
 function drawTrail(ctx, L, traj, endIdx, P) {
     if (endIdx <= 0)
         return;
+    /**
+     * Tyre tracks, not a painted line.
+     *
+     * Two rows of dark prints pressed into the sand, offset either side of the
+     * path - what a rover actually leaves behind. The themed dotted line rides
+     * down the middle on top, so the child still reads it as "the route I
+     * programmed" at a glance.
+     */
+    ctx.save();
+    ctx.fillStyle = 'rgba(35,16,9,0.42)';
+    let lastX = NaN;
+    let lastY = NaN;
+    for (let i = 0; i <= endIdx && i < traj.length; i++) {
+        const [sx, sy] = worldToScreen(L, traj[i].x, traj[i].y);
+        const dx = sx - lastX;
+        const dy = sy - lastY;
+        const dist = Math.hypot(dx, dy);
+        // A print every few px of travel; standing still leaves no tracks.
+        if (!(dist >= 6)) {
+            if (Number.isNaN(lastX)) {
+                lastX = sx;
+                lastY = sy;
+            }
+            continue;
+        }
+        const nx = -dy / dist; // perpendicular to travel
+        const ny = dx / dist;
+        for (const side of [-7, 7]) {
+            ctx.beginPath();
+            ctx.arc(sx + nx * side, sy + ny * side, 1.8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        lastX = sx;
+        lastY = sy;
+    }
+    // The programmed route, dotted down the centre.
     ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     ctx.lineWidth = 4;
     ctx.strokeStyle = P.trail;
+    ctx.globalAlpha = 0.75;
+    ctx.setLineDash([0.1, 12]);
     ctx.beginPath();
     for (let i = 0; i <= endIdx && i < traj.length; i++) {
         const [sx, sy] = worldToScreen(L, traj[i].x, traj[i].y);
@@ -324,17 +435,15 @@ function drawTrail(ctx, L, traj, endIdx, P) {
             ctx.lineTo(sx, sy);
     }
     ctx.stroke();
+    ctx.restore();
 }
-function drawRover(ctx, L, st) {
+function drawRover(ctx, L, st, t = 0) {
     const [cx, cy] = worldToScreen(L, st.x, st.y);
     /**
-     * Deliberately bigger than scale, and bigger again since the yard grew.
-     *
-     * A true-to-scale rover in a 640cm yard is a speck. The learner has to be
-     * able to see which way it is pointing, whether its wheels have turned, and
-     * now which of its four lamps are lit - none of which survive at true size on
-     * a panel this size. The yard is the honest measurement; the rover is an icon
-     * standing in the right place.
+     * Deliberately bigger than scale. A true-to-scale rover in a 640cm yard is a
+     * speck: the learner has to see which way it points, whether the wheels have
+     * turned, and which lamps are lit. The yard is the honest measurement; the
+     * rover is a character standing in the right place.
      */
     const scale = Math.max(1.15, Math.min(2.6, L.s / 0.85));
     const bw = 30 * scale;
@@ -344,9 +453,8 @@ function drawRover(ctx, L, st) {
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate((st.heading * Math.PI) / 180); // front points along heading
-    // Contact shadow, thrown away from the same light the terrain uses. Drawn
-    // before the rotate would have pinned it to the body, so it stays put on the
-    // ground as the rover turns.
+    // Contact shadow, thrown by the same light as the terrain. Drawn in an
+    // unrotated frame so it stays on the ground as the body turns.
     ctx.save();
     ctx.rotate((-st.heading * Math.PI) / 180);
     ctx.fillStyle = 'rgba(20,8,2,0.38)';
@@ -354,29 +462,31 @@ function drawRover(ctx, L, st) {
     ctx.ellipse(-LIGHT.x * 7, -LIGHT.y * 7, halfW + 6, halfH * 0.72, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    const wheelH = 11 * scale;
+    // Chunky wheels with two tread lines each - toy-like on purpose.
+    const wheelH = 12.5 * scale;
     const wheel = (lx, ly, angle) => {
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate((angle * Math.PI) / 180);
-        ctx.fillStyle = '#0f172a';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(-3.1 * scale, -wheelH / 2, 6.2 * scale, wheelH, 2.6 * scale);
-        ctx.fill();
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(148,163,184,0.7)';
+        ctx.fillStyle = '#1c2536';
+        ctx.strokeStyle = '#0a0f1a';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.moveTo(-2 * scale, 0);
-        ctx.lineTo(2 * scale, 0);
+        ctx.roundRect(-3.6 * scale, -wheelH / 2, 7.2 * scale, wheelH, 3 * scale);
+        ctx.fill();
         ctx.stroke();
+        ctx.strokeStyle = 'rgba(148,163,184,0.65)';
+        ctx.lineWidth = 1.2;
+        for (const ty of [-wheelH * 0.22, wheelH * 0.22]) {
+            ctx.beginPath();
+            ctx.moveTo(-2.2 * scale, ty);
+            ctx.lineTo(2.2 * scale, ty);
+            ctx.stroke();
+        }
         ctx.restore();
     };
-    // The M.A.R.S. rover has six wheels: the four corners steer to their servo
-    // angles; the middle pair is fixed (front toward -y). Middle wheels sit a
-    // touch more outboard, like the real chassis.
+    // Six wheels: four corners steer, the middle pair is fixed - the real
+    // M.A.R.S. chassis. Middle pair sits a touch more outboard, like the metal.
     const frontY = -halfH * 0.66;
     const rearY = halfH * 0.66;
     wheel(-halfW - 1, frontY, st.servos?.[FL] ?? 0);
@@ -385,42 +495,102 @@ function drawRover(ctx, L, st) {
     wheel(halfW + 2, 0, 0);
     wheel(-halfW - 1, rearY, st.servos?.[RL] ?? 0);
     wheel(halfW + 1, rearY, st.servos?.[RR] ?? 0);
-    // Chassis.
-    ctx.fillStyle = '#e2e8f0';
-    ctx.strokeStyle = '#0f172a';
+    // Chassis: proper spacecraft grey, dark enough that the deck, the lens and
+    // the lamps all read against it.
+    ctx.fillStyle = '#2b2f36';
+    ctx.strokeStyle = '#15171b';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.roundRect(-halfW, -halfH, bw, bh, 7 * scale);
     ctx.fill();
     ctx.stroke();
-    // Solar / top plate (Mars orange).
-    ctx.fillStyle = '#ff6d00';
+    /**
+     * Solar deck: deep photovoltaic blue with a cell grid and a gloss strip
+     * across the top of each cell. The single biggest realism lever on the
+     * body - this is the part everyone recognises from photos of the real thing.
+     */
+    const deckX = -halfW + 3.5 * scale;
+    const deckY = -halfH + 5 * scale;
+    const deckW = bw - 7 * scale;
+    const deckH = bh * 0.44;
+    ctx.fillStyle = '#10184a';
     ctx.beginPath();
-    ctx.roundRect(-halfW + 4 * scale, -halfH + 6 * scale, bw - 8 * scale, bh * 0.42, 4 * scale);
+    ctx.roundRect(deckX, deckY, deckW, deckH, 2.5 * scale);
     ctx.fill();
-    // Camera mast (a friendly "eye") near the front.
-    ctx.fillStyle = '#0ea5e9';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, -halfH * 0.45, 4 * scale, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = '#3b4cc7';
+    ctx.lineWidth = 1.2;
     ctx.stroke();
-    // Headlight blip marking the front.
-    ctx.fillStyle = '#fde68a';
+    const cols = 4;
+    const rows = 3;
+    const cw = deckW / cols;
+    const chh = deckH / rows;
+    for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+            const x = deckX + i * cw;
+            const y = deckY + j * chh;
+            ctx.fillStyle = (i + j) % 2 === 0 ? '#1c2a8c' : '#2436a8';
+            ctx.fillRect(x + 1, y + 1, cw - 2, chh - 2);
+            ctx.fillStyle = 'rgba(120,160,255,0.18)';
+            ctx.fillRect(x + 1, y + 1, cw - 2, chh * 0.4);
+        }
+    }
+    // Front nub: a pale wedge on the nose, so the facing direction survives even
+    // when the lens is hidden under a glow.
+    ctx.fillStyle = '#c9ced6';
     ctx.beginPath();
-    ctx.arc(0, -halfH - 2 * scale, 2.4 * scale, 0, Math.PI * 2);
+    ctx.moveTo(-4 * scale, -halfH);
+    ctx.lineTo(0, -halfH - 4.5 * scale);
+    ctx.lineTo(4 * scale, -halfH);
+    ctx.closePath();
+    ctx.fill();
+    // Antenna off the back corner, light mast with a hot orange tip.
+    ctx.strokeStyle = '#c9ced6';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(-halfW * 0.55, halfH * 0.75);
+    ctx.lineTo(-halfW * 0.95, halfH + 7 * scale);
+    ctx.stroke();
+    ctx.fillStyle = '#ff5a3c';
+    ctx.beginPath();
+    ctx.arc(-halfW * 0.95, halfH + 7 * scale, 2.2 * scale, 0, Math.PI * 2);
     ctx.fill();
     /**
-     * The four corner lamps.
-     *
-     * The real chassis has one at each corner, and the blocks have always let a
-     * child choose a colour for any of them - it simply never showed up here, so
-     * "Set all LEDs to green" did nothing a learner could see. Index order
-     * matches LED_POSITIONS in roverBlockly: 0 rear-left, 1 front-left,
-     * 2 front-right, 3 rear-right.
-     *
-     * Drawn last so the glow sits over the chassis rather than under it.
+     * The camera turret: housing, lens ring, and a soft cyan glow that pulses
+     * with the playhead. The pulse is what makes the rover read as switched on
+     * and slightly alive - the fun half of "realistic but fun" - and because it
+     * is driven by the playhead, scrubbing to a frame always shows that frame's
+     * exact glow. Nothing on this canvas animates on its own.
+     */
+    const eyeY = -halfH * 0.42;
+    const turretR = 5.8 * scale;
+    ctx.fillStyle = '#1c2026';
+    ctx.strokeStyle = '#0a0c0f';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(0, eyeY, turretR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#0a0c0f';
+    ctx.beginPath();
+    ctx.arc(0, eyeY, turretR * 0.62, 0, Math.PI * 2);
+    ctx.fill();
+    const pulse = 0.62 + 0.38 * Math.sin(t * 0.55);
+    const lens = ctx.createRadialGradient(0, eyeY, 0, 0, eyeY, turretR * 0.48);
+    lens.addColorStop(0, `rgba(120,255,255,${pulse.toFixed(3)})`);
+    lens.addColorStop(1, 'rgba(0,120,160,0.25)');
+    ctx.fillStyle = lens;
+    ctx.beginPath();
+    ctx.arc(0, eyeY, turretR * 0.48, 0, Math.PI * 2);
+    ctx.fill();
+    // Glint, up toward the light like every other highlight in the scene.
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.beginPath();
+    ctx.arc(turretR * 0.16 * LIGHT.x * -1 - turretR * 0.18, eyeY - turretR * 0.2, 1.4 * scale * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    /**
+     * The four corner lamps. The real chassis has one at each corner, in the
+     * order LED_POSITIONS uses: 0 rear-left, 1 front-left, 2 front-right,
+     * 3 rear-right. Drawn last so the glow sits over the chassis.
      */
     const lampR = 3.1 * scale;
     const lampPositions = [
@@ -493,12 +663,12 @@ P = DARK_SIM_PALETTE) {
         return;
     drawTerrain(ctx, L, P);
     if (traj.length === 0) {
-        drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} });
+        drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} }, 0);
         return;
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
     const current = interpolate(traj, playhead);
-    drawRover(ctx, L, current);
+    drawRover(ctx, L, current, playhead);
     if (current.hitWall) {
         drawWallHit(ctx, L, current);
     }
