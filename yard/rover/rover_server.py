@@ -14,8 +14,29 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, stream_with_context, send_file
-from posthog import Posthog
 from werkzeug.exceptions import HTTPException
+
+try:
+    from posthog import Posthog
+except ImportError:
+    # Analytics must never be what stops a rover starting.
+    #
+    # This was a hard top-level import, so a machine without the posthog
+    # package could not run the rover server at all - it failed with a bare
+    # ModuleNotFoundError before Flask was even built. `npm run dev` inherited
+    # that: the launcher kills every service when one dies, so a missing
+    # analytics library took Mission Control and the satellite down with it and
+    # opened no browser tabs, with the actual cause buried in a dead child
+    # process.
+    #
+    # On a Pi in a science centre the stakes are higher than a broken dev
+    # script. A dependency that failed to install must not be the reason a
+    # child's mission cannot run.
+    #
+    # Every use site already guards with `if posthog_client is not None`, so
+    # None here degrades to exactly what an unconfigured deployment does:
+    # the rover runs, and no events are sent.
+    Posthog = None
 import queue as queue_module
 
 from drivers import create_driver
@@ -62,7 +83,7 @@ def create_app(queue_service: RoverQueueService = None) -> Flask:
     """Create Flask app with optional injected service (for testing)."""
     global posthog_client, service, _error_handler_registered
 
-    if posthog_client is None:
+    if posthog_client is None and Posthog is not None:
         project_token = os.environ.get('POSTHOG_PROJECT_TOKEN')
         host = os.environ.get('POSTHOG_HOST')
         if project_token and host:
