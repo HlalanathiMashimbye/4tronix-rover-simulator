@@ -111,40 +111,40 @@ resource "google_project_iam_member" "runtime_firestore" {
 # account to finish checking it.
 #
 # It went unnoticed because the staging smoke check asserted that /operator
-# returned 404, so nothing ever exercised sign-in there until the check was
+# returned 404, so nothing ever exercised sign-in there until that check was
 # corrected.
 #
-# A CUSTOM ROLE RATHER THAN roles/firebaseauth.admin. That predefined role can
-# create and delete user accounts and read the password hash config. This
-# service needs to read accounts, mint session cookies, and set the role claim.
-# Nothing it does requires the power to delete an operator outright, so it does
-# not get it.
-resource "google_project_iam_custom_role" "operator_auth" {
-  role_id     = "missionControlOperatorAuth"
-  title       = "Mission Control operator auth"
-  description = "Read accounts, mint session cookies, and set the role claim. No create or delete."
-
-  permissions = [
-    # verifyIdToken(checkRevoked) and verifySessionCookie(checkRevoked) both
-    # read the user record to compare auth_time against tokensValidAfterTime.
-    # This is also what getUserByEmail and listUsers need for /operator/team.
-    "firebaseauth.users.get",
-
-    # createSessionCookie, in POST /api/auth/session. A separate permission
-    # from users.get, so granting only the read would leave sign-in failing
-    # one step later for a different reason.
-    "firebaseauth.users.createSession",
-
-    # setCustomUserClaims and revokeRefreshTokens, which are how /operator/team
-    # grants access and how removing it takes effect immediately.
-    "firebaseauth.users.update",
-  ]
-}
-
-resource "google_project_iam_member" "runtime_operator_auth" {
+# This matters here rather than only locally because impact.tfvars sets
+# firebase_credential_source = "adc". With ADC there is no mounted key, so the
+# Admin SDK authenticates as THIS service account and its roles are what
+# decide whether verifyIdToken can complete.
+#
+# WHY THE PREDEFINED ROLE AND NOT A NARROWER CUSTOM ONE.
+#
+# A custom role with just users.get, users.createSession and users.update
+# would be tighter, and it was the first thing written here. It is the wrong
+# trade for this project. The failure mode of a hand-listed permission set is
+# that some later Admin SDK call needs a permission nobody predicted, and it
+# surfaces as an unexplained 401 on login - which is exactly the bug this
+# commit exists to fix, and it took a token-by-token comparison against a
+# working environment to find. Getting that list right was already close: the
+# separate users.createSession permission is easy to miss, and missing it
+# breaks sign-in one step later than the obvious read.
+#
+# It also cuts against how this project is meant to be handed over. Werner and
+# David have both been clear about preferring stock configuration, Werner's
+# team reviews this Terraform, and a predefined role is one they can recognise
+# without reading a permission list. Creating a project custom role also needs
+# iam.roles.create, which the apply operator may not hold.
+#
+# The privilege this concedes is that the service could delete an account
+# rather than only read and update one. It is already trusted to mint session
+# cookies and set the role claim, so that is a small step, and it is worth
+# paying for a configuration that fails loudly and reads plainly.
+resource "google_project_iam_member" "runtime_firebase_auth" {
   for_each = var.environments
   project  = var.project_id
-  role     = google_project_iam_custom_role.operator_auth.name
+  role     = "roles/firebaseauth.admin"
   member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
 }
 
