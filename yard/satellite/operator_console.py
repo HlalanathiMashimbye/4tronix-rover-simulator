@@ -1055,9 +1055,18 @@ def api_integrations():
                 'id': 'firestore',
                 'name': 'Firestore',
                 'why': 'Syncs missions with mission-control.',
+                # Says which credential is actually in use rather than
+                # assuming a service account: ADC is what staging, prod and
+                # local dev all use, and reporting it as a missing key sent
+                # people looking for a variable that should not be set.
                 **state(_admin_configured(),
-                        'Service account present' if _admin_configured()
-                        else 'Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY'),
+                        ('Authenticated as ' + (
+                            'a service account' if _clean_env('FIREBASE_CLIENT_EMAIL')
+                            else 'Application Default Credentials'
+                        )) if _admin_configured()
+                        else 'Cannot reach Firebase. Run `gcloud auth application-default '
+                             'login`, or set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY '
+                             'together. The reason is in the satellite log.'),
             },
             {
                 'id': 'youtube',
