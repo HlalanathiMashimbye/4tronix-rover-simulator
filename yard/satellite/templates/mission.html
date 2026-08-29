@@ -114,6 +114,7 @@
         .tele-row .v.amber { color: var(--warn); }
 
         .yt-steps { margin: 0 0 0.6rem 1.05rem; padding: 0; color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.7; }
+        .review-reason { color: var(--text-dim); font-size: var(--fs-xs); line-height: 1.6; margin: 0 0 0.7rem; }
         .tag-copy {
             display: inline-flex; align-items: center; gap: 0.4rem; min-height: 34px;
             border: 1px dashed var(--border-strong); border-radius: 8px;
@@ -232,6 +233,9 @@
             complete: { title: 'Mark mission complete?', body: 'This marks the mission as completed and cannot be undone.', confirmLabel: 'Mark complete' },
             rerun: { title: 'Rerun this mission?', body: 'This clears the completed status and any attached video, and sends the mission back into the queue. This cannot be undone.', confirmLabel: 'Rerun' },
             cancel: { title: 'Cancel this mission?', body: 'It comes out of the queue without running. The learner still sees it as Pending, not rejected. You can put it back afterwards.', confirmLabel: 'Cancel mission' },
+            'resolve-completed': { title: 'Mark this mission complete?', body: 'Confirms the run finished. Its recording stays with the mission.', confirmLabel: 'Mark complete' },
+            'resolve-requeue': { title: 'Put this mission back in the queue?', body: 'Clears the review flag and returns it to Queued so it can be sent again. Its recording from the interrupted run is discarded - a fresh one is made when it reruns.', confirmLabel: 'Put back in queue' },
+            'resolve-cancelled': { title: 'Cancel this mission?', body: 'The interrupted run will not count. Its recording is discarded and cannot be recovered. The learner still sees it as Pending, not rejected.', confirmLabel: 'Cancel mission' },
             delete: {
                 title: 'Delete this mission permanently?',
                 body: 'This removes the mission and its attached video link from the platform, for the learner as well as here. There is no undo in this console. If you only want to keep it out of the queue, use Cancel instead - that can be reversed.',
@@ -242,7 +246,7 @@
 
         const SUCCESS_MESSAGE = {
             send: 'Mission sent to rover.',
-            stop: 'Rover stopped. Mission is back in the queue.',
+            stop: 'Rover stopped. Mission cancelled.',
             complete: 'Mission marked complete.',
             youtube: 'Video attached.',
             rerun: 'Mission queued for rerun.',
@@ -342,8 +346,14 @@
             document.getElementById('mId').textContent = mission.id;
             document.getElementById('idChip').hidden = false;
             const meta = STATUS_META[mission.status] || { label: mission.status, tone: '', icon: 'alert' };
+            // Recording badge (BACKLOG 335): shown only while a file is
+            // actively being written, so it disappears on its own once the
+            // status flips to 'kept'/'discarded' on the next poll.
+            const recordingBadge = mission.recordingStatus === 'recording'
+                ? `<span class="badge has-icon" data-tone="warn">${ICONS.video}<span>Recording</span></span>`
+                : '';
             document.getElementById('mStatus').innerHTML =
-                `<span class="badge has-icon" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>`;
+                `<span class="badge has-icon" data-tone="${meta.tone}">${ICONS[meta.icon]}<span>${esc(meta.label)}</span></span>${recordingBadge}`;
             renderCode(mission.code);
             renderMeta();
         }
@@ -380,31 +390,50 @@
             ).join('<span class="mmeta-sep">&middot;</span>');
         }
 
-        function actionButton(act, label, cls, confirm) {
-            return `<button class="btn ${cls || ''}" data-act="${act}"${confirm ? ' data-confirm="true"' : ''}>${label}</button>`;
+        function actionButton(act, label, cls, confirm, dataAttrs) {
+            const extra = dataAttrs
+                ? Object.entries(dataAttrs).map(([k, v]) => ` data-${k}="${esc(v)}"`).join('')
+                : '';
+            return `<button class="btn ${cls || ''}" data-act="${act}"${confirm ? ' data-confirm="true"' : ''}${extra}>${label}</button>`;
         }
 
         function renderRail() {
             const rail = document.getElementById('rail');
             let html = '';
 
-            html += '<div class="card"><h3 class="h-card rail-h">' + ICONS.bolt + 'Actions</h3><div class="actions">';
-            if (mission.status === 'queued') {
-                html += actionButton('send', 'Send to rover', 'primary');
-                html += actionButton('complete', 'Mark complete', '', true);
-                html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
-            } else if (mission.status === 'processing') {
-                html += actionButton('complete', 'Mark complete', 'primary', true);
-                html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
-            } else if (mission.status === 'completed') {
-                html += actionButton('rerun', 'Rerun', '', true);
-            } else if (mission.status === 'failed') {
-                html += actionButton('rerun', 'Rerun', 'primary');
-            } else if (mission.status === 'cancelled') {
-                html += actionButton('rerun', 'Put back in queue', 'primary', true);
+            // A needs-review mission is still status 'processing', but its
+            // fate isn't decided by the ordinary processing actions below -
+            // those bypass resolve_review's flag-clearing entirely. Checked
+            // first so a flagged mission always gets the review card instead
+            // of silently falling into the wrong action set.
+            if (mission.needsReview) {
+                html += `<div class="card"><h3 class="h-card rail-h">${ICONS.alert}Needs review</h3>
+                    <p class="review-reason">${esc(mission.reviewReason || 'The rover could not confirm this run finished.')}</p>
+                    <div class="actions">
+                        ${actionButton('resolve', 'Mark complete', 'primary', true, { outcome: 'completed' })}
+                        ${actionButton('resolve', 'Put back in queue', '', true, { outcome: 'requeue' })}
+                        ${actionButton('resolve', 'Cancel — discard recording', 'danger-quiet', true, { outcome: 'cancelled' })}
+                        ${actionButton('delete', 'Delete', 'danger-solid', true)}
+                    </div></div>`;
+            } else {
+                html += '<div class="card"><h3 class="h-card rail-h">' + ICONS.bolt + 'Actions</h3><div class="actions">';
+                if (mission.status === 'queued') {
+                    html += actionButton('send', 'Send to rover', 'primary');
+                    html += actionButton('complete', 'Mark complete', '', true);
+                    html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
+                } else if (mission.status === 'processing') {
+                    html += actionButton('complete', 'Mark complete', 'primary', true);
+                    html += actionButton('cancel', 'Cancel mission', 'danger-quiet', true);
+                } else if (mission.status === 'completed') {
+                    html += actionButton('rerun', 'Rerun', '', true);
+                } else if (mission.status === 'failed') {
+                    html += actionButton('rerun', 'Rerun', 'primary');
+                } else if (mission.status === 'cancelled') {
+                    html += actionButton('rerun', 'Put back in queue', 'primary', true);
+                }
+                html += actionButton('delete', 'Delete', 'danger-solid', true);
+                html += '</div></div>';
             }
-            html += actionButton('delete', 'Delete', 'danger-solid', true);
-            html += '</div></div>';
 
             // Video linking, only where it applies.
             if (mission.status === 'completed' && !mission.youtubeUrl) {
@@ -455,7 +484,7 @@
         function paintStop() {
             const running = mission && mission.status === 'processing';
             document.getElementById('stopNote').textContent = running
-                ? 'Halts the rover and clears its queue. This mission returns to Queued so you can run it again.'
+                ? 'Halts the rover and clears its queue. This mission is cancelled and its recording discarded; you can put it back in the queue afterwards.'
                 : "Clears the rover's queue and cuts the motors. This mission is not running, so its status will not change.";
         }
 
@@ -464,8 +493,13 @@
                 btn.onclick = () => {
                     const a = btn.dataset.act;
                     if (a === 'copytag') return copyTag(btn);
+                    // 'resolve' shares one action/route across three distinct
+                    // outcomes (data-outcome), so its confirm copy is keyed by
+                    // outcome too - "Mark complete" and "Cancel mission" need
+                    // very different confirmations even though both POST /resolve.
+                    const copyKey = a === 'resolve' ? `resolve-${btn.dataset.outcome}` : a;
                     if (btn.dataset.confirm === 'true') {
-                        openConfirm(CONFIRM_COPY[a] || { title: 'Are you sure?', body: 'This cannot be undone.', confirmLabel: 'Confirm' }, () => act(a, btn));
+                        openConfirm(CONFIRM_COPY[copyKey] || { title: 'Are you sure?', body: 'This cannot be undone.', confirmLabel: 'Confirm' }, () => act(a, btn));
                     } else {
                         act(a, btn);
                     }
@@ -531,7 +565,9 @@
         }
 
         async function act(action, btn) {
-            const body = action === 'youtube' ? { url: draftUrl || '' } : undefined;
+            const body = action === 'youtube' ? { url: draftUrl || '' }
+                : action === 'resolve' ? { outcome: btn && btn.dataset.outcome }
+                : undefined;
             const prevLabel = btn ? btn.textContent : '';
             if (btn) btn.disabled = true;
             if (action === 'stop' && btn) btn.innerHTML = ICONS.stop + '<span>STOPPING…</span>';
@@ -582,9 +618,16 @@
                 return;
             }
             if (action === 'stop') {
-                showToast('success', (data && data.newStatus === 'queued')
-                    ? 'Rover stopped. Mission is back in the queue.'
+                showToast('success', (data && data.newStatus === 'cancelled')
+                    ? 'Rover stopped. Mission cancelled' + (data.recordingDiscarded ? ' — recording discarded.' : '.')
                     : 'Rover stopped and its queue cleared.');
+            } else if (action === 'resolve') {
+                const RESOLVE_MESSAGE = {
+                    completed: 'Marked complete.',
+                    queued: 'Back in the queue. Its recording was discarded.',
+                    cancelled: 'Mission cancelled — recording discarded.',
+                };
+                showToast('success', (data && RESOLVE_MESSAGE[data.newStatus]) || 'Done.');
             } else {
                 showToast('success', SUCCESS_MESSAGE[action] || 'Done.');
             }

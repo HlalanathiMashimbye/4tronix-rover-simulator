@@ -96,6 +96,18 @@ def test_the_learner_notification_fires(monkeypatch):
     assert calls == [('m1', 'completed')]
 
 
+def test_a_confirmed_mission_stops_and_keeps_its_recording(monkeypatch):
+    """BACKLOG 335/336: the ordinary successful-run path keeps the video."""
+    _seed('m1', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
+    calls = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording', lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
+
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
+
+    assert calls == [('m1', 'curiosity', True)]
+
+
 def test_a_failing_notify_does_not_lose_the_completion(monkeypatch):
     _seed('m1', 'processing')
     monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
@@ -224,6 +236,25 @@ def test_a_run_the_rover_rejected_is_flagged_with_the_reason(monkeypatch):
     assert run['needs_review'] == 1
     assert 'SyntaxError' in run['review_reason'], run['review_reason']
     assert run['status'] == 'processing', 'the watcher must not invent an outcome'
+
+
+def test_a_run_the_rover_rejected_stops_and_keeps_its_recording_pending_review(monkeypatch):
+    """BACKLOG 338 - the corrected behavior: nothing is deleted at flag time.
+    Capturing stops (there is nothing left to film), but the file is kept so
+    an operator can review it; only their own resolve decision discards it."""
+    _seed('m1', 'processing')
+    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
+        _errored('m1', 'SyntaxError: invalid syntax (line 1)'),
+    ]))
+    calls = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording', lambda mission_id, yard_id, keep: calls.append((mission_id, yard_id, keep)))
+
+    mission_watcher.autocomplete_finished_missions(ROVER, yard_id='curiosity')
+
+    assert calls == [('m1', 'curiosity', True)]
+    run = mission_store.get_run('m1', 'curiosity')
+    assert run['status'] == 'processing'
+    assert run['needs_review'] == 1
 
 
 def test_an_errored_run_is_never_marked_failed(monkeypatch):

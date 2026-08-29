@@ -143,6 +143,17 @@ _ADDED_COLUMNS = {
     'mission_mirror': {
         'deleted': 'INTEGER DEFAULT 0',
         'deleted_at': 'TEXT',
+        # Mirrored copy of the run's recording_status, for the frontend
+        # contract only (BACKLOG 335/336/338) - see set_run_recording_state.
+        'recording_status': "TEXT NOT NULL DEFAULT 'none'",
+    },
+    'runs_mirror': {
+        # Recording lifecycle, satellite-local only - never queued to
+        # run_outbox, see set_run_recording_state.
+        'recording_status': "TEXT NOT NULL DEFAULT 'none'",  # none | recording | kept | discarded
+        'recording_path': 'TEXT',
+        'recording_started_at': 'TEXT',
+        'recording_stopped_at': 'TEXT',
     },
 }
 
@@ -642,9 +653,18 @@ def get_needs_review():
 def resolve_review(mission_id, status, now_iso):
     """Clear the review flag and set the status a human chose.
 
-    'completed' means the operator confirmed the run finished; 'queued' puts it
-    back in the queue to be run again. Either way the yard is free afterwards:
-    a status outside 'processing' is all that means now (AB#364).
+    'completed' means the operator confirmed the run finished; 'queued' puts
+    it back in the queue to be run again; 'cancelled' means the operator
+    decided the interrupted run should not count (BACKLOG 338). Either way
+    the yard is free afterwards: a status outside 'processing' is all that
+    means now (AB#364).
+
+    Also updates the run row for this mission's yard, not just the mission
+    rollup (BACKLOG 335/336/338 gap fix): before this, resolving a review
+    left runs_mirror stuck at 'processing'/needs_review=1 forever, because
+    nothing but release_run ever wrote to it, and this function never called
+    that. Any run-level consumer - recording finalization included - needs
+    the run's own state to actually change, not just the mission's.
     """
     with _db_lock:
         conn = _connect()
@@ -671,7 +691,9 @@ def resolve_review(mission_id, status, now_iso):
                 updates['completed_at'] = now_iso
                 payload['completedAt'] = now_iso
             else:
-                # Re-queued: clear the previous run's stamps so it looks fresh.
+                # Re-queued or cancelled: clear the previous run's stamps so a
+                # requeued mission looks fresh, and a cancelled one carries no
+                # stale timing into whatever rerun follows it.
                 updates['started_at'] = None
                 payload['startedAt'] = None
 
@@ -681,6 +703,19 @@ def resolve_review(mission_id, status, now_iso):
                 list(updates.values()) + [mission_id],
             )
             _enqueue(conn, mission_id, 'resolve', payload)
+
+            yard_row = conn.execute(
+                'SELECT yard_id FROM mission_mirror WHERE id = ?', (mission_id,)
+            ).fetchone()
+            if yard_row and yard_row['yard_id']:
+                yard_id = yard_row['yard_id']
+                run_sets = ', '.join(f'{k} = ?' for k in updates)
+                conn.execute(
+                    f'UPDATE runs_mirror SET {run_sets} WHERE mission_id = ? AND yard_id = ?',
+                    list(updates.values()) + [mission_id, yard_id],
+                )
+                _enqueue_run(conn, mission_id, yard_id, 'resolve', payload)
+
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1153,6 +1188,45 @@ def set_run_field(mission_id, yard_id, updates, payload, mirror_to_mission=None)
                     _enqueue(conn, mission_id, 'youtube',
                              {k: v for k, v in payload.items()})
 
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def set_run_recording_state(mission_id, yard_id, status, path=None, started_at=None, stopped_at=None):
+    """Mirror-only write of the recording lifecycle (BACKLOG 335/336/338).
+
+    Writes both runs_mirror (the source of truth) and mission_mirror's
+    mirrored recording_status column, same reasoning as set_run_field's
+    mirror_to_mission - the operator console's row-to-dict mapper only reads
+    mission_mirror. Unlike set_run_field, never enqueues anything: whether a
+    video file is being written on this SD card is a satellite-local fact,
+    not something Firestore needs until BACKLOG 337 (upload) exists.
+    """
+    updates = {'recording_status': status}
+    if path is not None:
+        updates['recording_path'] = path
+    if started_at is not None:
+        updates['recording_started_at'] = started_at
+    if stopped_at is not None:
+        updates['recording_stopped_at'] = stopped_at
+
+    with _db_lock:
+        conn = _connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            sets = ', '.join(f'{k} = ?' for k in updates)
+            conn.execute(
+                f'UPDATE runs_mirror SET {sets} WHERE mission_id = ? AND yard_id = ?',
+                list(updates.values()) + [mission_id, yard_id],
+            )
+            conn.execute(
+                'UPDATE mission_mirror SET recording_status = ? WHERE id = ?',
+                (status, mission_id),
+            )
             conn.commit()
         except Exception:
             conn.rollback()
