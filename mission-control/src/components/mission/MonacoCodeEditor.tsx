@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Play, AlertTriangle } from 'lucide-react';
 import { type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
+import { checkLearnerCode, type CodeProblem } from '@/lib/learnerCodeCheck';
 
 interface MonacoCodeEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -59,7 +60,7 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
 export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCodeEditorProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<Array<{ line: number; message: string }>>([]);
+  const [editorReady, setEditorReady] = useState(false);
   // Monaco editor + namespace instances (provided untyped by the editor lib).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
@@ -101,66 +102,58 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCod
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    // Validate on mount
-    validateCode(code);
+    setEditorReady(true);
   };
 
-  const validateCode = (codeToValidate: string) => {
-    const errors: Array<{ line: number; message: string }> = [];
+  /**
+   * THE REAL RULES, not a second opinion.
+   *
+   * This used to be seven hand-written regexes for import/eval/os, which meant
+   * the editor stayed silent on everything a learner actually gets wrong: a
+   * speed of 6300, a mistyped command, a bracket that never closes. The
+   * allowlist analyser had known about the first two since PR #78, with line
+   * numbers, and nothing asked it. Mission "Elsje" reached the yard carrying
+   * rover.forward(6300) because of exactly that gap.
+   *
+   * DERIVED FROM THE CODE rather than pushed into state by a handler. Doing it
+   * on keystroke and on mount missed the case that matters most: a draft
+   * restored from localStorage. A learner who closed the tab with a bad speed
+   * in it came back to a clean-looking editor and had to type something before
+   * anyone mentioned the problem, which is the same silence this story is
+   * about, just later in the day. Derived state cannot fall out of step with
+   * the thing it describes.
+   */
+  const validationErrors: CodeProblem[] = useMemo(() => checkLearnerCode(code), [code]);
 
-    // Only flag genuinely unsafe lines (mirrors the server-side allowlist).
-    // Real rover code uses time.sleep(), for-loops, print() and rover.setServo()
-    // alongside the movement calls, so we do not require every line to be a
-    // rover command.
-    const dangerousPatterns = [
-      { pattern: /\bimport\b/, message: 'Import statements are not allowed' },
-      { pattern: /\bopen\(/, message: 'File operations are not allowed' },
-      { pattern: /\beval\(/, message: 'eval() is not allowed' },
-      { pattern: /\bexec\(/, message: 'exec() is not allowed' },
-      { pattern: /\b__import__\b/, message: '__import__ is not allowed' },
-      { pattern: /\bos\./, message: 'The os module is not allowed' },
-      { pattern: /\bsys\./, message: 'The sys module is not allowed' },
-    ];
+  // Monaco's own squiggles, which are what put the problem ON the line rather
+  // than in a list underneath it. Separate from the calculation above because
+  // this one genuinely is a side effect on something outside React, and it has
+  // to wait for the editor to exist.
+  useEffect(() => {
+    if (!editorReady || !editorRef.current || !monacoRef.current) return;
 
-    codeToValidate.split('\n').forEach((line, index) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return;
-      for (const { pattern, message } of dangerousPatterns) {
-        if (pattern.test(line)) {
-          errors.push({ line: index + 1, message });
-          return;
-        }
-      }
-    });
+    const model = editorRef.current.getModel();
+    if (!model) return;
 
-    setValidationErrors(errors);
-
-    // Update Monaco editor markers
-    if (editorRef.current && monacoRef.current) {
-      const model = editorRef.current.getModel();
-      if (model) {
-        const markers = errors.map(err => ({
-          startLineNumber: err.line,
-          startColumn: 1,
-          endLineNumber: err.line,
-          endColumn: model.getLineMaxColumn(err.line),
-          message: err.message,
-          severity: monacoRef.current.MarkerSeverity.Error,
-        }));
-        monacoRef.current.editor.setModelMarkers(model, 'rover-validator', markers);
-      }
-    }
-  };
+    monacoRef.current.editor.setModelMarkers(
+      model,
+      'rover-validator',
+      validationErrors.map((err) => ({
+        startLineNumber: err.line,
+        startColumn: 1,
+        endLineNumber: err.line,
+        endColumn: model.getLineMaxColumn(err.line),
+        message: err.message,
+        severity: monacoRef.current.MarkerSeverity.Error,
+      })),
+    );
+  }, [validationErrors, editorReady]);
 
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';
     setCode(newCode);
     localStorage.setItem('rover_monaco_code', newCode);
     setError(null);
-
-    // Validate code in real-time
-    validateCode(newCode);
 
     // Notify parent of code change
     if (onCodeChange) {
