@@ -50,6 +50,7 @@ function trajectoryOf(frames: number): TrajectoryPoint[] {
     speedR: 50,
     servos: { '9': 0, '15': 0, '11': 0, '13': 0 },
     hitWall: false,
+    leds: [null, null, null, null],
   })) as TrajectoryPoint[];
 }
 

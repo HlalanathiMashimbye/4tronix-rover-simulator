@@ -523,10 +523,16 @@ export function workspaceToPython(workspace) {
         .forEach((b) => blockToLines(b, 0));
     return lines.join('\n') + '\n';
 }
+/** The rover has four corner lamps. LED_POSITIONS above is the same order. */
+export const LED_COUNT = 4;
 /**
- * Map the workspace to local-simulator commands (movement only - the 2D sim
- * has no concept of mast/LED/photo/wait). Speed is fixed at 60 to match the
- * Python the rover actually runs. Only blocks inside `rover_on_receive` count.
+ * Map the workspace to local-simulator commands. Speed is fixed at 60 to match
+ * the Python the rover actually runs. Only blocks inside `rover_on_receive`
+ * counts.
+ *
+ * LEDs used to be dropped here, on the grounds that the 2D sim had no concept
+ * of them. It does now: a child who lights the rover up should see it light up,
+ * and there are four real lamps on the corners of the chassis to match.
  */
 export function workspaceToCommands(workspace) {
     const commands = [];
@@ -572,6 +578,26 @@ export function workspaceToCommands(workspace) {
             case 'rover_stop':
                 out.push({ command: 'stop' });
                 break;
+            case 'rover_leds_all': {
+                const rgb = block.getFieldValue('COLOUR');
+                out.push({ command: 'leds', leds: Array(LED_COUNT).fill(rgb) });
+                break;
+            }
+            case 'rover_led_one': {
+                const rgb = block.getFieldValue('COLOUR');
+                const which = Number(block.getFieldValue('LED'));
+                // Only the chosen lamp changes; the others keep whatever they were.
+                const leds = Array(LED_COUNT).fill(null);
+                if (which >= 0 && which < LED_COUNT)
+                    leds[which] = rgb;
+                out.push({ command: 'leds', leds });
+                break;
+            }
+            case 'rover_wait':
+                // Time passes, and the lamps stay lit through it. Dropping this made a
+                // "lights on, wait, lights off" program flash past in one frame.
+                out.push({ command: 'wait', duration: Number(block.getFieldValue('TIME')) });
+                break;
             case 'rover_repeat': {
                 const times = Number(block.getFieldValue('TIMES'));
                 const loop = [];
@@ -580,7 +606,7 @@ export function workspaceToCommands(workspace) {
                     out.push(...loop);
                 break;
             }
-            // mast / LEDs / photo / wait / distance have no 2D-sim effect
+            // mast / photo / distance still have no 2D-sim effect
             default:
                 break;
         }
