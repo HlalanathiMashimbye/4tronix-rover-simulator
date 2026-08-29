@@ -437,7 +437,7 @@ function drawTrail(ctx, L, traj, endIdx, P) {
     ctx.stroke();
     ctx.restore();
 }
-function drawRover(ctx, L, st, t = 0) {
+function drawRover(ctx, L, st, t = 0, odo = 0) {
     const [cx, cy] = worldToScreen(L, st.x, st.y);
     /**
      * Deliberately bigger than scale. A true-to-scale rover in a 640cm yard is a
@@ -462,131 +462,157 @@ function drawRover(ctx, L, st, t = 0) {
     ctx.ellipse(-LIGHT.x * 7, -LIGHT.y * 7, halfW + 6, halfH * 0.72, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
-    // Chunky wheels with two tread lines each - toy-like on purpose.
-    const wheelH = 12.5 * scale;
+    /**
+     * Wheels: black knobbly tyres, drawn from above as a tread strip.
+     *
+     * The ribs SLIDE with the odometer, wrapping around the wheel, which is what
+     * finally shows movement: a rover gliding on frozen wheels read as a fridge
+     * magnet. The odometer is distance actually travelled (plus rotation for
+     * on-the-spot spins), so scrubbing to any frame shows that frame's exact
+     * tread position - nothing on this canvas animates on its own.
+     */
+    const wheelH = 13 * scale;
+    const wheelW = 7.6 * scale;
+    const ribSpacing = 3.4 * scale;
     const wheel = (lx, ly, angle) => {
         ctx.save();
         ctx.translate(lx, ly);
         ctx.rotate((angle * Math.PI) / 180);
-        ctx.fillStyle = '#1c2536';
-        ctx.strokeStyle = '#0a0f1a';
+        // Tyre.
+        ctx.fillStyle = '#17181b';
+        ctx.strokeStyle = '#000';
         ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.roundRect(-3.6 * scale, -wheelH / 2, 7.2 * scale, wheelH, 3 * scale);
+        ctx.roundRect(-wheelW / 2, -wheelH / 2, wheelW, wheelH, 3 * scale);
         ctx.fill();
         ctx.stroke();
-        ctx.strokeStyle = 'rgba(148,163,184,0.65)';
-        ctx.lineWidth = 1.2;
-        for (const ty of [-wheelH * 0.22, wheelH * 0.22]) {
+        // Rolling tread ribs, clipped to the tyre.
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(-wheelW / 2 + 1, -wheelH / 2 + 1, wheelW - 2, wheelH - 2, 2.4 * scale);
+        ctx.clip();
+        ctx.strokeStyle = '#43464d';
+        ctx.lineWidth = 1.6;
+        const phase = odo % ribSpacing;
+        for (let ry = -wheelH / 2 - ribSpacing; ry <= wheelH / 2 + ribSpacing; ry += ribSpacing) {
             ctx.beginPath();
-            ctx.moveTo(-2.2 * scale, ty);
-            ctx.lineTo(2.2 * scale, ty);
+            ctx.moveTo(-wheelW / 2 + 1, ry + phase);
+            ctx.lineTo(wheelW / 2 - 1, ry + phase);
             ctx.stroke();
         }
+        ctx.restore();
+        // White hub peeking past the tread, like the real wheel's spoked centre.
+        ctx.fillStyle = '#e8e8e6';
+        ctx.beginPath();
+        ctx.arc(0, 0, 1.7 * scale, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
     };
     // Six wheels: four corners steer, the middle pair is fixed - the real
     // M.A.R.S. chassis. Middle pair sits a touch more outboard, like the metal.
     const frontY = -halfH * 0.66;
     const rearY = halfH * 0.66;
+    // Rocker-bogie rails: the dark arms that join each side's three wheels on
+    // the real rover. Two strokes per side, hinged at the middle wheel.
+    ctx.strokeStyle = '#20242b';
+    ctx.lineWidth = 2.6 * scale;
+    ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+        const x = side * (halfW + 1.5);
+        ctx.beginPath();
+        ctx.moveTo(x, frontY);
+        ctx.lineTo(side * (halfW + 2), 0);
+        ctx.lineTo(x, rearY);
+        ctx.stroke();
+    }
     wheel(-halfW - 1, frontY, st.servos?.[FL] ?? 0);
     wheel(halfW + 1, frontY, st.servos?.[FR] ?? 0);
     wheel(-halfW - 2, 0, 0);
     wheel(halfW + 2, 0, 0);
     wheel(-halfW - 1, rearY, st.servos?.[RL] ?? 0);
     wheel(halfW + 1, rearY, st.servos?.[RR] ?? 0);
-    // Chassis: proper spacecraft grey, dark enough that the deck, the lens and
-    // the lamps all read against it.
-    ctx.fillStyle = '#2b2f36';
-    ctx.strokeStyle = '#15171b';
+    /**
+     * Body: the white PCB of the real M.A.R.S. rover - shop.4tronix.co.uk shows
+     * a white circuit board deck with rows of mounting holes, a micro:bit riding
+     * on top, and LEDs at the corners. White, per the photos and per request;
+     * the navy solar deck of the previous pass is not on this rover at all.
+     */
+    ctx.fillStyle = '#f4f5f2';
+    ctx.strokeStyle = '#2a2d31';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(-halfW, -halfH, bw, bh, 7 * scale);
+    ctx.roundRect(-halfW, -halfH, bw, bh, 6 * scale);
     ctx.fill();
     ctx.stroke();
-    /**
-     * Solar deck: deep photovoltaic blue with a cell grid and a gloss strip
-     * across the top of each cell. The single biggest realism lever on the
-     * body - this is the part everyone recognises from photos of the real thing.
-     */
-    const deckX = -halfW + 3.5 * scale;
-    const deckY = -halfH + 5 * scale;
-    const deckW = bw - 7 * scale;
-    const deckH = bh * 0.44;
-    ctx.fillStyle = '#10184a';
-    ctx.beginPath();
-    ctx.roundRect(deckX, deckY, deckW, deckH, 2.5 * scale);
-    ctx.fill();
-    ctx.strokeStyle = '#3b4cc7';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-    const cols = 4;
-    const rows = 3;
-    const cw = deckW / cols;
-    const chh = deckH / rows;
-    for (let i = 0; i < cols; i++) {
-        for (let j = 0; j < rows; j++) {
-            const x = deckX + i * cw;
-            const y = deckY + j * chh;
-            ctx.fillStyle = (i + j) % 2 === 0 ? '#1c2a8c' : '#2436a8';
-            ctx.fillRect(x + 1, y + 1, cw - 2, chh - 2);
-            ctx.fillStyle = 'rgba(120,160,255,0.18)';
-            ctx.fillRect(x + 1, y + 1, cw - 2, chh * 0.4);
+    // PCB mounting holes along the edges.
+    ctx.fillStyle = 'rgba(90,95,100,0.5)';
+    for (let i = 0; i < 5; i++) {
+        const hy = -halfH + bh * (0.14 + i * 0.18);
+        for (const hx of [-halfW + 2.6 * scale, halfW - 2.6 * scale]) {
+            ctx.beginPath();
+            ctx.arc(hx, hy, 0.8 * scale, 0, Math.PI * 2);
+            ctx.fill();
         }
     }
-    // Front nub: a pale wedge on the nose, so the facing direction survives even
-    // when the lens is hidden under a glow.
-    ctx.fillStyle = '#c9ced6';
+    // The micro:bit on the deck: dark board, gold edge-connector teeth at the
+    // back, and its little red LED matrix.
+    const mbW = bw * 0.5;
+    const mbH = bh * 0.3;
+    const mbY = -bh * 0.02;
+    ctx.fillStyle = '#1c1e22';
     ctx.beginPath();
-    ctx.moveTo(-4 * scale, -halfH);
-    ctx.lineTo(0, -halfH - 4.5 * scale);
-    ctx.lineTo(4 * scale, -halfH);
-    ctx.closePath();
+    ctx.roundRect(-mbW / 2, mbY, mbW, mbH, 1.6 * scale);
     ctx.fill();
-    // Antenna off the back corner, light mast with a hot orange tip.
-    ctx.strokeStyle = '#c9ced6';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(-halfW * 0.55, halfH * 0.75);
-    ctx.lineTo(-halfW * 0.95, halfH + 7 * scale);
-    ctx.stroke();
-    ctx.fillStyle = '#ff5a3c';
-    ctx.beginPath();
-    ctx.arc(-halfW * 0.95, halfH + 7 * scale, 2.2 * scale, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#c9a227';
+    for (let i = 0; i < 6; i++) {
+        ctx.fillRect(-mbW / 2 + 1.5 + i * ((mbW - 3) / 6), mbY + mbH - 2.2 * scale, (mbW - 3) / 6 - 1.2, 1.6 * scale);
+    }
+    ctx.fillStyle = 'rgba(255,80,60,0.85)';
+    for (let i = 0; i < 3; i++) {
+        for (let j = 0; j < 3; j++) {
+            ctx.beginPath();
+            ctx.arc(-mbW / 6 + (i * mbW) / 6, mbY + mbH * 0.28 + (j * mbH) / 4.2, 0.55 * scale, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
     /**
-     * The camera turret: housing, lens ring, and a soft cyan glow that pulses
-     * with the playhead. The pulse is what makes the rover read as switched on
-     * and slightly alive - the fun half of "realistic but fun" - and because it
-     * is driven by the playhead, scrubbing to a frame always shows that frame's
-     * exact glow. Nothing on this canvas animates on its own.
+     * The ultrasonic head: the real rover's face. A white board up front with
+     * two round sensor eyes side by side - faithful to the photos, and the
+     * cutest thing on the chassis without inventing anything. The soft pulse in
+     * the pupils follows the playhead, so it reads as switched on.
      */
-    const eyeY = -halfH * 0.42;
-    const turretR = 5.8 * scale;
-    ctx.fillStyle = '#1c2026';
-    ctx.strokeStyle = '#0a0c0f';
+    const headW = bw * 0.62;
+    const headH = 7.5 * scale;
+    const headY = -halfH - headH * 0.35;
+    ctx.fillStyle = '#f4f5f2';
+    ctx.strokeStyle = '#2a2d31';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.arc(0, eyeY, turretR, 0, Math.PI * 2);
+    ctx.roundRect(-headW / 2, headY - headH / 2, headW, headH, 2.2 * scale);
     ctx.fill();
     ctx.stroke();
-    ctx.fillStyle = '#0a0c0f';
-    ctx.beginPath();
-    ctx.arc(0, eyeY, turretR * 0.62, 0, Math.PI * 2);
-    ctx.fill();
-    const pulse = 0.62 + 0.38 * Math.sin(t * 0.55);
-    const lens = ctx.createRadialGradient(0, eyeY, 0, 0, eyeY, turretR * 0.48);
-    lens.addColorStop(0, `rgba(120,255,255,${pulse.toFixed(3)})`);
-    lens.addColorStop(1, 'rgba(0,120,160,0.25)');
-    ctx.fillStyle = lens;
-    ctx.beginPath();
-    ctx.arc(0, eyeY, turretR * 0.48, 0, Math.PI * 2);
-    ctx.fill();
-    // Glint, up toward the light like every other highlight in the scene.
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    ctx.beginPath();
-    ctx.arc(turretR * 0.16 * LIGHT.x * -1 - turretR * 0.18, eyeY - turretR * 0.2, 1.4 * scale * 0.6, 0, Math.PI * 2);
-    ctx.fill();
+    const pulse = 0.5 + 0.3 * Math.sin(t * 0.55);
+    for (const ex of [-headW * 0.22, headW * 0.22]) {
+        // Transducer barrel.
+        ctx.fillStyle = '#33373d';
+        ctx.strokeStyle = '#15171a';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(ex, headY, 2.7 * scale, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        // Mesh ring.
+        ctx.strokeStyle = 'rgba(190,195,200,0.7)';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.arc(ex, headY, 1.9 * scale, 0, Math.PI * 2);
+        ctx.stroke();
+        // Pupil, faintly alive.
+        ctx.fillStyle = `rgba(140,230,255,${pulse.toFixed(3)})`;
+        ctx.beginPath();
+        ctx.arc(ex, headY, 0.95 * scale, 0, Math.PI * 2);
+        ctx.fill();
+    }
     /**
      * The four corner lamps. The real chassis has one at each corner, in the
      * order LED_POSITIONS uses: 0 rear-left, 1 front-left, 2 front-right,
@@ -668,7 +694,20 @@ P = DARK_SIM_PALETTE) {
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
     const current = interpolate(traj, playhead);
-    drawRover(ctx, L, current, playhead);
+    /**
+     * Odometer, in screen px, up to the playhead: how far the wheels have
+     * actually rolled. Position deltas cover driving; the heading term covers
+     * spinning on the spot, where the wheels turn hard while the rover goes
+     * nowhere. Recomputed from the trajectory each frame rather than
+     * accumulated, so scrubbing backwards is exact.
+     */
+    let odo = 0;
+    const upTo = Math.min(traj.length - 1, Math.ceil(playhead));
+    for (let i = 1; i <= upTo; i++) {
+        odo += Math.hypot(traj[i].x - traj[i - 1].x, traj[i].y - traj[i - 1].y) * L.s;
+        odo += Math.abs(traj[i].heading - traj[i - 1].heading) * 0.35;
+    }
+    drawRover(ctx, L, current, playhead, odo);
     if (current.hitWall) {
         drawWallHit(ctx, L, current);
     }
