@@ -46,13 +46,34 @@ export const LIGHT_SIM_PALETTE = {
 /**
  * The driveable yard, in centimetres.
  *
- * Grown from 400x300. At the old size a couple of forward blocks put the rover
- * against a wall, which is a dull thing to discover when the whole point of a
- * simulator is to give a child room to play. rover-physics.ts bounds the rover
- * to the same numbers, and the two must not drift.
+ * SIZED SO THE ROVER'S REAL SPEED READS AS MOVEMENT.
+ *
+ * The rover covers 6cm a second at speed 60, which is what the hardware
+ * actually does. In a 640cm yard that made a default square about 4% of the
+ * width - smaller than the rover icon - so a child drew a perfect square and
+ * saw nothing happen.
+ *
+ * The fix is the yard, not the speed. FULL_SPEED_CM_PER_SECOND is tied to real
+ * hardware, and inflating it would make the simulator trace a neat square on
+ * screen while the real rover traced something else, which destroys the only
+ * thing a simulator is for. The old 400x300 was inherited from the 4tronix Qt
+ * simulator rather than measured from anything, so the yard was always the
+ * free parameter.
+ *
+ * At 120x90 a default square fills about a fifth of the yard and a ten-second
+ * one most of it. 1.2m x 0.9m is a believable floor mat for a robot this slow.
+ *
+ * NOTE THE TRADE. With the rover drawn at its true 20cm, its size on screen IS
+ * the yard size: it is a sixth of the width here, an eighth at 160, a twelfth
+ * at 240. Wanting a bigger square and a smaller rover pulls this number in
+ * opposite directions, and the way out is longer default drive times rather
+ * than a smaller world.
+ *
+ * rover-physics.ts bounds the rover to the same numbers, and the two must not
+ * drift.
  */
-export const YARD_W = 640;
-export const YARD_H = 480;
+export const YARD_W = 120;
+export const YARD_H = 90;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
 const MARGIN = 10; // px inset so the rover never clips the panel edge
 // Servo ids for the four steerable wheels (front/rear, left/right).
@@ -63,16 +84,16 @@ const RR = '13';
 // Deterministic crater field (world cm) so the terrain reads as Mars without a
 // muddy photo. Each is [x, y, radius].
 /**
- * The original six craters, positions and radii scaled 1.6x with the yard so
- * they sit and read exactly as they did at 400x300.
+ * The original six craters, scaled with the yard so they sit exactly where they
+ * always did as a fraction of the ground.
  */
 const CRATERS = [
-    [-208, 128, 54],
-    [144, 96, 42],
-    [224, -112, 64],
-    [-144, -144, 35],
-    [32, 192, 29],
-    [-256, -48, 26],
+    [-39, 24, 10],
+    [27, 18, 8],
+    [42, -21, 12],
+    [-27, -27, 7],
+    [6, 36, 5],
+    [-48, -9, 5],
 ];
 /**
  * One light direction for the whole scene, up and to the left.
@@ -176,11 +197,10 @@ function paintTerrain(ctx, L, P) {
         ctx.arc(px, py, r, 0, Math.PI * 2);
         ctx.fill();
     }
-    // Faint measurement grid. 80cm rather than the old 50, so the bigger yard
-    // shows the same number of lines and reads just as calm.
+    // Faint measurement grid every 15cm, keeping the same handful of divisions.
     ctx.strokeStyle = P.grid;
     ctx.lineWidth = 1;
-    for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 80) {
+    for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 15) {
         const [sx] = worldToScreen(L, gx, 0);
         if (sx < -2 || sx > w + 2)
             continue;
@@ -189,7 +209,7 @@ function paintTerrain(ctx, L, P) {
         ctx.lineTo(sx, h);
         ctx.stroke();
     }
-    for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 80) {
+    for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 15) {
         const [, sy] = worldToScreen(L, 0, gy);
         if (sy < -2 || sy > h + 2)
             continue;
@@ -274,12 +294,23 @@ function drawTrail(ctx, L, traj, endIdx, P) {
 function drawRover(ctx, L, st, t = 0, odo = 0) {
     const [cx, cy] = worldToScreen(L, st.x, st.y);
     /**
-     * Deliberately bigger than scale. A true-to-scale rover in a 640cm yard is a
-     * speck: the learner has to see which way it points, whether the wheels have
-     * turned, and which lamps are lit. The yard is the honest measurement; the
-     * rover is a character standing in the right place.
+     * TRUE SCALE, near enough, now the yard is 160cm rather than 640.
+     *
+     * This used to be inflated about 2.5x, because a real 20cm rover in a 640cm
+     * yard came out three pixels long and a learner could not see which way it
+     * pointed. Shrinking the yard removed the reason for the lie: the body is
+     * drawn from its actual size in centimetres, so distance, rover and walls are
+     * all finally in the same units.
+     *
+     * The floor keeps it legible on a small panel, where the whole yard might
+     * only be 200px wide.
      */
-    const scale = Math.max(1.15, Math.min(2.6, L.s / 0.85));
+    // 200mm long, 185mm wide, per the 4tronix spec. Divided by the DRAWN extent
+    // rather than the chassis: the ultrasonic head adds about 6.4 units past the
+    // body, so mapping 20cm onto bh alone drew the whole rover a third too large.
+    const ROVER_LENGTH_CM = 20;
+    const DRAWN_LENGTH_UNITS = 44.4; // body (38) + head overhang (~6.4)
+    const scale = Math.max(0.7, (ROVER_LENGTH_CM * L.s) / DRAWN_LENGTH_UNITS);
     const bw = 30 * scale;
     const bh = 38 * scale;
     const halfW = bw / 2;

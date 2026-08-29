@@ -43,6 +43,9 @@ const KEY_MAP: Record<string, DriveBlock> = {
   e: BLOCKS[5],
 };
 
+/** Bounded so a long drive cannot grow the trail for ever. */
+const MAX_TRAIL_POINTS = 3000;
+
 export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersion = 0 }: ManualControlRealtimeProps) {
   const roverRef = useRef<RoverPhysics>(new RoverPhysics());
   const trajectoryRef = useRef<RoverState[]>([]);
@@ -83,8 +86,21 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
       const newState = roverRef.current.update();
       trajectoryRef.current.push(newState);
 
-      if (trajectoryRef.current.length > 1000) {
-        trajectoryRef.current = trajectoryRef.current.slice(-1000);
+      /**
+       * A sliding window, and callers must treat it as one.
+       *
+       * The cap keeps a long drive from growing without bound, but it means
+       * this array does NOT only ever grow: past the limit the oldest points
+       * fall off the front. A parent tracking "how much have I seen" by length
+       * will conclude nothing new ever arrives and freeze the rover on screen,
+       * which is exactly what used to happen after about sixteen seconds of
+       * driving. Send the whole thing; let the consumer take it as given.
+       *
+       * 3000 points is roughly fifty seconds at 60fps, long enough that the
+       * trail rarely eats its own tail while a child is exploring.
+       */
+      if (trajectoryRef.current.length > MAX_TRAIL_POINTS) {
+        trajectoryRef.current = trajectoryRef.current.slice(-MAX_TRAIL_POINTS);
       }
 
       onTrajectoryUpdate([...trajectoryRef.current]);

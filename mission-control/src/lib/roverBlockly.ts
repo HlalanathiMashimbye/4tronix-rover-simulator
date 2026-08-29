@@ -1,3 +1,5 @@
+import { spinDegreesPerSecond, spinSecondsForDegrees } from './rover-physics';
+
 /**
  * Shared rover Blockly definitions, toolbox, and generators.
  *
@@ -78,12 +80,12 @@ export function defineRoverBlocks(Blockly: any): void {
     init: function () {
       this.appendDummyInput()
         .appendField('Spin Left')
-        .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), 'TIME')
-        .appendField('seconds');
+        .appendField(new Blockly.FieldNumber(90, 15, 360, 15), 'DEGREES')
+        .appendField('degrees');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour('#9C27B0');
-      this.setTooltip('Spin the rover left in place');
+      this.setTooltip('Turn left on the spot, by this many degrees');
     },
   };
 
@@ -91,12 +93,12 @@ export function defineRoverBlocks(Blockly: any): void {
     init: function () {
       this.appendDummyInput()
         .appendField('Spin Right')
-        .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), 'TIME')
-        .appendField('seconds');
+        .appendField(new Blockly.FieldNumber(90, 15, 360, 15), 'DEGREES')
+        .appendField('degrees');
       this.setPreviousStatement(true, null);
       this.setNextStatement(true, null);
       this.setColour('#9C27B0');
-      this.setTooltip('Spin the rover right in place');
+      this.setTooltip('Turn right on the spot, by this many degrees');
     },
   };
 
@@ -424,8 +426,9 @@ export function workspaceToPython(workspace: any): string {
         break;
       }
       case 'rover_spin_left': {
-        const t = block.getFieldValue('TIME');
-        lines.push(`${pad}# Spin left on the spot for ${seconds(t)}`);
+        const deg = spinDegrees(block);
+        const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+        lines.push(`${pad}# Turn left ${deg} degrees on the spot`);
         lines.push(`${pad}rover.stop()`);
         lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
         lines.push(`${pad}rover.setServo(9, 50)`);
@@ -438,8 +441,9 @@ export function workspaceToPython(workspace: any): string {
         break;
       }
       case 'rover_spin_right': {
-        const t = block.getFieldValue('TIME');
-        lines.push(`${pad}# Spin right on the spot for ${seconds(t)}`);
+        const deg = spinDegrees(block);
+        const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+        lines.push(`${pad}# Turn right ${deg} degrees on the spot`);
         lines.push(`${pad}rover.stop()`);
         lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
         lines.push(`${pad}rover.setServo(9, 50)`);
@@ -573,6 +577,92 @@ export interface SimulationCommand {
   leds?: (string | null)[];
 }
 
+/**
+ * Turning is expressed in DEGREES, and converted to seconds here.
+ *
+ * The blocks used to ask for seconds, which made the most obvious thing a child
+ * would ever try - drive a square - impossible. A 90 degree corner needs 2.736
+ * seconds at speed 60, the field's step was 0.1, and nothing in the interface
+ * told them the rate. Four corners of 2.7s left the square 1.1cm open and the
+ * rover 4.5 degrees off; 2.8s overshot the other way. They were being asked to
+ * solve 90 / 32.9 with a number they had never been given.
+ *
+ * Steer Left and Steer Right already took degrees. Turning on the spot was the
+ * one motion that did not, and the one a square needs.
+ */
+const SPIN_SPEED = 60;
+
+/**
+ * The turn angle on a spin block, tolerating workspaces saved before this
+ * changed.
+ *
+ * Old missions stored `TIME` in seconds. Blockly drops a field it does not
+ * recognise on load, so without this an archived mission would silently render
+ * as the 90 degree default and its blocks would no longer match the Python
+ * stored alongside them. Converting keeps the picture honest.
+ */
+function spinDegrees(block: { getFieldValue: (name: string) => unknown }): number {
+  const degrees = block.getFieldValue('DEGREES');
+  if (degrees !== null && degrees !== undefined && degrees !== '') return Number(degrees);
+
+  const legacySeconds = Number(block.getFieldValue('TIME'));
+  if (Number.isFinite(legacySeconds) && legacySeconds > 0) {
+    return Math.round(legacySeconds * spinDegreesPerSecond(SPIN_SPEED));
+  }
+  return 90;
+}
+
+/**
+ * Rewrite a saved workspace's spin blocks from seconds to degrees.
+ *
+ * Blockly serialises fields by name and silently drops any it does not
+ * recognise, so a workspace saved before this change would load with its spin
+ * blocks reset to the 90 degree default - and an archived mission would render
+ * as blocks that no longer match the Python stored beside them.
+ *
+ * Converting at load time keeps every existing mission truthful. Returns the
+ * input untouched if it is not JSON we recognise: a mission that will not parse
+ * is better rendered empty than half-rewritten.
+ */
+export function migrateSpinBlocks(serialised: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialised);
+  } catch {
+    return serialised;
+  }
+
+  let changed = false;
+
+  const walk = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+
+    const block = node as { type?: unknown; fields?: Record<string, unknown> };
+    if (
+      (block.type === 'rover_spin_left' || block.type === 'rover_spin_right') &&
+      block.fields &&
+      block.fields.DEGREES === undefined &&
+      block.fields.TIME !== undefined
+    ) {
+      const seconds = Number(block.fields.TIME);
+      if (Number.isFinite(seconds) && seconds > 0) {
+        block.fields.DEGREES = Math.round(seconds * spinDegreesPerSecond(SPIN_SPEED));
+        delete block.fields.TIME;
+        changed = true;
+      }
+    }
+
+    Object.values(node as Record<string, unknown>).forEach(walk);
+  };
+
+  walk(parsed);
+  return changed ? JSON.stringify(parsed) : serialised;
+}
+
 /** The rover has four corner lamps. LED_POSITIONS above is the same order. */
 export const LED_COUNT = 4;
 
@@ -607,10 +697,18 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
         out.push({ command: 'reverse', speed: 60, duration: Number(block.getFieldValue('TIME')) });
         break;
       case 'rover_spin_left':
-        out.push({ command: 'spinLeft', speed: 60, duration: Number(block.getFieldValue('TIME')) });
+        out.push({
+          command: 'spinLeft',
+          speed: SPIN_SPEED,
+          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+        });
         break;
       case 'rover_spin_right':
-        out.push({ command: 'spinRight', speed: 60, duration: Number(block.getFieldValue('TIME')) });
+        out.push({
+          command: 'spinRight',
+          speed: SPIN_SPEED,
+          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+        });
         break;
       case 'rover_steer_left':
         out.push({

@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Code2, Play } from 'lucide-react';
 import { loadBlockly } from '@/lib/loadBlockly';
 import {
   defineRoverBlocks,
+  migrateSpinBlocks,
   ROVER_TOOLBOX,
   ROVER_MAX_INSTANCES,
   mergeUplinkHats,
@@ -124,7 +125,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          Blockly.serialization.workspaces.load(JSON.parse(saved), workspace);
+          Blockly.serialization.workspaces.load(JSON.parse(migrateSpinBlocks(saved)), workspace);
           if (mergeUplinkHats(workspace)) {
             localStorage.setItem(
               STORAGE_KEY,
