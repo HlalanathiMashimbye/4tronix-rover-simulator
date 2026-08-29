@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Blocks, Code2, Loader2, Radio } from 'lucide-react';
+import { AlertTriangle, Blocks, Check, Code2, Copy, Loader2, Radio } from 'lucide-react';
 
 import {
   subscribeToYardQueue,
@@ -52,6 +52,21 @@ function YardQueue({ yardId }: { yardId: string }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function copyCode(mission: QueueMission) {
+    try {
+      await navigator.clipboard.writeText(mission.code);
+      setCopiedId(mission.id);
+      // Long enough to read, short enough that the next copy is unambiguous.
+      window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
+    } catch {
+      // Clipboard access can be refused (insecure origin, denied permission).
+      // Say so rather than showing "Copied" over an empty clipboard, which
+      // would send an operator to paste nothing into the yard.
+      window.prompt('Copy this, then paste it into the yard code editor:', mission.code);
+    }
+  }
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -164,6 +179,30 @@ function YardQueue({ yardId }: { yardId: string }) {
                     review
                   </span>
                 )}
+
+                {/* The manual bridge to the yard, and deliberately manual.
+                    Mission Control cannot reach the satellite: it is behind
+                    carrier NAT with no inbound path, which is why Firestore is
+                    the only channel between them. So the operator keeps both
+                    open in tabs, copies the Python here, and pastes it into
+                    the yard's /code/ editor to run.
+
+                    This is a fallback that should survive automated dispatch
+                    rather than be replaced by it - it is the path that works
+                    when the venue's internet does not. */}
+                <button
+                  onClick={() => copyCode(mission)}
+                  disabled={!mission.code}
+                  title="Copy the Python, then paste it into the yard's code editor"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {copiedId === mission.id ? (
+                    <Check className="h-3 w-3 text-primary" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedId === mission.id ? 'Copied' : 'Copy'}
+                </button>
 
                 <button
                   onClick={() => setExpanded(isOpen ? null : mission.id)}

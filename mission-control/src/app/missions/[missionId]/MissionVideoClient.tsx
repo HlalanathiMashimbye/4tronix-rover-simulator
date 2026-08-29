@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
+import { ArrowLeft, MonitorPlay, Rocket, Star, Video, Zap } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { getFirestoreClient } from '@/lib/firebase';
@@ -14,22 +14,18 @@ import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { yardLabel, yardPlace } from '@/infrastructure/config/yards';
+import { yardLabel } from '@/infrastructure/config/yards';
+import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-}
-
-type RunOption = { id: string; label: string; kind: 'sim' | 'real'; youtubeId?: string };
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
   const [mission, setMission] = useState<Mission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedRunId, setSelectedRunId] = useState('sim');
+  // Null until the mission loads, then the first run - which is the real one
+  // when there is one. A child opening their mission sees the rover, not a
+  // simulation they have already watched in the editor.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [codeView, setCodeView] = useState<'blocks' | 'python'>('blocks');
   const [copied, setCopied] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -41,25 +37,9 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
     [mission]
   );
 
-  // Run selector entries: the simulated run is always present; real yard runs
-  // are added as they are attached. A dropdown handles any number of runs.
-  const runs = useMemo<RunOption[]>(() => {
-    const list: RunOption[] = [{ id: 'sim', label: 'Simulated run', kind: 'sim' }];
-    const realId = getYouTubeId(mission?.youtubeUrl || mission?.videoUrl);
-    if (realId) {
-      // Name the city, not "Real run". Once Durban and Limpopo have rovers this
-      // selector is how a learner tells the runs apart, and "which yard" only
-      // means something to them as a place they could point to on a map.
-      const place = yardPlace(mission?.yardId);
-      list.push({
-        id: 'real-1',
-        label: place ? `Real run · ${place}` : 'Real run',
-        kind: 'real',
-        youtubeId: realId,
-      });
-    }
-    return list;
-  }, [mission]);
+  // Real runs come FIRST, which is the point: a child needs to see that an
+  // actual rover drove their code. See lib/missionRuns for the reasoning.
+  const runs = useMemo<RunOption[]>(() => buildRunOptions(mission), [mission]);
 
   useEffect(() => {
     const fetchMission = async () => {
@@ -163,20 +143,52 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
               {dateLabel}
             </span>
           </div>
-          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            Run
-            <select
-              value={selectedRunId}
-              onChange={(e) => setSelectedRunId(e.target.value)}
-              className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none transition-colors focus:border-primary"
+          {/* WAS A DROPDOWN, AND THAT WAS THE PROBLEM.
+              A closed <select> showed one option, so a child had no way to
+              know a real rover had driven their code - the single most
+              exciting thing this platform does was behind a control that
+              looked like it had nothing in it. Every run is a visible chip
+              now, the real one first and selected by default. */}
+          {runs.length > 1 && (
+            <div
+              role="tablist"
+              aria-label="Choose a run to watch"
+              className="flex shrink-0 items-center gap-1.5"
             >
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
+              {runs.map((r) => {
+                const active = r.id === selectedRun.id;
+                return (
+                  <button
+                    key={r.id}
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setSelectedRunId(r.id)}
+                    className={`clay-press flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-left transition-colors ${
+                      active
+                        ? 'border-primary/60 bg-gradient-mars text-primary-foreground'
+                        : 'border-border/60 bg-card text-foreground hover:border-primary/50'
+                    }`}
+                  >
+                    {r.kind === 'real' ? (
+                      <Video className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <MonitorPlay className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="leading-tight">
+                      <span className="block text-xs font-bold">{r.label}</span>
+                      <span
+                        className={`block text-[10px] ${
+                          active ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                        }`}
+                      >
+                        {r.sublabel}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Body fills the remaining viewport height; nothing scrolls except the
@@ -281,7 +293,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 className="clay clay-press inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-mars px-4 py-2.5 font-display text-sm font-bold text-primary-foreground"
               >
                 <Zap className="h-4 w-4" fill="currentColor" />
-                Try it
+                Remix
               </button>
             </div>
             </div>
