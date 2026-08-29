@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from web_server import app as flask_app  # noqa: E402
 import operator_console  # noqa: E402
 import mission_store  # noqa: E402
+import recording_control  # noqa: E402
 
 # The yard the seeded missions belong to, and the one the satellite defaults
 # to. Runs are keyed by it, so tests that assert on a run need it by name.
@@ -315,6 +316,15 @@ def client(missions, monkeypatch, tmp_path):
     # recorded call rather than a real one firing mid-suite.
     RecordingTimer.reset()
     monkeypatch.setattr(operator_console.threading, 'Timer', RecordingTimer)
+    # Default every test to "camera ready, recording starts/stops cleanly" -
+    # recording_control would otherwise try a real websocket connection to
+    # localhost:8890 on every /send or /rerun call, which is slow and always
+    # fails in CI. Tests that care about the readiness check or the recording
+    # lifecycle itself re-monkeypatch these within the test body.
+    monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+    monkeypatch.setattr(recording_control, 'start_recording',
+                         lambda mission_id, yard: (True, f'/tmp/{mission_id}__{yard}.mp4'))
+    monkeypatch.setattr(recording_control, 'stop_recording', lambda mission_id, yard, keep: (True, 'ok'))
     flask_app.config['TESTING'] = True
     with flask_app.test_client() as c:
         yield c
@@ -400,20 +410,33 @@ def test_auth_off_opens_console_and_hub_without_session(client, monkeypatch):
 
 # --- Stop: the control an operator uses with a rover already moving --------
 
-def test_stop_halts_the_rover_and_requeues_the_mission(client, missions, monkeypatch):
+def test_stop_cancels_the_mission_and_discards_its_recording(client, missions, monkeypatch):
+    """BACKLOG 338. STOP now writes 'cancelled', not 'queued' (see
+    api_stop_mission's docstring for why 'cancelled' rather than 'failed'),
+    and discards the recording in the same request - an operator stopping the
+    rover in real time has already made the call, no review step needed."""
     sign_in(client)
     calls = []
+    discard_calls = []
 
     def fake_post(url, **kwargs):
         calls.append(url)
         return FakeResponse(200, {'status': 'success'})
 
     monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
     resp = client.post('/operator/api/missions/p1/stop')
 
     assert resp.status_code == 200
+    data = resp.get_json()
+    assert data['newStatus'] == 'cancelled'
+    assert data['recordingDiscarded'] is True
     assert any(url.endswith('/queue/clear') for url in calls), calls
-    assert missions['p1']['status'] == 'queued'
+    assert missions['p1']['status'] == 'cancelled'
+    assert discard_calls == [('p1', YARD, False)]
 
 
 def test_stop_still_clears_the_rover_when_this_mission_is_not_running(client, missions, monkeypatch):
@@ -480,7 +503,7 @@ def test_the_force_marker_never_reaches_firestore(client, missions, monkeypatch)
 
     written = {k: v for k, v in payload.items() if k != FORCE_KEY}
     assert FORCE_KEY not in written
-    assert written['status'] == 'queued'
+    assert written['status'] == 'cancelled'
 
 
 # --- Sync rate, exposed on the Settings page -------------------------------
@@ -635,6 +658,56 @@ def test_send_rejects_missions_that_are_not_queued(client, missions, monkeypatch
     assert client.post('/operator/api/missions/c1/send').status_code == 400
 
 
+# --- Camera readiness + recording start (BACKLOG 334/335) -------------------
+
+def test_send_refuses_dispatch_when_camera_is_not_ready(client, missions, monkeypatch):
+    sign_in(client)
+    monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (False, 'no frame received'))
+    monkeypatch.setattr(
+        operator_console.requests, 'post',
+        lambda *a, **k: pytest.fail('rover must not be called when the camera is not ready'),
+    )
+
+    resp = client.post('/operator/api/missions/q1/send')
+
+    assert resp.status_code == 503
+    assert 'not ready' in resp.get_json()['error']
+    assert missions['q1']['status'] == 'queued'
+
+
+def test_send_starts_recording_after_a_successful_dispatch(client, missions, monkeypatch):
+    sign_in(client)
+    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    started = []
+    monkeypatch.setattr(
+        recording_control, 'start_recording',
+        lambda mission_id, yard: (started.append((mission_id, yard)), (True, f'/tmp/{mission_id}__{yard}.mp4'))[1],
+    )
+
+    resp = client.post('/operator/api/missions/q1/send')
+
+    assert resp.status_code == 200
+    assert resp.get_json()['recordingStarted'] is True
+    assert started == [('q1', YARD)]
+    run = mission_store.get_run('q1', YARD)
+    assert run['recording_status'] == 'recording'
+    assert run['recording_path'] == f'/tmp/q1__{YARD}.mp4'
+
+
+def test_send_does_not_fail_the_request_when_recording_fails_to_start(client, missions, monkeypatch):
+    """The rover is already moving by the time recording starts - a camera
+    hiccup here is a warning to log, not a reason to fail the response."""
+    sign_in(client)
+    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    monkeypatch.setattr(recording_control, 'start_recording', lambda mission_id, yard: (False, 'camera dropped'))
+
+    resp = client.post('/operator/api/missions/q1/send')
+
+    assert resp.status_code == 200
+    assert resp.get_json()['recordingStarted'] is False
+    assert missions['q1']['status'] == 'processing'
+
+
 def test_send_reports_rover_offline_and_keeps_mission_queued(client, missions, monkeypatch):
     sign_in(client)
 
@@ -712,6 +785,22 @@ def test_complete_marks_mission_completed(client, missions):
     assert resp.status_code == 200
     assert missions['p1']['status'] == 'completed'
     assert 'completedAt' in missions['p1']
+
+
+def test_complete_keeps_the_recording_and_marks_it_kept(client, missions, monkeypatch):
+    """BACKLOG 335/336: the ordinary successful-run path. Unlike STOP or a
+    rover-reported error, a mission marked complete keeps its video."""
+    sign_in(client)
+    stop_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (stop_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    resp = client.post('/operator/api/missions/p1/complete')
+
+    assert resp.status_code == 200
+    assert stop_calls == [('p1', YARD, True)]
 
 
 def test_complete_notifies_mission_control(client, missions, monkeypatch):
@@ -1430,6 +1519,67 @@ def test_requeuing_returns_it_to_the_queue_without_touching_the_rover(client, mi
     assert not any('queue/add' in u for u in rover_calls), 'must not re-dispatch'
 
 
+def test_resolve_cancelled_sets_status_and_discards_the_kept_recording(client, missions, monkeypatch):
+    """BACKLOG 338. This is the review flow's discard point: mission_watcher
+    already stopped the recording and kept it (flag_for_review); only the
+    operator's own 'cancelled' decision throws it away."""
+    import mission_store
+    sign_in(client)
+    mission_store.flag_for_review('p1', 'interrupted')
+    discard_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    resp = client.post('/operator/api/missions/p1/resolve', json={'outcome': 'cancelled'})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['newStatus'] == 'cancelled'
+    row = mission_store.get_mission('p1')
+    assert row['status'] == 'cancelled'
+    assert row['needs_review'] == 0
+    run = mission_store.get_run('p1', YARD)
+    assert run['status'] == 'cancelled'
+    assert run['needs_review'] == 0
+    assert discard_calls == [('p1', YARD, False)]
+
+
+def test_resolve_completed_leaves_the_kept_recording_untouched(client, missions, monkeypatch):
+    import mission_store
+    sign_in(client)
+    mission_store.flag_for_review('p1', 'interrupted')
+    discard_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    resp = client.post('/operator/api/missions/p1/resolve', json={'outcome': 'completed'})
+
+    assert resp.status_code == 200
+    assert discard_calls == [], 'completed keeps whatever mission_watcher already kept'
+
+
+def test_resolve_requeue_discards_the_stale_recording(client, missions, monkeypatch):
+    """A requeued mission is about to be re-run and will get a fresh
+    recording; the old one from the interrupted run should not follow it
+    back into the ordinary queue."""
+    import mission_store
+    sign_in(client)
+    mission_store.flag_for_review('p1', 'interrupted')
+    discard_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    resp = client.post('/operator/api/missions/p1/resolve', json={'outcome': 'requeue'})
+
+    assert resp.status_code == 200
+    assert discard_calls == [('p1', YARD, False)]
+
+
 def test_resolve_rejects_an_unknown_outcome(client, missions):
     import mission_store
     sign_in(client)
@@ -1456,6 +1606,20 @@ def test_conflicts_endpoint_exposes_the_log(client, missions):
 
     assert len(conflicts) == 1
     assert conflicts[0]['resolution'] == 'local'
+
+
+def test_recording_status_appears_in_the_mission_api_contract(client, missions):
+    """BACKLOG 335/336: the mission page renders a recording badge off this
+    field, so it has to reach the camelCase JSON contract, not just the
+    snake_case mirror row."""
+    sign_in(client)
+
+    resp = client.get('/operator/api/missions/q1')
+
+    assert resp.status_code == 200
+    mission = resp.get_json()['mission']
+    assert mission['recordingStatus'] == 'none'
+    assert 'recordingPath' not in mission, 'server-internal, not operator-facing'
 
 
 def test_review_endpoints_require_an_operator(client, missions):
@@ -1499,6 +1663,36 @@ def test_cancel_frees_the_yard(client, missions, monkeypatch):
 def test_cancel_is_refused_on_a_finished_mission(client, missions):
     sign_in(client)
     assert client.post('/operator/api/missions/c1/cancel').status_code == 400
+
+
+def test_cancel_discards_the_recording_when_the_mission_was_running(client, missions, monkeypatch):
+    """A 'processing' run cancelled this way ends up 'cancelled' exactly like
+    one stopped via STOP, and must not carry a video a future upload step
+    could mistake for a successful run (BACKLOG 338)."""
+    sign_in(client)
+    discard_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    assert client.post('/operator/api/missions/p1/cancel').status_code == 200
+
+    assert discard_calls == [('p1', YARD, False)]
+
+
+def test_cancel_does_not_touch_recording_for_a_queued_mission(client, missions, monkeypatch):
+    """A queued mission never started recording - nothing to discard."""
+    sign_in(client)
+    discard_calls = []
+    monkeypatch.setattr(
+        recording_control, 'stop_recording',
+        lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
+    )
+
+    assert client.post('/operator/api/missions/q1/cancel').status_code == 200
+
+    assert discard_calls == []
 
 
 def test_cancel_queues_the_change_for_firestore(client, missions):

@@ -35,6 +35,7 @@ from mission_store import (
     release_run,
     run_has_pending,
 )
+from recording_control import stop_recording
 
 ROVER_POLL_TIMEOUT = 3.0
 DEFAULT_POLL_INTERVAL = 10  # seconds
@@ -141,6 +142,10 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
         # Flag the run for review
         release_run(mission_id, yard_id, 'processing', _now_iso(),
                    review_reason=f'rover could not run it: {reason}'[:REVIEW_REASON_MAX])
+        # Stop capturing - there is nothing left to film - but keep the file
+        # (BACKLOG 338). It stays 'processing'/needs_review until a human
+        # decides; only that decision (api_resolve_review) discards it.
+        stop_recording(mission_id, yard_id, keep=True)
         print(f'[watcher] Rover reported an error for {mission_id}: {reason}')
 
     for mission_id in done:
@@ -158,6 +163,7 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
             continue
 
         release_run(mission_id, yard_id, 'completed', _now_iso())
+        stop_recording(mission_id, yard_id, keep=True)
         completed.append(mission_id)
         print(f'[watcher] Rover confirmed {mission_id}; marked complete')
 

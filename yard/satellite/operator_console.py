@@ -500,6 +500,9 @@ def _mirror_row_to_dict(row):
         # The resolve endpoint has existed all along with no way to reach it.
         'needsReview': bool(row.get('needs_review')),
         'reviewReason': row.get('review_reason'),
+        # BACKLOG 335/336/338. recording_path/timestamps stay run-internal -
+        # a filesystem path on the satellite isn't operator-facing information.
+        'recordingStatus': row.get('recording_status') or 'none',
     }
 
 
@@ -576,6 +579,26 @@ def _dispatch_to_rover(mission, mission_id=None):
     return True, None
 
 
+def _begin_recording(mission_id, yard):
+    """Start recording right after a successful dispatch (BACKLOG 335).
+
+    Best-effort and never surfaced as a request failure: by the time this
+    runs the rover has already been dispatched, which is irreversible, so a
+    camera hiccup here is a warning to log, not a reason to fail the response.
+    Returns whether recording actually started, for the caller to pass on to
+    the operator as a soft signal.
+    """
+    from recording_control import start_recording
+    from mission_store import set_run_recording_state
+
+    ok, detail = start_recording(mission_id, yard)
+    if ok:
+        set_run_recording_state(mission_id, yard, 'recording', path=detail, started_at=_now_iso())
+    else:
+        current_app.logger.warning('Recording did not start for %s/%s: %s', mission_id, yard, detail)
+    return ok
+
+
 @operator_bp.route('/api/missions/<mission_id>/send', methods=['POST'])
 @require_operator
 def api_send_to_rover(mission_id):
@@ -589,9 +612,23 @@ def api_send_to_rover(mission_id):
 
     Concurrency is scoped to (mission_id, yard_id): the same mission can run
     simultaneously on different yards.
+
+    A camera readiness check (BACKLOG 334) runs before the lock is even
+    touched: readiness has nothing to do with which mission is being sent, so
+    there is no claim to roll back on failure. Refusing here, rather than
+    after dispatch, is the whole point - a mission with no camera up produces
+    a run nobody will ever have video of.
     """
     from mission_store import acquire_run, release_run, get_mission
+    from recording_control import is_ready
     from satellite_identity import yard_id
+
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'sending a mission - a run with no video cannot be reviewed later.',
+        }), 503
 
     now = _now_iso()
     yard = yard_id()
@@ -622,17 +659,31 @@ def api_send_to_rover(mission_id):
         release_run(mission_id, yard, 'queued', _now_iso())
         return err
 
+    recording_started = _begin_recording(mission_id, yard)
     _notify_mission_control_async(mission_id, 'processing')
-    return jsonify({'status': 'ok', 'missionId': mission_id})
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
 @operator_bp.route('/api/missions/<mission_id>/rerun', methods=['POST'])
 @require_operator
 def api_rerun(mission_id):
     """Re-run a finished mission at this yard. Clears the run's completion
-    and video so the new run starts fresh without stale data."""
+    and video so the new run starts fresh without stale data.
+
+    Gets the same camera readiness check and recording start as Send (BACKLOG
+    334/335): a rerun is a real dispatch to the rover, so a rerun with no
+    video would defeat the point exactly as much as a first run would.
+    """
     from mission_store import acquire_run, release_run, get_mission, get_run
+    from recording_control import is_ready
     from satellite_identity import yard_id
+
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'rerunning a mission - a run with no video cannot be reviewed later.',
+        }), 503
 
     now = _now_iso()
     yard = yard_id()
@@ -671,8 +722,9 @@ def api_rerun(mission_id):
         release_run(mission_id, yard, previous, _now_iso())
         return err
 
+    recording_started = _begin_recording(mission_id, yard)
     _notify_mission_control_async(mission_id, 'processing')
-    return jsonify({'status': 'ok', 'missionId': mission_id})
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
 @operator_bp.route('/api/missions/<mission_id>', methods=['GET'])
@@ -690,7 +742,7 @@ def api_mission(mission_id):
 @operator_bp.route('/api/missions/<mission_id>/stop', methods=['POST'])
 @require_operator
 def api_stop_mission(mission_id):
-    """Halt the rover mid-run and put the mission back in the queue.
+    """Halt the rover mid-run and cancel the run.
 
     The gap this fills: until now an operator standing next to a moving rover,
     in a hall full of children, had no control that stopped it. The rover has
@@ -702,10 +754,15 @@ def api_stop_mission(mission_id):
     ordering is the whole point. A failed status write is a tidy-up problem; a
     rover that keeps driving because a database call raised is not.
 
-    The mission goes back to 'queued' rather than 'failed' or 'cancelled': the
-    code did not do anything wrong, somebody just needed the rover to stop, and
-    it should be re-runnable with one tap. 'failed' would also reach the learner
-    as a run that went wrong, which it did not.
+    The run goes to 'cancelled' rather than 'failed': the code did not do
+    anything wrong, somebody just needed the rover to stop, and 'failed' would
+    reach the learner as a run that went wrong, which it did not. 'cancelled'
+    is what api_cancel_mission already uses for exactly that property - reads
+    as "Pending" to the learner, nobody is shown a rejection - and it is still
+    one tap away from running again via rerun. Its recording (BACKLOG 338) is
+    discarded in the same request: an operator stopping the rover in real time
+    has already made the call, unlike a rover-reported error, which waits for
+    a review decision instead (see mission_watcher.flag_for_review).
 
     Deliberately works whatever state THIS mission is in. The button is on
     screen at all times, and refusing to stop a rover because the mission you
@@ -715,6 +772,7 @@ def api_stop_mission(mission_id):
     is skipped.
     """
     from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
     from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
@@ -744,15 +802,19 @@ def api_stop_mission(mission_id):
         run_status = run.get('status') if run else 'queued'
         return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': run_status})
 
-    release_run(mission_id, yard, 'queued', _now_iso(), operator_decision=True)
-    _notify_mission_control_async(mission_id, 'queued')
-    return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
+    release_run(mission_id, yard, 'cancelled', _now_iso(), operator_decision=True)
+    stop_recording(mission_id, yard, keep=False)
+    _notify_mission_control_async(mission_id, 'cancelled')
+    return jsonify({
+        'status': 'ok', 'missionId': mission_id, 'newStatus': 'cancelled', 'recordingDiscarded': True,
+    })
 
 
 @operator_bp.route('/api/missions/<mission_id>/complete', methods=['POST'])
 @require_operator
 def api_mark_complete(mission_id):
     from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
     from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
@@ -765,6 +827,7 @@ def api_mark_complete(mission_id):
         return jsonify({'error': 'Only queued or running missions can be marked complete'}), 400
 
     release_run(mission_id, yard, 'completed', _now_iso())
+    stop_recording(mission_id, yard, keep=True)
     _notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -806,8 +869,16 @@ def api_cancel_mission(mission_id):
     Cancel rather than delete, deliberately. The mission is a child's work and
     the record of it should survive; 'cancelled' also reads as "Pending" on the
     learner's side (discoveryStatus.ts), so nobody is shown a rejection.
+
+    A 'processing' run being cancelled here still gets its recording discarded
+    (BACKLOG 338), for the same reason STOP does: a run that ends up
+    'cancelled' should never carry a video a future upload step could mistake
+    for a successful run - however the cancellation happened to reach it. This
+    route does not itself stop the rover; that gap is pre-existing and
+    unrelated to recording.
     """
     from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
     from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
@@ -819,7 +890,10 @@ def api_cancel_mission(mission_id):
     if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be cancelled'}), 400
 
+    was_running = run.get('status') == 'processing'
     release_run(mission_id, yard, 'cancelled', _now_iso())
+    if was_running:
+        stop_recording(mission_id, yard, keep=False)
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
@@ -1106,19 +1180,30 @@ def api_needs_review():
 def api_resolve_review(mission_id):
     """Record the operator's decision about an interrupted mission.
 
-    'completed' - they checked and the run finished.
-    'requeue'   - put it back in the queue to be run again.
+    'completed' - they checked and the run finished. Its recording (already
+                  'kept' by mission_watcher.flag_for_review, BACKLOG 338) is
+                  left untouched - it is exactly the video this run produced.
+    'requeue'   - put it back in the queue to be run again. The old recording
+                  is discarded: a fresh one is made when it actually reruns,
+                  and a stale video should not follow a mission back into the
+                  ordinary queue as if nothing had happened.
+    'cancelled' - the operator decided the interrupted run should not count
+                  (BACKLOG 338). Its recording is discarded - the whole point
+                  of this outcome is that it must never be mistaken for a
+                  successful run's video.
 
     Deliberately does NOT dispatch to the rover. Re-queuing makes the mission
     available for a human to send again; it never moves the robot by itself
     (plan 2.3).
     """
     from mission_store import get_mission, resolve_review
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
 
     data = request.get_json(silent=True) or {}
     outcome = (data.get('outcome') or '').strip()
-    if outcome not in ('completed', 'requeue'):
-        return jsonify({'error': "outcome must be 'completed' or 'requeue'"}), 400
+    if outcome not in ('completed', 'requeue', 'cancelled'):
+        return jsonify({'error': "outcome must be 'completed', 'requeue', or 'cancelled'"}), 400
 
     mission = get_mission(mission_id)
     if mission is None:
@@ -1126,8 +1211,14 @@ def api_resolve_review(mission_id):
     if not mission.get('needs_review'):
         return jsonify({'error': 'This mission is not awaiting review'}), 400
 
-    status = 'completed' if outcome == 'completed' else 'queued'
+    status = {'completed': 'completed', 'requeue': 'queued', 'cancelled': 'cancelled'}[outcome]
     resolve_review(mission_id, status, _now_iso())
+
+    if status != 'completed':
+        # 'queued' (fresh rerun ahead) and 'cancelled' (must never look
+        # successful) both discard the recording left over from the
+        # interrupted run; only 'completed' keeps it.
+        stop_recording(mission_id, yard_id(), keep=False)
 
     if status == 'completed':
         _notify_mission_control_async(mission_id, 'completed')
