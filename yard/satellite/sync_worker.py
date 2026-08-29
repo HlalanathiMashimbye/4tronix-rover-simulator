@@ -289,6 +289,51 @@ def flush_run_one(firestore_client, entry):
         return False
 
 
+
+# The last pull failure printed, so a permanent one is reported once rather
+# than every cycle.
+_last_pull_error = None
+
+
+def _log_pull_failure(error):
+    """Print a pull failure, but not the same one over and over.
+
+    A missing composite index does not resolve itself: the pull fails
+    identically every cycle, and at one line each it buried everything else in
+    the dev log within a minute - including the line saying which index to
+    create. Some failures are transient and worth seeing repeat; this one is a
+    standing condition, and repeating it costs the reader the rest of the log.
+
+    Repeats are counted and reported when the error changes or clears, so a
+    genuinely stuck satellite still looks stuck rather than silent.
+    """
+    global _last_pull_error
+
+    message = str(error)
+    if message == _last_pull_error:
+        _pull_failure_repeats[0] += 1
+        return
+
+    if _last_pull_error is not None and _pull_failure_repeats[0]:
+        print(f'[sync] (previous error repeated {_pull_failure_repeats[0]} more times)')
+
+    _pull_failure_repeats[0] = 0
+    _last_pull_error = message
+    print(f'[sync] Failed to pull from Firestore: {message}')
+
+
+_pull_failure_repeats = [0]
+
+
+def _clear_pull_failure():
+    """Called after a successful pull, so the next failure prints again."""
+    global _last_pull_error
+    if _last_pull_error is not None and _pull_failure_repeats[0]:
+        print(f'[sync] (previous error repeated {_pull_failure_repeats[0]} more times)')
+    _last_pull_error = None
+    _pull_failure_repeats[0] = 0
+
+
 def sync_from_firestore(firestore_client, collection_name='missions', yard_id=None):
     """Pull only what changed, rather than the whole collection every cycle.
 
@@ -331,9 +376,10 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
             # Firestore just now or it will report itself as stale.
             set_meta('last_synced_at', _now_iso())
 
+        _clear_pull_failure()
         return True
     except Exception as e:
-        print(f'[sync] Failed to pull from Firestore: {e}')
+        _log_pull_failure(e)
         return False
 
 

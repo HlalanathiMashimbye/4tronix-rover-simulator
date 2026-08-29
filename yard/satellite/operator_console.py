@@ -41,6 +41,7 @@ shadow Python's stdlib `operator` module.
 import os
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -90,15 +91,51 @@ def _web_api_key():
     )
 
 
+# Remembered so the login page and the status page do not each retry a broken
+# credential, and so the reason is printed once rather than per request.
+_admin_config_error = None
+
+
 def _admin_configured():
-    return bool(
-        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        or (
-            os.environ.get('FIREBASE_PROJECT_ID')
-            and os.environ.get('FIREBASE_CLIENT_EMAIL')
-            and os.environ.get('FIREBASE_PRIVATE_KEY')
-        )
-    )
+    """Whether this satellite can actually authenticate, not whether some
+    variables happen to be set.
+
+    This used to require GOOGLE_APPLICATION_CREDENTIALS or all three
+    FIREBASE_* key variables, which meant it reported "not configured" for a
+    satellite running on Application Default Credentials - the mode staging,
+    prod and now local dev all use. Sign-in was refused while the credential
+    underneath it worked perfectly.
+
+    Asking the real question instead: try to build the Firebase app, and say
+    yes if it built. _init_firebase memoises, so this costs one attempt and
+    then nothing.
+    """
+    global _admin_config_error
+    try:
+        _init_firebase()
+        _admin_config_error = None
+        return True
+    except Exception as error:
+        message = str(error)
+        if message != _admin_config_error:
+            _admin_config_error = message
+            print(f'[operator] Firebase credentials unavailable: {message}')
+        return False
+
+
+def _clean_env(name):
+    """An env value with surrounding quotes and whitespace removed, or None.
+
+    .env files keep their quotes when a shell is not doing the parsing, and a
+    quoted empty string is still empty.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1]
+    return value or None
 
 
 def _init_firebase():
@@ -117,23 +154,55 @@ def _init_firebase():
         if _firebase_app is not None:
             return _firebase_app
 
-        if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
-            cred = credentials.ApplicationDefault()
-        else:
-            # \n in the private key survives .env files as the two characters
-            # backslash-n; decode them back to newlines (mission-control does
-            # the same in its firebase-admin bootstrap).
-            private_key = os.environ['FIREBASE_PRIVATE_KEY'].strip().strip('"').replace('\\n', '\n')
+        # Same three-way choice as mission-control's firebase-admin.ts, and
+        # deliberately so: the two used to disagree, and the satellite quietly
+        # talked to a different Firebase project for weeks.
+        #
+        #   both key variables set   -> that service account
+        #   neither set              -> Application Default Credentials
+        #   exactly one set          -> refuse, because it is a broken .env
+        client_email = _clean_env('FIREBASE_CLIENT_EMAIL')
+        private_key = _clean_env('FIREBASE_PRIVATE_KEY')
+
+        if client_email and private_key:
             cred = credentials.Certificate({
                 'type': 'service_account',
-                'project_id': os.environ['FIREBASE_PROJECT_ID'],
-                'client_email': os.environ['FIREBASE_CLIENT_EMAIL'],
-                'private_key': private_key,
+                'project_id': _clean_env('FIREBASE_PROJECT_ID'),
+                'client_email': client_email,
+                # \n in the private key survives .env files as the two
+                # characters backslash-n; decode them back to newlines.
+                'private_key': private_key.replace('\\n', '\n'),
                 'token_uri': 'https://oauth2.googleapis.com/token',
             })
+        elif client_email or private_key:
+            # Falling back to ADC here would authenticate as a DIFFERENT
+            # identity than the one intended, silently. Fail instead.
+            missing = 'FIREBASE_PRIVATE_KEY' if client_email else 'FIREBASE_CLIENT_EMAIL'
+            raise RuntimeError(
+                f'Incomplete Firebase service account config: {missing} is not '
+                f'set while the other half is. Set both, or unset both to use '
+                f'Application Default Credentials.'
+            )
+        else:
+            cred = credentials.ApplicationDefault()
+
+        # Pass the project EXPLICITLY, as mission-control does.
+        #
+        # Without it firebase_admin infers the project from the credential, and
+        # under ADC that is whatever `gcloud config get-value project` happens
+        # to say - which on this machine was still the retired project. The
+        # satellite would then report one project while FIREBASE_PROJECT_ID
+        # said another, which is exactly the kind of disagreement that hid the
+        # env drift in the first place.
+        options = {}
+        project_id = _clean_env('FIREBASE_PROJECT_ID')
+        if project_id:
+            options['projectId'] = project_id
 
         try:
-            _firebase_app = firebase_admin.initialize_app(cred, name='operator-console')
+            _firebase_app = firebase_admin.initialize_app(
+                cred, options, name='operator-console',
+            )
         except ValueError:
             # Already registered by something this lock didn't cover (e.g. a
             # prior dev-server run that left firebase_admin's process-wide
@@ -217,11 +286,80 @@ def auth_disabled():
     return os.environ.get('OPERATOR_AUTH', '').strip().lower() in ('off', 'disabled', '0', 'false')
 
 
+# How long a sign-in lasts before the operator must authenticate again, and how
+# often a live session is re-checked against Firebase.
+#
+# The satellite verified the token once at sign-in and then trusted the Flask
+# session for as long as the browser kept it. Mission Control re-verifies on
+# every request with checkRevoked, so removing an operator there took effect at
+# once - and did nothing at all here. Someone whose access was revoked kept the
+# yard console, including Send, which moves a physical rover.
+#
+# It cannot simply copy Mission Control: this console exists to work with no
+# internet, so a check that fails closed would lock an operator out of a rover
+# mid-event because venue wifi dropped. The compromise is deliberate and has
+# two halves.
+SESSION_MAX_AGE = int(os.environ.get('OPERATOR_SESSION_MAX_AGE', 12 * 3600))
+SESSION_RECHECK_EVERY = int(os.environ.get('OPERATOR_SESSION_RECHECK', 300))
+
+
+def _session_expired(operator, now):
+    started = operator.get('signed_in_at')
+    return started is None or (now - started) > SESSION_MAX_AGE
+
+
+def _still_authorised(operator, now):
+    """Re-check a live session against Firebase, at most every few minutes.
+
+    FAILS OPEN when Firebase cannot be reached. That is the offline-first
+    trade: an operator standing at a rover with no internet keeps working, and
+    the bound on how long a revoked session can survive is SESSION_MAX_AGE
+    rather than forever.
+
+    FAILS CLOSED when Firebase answers and says no - the account is gone,
+    disabled, or no longer holds a role. That is the case that matters, since
+    it is the one an admin just acted on.
+    """
+    if operator.get('uid') == OFFLINE_OPERATOR['uid']:
+        return True
+
+    if now - operator.get('checked_at', 0) < SESSION_RECHECK_EVERY:
+        return True
+
+    try:
+        from firebase_admin import auth
+        user = auth.get_user(operator['uid'], app=_init_firebase())
+    except Exception:
+        # Unreachable, or the credential is unavailable. Keep working.
+        operator['checked_at'] = now
+        session.modified = True
+        return True
+
+    if user.disabled:
+        return False
+
+    role = (user.custom_claims or {}).get('role')
+    if role not in ('operator', 'admin'):
+        return False
+
+    # Pick up a promotion or demotion without needing a re-login.
+    operator['role'] = role
+    operator['checked_at'] = now
+    session.modified = True
+    return True
+
+
 def current_operator():
     """The signed-in operator, or the offline stub when auth is disabled."""
     operator = session.get('operator')
+
     if operator:
+        now = time.time()
+        if _session_expired(operator, now) or not _still_authorised(operator, now):
+            session.pop('operator', None)
+            return OFFLINE_OPERATOR if auth_disabled() else None
         return operator
+
     return OFFLINE_OPERATOR if auth_disabled() else None
 
 
@@ -315,10 +453,15 @@ def api_login():
     if role not in ('operator', 'admin'):
         return jsonify({'error': 'This account does not have operator access'}), 403
 
+    now = time.time()
     session['operator'] = {
         'uid': claims.get('user_id') or claims.get('sub'),
         'email': claims.get('email') or email,
         'role': role,
+        # Both are what bound the session: one caps its life, the other paces
+        # the re-check against Firebase. See current_operator.
+        'signed_in_at': now,
+        'checked_at': now,
     }
     return jsonify({'status': 'ok', 'role': role})
 
@@ -912,9 +1055,18 @@ def api_integrations():
                 'id': 'firestore',
                 'name': 'Firestore',
                 'why': 'Syncs missions with mission-control.',
+                # Says which credential is actually in use rather than
+                # assuming a service account: ADC is what staging, prod and
+                # local dev all use, and reporting it as a missing key sent
+                # people looking for a variable that should not be set.
                 **state(_admin_configured(),
-                        'Service account present' if _admin_configured()
-                        else 'Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY'),
+                        ('Authenticated as ' + (
+                            'a service account' if _clean_env('FIREBASE_CLIENT_EMAIL')
+                            else 'Application Default Credentials'
+                        )) if _admin_configured()
+                        else 'Cannot reach Firebase. Run `gcloud auth application-default '
+                             'login`, or set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY '
+                             'together. The reason is in the satellite log.'),
             },
             {
                 'id': 'youtube',
