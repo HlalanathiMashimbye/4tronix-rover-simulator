@@ -10,6 +10,7 @@ import sys
 import os
 import re
 import threading
+import time
 
 import pytest
 from flask import current_app
@@ -320,8 +321,22 @@ def client(missions, monkeypatch, tmp_path):
 
 
 def sign_in(client):
+    """Mint the session the login route mints, timestamps included.
+
+    signed_in_at bounds the session and checked_at paces the Firebase
+    re-check; a session without them is treated as expired, which is the
+    correct fate for one minted before those existed.
+    """
+    now = time.time()
     with client.session_transaction() as sess:
-        sess['operator'] = {'uid': 'op-1', 'email': 'op@test.com', 'role': 'operator'}
+        sess['operator'] = {
+            'uid': 'op-1',
+            'email': 'op@test.com',
+            'role': 'operator',
+            'signed_in_at': now,
+            # Recent, so tests do not reach for Firebase on every request.
+            'checked_at': now,
+        }
 
 
 # ---------------------------------------------------------------------------

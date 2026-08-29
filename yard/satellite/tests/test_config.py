@@ -2,6 +2,7 @@
 Tests for the runtime rover-URL config endpoint POST /api/config/rover_url.
 """
 
+import time
 import sys
 import os
 import json
@@ -22,7 +23,13 @@ def client(tmp_path, monkeypatch):
         # Repointing the rover is now an operator action; these tests exercise
         # the endpoint's behaviour, not its gate (see the auth test below).
         with client.session_transaction() as sess:
-            sess['operator'] = {'uid': 'op-1', 'email': 'op@test.com', 'role': 'operator'}
+            now = time.time()
+            sess['operator'] = {
+                'uid': 'op-1', 'email': 'op@test.com', 'role': 'operator',
+                # A session without these is treated as expired; see
+                # current_operator in operator_console.
+                'signed_in_at': now, 'checked_at': now,
+            }
         yield client
     web_server.ROVER_URL = original_url
 

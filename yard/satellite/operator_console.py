@@ -41,6 +41,7 @@ shadow Python's stdlib `operator` module.
 import os
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -285,11 +286,80 @@ def auth_disabled():
     return os.environ.get('OPERATOR_AUTH', '').strip().lower() in ('off', 'disabled', '0', 'false')
 
 
+# How long a sign-in lasts before the operator must authenticate again, and how
+# often a live session is re-checked against Firebase.
+#
+# The satellite verified the token once at sign-in and then trusted the Flask
+# session for as long as the browser kept it. Mission Control re-verifies on
+# every request with checkRevoked, so removing an operator there took effect at
+# once - and did nothing at all here. Someone whose access was revoked kept the
+# yard console, including Send, which moves a physical rover.
+#
+# It cannot simply copy Mission Control: this console exists to work with no
+# internet, so a check that fails closed would lock an operator out of a rover
+# mid-event because venue wifi dropped. The compromise is deliberate and has
+# two halves.
+SESSION_MAX_AGE = int(os.environ.get('OPERATOR_SESSION_MAX_AGE', 12 * 3600))
+SESSION_RECHECK_EVERY = int(os.environ.get('OPERATOR_SESSION_RECHECK', 300))
+
+
+def _session_expired(operator, now):
+    started = operator.get('signed_in_at')
+    return started is None or (now - started) > SESSION_MAX_AGE
+
+
+def _still_authorised(operator, now):
+    """Re-check a live session against Firebase, at most every few minutes.
+
+    FAILS OPEN when Firebase cannot be reached. That is the offline-first
+    trade: an operator standing at a rover with no internet keeps working, and
+    the bound on how long a revoked session can survive is SESSION_MAX_AGE
+    rather than forever.
+
+    FAILS CLOSED when Firebase answers and says no - the account is gone,
+    disabled, or no longer holds a role. That is the case that matters, since
+    it is the one an admin just acted on.
+    """
+    if operator.get('uid') == OFFLINE_OPERATOR['uid']:
+        return True
+
+    if now - operator.get('checked_at', 0) < SESSION_RECHECK_EVERY:
+        return True
+
+    try:
+        from firebase_admin import auth
+        user = auth.get_user(operator['uid'], app=_init_firebase())
+    except Exception:
+        # Unreachable, or the credential is unavailable. Keep working.
+        operator['checked_at'] = now
+        session.modified = True
+        return True
+
+    if user.disabled:
+        return False
+
+    role = (user.custom_claims or {}).get('role')
+    if role not in ('operator', 'admin'):
+        return False
+
+    # Pick up a promotion or demotion without needing a re-login.
+    operator['role'] = role
+    operator['checked_at'] = now
+    session.modified = True
+    return True
+
+
 def current_operator():
     """The signed-in operator, or the offline stub when auth is disabled."""
     operator = session.get('operator')
+
     if operator:
+        now = time.time()
+        if _session_expired(operator, now) or not _still_authorised(operator, now):
+            session.pop('operator', None)
+            return OFFLINE_OPERATOR if auth_disabled() else None
         return operator
+
     return OFFLINE_OPERATOR if auth_disabled() else None
 
 
@@ -383,10 +453,15 @@ def api_login():
     if role not in ('operator', 'admin'):
         return jsonify({'error': 'This account does not have operator access'}), 403
 
+    now = time.time()
     session['operator'] = {
         'uid': claims.get('user_id') or claims.get('sub'),
         'email': claims.get('email') or email,
         'role': role,
+        # Both are what bound the session: one caps its life, the other paces
+        # the re-check against Firebase. See current_operator.
+        'signed_in_at': now,
+        'checked_at': now,
     }
     return jsonify({'status': 'ok', 'role': role})
 
