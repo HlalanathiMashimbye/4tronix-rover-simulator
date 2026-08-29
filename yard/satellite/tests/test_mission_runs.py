@@ -42,9 +42,7 @@ def test_create_first_run_for_mission():
     """First acquire_run creates the run from queued state."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
 
-    ok, reason, run = mission_store.acquire_run(
-        'm1', 'yard-a', 'operator-1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok, reason, run = mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     assert ok is True
     assert reason is None
@@ -52,13 +50,12 @@ def test_create_first_run_for_mission():
     assert run['mission_id'] == 'm1'
     assert run['yard_id'] == 'yard-a'
     assert run['status'] == 'processing'
-    assert run['lock_owner'] == 'operator-1'
 
 
 def test_get_run():
     """Retrieve a run by (mission_id, yard_id)."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     run = mission_store.get_run('m1', 'yard-a')
     assert run is not None
@@ -72,8 +69,8 @@ def test_get_run():
 def test_get_runs_lists_all_for_mission():
     """get_runs returns all runs for a mission."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
-    mission_store.acquire_run('m1', 'yard-b', 'op2', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
+    mission_store.acquire_run('m1', 'yard-b', '2026-07-14T10:00:00Z')
 
     runs = mission_store.get_runs('m1')
     assert len(runs) == 2
@@ -90,14 +87,10 @@ def test_mission_a_can_run_simultaneously_on_yard_a_and_yard_b():
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
 
     # Yard A acquires
-    ok_a, _, run_a = mission_store.acquire_run(
-        'm1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok_a, _, run_a = mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     # Yard B should also acquire (concurrency scoped to yard, not global)
-    ok_b, _, run_b = mission_store.acquire_run(
-        'm1', 'yard-b', 'op2', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok_b, _, run_b = mission_store.acquire_run('m1', 'yard-b', '2026-07-14T10:00:00Z')
 
     assert ok_a is True
     assert ok_b is True
@@ -106,41 +99,37 @@ def test_mission_a_can_run_simultaneously_on_yard_a_and_yard_b():
 
 
 def test_second_acquire_at_same_yard_rejected():
-    """Second acquire at the same yard is rejected while first holds lease."""
+    """Two Sends at one yard produce one run.
+
+    This is the whole duplicate-Send guard now: one processing run per yard,
+    with no owner and no expiry to reason about (AB#364).
+    """
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
 
     # First acquire succeeds
-    ok1, _, _ = mission_store.acquire_run(
-        'm1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok1, _, _ = mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     # Second acquire at same yard is rejected
-    ok2, reason2, _ = mission_store.acquire_run(
-        'm1', 'yard-a', 'op2', '2026-07-14T10:01:00Z', '2026-07-14T10:06:00Z'
-    )
+    ok2, reason2, _ = mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:01:00Z')
 
     assert ok1 is True
     assert ok2 is False
-    assert reason2 == 'locked-by-other'
+    assert reason2 == 'already-running'
 
 
 def test_yard_a_does_not_block_yard_b_when_yard_a_runs():
-    """Yard A holding the lock at mission M1 does not prevent Yard B's mission M2."""
+    """A run at yard A does not stop yard B running anything."""
     mission_store.upsert_missions([_mission('m1'), _mission('m2')], '2026-07-14T09:00:00Z')
 
     # Yard A acquires M1
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     # Yard B should be able to acquire M1 (different yard, same mission)
-    ok, reason, _ = mission_store.acquire_run(
-        'm1', 'yard-b', 'op2', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok, reason, _ = mission_store.acquire_run('m1', 'yard-b', '2026-07-14T10:00:00Z')
     assert ok is True
 
     # Yard B should also be able to acquire M2
-    ok, reason, _ = mission_store.acquire_run(
-        'm2', 'yard-b', 'op2', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z'
-    )
+    ok, reason, _ = mission_store.acquire_run('m2', 'yard-b', '2026-07-14T10:00:00Z')
     assert ok is True
 
 
@@ -148,17 +137,23 @@ def test_yard_a_does_not_block_yard_b_when_yard_a_runs():
 # Release and status transitions
 # ---------------------------------------------------------------------------
 
-def test_release_run_clears_lock():
-    """Releasing a run clears the lock so another operator can acquire it."""
-    mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+def test_a_finished_run_can_be_started_again_as_a_rerun():
+    """Finishing frees the yard, and rerun is how it starts again.
 
-    # Release it
+    A plain Send is deliberately refused on a finished run: restarting
+    something that already completed is what the rerun button is for, and a
+    Send that quietly re-drives a rover is a surprise.
+    """
+    mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
     mission_store.release_run('m1', 'yard-a', 'completed', '2026-07-14T10:05:00Z')
 
-    # Another operator can acquire it again
-    ok, reason, _ = mission_store.acquire_run(
-        'm1', 'yard-a', 'op2', '2026-07-14T10:06:00Z', '2026-07-14T10:11:00Z'
+    refused, reason, _ = mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:06:00Z')
+    assert refused is False
+    assert reason == 'not-queued'
+
+    ok, _, _ = mission_store.acquire_run(
+        'm1', 'yard-a', '2026-07-14T10:06:00Z', for_rerun=True,
     )
     assert ok is True
 
@@ -166,20 +161,19 @@ def test_release_run_clears_lock():
 def test_release_run_sets_status_and_completed_at():
     """Releasing with 'completed' status sets both status and completedAt."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     mission_store.release_run('m1', 'yard-a', 'completed', '2026-07-14T10:05:00Z')
 
     run = mission_store.get_run('m1', 'yard-a')
     assert run['status'] == 'completed'
     assert run['completed_at'] == '2026-07-14T10:05:00Z'
-    assert run['lock_owner'] is None
 
 
 def test_release_run_with_review_reason():
     """Releasing with review_reason flags the run for operator attention."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     mission_store.release_run(
         'm1', 'yard-a', 'processing', '2026-07-14T10:05:00Z',
@@ -196,21 +190,21 @@ def test_release_run_with_review_reason():
 # ---------------------------------------------------------------------------
 
 def test_acquire_run_queues_outbox_entry():
-    """acquire_run enqueues a lock entry for Firestore."""
+    """acquire_run enqueues the start for Firestore."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     entry = mission_store.peek_run_outbox()
     assert entry is not None
     assert entry['mission_id'] == 'm1'
     assert entry['yard_id'] == 'yard-a'
-    assert entry['op'] == 'lock'
+    assert entry['op'] == 'start'
 
 
 def test_release_run_queues_outbox_entry():
     """release_run enqueues a status change for Firestore."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
     mission_store.delete_run_outbox(mission_store.peek_run_outbox()['seq'])  # Clear lock entry
 
     mission_store.release_run('m1', 'yard-a', 'completed', '2026-07-14T10:05:00Z')
@@ -225,7 +219,7 @@ def test_release_run_queues_outbox_entry():
 def test_run_has_pending():
     """run_has_pending detects unflushed outbox entries."""
     mission_store.upsert_missions([_mission('m1')], '2026-07-14T09:00:00Z')
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     assert mission_store.run_has_pending('m1', 'yard-a') is True
     assert mission_store.run_has_pending('m1', 'yard-b') is False
@@ -264,7 +258,7 @@ def test_backfill_skips_existing_runs():
     mission_store.upsert_missions([_mission('m1', yardId='yard-a')], '2026-07-14T09:00:00Z')
 
     # Create a run manually
-    mission_store.acquire_run('m1', 'yard-a', 'op1', '2026-07-14T10:00:00Z', '2026-07-14T10:05:00Z')
+    mission_store.acquire_run('m1', 'yard-a', '2026-07-14T10:00:00Z')
 
     # Backfill should skip it
     created, skipped, errors = mission_store.backfill_missions_to_runs()

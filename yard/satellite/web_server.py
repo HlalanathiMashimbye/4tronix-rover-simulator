@@ -372,8 +372,8 @@ if __name__ == '__main__':
     # for review before any flush can push its stale 'processing' onward.
     try:
         from recovery import recover_interrupted_missions
-        from satellite_identity import satellite_id
-        recover_interrupted_missions(satellite_id(), rover_url=os.environ.get('ROVER_URL'))
+        from satellite_identity import yard_id
+        recover_interrupted_missions(yard_id(), rover_url=os.environ.get('ROVER_URL'))
     except Exception as e:
         print(f'[recovery] Skipped: {e}')
 

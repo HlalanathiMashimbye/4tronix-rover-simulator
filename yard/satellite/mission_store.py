@@ -475,199 +475,6 @@ def get_conflicts(limit=50):
 # rather than reading stale state. Contention is within one satellite, which is
 # the only contention that exists (plan section 9: one yard, yardId-scoped).
 
-def acquire_mission(mission_id, owner, now_iso, expires_iso, for_rerun=False):
-    """Atomically claim a mission and queue the claim for Firestore.
-
-    Returns (ok, reason, mission_dict). Reasons mirror the Firestore version:
-    'not-found', 'not-queued' / 'not-terminal', 'locked-by-other'.
-    """
-    with _db_lock:
-        conn = _connect()
-        try:
-            conn.execute('BEGIN IMMEDIATE')
-            row = conn.execute(
-                'SELECT * FROM mission_mirror WHERE id = ?', (mission_id,)
-            ).fetchone()
-
-            if row is None or row['deleted']:
-                conn.rollback()
-                return False, 'not-found', None
-
-            mission = dict(row)
-            status = mission.get('status')
-            holder = mission.get('lock_owner')
-            lease = mission.get('lease_expires_at')
-            lease_live = bool(lease) and lease > now_iso
-
-            if for_rerun:
-                # 'cancelled' belongs here. The console has always offered a
-                # "put back in queue" action for cancelled missions, and it
-                # could never have worked - this check rejected it as
-                # not-terminal. It went unnoticed because cancelled missions
-                # were filtered out of the console entirely, so the button had
-                # nothing to render against. They are visible now, so the
-                # action has to actually do something.
-                # A mission flagged for review is stuck in 'processing' by
-                # definition - the satellite died mid-run and nobody knows
-                # whether the rover finished. Rerun is exactly the action an
-                # operator wants there, and refusing it meant the recovery
-                # flow's own missions were the ones rerun could not touch. The
-                # operator pressing rerun IS the human decision recovery.py
-                # deliberately refuses to make on its own.
-                recoverable = status == 'processing' and mission.get('needs_review')
-                if status not in ('completed', 'failed', 'cancelled') and not recoverable:
-                    conn.rollback()
-                    return False, 'not-terminal', None
-            else:
-                # An expired lease on a 'processing' mission means the holder
-                # died; reclaiming it is the point of having a lease. No lease
-                # at all is legacy data and is deliberately NOT reclaimable.
-                reclaimable = status == 'processing' and bool(lease) and not lease_live
-                if status != 'queued' and not reclaimable:
-                    conn.rollback()
-                    return False, 'not-queued', None
-
-            if holder and holder != owner and lease_live:
-                conn.rollback()
-                return False, 'locked-by-other', None
-
-            updates = {
-                'status': 'processing',
-                'started_at': now_iso,
-                'status_updated_at': now_iso,
-                'lock_owner': owner,
-                'locked_at': now_iso,
-                'lease_expires_at': expires_iso,
-                'local_dirty': 1,
-            }
-            payload = {
-                'status': 'processing',
-                'startedAt': now_iso,
-                'statusUpdatedAt': now_iso,
-                'lockOwner': owner,
-                'lockedAt': now_iso,
-                'leaseExpiresAt': expires_iso,
-            }
-            if for_rerun:
-                # A rerun supersedes the previous run's outcome. It also moves
-                # the mission backwards (completed -> processing), which the
-                # sync merge would otherwise reject, so say plainly that a
-                # human asked for this.
-                updates['completed_at'] = None
-                updates['youtube_url'] = None
-                payload['completedAt'] = None
-                payload['youtubeUrl'] = None
-                payload[_FORCE_KEY] = True
-                # Rerunning IS the operator resolving the ambiguity: they have
-                # decided the previous outcome does not stand and are running
-                # it again. Leaving the flag set kept the mission in the
-                # needs-review list forever, which is how that count got stuck.
-                updates['needs_review'] = 0
-                updates['review_reason'] = None
-                payload['needsReview'] = False
-                payload['reviewReason'] = None
-
-            sets = ', '.join(f'{k} = ?' for k in updates)
-            conn.execute(
-                f'UPDATE mission_mirror SET {sets} WHERE id = ?',
-                list(updates.values()) + [mission_id],
-            )
-            _enqueue(conn, mission_id, 'lock', payload)
-            conn.commit()
-            return True, None, mission
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
-
-def release_mission(mission_id, status, now_iso, review_reason=None, operator_decision=False):
-    """Drop the lock and set a status, queueing both for Firestore.
-
-    Used for terminal transitions and for rolling back when a dispatch never
-    reached the rover.
-
-    `operator_decision` marks the change as a human's call so the sync merge
-    lets it through even when it moves the mission backwards - stopping a rover
-    is the case that matters (see sync_worker.should_local_win). Left False for
-    changes that happen on their own, so the normal merge still protects
-    against a stale local copy overwriting real progress.
-    """
-    with _db_lock:
-        conn = _connect()
-        try:
-            conn.execute('BEGIN IMMEDIATE')
-            updates = {
-                'status': status,
-                'status_updated_at': now_iso,
-                'lock_owner': None,
-                'locked_at': None,
-                'lease_expires_at': None,
-                'local_dirty': 1,
-            }
-            payload = {
-                'status': status,
-                'statusUpdatedAt': now_iso,
-                'lockOwner': None,
-                'lockedAt': None,
-                'leaseExpiresAt': None,
-            }
-            if status == 'completed':
-                updates['completed_at'] = now_iso
-                payload['completedAt'] = now_iso
-            if review_reason is not None:
-                updates['needs_review'] = 1
-                updates['review_reason'] = review_reason
-                payload['needsReview'] = True
-                payload['reviewReason'] = review_reason
-            elif status in ('completed', 'failed', 'cancelled'):
-                # A terminal mission is not ambiguous any more, so it must not
-                # stay in the needs-review list. Until now resolve_review was
-                # the ONLY thing that ever cleared this flag, so a mission that
-                # was flagged, rerun and completed normally stayed flagged
-                # forever - the count never went down and no action available
-                # to the operator could bring it down.
-                updates['needs_review'] = 0
-                updates['review_reason'] = None
-                payload['needsReview'] = False
-                payload['reviewReason'] = None
-            if operator_decision:
-                payload[_FORCE_KEY] = True
-
-            sets = ', '.join(f'{k} = ?' for k in updates)
-            conn.execute(
-                f'UPDATE mission_mirror SET {sets} WHERE id = ?',
-                list(updates.values()) + [mission_id],
-            )
-            _enqueue(conn, mission_id, 'release', payload)
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
-
-
-def renew_lease(mission_id, expires_iso, now_iso):
-    """Extend a live lease. Mirror-only: a renewal is not worth an outbox entry,
-    because the lease is re-sent with the next real status change and a lapsed
-    lease is recoverable by design."""
-    with _db_lock:
-        conn = _connect()
-        conn.execute(
-            'UPDATE mission_mirror SET lease_expires_at = ?, status_updated_at = ? WHERE id = ?',
-            (expires_iso, now_iso, mission_id),
-        )
-        conn.commit()
-        conn.close()
-
-
-def set_mission_field(mission_id, mirror_updates, payload):
-    """Generic mirror write + outbox enqueue for non-status changes (YouTube)."""
-    write_and_enqueue(mission_id, mirror_updates, 'youtube', payload)
-
-
 def _enqueue(conn, mission_id, op, payload):
     """Append to the outbox on an already-open transaction."""
     now = _now_iso()
@@ -706,21 +513,96 @@ def set_mirror_only(mission_id, updates):
         conn.close()
 
 
-# --- Recovery (plan PR 4) --------------------------------------------------
+def set_mission_field(mission_id, mirror_updates, payload):
+    """Generic mirror write + outbox enqueue for non-status changes (YouTube)."""
+    write_and_enqueue(mission_id, mirror_updates, 'youtube', payload)
 
-def find_interrupted(owner):
-    """Missions this satellite still holds as 'processing' after a restart.
+
+def release_mission(mission_id, status, now_iso, review_reason=None, operator_decision=False):
+    """Set a mission-level status, queueing it for Firestore.
+
+    No longer drops a lock: there is none (AB#364). Kept because the mission
+    row is still what Mission Control reads, and sync_worker's merge rules are
+    exercised through it.
+
+    Used for terminal transitions and for rolling back when a dispatch never
+    reached the rover.
+
+    `operator_decision` marks the change as a human's call so the sync merge
+    lets it through even when it moves the mission backwards - stopping a rover
+    is the case that matters (see sync_worker.should_local_win). Left False for
+    changes that happen on their own, so the normal merge still protects
+    against a stale local copy overwriting real progress.
+    """
+    with _db_lock:
+        conn = _connect()
+        try:
+            conn.execute('BEGIN IMMEDIATE')
+            updates = {
+                'status': status,
+                'status_updated_at': now_iso,
+                'local_dirty': 1,
+            }
+            payload = {
+                'status': status,
+                'statusUpdatedAt': now_iso,
+            }
+            if status == 'completed':
+                updates['completed_at'] = now_iso
+                payload['completedAt'] = now_iso
+            if review_reason is not None:
+                updates['needs_review'] = 1
+                updates['review_reason'] = review_reason
+                payload['needsReview'] = True
+                payload['reviewReason'] = review_reason
+            elif status in ('completed', 'failed', 'cancelled'):
+                # A terminal mission is not ambiguous any more, so it must not
+                # stay in the needs-review list. Until now resolve_review was
+                # the ONLY thing that ever cleared this flag, so a mission that
+                # was flagged, rerun and completed normally stayed flagged
+                # forever - the count never went down and no action available
+                # to the operator could bring it down.
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
+            if operator_decision:
+                payload[_FORCE_KEY] = True
+
+            sets = ', '.join(f'{k} = ?' for k in updates)
+            conn.execute(
+                f'UPDATE mission_mirror SET {sets} WHERE id = ?',
+                list(updates.values()) + [mission_id],
+            )
+            _enqueue(conn, mission_id, 'release', payload)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+def find_interrupted(yard_id):
+    """Runs left 'processing' at this yard after a restart.
 
     These are genuinely ambiguous: the rover may have finished the run, or the
     power may have gone out mid-drive. Nothing here decides which - that is a
     human's call (plan 2.3, never move the robot without a human).
+
+    Was "missions this satellite owns", matched on lock_owner. With the lease
+    gone (AB#364) the set is identified by yard instead, which selects exactly
+    the same rows: one satellite serves one yard, so a processing run here is
+    by definition one this satellite was executing.
+
+    Returns run rows carrying mission_id, which is what recovery.py needs.
     """
     with _db_lock:
         conn = _connect()
         rows = conn.execute(
-            "SELECT * FROM mission_mirror WHERE status = 'processing' AND lock_owner = ?"
+            "SELECT * FROM runs_mirror WHERE status = 'processing' AND yard_id = ?"
             " AND needs_review = 0",
-            (owner,),
+            (yard_id,),
         ).fetchall()
         conn.close()
     return [dict(r) for r in rows]
@@ -737,6 +619,11 @@ def flag_for_review(mission_id, reason):
         conn = _connect()
         try:
             conn.execute('BEGIN IMMEDIATE')
+            conn.execute(
+                'UPDATE runs_mirror SET needs_review = 1, review_reason = ? WHERE mission_id ='
+                ' ? AND yard_id = (SELECT yard_id FROM mission_mirror WHERE id = ?)',
+                (reason, mission_id, mission_id),
+            )
             conn.execute(
                 'UPDATE mission_mirror SET needs_review = 1, review_reason = ?, local_dirty = 1'
                 ' WHERE id = ?',
@@ -1042,83 +929,151 @@ def upsert_runs(runs, synced_at):
         conn.close()
 
 
-def acquire_run(mission_id, yard_id, owner, now_iso, expires_iso):
-    """Atomically claim a run and queue the claim for Firestore.
 
-    Returns (ok, reason, run_dict). Mirrors acquire_mission but for runs:
-    concurrency is scoped to (mission_id, yard_id) instead of globally.
+def _rollup_mission_status(conn, mission_id, status, now_iso, extra_cols=None,
+                           extra_payload=None, operator_decision=False):
+    """Mirror a run's status onto the mission row, and queue it for Firestore.
 
-    Reasons: 'not-found', 'not-queued', 'locked-by-other'.
+    WHY THIS EXISTS, GIVEN STATUS NOW LIVES ON THE RUN.
+
+    Mission Control still reads missions/{id}.status: getDiscoveryStatus turns
+    it into the learner's Completed/Pending, the feed sorts on it, and the
+    operator queue selects on it. If the satellite wrote only to the run, that
+    field would freeze at 'queued' forever - every learner would see Pending
+    for a mission that finished, and the operator queue would never clear.
+
+    So the run is the truth and the mission carries a rollup of it. That keeps
+    the change additive, which is what PR #91 was careful to be, until the
+    cloud reads runs directly (AB#368).
+
+    SAFE WITH SEVERAL YARDS. Each yard rolls up only its own run, so two yards
+    can disagree. sync_worker's _RANK ladder settles it, and 'completed' (4)
+    outranks 'failed' (3) and 'cancelled' (2): a mission that succeeded
+    anywhere reads as completed, and one yard failing cannot take that away.
+    That is the same rule the learner-facing view already relies on.
+    """
+    cols = {'status': status, 'status_updated_at': now_iso, 'local_dirty': 1}
+    payload = {'status': status, 'statusUpdatedAt': now_iso}
+    cols.update(extra_cols or {})
+    payload.update(extra_payload or {})
+
+    # Carry the operator's decision onto the mission entry as well. Without it
+    # the run would be forced through the merge and the mission rollup would
+    # not, so a rover an operator stopped would show as still running to every
+    # learner watching. See sync_worker.should_local_win.
+    if operator_decision:
+        payload[_FORCE_KEY] = True
+
+    sets = ', '.join(f'{k} = ?' for k in cols)
+    conn.execute(
+        f'UPDATE mission_mirror SET {sets} WHERE id = ?',
+        list(cols.values()) + [mission_id],
+    )
+    _enqueue(conn, mission_id, 'status', payload)
+
+
+def acquire_run(mission_id, yard_id, now_iso, for_rerun=False):
+    """Atomically start a run at this yard, and queue that for Firestore.
+
+    Returns (ok, reason, run_dict). Reasons: 'not-queued', 'already-running'.
+
+    NO LEASE, NO OWNER, NO EXPIRY (AB#364). The lease was built when a mission
+    had one global lock and two yards could genuinely contend for it. Runs are
+    keyed by yard, so two yards now write different documents and there is
+    nothing left to arbitrate between them.
+
+    Within a yard there is exactly one satellite, so a second Send is two
+    requests to one process rather than a distributed race: BEGIN IMMEDIATE
+    plus "is this run already processing" is the whole guard. The rover
+    serialises the rest physically, its queue being a FIFO with a single
+    worker thread.
+
+    What the expiry was really for was reclaiming a run whose satellite died
+    mid-drive. recovery.py does that better on startup: it asks the ROVER
+    whether the run finished rather than inferring from a clock, and flags the
+    run for a human when it cannot tell. A timeout would have guessed.
     """
     with _db_lock:
         conn = _connect()
         try:
             conn.execute('BEGIN IMMEDIATE')
 
-            # Read or create the run
             row = conn.execute(
                 'SELECT * FROM runs_mirror WHERE mission_id = ? AND yard_id = ?',
                 (mission_id, yard_id),
             ).fetchone()
 
             if row is None:
-                # First run for this (mission, yard): create it from queued state
-                run = {
-                    'mission_id': mission_id,
-                    'yard_id': yard_id,
-                    'status': 'queued',
-                    'lock_owner': None,
-                    'locked_at': None,
-                    'lease_expires_at': None,
-                }
-                conn.execute("""
-                    INSERT INTO runs_mirror
-                        (mission_id, yard_id, status, lock_owner, locked_at,
-                         lease_expires_at, local_dirty)
-                    VALUES (?,?,?,?,?,?,1)
-                """, (mission_id, yard_id, 'queued', None, None, None))
+                # First attempt at this yard: create the run as queued, then
+                # fall through and claim it below.
+                run = {'mission_id': mission_id, 'yard_id': yard_id, 'status': 'queued'}
+                conn.execute(
+                    'INSERT INTO runs_mirror (mission_id, yard_id, status, local_dirty)'
+                    ' VALUES (?,?,?,1)',
+                    (mission_id, yard_id, 'queued'),
+                )
             else:
                 run = dict(row)
 
             status = run.get('status')
-            holder = run.get('lock_owner')
-            lease = run.get('lease_expires_at')
-            lease_live = bool(lease) and lease > now_iso
 
-            # Check if this run is already processing
-            if status == 'processing' and holder and lease_live:
+            # The entire duplicate-Send guard. Reading state we already hold,
+            # rather than asking who owns a lease and whether it is still live.
+            # Distinct from 'not-queued' because the two mean different things
+            # to an operator: one is "someone already started this here", the
+            # other is "this is not in a state you can start".
+            # A run recovery flagged is stuck in 'processing' with nobody
+            # driving it: the satellite died mid-drive and startup could not
+            # establish what happened. Rerun is precisely how an operator
+            # resolves that, so it is the one case where a processing run may
+            # be restarted - and restarting it IS the operator's answer, so
+            # the flag clears.
+            rescuing = for_rerun and status == 'processing' and run.get('needs_review')
+
+            if status == 'processing' and not rescuing:
                 conn.rollback()
-                return False, 'locked-by-other', None
+                return False, 'already-running', None
 
-            if status not in ('queued', 'completed', 'failed', 'cancelled'):
+            # Send starts queued work only. Restarting something already
+            # finished is what rerun is for, and it says so on the button - a
+            # plain Send that quietly re-drives a completed mission is a
+            # surprise nobody asked for.
+            allowed = ('queued', 'completed', 'failed', 'cancelled') if for_rerun else ('queued',)
+            if rescuing:
+                # The flagged-run case above; 'processing' is exactly what it is.
+                allowed = allowed + ('processing',)
+            if status not in allowed:
                 conn.rollback()
                 return False, 'not-queued', None
 
-            # Claim it
             updates = {
                 'status': 'processing',
                 'started_at': now_iso,
                 'status_updated_at': now_iso,
-                'lock_owner': owner,
-                'locked_at': now_iso,
-                'lease_expires_at': expires_iso,
                 'local_dirty': 1,
             }
             payload = {
                 'status': 'processing',
                 'startedAt': now_iso,
                 'statusUpdatedAt': now_iso,
-                'lockOwner': owner,
-                'lockedAt': now_iso,
-                'leaseExpiresAt': expires_iso,
             }
+
+            if rescuing:
+                updates['needs_review'] = 0
+                updates['review_reason'] = None
+                payload['needsReview'] = False
+                payload['reviewReason'] = None
 
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
                 f'UPDATE runs_mirror SET {sets} WHERE mission_id = ? AND yard_id = ?',
                 list(updates.values()) + [mission_id, yard_id],
             )
-            _enqueue_run(conn, mission_id, yard_id, 'lock', payload)
+            _enqueue_run(conn, mission_id, yard_id, 'start', payload)
+            _rollup_mission_status(
+                conn, mission_id, 'processing', now_iso,
+                {'started_at': now_iso}, {'startedAt': now_iso},
+            )
             conn.commit()
 
             run.update(updates)
@@ -1131,9 +1086,11 @@ def acquire_run(mission_id, yard_id, owner, now_iso, expires_iso):
 
 
 def release_run(mission_id, yard_id, status, now_iso, review_reason=None, operator_decision=False):
-    """Drop the lock and set a run status, queueing both for Firestore.
+    """Set a run's status, and queue it for Firestore.
 
-    Mirrors release_mission for runs: handles terminal transitions and rollbacks.
+    There is no lock to drop any more (AB#364): finishing a run is just a
+    status write. The mission row gets the same status rolled onto it so
+    Mission Control keeps working - see _rollup_mission_status.
     """
     with _db_lock:
         conn = _connect()
@@ -1142,17 +1099,11 @@ def release_run(mission_id, yard_id, status, now_iso, review_reason=None, operat
             updates = {
                 'status': status,
                 'status_updated_at': now_iso,
-                'lock_owner': None,
-                'locked_at': None,
-                'lease_expires_at': None,
                 'local_dirty': 1,
             }
             payload = {
                 'status': status,
                 'statusUpdatedAt': now_iso,
-                'lockOwner': None,
-                'lockedAt': None,
-                'leaseExpiresAt': None,
             }
 
             if status == 'completed':
@@ -1180,6 +1131,12 @@ def release_run(mission_id, yard_id, status, now_iso, review_reason=None, operat
                 list(updates.values()) + [mission_id, yard_id],
             )
             _enqueue_run(conn, mission_id, yard_id, 'release', payload)
+            _rollup_mission_status(
+                conn, mission_id, status, now_iso,
+                {'completed_at': now_iso} if status == 'completed' else None,
+                {'completedAt': now_iso} if status == 'completed' else None,
+                operator_decision=operator_decision,
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1188,20 +1145,16 @@ def release_run(mission_id, yard_id, status, now_iso, review_reason=None, operat
             conn.close()
 
 
-def renew_run_lease(mission_id, yard_id, expires_iso, now_iso):
-    """Extend a live run lease. Mirror-only, like mission renewal."""
-    with _db_lock:
-        conn = _connect()
-        conn.execute(
-            'UPDATE runs_mirror SET lease_expires_at = ?, status_updated_at = ? WHERE mission_id = ? AND yard_id = ?',
-            (expires_iso, now_iso, mission_id, yard_id),
-        )
-        conn.commit()
-        conn.close()
+def set_run_field(mission_id, yard_id, updates, payload, mirror_to_mission=None):
+    """Generic run mirror write + run outbox enqueue (e.g., YouTube URL).
 
-
-def set_run_field(mission_id, yard_id, updates, payload):
-    """Generic run mirror write + run outbox enqueue (e.g., YouTube URL)."""
+    `mirror_to_mission` names the columns that must ALSO land on the mission
+    row. The video is the case that matters: the learner's mission page reads
+    missions/{id}.youtubeUrl, so a URL written only to the run would attach a
+    recording nobody can watch. Same reasoning as _rollup_mission_status, and
+    the same temporary state of affairs - it goes when the cloud reads runs
+    directly (AB#368).
+    """
     with _db_lock:
         conn = _connect()
         try:
@@ -1214,6 +1167,19 @@ def set_run_field(mission_id, yard_id, updates, payload):
                 list(updates_dict.values()) + [mission_id, yard_id],
             )
             _enqueue_run(conn, mission_id, yard_id, 'youtube', payload)
+
+            if mirror_to_mission:
+                cols = {c: updates[c] for c in mirror_to_mission if c in updates}
+                if cols:
+                    cols['local_dirty'] = 1
+                    m_sets = ', '.join(f'{k} = ?' for k in cols)
+                    conn.execute(
+                        f'UPDATE mission_mirror SET {m_sets} WHERE id = ?',
+                        list(cols.values()) + [mission_id],
+                    )
+                    _enqueue(conn, mission_id, 'youtube',
+                             {k: v for k, v in payload.items()})
+
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1294,20 +1260,6 @@ def _enqueue_run(conn, mission_id, yard_id, op, payload):
 # --- Backfill: migrate existing missions to implicit runs (User Story 361) ----
 
 # --- Backward compatibility (deprecated, routed to runs) ----
-
-def acquire_mission_compat(mission_id, owner, now_iso, expires_iso, yard_id, for_rerun=False):
-    """DEPRECATED: Routes to acquire_run. Kept for gradual migration.
-
-    This wrapper allows existing code to call acquire_mission and get run-based
-    locking. The for_rerun logic is handled in acquire_run.
-    """
-    return acquire_run(mission_id, yard_id, owner, now_iso, expires_iso)
-
-
-def release_mission_compat(mission_id, status, now_iso, yard_id, review_reason=None, operator_decision=False):
-    """DEPRECATED: Routes to release_run. Kept for gradual migration."""
-    return release_run(mission_id, yard_id, status, now_iso, review_reason, operator_decision)
-
 
 def backfill_missions_to_runs():
     """Create one implicit run per mission with existing execution state.

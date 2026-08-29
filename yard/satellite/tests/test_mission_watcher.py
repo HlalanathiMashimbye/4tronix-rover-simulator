@@ -73,7 +73,8 @@ def test_a_confirmed_mission_is_completed(monkeypatch):
     run = mission_store.get_run('m1', 'curiosity')
     assert run['status'] == 'completed'
     assert run['completed_at']
-    assert run['lock_owner'] is None, 'the lease must be released too'
+    # No lease to release any more (AB#364): reaching a terminal status is
+    # the whole of finishing a run.
 
 
 def test_completion_is_queued_for_firestore(monkeypatch):

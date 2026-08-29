@@ -32,7 +32,6 @@ from mission_store import (
     get_mission,
     get_run,
     mission_has_pending,
-    release_mission,
     release_run,
     run_has_pending,
 )
