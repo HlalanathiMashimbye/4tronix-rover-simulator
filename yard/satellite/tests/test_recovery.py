@@ -129,7 +129,6 @@ def test_rover_confirmation_resolves_without_a_human(monkeypatch):
     row = mission_store.get_mission('m1')
     assert row['status'] == 'completed'
     assert row['needs_review'] == 0
-    assert row['lock_owner'] is None, 'the lock must be released'
 
 
 def test_an_unreachable_rover_falls_back_to_review_not_completion(monkeypatch):

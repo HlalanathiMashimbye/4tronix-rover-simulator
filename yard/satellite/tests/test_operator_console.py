@@ -183,8 +183,7 @@ _MIRROR_FIELDS = {
     'blocklyState': 'blockly_state', 'status': 'status',
     'submittedAt': 'submitted_at', 'startedAt': 'started_at',
     'completedAt': 'completed_at', 'youtubeUrl': 'youtube_url',
-    'lockOwner': 'lock_owner', 'lockedAt': 'locked_at',
-    'leaseExpiresAt': 'lease_expires_at', 'needsReview': 'needs_review',
+    'needsReview': 'needs_review',
     'reviewReason': 'review_reason', 'statusUpdatedAt': 'status_updated_at',
 }
 _TO_CAMEL = {v: k for k, v in _MIRROR_FIELDS.items()}
@@ -1163,8 +1162,6 @@ def test_failed_dispatch_releases_the_lock_and_requeues(client, missions, monkey
 
     m = missions['q1']
     assert m['status'] == 'queued', 'must go back in the queue, not stay processing'
-    assert m['lockOwner'] is None
-    assert m['leaseExpiresAt'] is None
 
 
 def test_completing_a_run_frees_the_yard_for_the_next_mission(client, missions, monkeypatch):
@@ -1206,8 +1203,6 @@ def test_rerun_restores_the_previous_status_when_dispatch_fails(client, missions
 
     m = missions['c1']
     assert m['status'] == 'completed', 'must not be left marked failed'
-    assert m['lockOwner'] is None
-    assert m['leaseExpiresAt'] is None
 
 
 def test_rerun_is_refused_while_the_run_is_already_going(client, missions, monkeypatch):
@@ -1396,7 +1391,6 @@ def test_resolving_as_completed_closes_it_out(client, missions, monkeypatch):
     row = mission_store.get_mission('p1')
     assert row['status'] == 'completed'
     assert row['needs_review'] == 0
-    assert row['lock_owner'] is None
 
 
 def test_requeuing_returns_it_to_the_queue_without_touching_the_rover(client, missions, monkeypatch):

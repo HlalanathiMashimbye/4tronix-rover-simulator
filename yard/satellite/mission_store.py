@@ -57,9 +57,6 @@ def init_db():
                 started_at        TEXT,
                 completed_at      TEXT,
                 youtube_url       TEXT,
-                lock_owner        TEXT,
-                locked_at         TEXT,
-                lease_expires_at  TEXT,
                 needs_review      INTEGER DEFAULT 0,
                 review_reason     TEXT,
                 status_updated_at TEXT,
@@ -112,9 +109,6 @@ def init_db():
                 needs_review      INTEGER DEFAULT 0,
                 review_reason     TEXT,
                 status_updated_at TEXT,
-                lock_owner        TEXT,
-                locked_at         TEXT,
-                lease_expires_at  TEXT,
                 deleted           INTEGER DEFAULT 0,
                 deleted_at        TEXT,
                 synced_at         TEXT,
@@ -147,7 +141,6 @@ def init_db():
 # earlier version picks them up instead of failing on the first write.
 _ADDED_COLUMNS = {
     'mission_mirror': {
-        'locked_at': 'TEXT',
         'deleted': 'INTEGER DEFAULT 0',
         'deleted_at': 'TEXT',
     },
@@ -171,10 +164,10 @@ def upsert_missions(missions, synced_at):
                 INSERT INTO mission_mirror
                     (id, name, yard_id, code, blockly_state, status,
                      submitted_at, started_at, completed_at, youtube_url,
-                     lock_owner, locked_at, lease_expires_at, needs_review,
+                     needs_review,
                      review_reason, status_updated_at, deleted, deleted_at,
                      synced_at, local_dirty)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
                 ON CONFLICT(id) DO UPDATE SET
                     name=excluded.name,
                     yard_id=excluded.yard_id,
@@ -185,9 +178,6 @@ def upsert_missions(missions, synced_at):
                     started_at=excluded.started_at,
                     completed_at=excluded.completed_at,
                     youtube_url=excluded.youtube_url,
-                    lock_owner=excluded.lock_owner,
-                    locked_at=excluded.locked_at,
-                    lease_expires_at=excluded.lease_expires_at,
                     needs_review=excluded.needs_review,
                     review_reason=excluded.review_reason,
                     status_updated_at=excluded.status_updated_at,
@@ -199,8 +189,7 @@ def upsert_missions(missions, synced_at):
                 m['id'], m.get('name'), m.get('yardId'),
                 m.get('code'), m.get('blocklyState'), m.get('status'),
                 m.get('submittedAt'), m.get('startedAt'), m.get('completedAt'),
-                m.get('youtubeUrl'), m.get('lockOwner'), m.get('lockedAt'),
-                m.get('leaseExpiresAt'),
+                m.get('youtubeUrl'),
                 m.get('needsReview', 0), m.get('reviewReason'),
                 m.get('statusUpdatedAt'),
                 1 if m.get('deleted') else 0, m.get('deletedAt'),
@@ -656,7 +645,8 @@ def resolve_review(mission_id, status, now_iso):
     """Clear the review flag and set the status a human chose.
 
     'completed' means the operator confirmed the run finished; 'queued' puts it
-    back in the queue to be run again. Either way the lock is released.
+    back in the queue to be run again. Either way the yard is free afterwards:
+    a status outside 'processing' is all that means now (AB#364).
     """
     with _db_lock:
         conn = _connect()
@@ -667,9 +657,6 @@ def resolve_review(mission_id, status, now_iso):
                 'status_updated_at': now_iso,
                 'needs_review': 0,
                 'review_reason': None,
-                'lock_owner': None,
-                'locked_at': None,
-                'lease_expires_at': None,
                 'local_dirty': 1,
             }
             payload = {
@@ -677,9 +664,6 @@ def resolve_review(mission_id, status, now_iso):
                 'statusUpdatedAt': now_iso,
                 'needsReview': False,
                 'reviewReason': None,
-                'lockOwner': None,
-                'lockedAt': None,
-                'leaseExpiresAt': None,
                 # This IS the operator's decision about an ambiguous mission -
                 # the whole point of the review flow. Re-queuing moves it back
                 # from 'processing', which the merge ladder would drop.
@@ -800,7 +784,8 @@ def delete_mission(mission_id, now_iso):
     a single wrong tap unrecoverable, which is a bad trade for a field that
     costs one integer.
 
-    Also releases the lock: a deleted mission must never keep a lease alive.
+    A deleted mission is left in no state that holds a yard: nothing is
+    'processing', so nothing blocks the next Send (AB#364).
     """
     with _db_lock:
         conn = _connect()
@@ -810,18 +795,12 @@ def delete_mission(mission_id, now_iso):
                 'deleted': 1,
                 'deleted_at': now_iso,
                 'status_updated_at': now_iso,
-                'lock_owner': None,
-                'locked_at': None,
-                'lease_expires_at': None,
                 'local_dirty': 1,
             }
             payload = {
                 'deleted': True,
                 'deletedAt': now_iso,
                 'statusUpdatedAt': now_iso,
-                'lockOwner': None,
-                'lockedAt': None,
-                'leaseExpiresAt': None,
             }
             sets = ', '.join(f'{k} = ?' for k in updates)
             conn.execute(
@@ -897,9 +876,9 @@ def upsert_runs(runs, synced_at):
                 INSERT INTO runs_mirror
                     (mission_id, yard_id, status, started_at, completed_at,
                      youtube_url, needs_review, review_reason, status_updated_at,
-                     lock_owner, locked_at, lease_expires_at, deleted, deleted_at,
+                     deleted, deleted_at,
                      synced_at, local_dirty)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,0)
                 ON CONFLICT(mission_id, yard_id) DO UPDATE SET
                     status=excluded.status,
                     started_at=excluded.started_at,
@@ -908,9 +887,6 @@ def upsert_runs(runs, synced_at):
                     needs_review=excluded.needs_review,
                     review_reason=excluded.review_reason,
                     status_updated_at=excluded.status_updated_at,
-                    lock_owner=excluded.lock_owner,
-                    locked_at=excluded.locked_at,
-                    lease_expires_at=excluded.lease_expires_at,
                     deleted=excluded.deleted,
                     deleted_at=excluded.deleted_at,
                     synced_at=excluded.synced_at
@@ -921,7 +897,6 @@ def upsert_runs(runs, synced_at):
                 r.get('status'), r.get('startedAt'), r.get('completedAt'),
                 r.get('youtubeUrl'), r.get('needsReview', 0), r.get('reviewReason'),
                 r.get('statusUpdatedAt'),
-                r.get('lockOwner'), r.get('lockedAt'), r.get('leaseExpiresAt'),
                 1 if r.get('deleted') else 0, r.get('deletedAt'),
                 synced_at,
             ))
@@ -1280,8 +1255,7 @@ def backfill_missions_to_runs():
             # Find missions with execution state and a yard
             missions = conn.execute("""
                 SELECT id, yard_id, status, started_at, completed_at, youtube_url,
-                       needs_review, review_reason, status_updated_at, lock_owner,
-                       locked_at, lease_expires_at
+                       needs_review, review_reason, status_updated_at
                 FROM mission_mirror
                 WHERE yard_id IS NOT NULL AND yard_id != ''
             """).fetchall()
@@ -1306,20 +1280,23 @@ def backfill_missions_to_runs():
                         INSERT INTO runs_mirror
                             (mission_id, yard_id, status, started_at, completed_at,
                              youtube_url, needs_review, review_reason, status_updated_at,
-                             lock_owner, locked_at, lease_expires_at, synced_at, local_dirty)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,0)
+                             synced_at, local_dirty)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,0)
                     """, (
                         mission_id, yard_id,
                         mission['status'], mission['started_at'], mission['completed_at'],
                         mission['youtube_url'],
                         mission['needs_review'], mission['review_reason'],
                         mission['status_updated_at'],
-                        mission['lock_owner'], mission['locked_at'], mission['lease_expires_at'],
                         _now_iso(),
                     ))
                     created += 1
                 except Exception as e:
+                    # Recorded per mission so one bad row does not abandon the
+                    # rest, but the caller must actually look: a silent 0 here
+                    # is indistinguishable from "nothing needed doing".
                     errors.append((mission_id, str(e)))
+                    print(f'[backfill] {mission_id}: {e}')
 
             conn.commit()
             return created, skipped, errors

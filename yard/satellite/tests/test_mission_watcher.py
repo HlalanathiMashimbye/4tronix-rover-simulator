@@ -42,7 +42,6 @@ def _seed(mission_id, status, needs_review=0, owner='sat-1'):
             'missionId': mission_id,
             'yardId': yard_id,
             'status': status,
-            'lockOwner': owner,
             'needsReview': needs_review,
             'statusUpdatedAt': '2026-07-14T09:00:00Z',
         }],
