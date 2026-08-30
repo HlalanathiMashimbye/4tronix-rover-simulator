@@ -71,9 +71,9 @@ class FakeQuery:
         # Support both signatures: where(field, op, value) and where(filter=FieldFilter(...))
         if filter is not None:
             # FieldFilter object: extract field, op, value from it
-            field = filter._field
-            op = filter._op
-            value = filter._value
+            field = filter.field_path
+            op = filter.op_string
+            value = filter.value
 
         def keep(item):
             v = item[1].get(field)
