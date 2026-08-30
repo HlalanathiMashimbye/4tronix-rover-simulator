@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { RoverState } from '@/lib/rover-physics';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';

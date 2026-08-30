@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from typing import Optional, Callable
 
 from drivers import RoverDriver
+from mission_validator import validate_mission_code
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +189,14 @@ class RoverQueueService(RoverQueuePort):
         added = []
         with self._queue_lock:
             for instr in instructions:
+                # Validate run_python missions against time and speed limits (User Story 401)
+                if instr.get('cmd') == 'run_python':
+                    code = instr.get('params', {}).get('code', '')
+                    is_valid, errors = validate_mission_code(code)
+                    if not is_valid:
+                        error_msg = '; '.join(errors) if errors else 'Mission validation failed'
+                        return {'status': 'error', 'error': error_msg, 'added': 0}
+
                 instruction = {
                     'id': self._uuid_provider(),
                     'cmd': instr.get('cmd'),

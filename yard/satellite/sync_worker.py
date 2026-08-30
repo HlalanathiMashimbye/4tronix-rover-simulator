@@ -19,6 +19,8 @@ import os
 import threading
 from datetime import datetime, timezone
 
+from google.cloud.firestore_v1 import FieldFilter
+
 from mission_store import (
     clear_dirty,
     clear_run_dirty,
@@ -421,7 +423,7 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
         # from it, and the read budget would grow with a yard we do not serve.
         # yard_id is None only if satellite_identity failed to import, in which
         # case pulling everything is still better than pulling nothing.
-        scoped = col.where('yardId', '==', yard_id) if yard_id else col
+        scoped = col.where(filter=FieldFilter('yardId', '==', yard_id)) if yard_id else col
 
         if cursor:
             # Incremental: missions submitted since the newest one we hold.

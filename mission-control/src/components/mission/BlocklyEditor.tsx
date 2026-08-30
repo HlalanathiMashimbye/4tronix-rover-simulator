@@ -13,6 +13,8 @@ import {
   workspaceToCommands,
   type SimulationCommand,
 } from '@/lib/roverBlockly';
+import { calculateBlocklyDuration } from '@/lib/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
 
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -185,11 +187,29 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         );
       flyoutObserverRef.current = flyoutObserver;
 
-      // Auto-save serialized state on every change.
+      // Validate mission duration and time limit on every change.
+      let lastValidState: Record<string, unknown> | null = null;
       workspace.addChangeListener(() => {
         try {
-          const state = Blockly.serialization.workspaces.save(workspace);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+          // Save valid state before checking duration
+          lastValidState = Blockly.serialization.workspaces.save(workspace);
+
+          // Check if duration exceeds limit
+          const duration = calculateBlocklyDuration(workspace);
+          if (duration > MISSION_TIME_LIMIT_SECONDS) {
+            // Undo the change that caused the overage
+            Blockly.Events.disableEvents();
+            workspace.undo(false);
+            Blockly.Events.enableEvents();
+
+            alert(
+              'Mission time limit exceeded. A mission cannot exceed 120 seconds. Please reduce the seconds on your blocks.'
+            );
+            return;
+          }
+
+          // Duration is OK, save it
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(lastValidState));
         } catch {
           // Non-fatal - a transient change event during load can race; ignore.
         }
