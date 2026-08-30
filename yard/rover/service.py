@@ -39,6 +39,58 @@ def _default_take_photo() -> str:
     )
     return PHOTO_PATH
 
+def _rover_lib_path() -> str:
+    """Directory holding the 4tronix `rover` library on the Pi.
+
+    Defaults to the copy vendored beside this file rather than a hardcoded
+    absolute path, so nothing here bakes in a machine layout. ROVER_LIB_PATH
+    overrides it; yard/deploy/rover-server.service sets it explicitly.
+
+    Note this is only half of what the Pi needs on its path: rover.py imports
+    `pca9685`, which is not vendored and still comes from the 4tronix install.
+    See yard/rover/vendor/README.md.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.environ.get('ROVER_LIB_PATH', os.path.join(here, 'vendor'))
+
+
+def _simulator_path() -> str:
+    """Directory holding roversimulator.py, the off-Pi stand-in for `rover`."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    repo_root = os.path.dirname(os.path.dirname(here))
+    return os.path.join(repo_root, 'legacy', 'simulator')
+
+
+def _import_rover_module():
+    """Import the rover hardware library, or the simulator standing in for it.
+
+    On the Pi, `rover` drives real motors. Off it, that import fails (no
+    RPi.GPIO) and legacy/simulator/roversimulator.py takes over with the same
+    API, which is the whole reason that file is kept rather than deleted.
+
+    Extracted from _execute_instruction so the two paths above are reachable
+    from a test. They were not, and it cost us: when the simulator moved from
+    the repo root into legacy/simulator/, this fallback kept pointing at the
+    root and raised ModuleNotFoundError on every machine without the 4tronix
+    library. All 135 rover tests still passed, because each one injects a
+    rover_module and never reaches this code.
+    """
+    try:
+        lib_path = _rover_lib_path()
+        if lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
+        import rover as rover_module
+        if not hasattr(rover_module, 'forward'):
+            raise ImportError('rover module missing hardware API')
+        return rover_module
+    except (ImportError, AttributeError):
+        sim_path = _simulator_path()
+        if sim_path not in sys.path:
+            sys.path.insert(0, sim_path)
+        import roversimulator as rover_module
+        return rover_module
+
+
 # Filename given to compiled student code so the trace function can
 # distinguish student frames from rover module / service internals
 STUDENT_CODE_FILENAME = '<student-code>'
@@ -348,23 +400,11 @@ class RoverQueueService(RoverQueuePort):
 
             elif cmd == 'run_python':
                 code = params.get('code', '')
-                import sys
-                import os
                 import time as time_module
                 if self._rover_module is not None:
                     rover_module = self._rover_module
                 else:
-                    try:
-                        sys.path.insert(0, '/home/mars/marsrover')
-                        import rover as rover_module
-                        if not hasattr(rover_module, 'forward'):
-                            raise ImportError("rover module missing hardware API")
-                    except (ImportError, AttributeError):
-                        # Not on Pi — use roversimulator (same API, sends to visual sim or no-ops)
-                        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                        if repo_root not in sys.path:
-                            sys.path.insert(0, repo_root)
-                        import roversimulator as rover_module
+                    rover_module = _import_rover_module()
                 safe_builtins = {
                     'range': range, 'len': len, 'print': print,
                     'int': int, 'float': float, 'str': str,
