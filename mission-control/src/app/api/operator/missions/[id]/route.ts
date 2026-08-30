@@ -28,6 +28,7 @@ import { z } from 'zod';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         const notifier = new MissionNotificationService(
           new ResendEmailSender(),
+          missionEmailComposer,
           firestore,
           resolveAppUrl(),
         );

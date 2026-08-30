@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/lib/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
-import { generateRandomMissionName } from '@/lib/missionNameGenerator';
+import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';

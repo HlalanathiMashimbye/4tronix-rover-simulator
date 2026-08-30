@@ -18,7 +18,7 @@ import {
   allGeneratedMissionNames,
   generateRandomMissionName,
   isGeneratedMissionName,
-} from '@/lib/missionNameGenerator';
+} from '@/core/domain/services/missionNameGenerator';
 import { validateMission } from '@/infrastructure/validation/schemas';
 
 const valid = {

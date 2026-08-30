@@ -16,10 +16,11 @@
  */
 
 import { z } from 'zod';
+import type { CreateMissionDto } from '@/core/application/dto/mission';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
-import { calculatePythonDuration } from '@/lib/calculateMissionDuration';
-import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
-import { isGeneratedMissionName } from '@/lib/missionNameGenerator';
+import { calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
+import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
 
 /**
  * Schema for creating a new mission (anonymous submission)
@@ -79,12 +80,14 @@ export const createMissionSchema = z.object({
     }),
 
   blocklyState: z.string().optional(),
-});
+}) satisfies z.ZodType<CreateMissionDto>;
 
 /**
- * Inferred TypeScript type from schema
+ * The DTO lives in core (application/dto/mission). Re-exported here so the
+ * many existing importers keep working, and asserted against below so the
+ * schema cannot drift from the contract without a compile error.
  */
-export type CreateMissionDto = z.infer<typeof createMissionSchema>;
+export type { CreateMissionDto, UpdateMissionDto } from '@/core/application/dto/mission';
 
 /**
  * Schema for mission status updates
@@ -106,7 +109,6 @@ export const updateMissionSchema = z.object({
   completedAt: z.string().datetime().optional(),
 }).strict();
 
-export type UpdateMissionDto = z.infer<typeof updateMissionSchema>;
 
 /**
  * Validation helper that returns formatted error messages

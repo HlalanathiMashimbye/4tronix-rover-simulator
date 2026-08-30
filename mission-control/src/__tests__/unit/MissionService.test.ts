@@ -12,7 +12,7 @@ import {
   MissionPage,
 } from '@/core/domain/repositories/IMissionRepository';
 import { Mission } from '@/core/domain/entities/Mission';
-import { CreateMissionDto } from '@/infrastructure/validation/schemas';
+import { CreateMissionDto } from '@/core/application/dto/mission';
 
 class MockMissionRepository implements IMissionRepository {
   private missions: Map<string, Mission> = new Map();

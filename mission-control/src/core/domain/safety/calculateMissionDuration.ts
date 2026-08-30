@@ -3,6 +3,18 @@
  *
  * Used for the safety ceiling (AB#401) in two places: the Blockly editor warns
  * while the learner builds, and validateMission refuses at submit.
+ *
+ * This is domain logic - how long a mission may run is a rule about missions,
+ * not a detail of how they are stored or displayed - which is why it lives in
+ * core rather than in lib where it started.
+ *
+ * The one import below points OUT of core, which the layering rule otherwise
+ * forbids. It is deliberate and it is not an infrastructure dependency:
+ * roverBlockly is the rover's block language, domain logic by any reading. It
+ * sits in src/lib because it is one of five modules compiled into
+ * yard/satellite/static/roversim so the yard's offline editor shares exactly
+ * this code, and tsconfig.roversim.json pins their paths. Moving it would
+ * mean moving the build. See src/lib/README.md.
  */
 
 import { workspaceToCommands } from '@/lib/roverBlockly';

@@ -6,9 +6,9 @@
  * field they no longer have and every turn counted as zero.
  */
 
-import { calculateBlocklyDuration, calculatePythonDuration } from '@/lib/calculateMissionDuration';
+import { calculateBlocklyDuration, calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { workspaceToPython } from '@/lib/roverBlockly';
-import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
 type Block = Record<string, unknown>;
 

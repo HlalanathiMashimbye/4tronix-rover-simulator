@@ -22,8 +22,8 @@
  * next. "Invalid argument" tells them they have failed at something.
  */
 
-import { analyzeCodeForAllowlist } from '@/infrastructure/sandbox/ast-allowlist-analyzer';
-import { ROVER_COMMAND_ALLOWLIST } from '@/infrastructure/sandbox/rover-command-allowlist';
+import { analyzeCodeForAllowlist } from '@/core/domain/safety/ast-allowlist-analyzer';
+import { ROVER_COMMAND_ALLOWLIST } from '@/core/domain/safety/rover-command-allowlist';
 
 export interface CodeProblem {
   /** 1-based, so it can go straight to a Monaco marker. */

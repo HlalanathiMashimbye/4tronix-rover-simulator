@@ -5,7 +5,7 @@ import Editor from '@monaco-editor/react';
 import { AlertTriangle, Play } from 'lucide-react';
 import { type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
-import { checkLearnerCode, type CodeProblem } from '@/lib/learnerCodeCheck';
+import { checkLearnerCode, type CodeProblem } from '@/core/domain/safety/learnerCodeCheck';
 import {
   ROVER_COMMAND_HELP,
   commandAt,

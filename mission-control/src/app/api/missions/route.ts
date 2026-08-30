@@ -11,6 +11,7 @@ import { validateMission } from '@/infrastructure/validation/schemas';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { MissionService } from '@/core/application/services/MissionService';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     const appUrl = resolveAppUrl();
     const notificationService = new MissionNotificationService(
       new ResendEmailSender(),
+      missionEmailComposer,
       firestore,
       appUrl
     );

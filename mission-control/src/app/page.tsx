@@ -9,7 +9,7 @@ import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, type DiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';

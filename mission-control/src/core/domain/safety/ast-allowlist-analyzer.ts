@@ -25,7 +25,7 @@ import {
   ROVER_ARGUMENT_LIMITS,
   DISALLOWED_IMPORTS,
   ALLOWLIST_ERROR_MESSAGES,
-} from '@/infrastructure/sandbox/rover-command-allowlist';
+} from '@/core/domain/safety/rover-command-allowlist';
 
 /**
  * Analyze Python code for allowlist violations

@@ -10,7 +10,7 @@ import { FirestoreMissionRepository } from '@/infrastructure/persistence/Firesto
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
-import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { yardLabel } from '@/infrastructure/config/yards';

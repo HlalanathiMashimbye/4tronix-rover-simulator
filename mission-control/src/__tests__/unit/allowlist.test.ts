@@ -19,7 +19,7 @@
  */
 
 import { AllowlistService } from '@/core/application/services/AllowlistService';
-import { analyzeCodeForAllowlist } from '@/infrastructure/sandbox/ast-allowlist-analyzer';
+import { analyzeCodeForAllowlist } from '@/core/domain/safety/ast-allowlist-analyzer';
 
 describe('allowlist enforcement', () => {
   let service: AllowlistService;
