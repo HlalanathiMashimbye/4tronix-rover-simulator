@@ -27,7 +27,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { adminMissionRepository } from '@/infrastructure/container.server';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
@@ -104,7 +105,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const firestore = getFirestoreInstance();
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = adminMissionRepository();
 
     const mission = await repository.findById(id);
     if (!mission || mission.deleted) {
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         const notifier = new MissionNotificationService(
           new ResendEmailSender(),
+          missionEmailComposer,
           firestore,
           resolveAppUrl(),
         );
@@ -230,7 +232,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params;
 
   try {
-    const repository = new FirestoreMissionRepository(getFirestoreInstance());
+    const repository = adminMissionRepository();
 
     const mission = await repository.findById(id);
     if (!mission) {

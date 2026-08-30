@@ -15,7 +15,7 @@ import { MobileSearch } from '@/components/layout/MobileSearch';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useLearner } from '@/contexts/LearnerContext';
 import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
-import { getDiscoveryStatus } from '@/lib/discoveryStatus';
+import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 
 export function MissionHistory() {

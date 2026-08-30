@@ -1,7 +1,7 @@
 'use client';
 
 import { Dices } from 'lucide-react';
-import { generateRandomMissionName } from '@/lib/missionNameGenerator';
+import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
 
 interface MissionNameInputProps {
   value: string;

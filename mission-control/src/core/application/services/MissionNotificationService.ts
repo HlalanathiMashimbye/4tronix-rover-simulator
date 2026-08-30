@@ -10,7 +10,7 @@
 import { Firestore } from 'firebase-admin/firestore';
 import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
-import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTemplates';
+import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import {
   LEARNER_PRIVATE_COLLECTION,
   LEARNER_CONTACT_DOC,
@@ -39,6 +39,8 @@ type LearnerContact = {
 export class MissionNotificationService {
   constructor(
     private readonly emailSender: IEmailSender,
+    /** What the email says. Injected for the same reason emailSender is. */
+    private readonly emailComposer: IMissionEmailComposer,
     private readonly firestore: Firestore,
     /**
      * Base URL of the learner app, e.g. https://marsyard.sapient.rocks. The
@@ -71,7 +73,7 @@ export class MissionNotificationService {
     }
 
     try {
-      const { subject, html } = buildMissionStatusEmail(status, {
+      const { subject, html } = this.emailComposer.statusUpdate(status, {
         missionName: mission.name || mission.id,
         learnerName: learner.displayName,
         missionUrl: this.missionUrl(mission.id),

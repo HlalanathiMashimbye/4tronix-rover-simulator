@@ -9,8 +9,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { adminMissionRepository } from '@/infrastructure/container.server';
 import { MissionService } from '@/core/application/services/MissionService';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const firestore = getFirestoreInstance();
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = adminMissionRepository();
     const service = new MissionService(repository);
     const result = await service.submitMission(validation.data);
 
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     const appUrl = resolveAppUrl();
     const notificationService = new MissionNotificationService(
       new ResendEmailSender(),
+      missionEmailComposer,
       firestore,
       appUrl
     );

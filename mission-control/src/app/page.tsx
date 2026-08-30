@@ -4,12 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
-import { getFirestoreClient } from '@/lib/firebase';
 import { MobileSearch } from '@/components/layout/MobileSearch';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, type DiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
@@ -69,7 +68,7 @@ export default function LandingPage() {
       }, 10000);
 
       try {
-        const repository = new FirestoreMissionRepository(getFirestoreClient());
+        const repository = browserMissionRepository();
         // findRecent reads one page. findAll fetched 100 documents to render 24
         // and then ran a COUNT aggregation per queued mission for positions
         // this page never displays - roughly 125 reads per view, and why the
@@ -111,7 +110,7 @@ export default function LandingPage() {
 
     setLoadingMore(true);
     try {
-      const repository = new FirestoreMissionRepository(getFirestoreClient());
+      const repository = browserMissionRepository();
       const page = await repository.findRecent(FEED_SIZE, cursor);
 
       // Guard against a mission appearing twice if one was inserted between
@@ -154,7 +153,7 @@ export default function LandingPage() {
     setError(null);
 
     try {
-      const repository = new FirestoreMissionRepository(getFirestoreClient());
+      const repository = browserMissionRepository();
       let nextCursor = cursor;
       let pagesFetched = 0;
       let pool: Mission[] = missions;

@@ -14,7 +14,7 @@
  * - Detailed error messages for learning
  */
 
-import { analyzeCodeForAllowlist } from '@/infrastructure/sandbox/ast-allowlist-analyzer';
+import { analyzeCodeForAllowlist } from '@/core/domain/safety/ast-allowlist-analyzer';
 
 /**
  * Represents a single allowlist violation found in learner code

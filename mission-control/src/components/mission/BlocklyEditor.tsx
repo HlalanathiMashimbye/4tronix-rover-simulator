@@ -13,8 +13,8 @@ import {
   workspaceToCommands,
   type SimulationCommand,
 } from '@/lib/roverBlockly';
-import { calculateBlocklyDuration } from '@/lib/calculateMissionDuration';
-import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
+import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;

@@ -14,7 +14,7 @@ import {
   checkLearnerCode,
   closestCommand,
   findSyntaxProblems,
-} from '@/lib/learnerCodeCheck';
+} from '@/core/domain/safety/learnerCodeCheck';
 
 describe('the mission that started this', () => {
   it('catches the speed that reached the yard, on the right line', () => {

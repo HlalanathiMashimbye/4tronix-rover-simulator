@@ -13,7 +13,7 @@ import {
   commandAt,
   helpAsMarkdown,
 } from '@/lib/roverCommandHelp';
-import { ROVER_COMMAND_ALLOWLIST } from '@/infrastructure/sandbox/rover-command-allowlist';
+import { ROVER_COMMAND_ALLOWLIST } from '@/core/domain/safety/rover-command-allowlist';
 
 describe('the command a learner is pointing at', () => {
   it('finds the whole dotted name, not the half under the cursor', () => {

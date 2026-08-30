@@ -10,7 +10,8 @@
  * - Keep business logic independent of persistence details
  */
 
-import { Mission } from '../entities/Mission';
+import { Mission, MissionStatus } from '../entities/Mission';
+import { MissionRun } from '../entities/MissionRun';
 
 export interface IMissionRepository {
   /**
@@ -44,6 +45,42 @@ export interface IMissionRepository {
    * over, so page 5 of an offset scheme costs five pages' worth of reads.
    */
   findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage>;
+
+  /**
+   * Every yard's attempt at this mission.
+   *
+   * A mission is a program; a run is one yard's attempt at it, and any yard
+   * may run any mission. The learner's page shows the runs that produced a
+   * video, which is also how a failed run stays invisible to them.
+   */
+  findRuns(missionId: string): Promise<MissionRun[]>;
+
+  /** Record one yard's attempt, creating or replacing it. */
+  upsertRun(missionId: string, run: MissionRun): Promise<void>;
+
+  /**
+   * Apply an operator's decision to a run, and roll the mission's own status
+   * up from it. One write, because a run and its mission disagreeing is the
+   * bug this exists to prevent.
+   */
+  applyBookkeeping(
+    missionId: string,
+    yardId: string,
+    change: {
+      status?: MissionStatus | null;
+      youtubeUrl?: string;
+      clearsReview?: boolean;
+      decidedAt: string;
+      decidedBy: string;
+    },
+  ): Promise<void>;
+
+  /**
+   * Hide a mission without destroying it. Soft, because a mission is a
+   * child's work and the operator pressing delete is usually removing it from
+   * a public feed, not asking for it to be unrecoverable.
+   */
+  softDeleteMission(missionId: string, deletedAt: string, deletedBy: string): Promise<void>;
 }
 
 /** Where a page ended. Both ordering fields, so ties cannot skip or repeat. */
