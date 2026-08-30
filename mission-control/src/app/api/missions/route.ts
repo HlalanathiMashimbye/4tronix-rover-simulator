@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { adminMissionRepository } from '@/infrastructure/container';
 import { MissionService } from '@/core/application/services/MissionService';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const firestore = getFirestoreInstance();
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = adminMissionRepository();
     const service = new MissionService(repository);
     const result = await service.submitMission(validation.data);
 

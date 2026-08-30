@@ -65,6 +65,15 @@ class MockMissionRepository implements IMissionRepository {
     ).length;
   }
 
+  // Widened with the port: routes needed findRuns/applyBookkeeping/
+  // softDeleteMission and could not be typed against IMissionRepository
+  // while those lived only on the Firestore class. MissionService does not
+  // use them, so here they only have to exist.
+  async findRuns() { return []; }
+  async upsertRun() { return; }
+  async applyBookkeeping() { return; }
+  async softDeleteMission() { return; }
+
   async findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage> {
     const ordered = Array.from(this.missions.values()).sort((a, b) => {
       const byDate = b.submittedAt.localeCompare(a.submittedAt);

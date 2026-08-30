@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
+import { browserMissionRepository } from '@/infrastructure/container';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
-import { getFirestoreClient } from '@/lib/firebase';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
@@ -53,7 +52,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   useEffect(() => {
     const fetchMission = async () => {
       try {
-        const repository = new FirestoreMissionRepository(getFirestoreClient());
+        const repository = browserMissionRepository();
         const loadedMission = await repository.findById(missionId);
         if (!loadedMission) {
           setError('Mission not found');

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { adminMissionRepository } from '@/infrastructure/container';
 import { MissionService } from '@/core/application/services/MissionService';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
@@ -53,7 +53,7 @@ export async function POST(
 
   try {
     const firestore = getFirestoreInstance();
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = adminMissionRepository();
     const service = new MissionService(repository);
     const mission = await service.getMissionById(id);
 
