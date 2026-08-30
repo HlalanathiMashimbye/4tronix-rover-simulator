@@ -37,7 +37,12 @@ export interface SimLayout {
  * already separates it from either background.
  */
 export interface SimPalette {
-  backdrop: string;    // behind the letterboxed yard
+  /**
+   * The ground is a radial wash from the centre out, and it is painted across
+   * the whole canvas - there is no letterbox and no frame any more, so the
+   * outer stop is also the colour at every edge. Anything sitting behind the
+   * canvas has to use groundOuter to be invisible.
+   */
   groundInner: string; // radial wash, centre
   groundMid: string;
   groundOuter: string;
@@ -47,13 +52,11 @@ export interface SimPalette {
   grid: string;        // 50cm measurement lines
   vignetteTop: string; // arena edge shadow
   vignetteBottom: string;
-  border: string;      // frame around the play area
   trail: string;       // the path the rover has driven
 }
 
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE: SimPalette = {
-  backdrop: '#1a0f0a',
   groundInner: '#7c4a2b',
   groundMid: '#5a3320',
   groundOuter: '#34190d',
@@ -63,7 +66,6 @@ export const DARK_SIM_PALETTE: SimPalette = {
   grid: 'rgba(255,190,150,0.08)',
   vignetteTop: 'rgba(0,0,0,0.30)',
   vignetteBottom: 'rgba(0,0,0,0.35)',
-  border: 'rgba(255,109,0,0.55)',
   trail: '#2196f3',
 };
 
@@ -74,7 +76,6 @@ export const DARK_SIM_PALETTE: SimPalette = {
  * brown so it darkens the sand instead of greying it.
  */
 export const LIGHT_SIM_PALETTE: SimPalette = {
-  backdrop: '#efeae1',
   groundInner: '#e3d5bf',
   groundMid: '#cfbda2',
   groundOuter: '#b6a086',
@@ -84,7 +85,6 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
   grid: 'rgba(88,66,42,0.12)',
   vignetteTop: 'rgba(88,66,42,0.16)',
   vignetteBottom: 'rgba(88,66,42,0.20)',
-  border: 'rgba(45,38,30,0.28)',
   trail: '#1668c9',
 };
 

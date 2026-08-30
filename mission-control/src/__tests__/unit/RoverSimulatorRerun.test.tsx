@@ -27,9 +27,19 @@ jest.mock('@/contexts/ThemeContext', () => ({ useTheme: () => ({ theme: 'dark' }
 // The canvas is irrelevant here; only the playhead is under test. A proxy
 // swallows whatever drawScene reaches for without pinning the test to the
 // drawing code.
+//
+// Every method hands back a gradient-shaped stub. The renderer builds its
+// ground and vignette with createRadialGradient/createLinearGradient and then
+// calls addColorStop on the result, so a proxy returning undefined throws the
+// moment the paint path runs. It did not run here until the simulator started
+// sizing itself from the canvas's own client box - the clientWidth and
+// clientHeight defined just below had never actually reached it, because the
+// old code measured the wrapper's getBoundingClientRect, which jsdom reports
+// as zero, and drawScene bailed out on a zero-width layout.
 beforeAll(() => {
+  const gradient = { addColorStop: () => undefined };
   HTMLCanvasElement.prototype.getContext = jest.fn(
-    () => new Proxy({}, { get: () => () => undefined }),
+    () => new Proxy({}, { get: () => () => gradient }),
   ) as unknown as HTMLCanvasElement['getContext'];
   Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, value: 800 });
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, value: 600 });
