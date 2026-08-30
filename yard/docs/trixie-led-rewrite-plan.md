@@ -10,7 +10,7 @@ Create an LED abstraction layer that supports both:
 
 ## Files to Create
 
-### 1. `real-rover/led_driver.py` - LED Driver Abstraction
+### 1. `yard/rover/vendor/led_driver.py` - LED Driver Abstraction
 
 ```python
 from abc import ABC, abstractmethod
@@ -49,7 +49,7 @@ class NullLEDDriver(LEDDriver):
     """No-op for testing or disabled LEDs"""
 ```
 
-### 2. `real-rover/led_factory.py` - Auto-Detection
+### 2. `yard/rover/vendor/led_factory.py` - Auto-Detection
 
 ```python
 def create_led_driver() -> LEDDriver:
@@ -61,7 +61,7 @@ def create_led_driver() -> LEDDriver:
 
 ## Files to Modify
 
-### 3. `real-rover/rover.py` - Minimal Changes
+### 3. `yard/rover/vendor/rover.py` - Minimal Changes
 
 **Current (line 139):**
 ```python
