@@ -49,7 +49,7 @@ import requests
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session
 
 import youtube_poll
-from console import auth, deps, notify
+from console import auth, camera, deps, health, mirror, notify, review  # noqa: F401
 # Re-exported, not re-implemented: web_server.py and the templates reach the
 # console through this module, and these are the names they use. The bodies
 # live in the console package.
@@ -76,8 +76,6 @@ YOUTUBE_URL_PATTERNS = youtube_poll.YOUTUBE_URL_PATTERNS
 
 
 
-def _now_iso():
-    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
 
@@ -85,43 +83,6 @@ def _now_iso():
 # Missions API
 # ---------------------------------------------------------------------------
 
-def _mirror_row_to_dict(row):
-    """Map a mission_mirror SQLite row (snake_case) to the API's camelCase
-    shape - the frontend contract (home.html's queue, mission.html) predates
-    the mirror and is unchanged by it.
-    """
-    return {
-        'id': row['id'],
-        'name': row.get('name'),
-        'yardId': row.get('yard_id'),
-        'code': row.get('code') or '',
-        'blocklyState': row.get('blockly_state'),
-        'status': row.get('status'),
-        'submittedAt': row.get('submitted_at'),
-        'startedAt': row.get('started_at'),
-        'completedAt': row.get('completed_at'),
-        'youtubeUrl': row.get('youtube_url'),
-        'deleted': bool(row.get('deleted')),
-        # Recovery flags. The home page already surfaces a needs-review banner
-        # linking to each flagged mission, but the mission page could not see
-        # the flag because it was not in this contract - so the banner led the
-        # operator to a page offering nothing, which is worse than no banner.
-        # The resolve endpoint has existed all along with no way to reach it.
-        'needsReview': bool(row.get('needs_review')),
-        'reviewReason': row.get('review_reason'),
-        # BACKLOG 335/336/338. recording_path/timestamps stay run-internal -
-        # a filesystem path on the satellite isn't operator-facing information.
-        'recordingStatus': row.get('recording_status') or 'none',
-    }
-
-
-def _mirror_is_stale(last_synced_at):
-    """Stale if we've never synced, or the last pull was over 60s ago."""
-    if not last_synced_at:
-        return True
-    synced_time = datetime.fromisoformat(last_synced_at.replace('Z', '+00:00'))
-    age = (datetime.now(timezone.utc) - synced_time).total_seconds()
-    return age > 60
 
 
 @operator_bp.route('/api/missions', methods=['GET'])
@@ -144,8 +105,8 @@ def api_missions():
     rows, last_synced, finished_total = get_missions(finished, yard_id=yard_id())
 
     return jsonify({
-        'missions': [_mirror_row_to_dict(row) for row in rows],
-        'stale': _mirror_is_stale(last_synced),
+        'missions': [mirror.mirror_row_to_dict(row) for row in rows],
+        'stale': mirror.mirror_is_stale(last_synced),
         'lastSyncedAt': last_synced,
         'pendingWrites': outbox_count(),
         'finishedShown': min(finished, finished_total),
@@ -202,7 +163,7 @@ def _begin_recording(mission_id, yard):
 
     ok, detail = start_recording(mission_id, yard)
     if ok:
-        set_run_recording_state(mission_id, yard, 'recording', path=detail, started_at=_now_iso())
+        set_run_recording_state(mission_id, yard, 'recording', path=detail, started_at=mirror.now_iso())
     else:
         current_app.logger.warning('Recording did not start for %s/%s: %s', mission_id, yard, detail)
     return ok
@@ -239,7 +200,7 @@ def api_send_to_rover(mission_id):
                      'sending a mission - a run with no video cannot be reviewed later.',
         }), 503
 
-    now = _now_iso()
+    now = mirror.now_iso()
     yard = yard_id()
 
     # The SQLite transaction serialises across processes; this serialises the
@@ -258,14 +219,14 @@ def api_send_to_rover(mission_id):
 
     mission = get_mission(mission_id)
     if not mission:
-        release_run(mission_id, yard, 'queued', _now_iso())
+        release_run(mission_id, yard, 'queued', mirror.now_iso())
         return jsonify({'error': 'Mission not found'}), 404
 
-    ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
+    ok, err = _dispatch_to_rover(mirror.mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
         # Nothing reached the rover, so put it back rather than holding the
         # run stuck in 'processing' with nothing driving it.
-        release_run(mission_id, yard, 'queued', _now_iso())
+        release_run(mission_id, yard, 'queued', mirror.now_iso())
         return err
 
     recording_started = _begin_recording(mission_id, yard)
@@ -294,7 +255,7 @@ def api_rerun(mission_id):
                      'rerunning a mission - a run with no video cannot be reviewed later.',
         }), 503
 
-    now = _now_iso()
+    now = mirror.now_iso()
     yard = yard_id()
 
     with _acquire_lock:
@@ -322,13 +283,13 @@ def api_rerun(mission_id):
 
     mission = get_mission(mission_id)
     if not mission:
-        release_run(mission_id, yard, previous, _now_iso())
+        release_run(mission_id, yard, previous, mirror.now_iso())
         return jsonify({'error': 'Mission not found'}), 404
 
-    ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
+    ok, err = _dispatch_to_rover(mirror.mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
         # Nothing reached the rover, so restore what was there before.
-        release_run(mission_id, yard, previous, _now_iso())
+        release_run(mission_id, yard, previous, mirror.now_iso())
         return err
 
     recording_started = _begin_recording(mission_id, yard)
@@ -345,7 +306,7 @@ def api_mission(mission_id):
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    return jsonify({'mission': _mirror_row_to_dict(mission)})
+    return jsonify({'mission': mirror.mirror_row_to_dict(mission)})
 
 
 @operator_bp.route('/api/missions/<mission_id>/stop', methods=['POST'])
@@ -411,7 +372,7 @@ def api_stop_mission(mission_id):
         run_status = run.get('status') if run else 'queued'
         return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': run_status})
 
-    release_run(mission_id, yard, 'cancelled', _now_iso(), operator_decision=True)
+    release_run(mission_id, yard, 'cancelled', mirror.now_iso(), operator_decision=True)
     stop_recording(mission_id, yard, keep=False)
     notify.notify_mission_control_async(mission_id, 'cancelled')
     return jsonify({
@@ -435,7 +396,7 @@ def api_mark_complete(mission_id):
     if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be marked complete'}), 400
 
-    release_run(mission_id, yard, 'completed', _now_iso())
+    release_run(mission_id, yard, 'completed', mirror.now_iso())
     stop_recording(mission_id, yard, keep=True)
     notify.notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
@@ -500,119 +461,11 @@ def api_cancel_mission(mission_id):
         return jsonify({'error': 'Only queued or running missions can be cancelled'}), 400
 
     was_running = run.get('status') == 'processing'
-    release_run(mission_id, yard, 'cancelled', _now_iso())
+    release_run(mission_id, yard, 'cancelled', mirror.now_iso())
     if was_running:
         stop_recording(mission_id, yard, keep=False)
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
-
-@operator_bp.route('/api/camera/start', methods=['POST'])
-@require_operator
-def api_camera_start():
-    """Start (or restart) the camera server.
-
-    Behind require_operator deliberately. Spawning a process is the most
-    powerful thing this console can do, and it sits on a network anyone at the
-    venue can join. The command itself is hardcoded - see camera_control - so
-    nothing from this request reaches a shell; the auth gate is defence in
-    depth rather than the only control.
-
-    An optional camera index is accepted and validated as an integer. It is the
-    device selector on a development machine, the analogue of the rover URL.
-    """
-    from camera_control import start
-
-    data = request.get_json(silent=True) or {}
-    index = data.get('cameraIndex')
-    if index is not None:
-        try:
-            index = int(index)
-        except (TypeError, ValueError):
-            return jsonify({'error': 'cameraIndex must be a number'}), 400
-        if not 0 <= index <= 15:
-            return jsonify({'error': 'cameraIndex must be between 0 and 15'}), 400
-        _persist_camera_index(index)
-
-    ok, detail = start(camera_index=index)
-    if not ok:
-        return jsonify({'error': detail}), 502
-
-    # The server needs a moment to bind, so the caller polls /api/camera
-    # rather than this reporting a readiness it cannot yet know.
-    return jsonify({'status': 'ok', 'detail': detail})
-
-
-@operator_bp.route('/api/camera/stop', methods=['POST'])
-@require_operator
-def api_camera_stop():
-    from camera_control import stop
-
-    ok, detail = stop()
-    if not ok:
-        return jsonify({'error': detail}), 502
-    return jsonify({'status': 'ok', 'detail': detail})
-
-
-def _persist_camera_index(index):
-    """Remember the device across restarts, like the rover URL."""
-    try:
-        from satellite_identity import CONFIG_FILE
-        import json
-        try:
-            with open(CONFIG_FILE) as f:
-                cfg = json.load(f)
-        except Exception:
-            cfg = {}
-        cfg['camera_index'] = index
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(cfg, f, indent=2)
-        os.environ['CAMERA_INDEX'] = str(index)
-    except (OSError, ValueError, ImportError) as e:
-        # Best effort: the index still applies to the start about to happen,
-        # it just will not survive a restart. Logged rather than swallowed so
-        # a read-only config file is not invisible.
-        print(f'could not persist camera_index: {e}')
-
-
-@operator_bp.route('/api/camera', methods=['GET'])
-@require_operator
-def api_camera_status():
-    """Whether the camera feed is up, and which backend is serving it.
-
-    The backend matters to an operator: on the Pi the IMX500 does object
-    detection on its own NPU, whereas a laptop webcam is a plain feed. Showing
-    'no detection' beats someone concluding detection is broken.
-    """
-    port = int(os.environ.get('CAMERA_PORT', 8890))
-    host = os.environ.get('CAMERA_HOST', 'localhost')
-
-    import socket
-    reachable = False
-    try:
-        with socket.create_connection((host, port), timeout=1.0):
-            reachable = True
-    except OSError:
-        pass
-
-    try:
-        from camera_control import describe
-        control = describe()
-    except Exception:
-        control = {'managedBy': 'unknown', 'running': reachable}
-
-    return jsonify({
-        'reachable': reachable,
-        'host': host,
-        'port': port,
-        'wsUrl': f'ws://{host}:{port}',
-        'managedBy': control.get('managedBy'),
-        'cameraIndex': int(os.environ.get('CAMERA_INDEX', 0)),
-        'hint': None if reachable else (
-            'Camera server is not running. Use Start below. On a Mac it uses '
-            'the built-in webcam (no object detection) and needs Camera '
-            'permission; press Start and the message will say what to do.'
-        ),
-    })
 
 
 @operator_bp.route('/api/missions/<mission_id>/delete', methods=['POST'])
@@ -638,7 +491,7 @@ def api_delete_mission(mission_id):
     if mission.get('deleted'):
         return jsonify({'error': 'This mission is already deleted'}), 400
 
-    delete_mission(mission_id, _now_iso())
+    delete_mission(mission_id, mirror.now_iso())
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
@@ -769,97 +622,11 @@ def api_integrations():
     })
 
 
-@operator_bp.route('/api/missions/needs-review', methods=['GET'])
-@require_operator
-def api_needs_review():
-    """Missions that were running when the satellite stopped.
-
-    Surfaced as a distinct group rather than mixed into the queue: they are
-    ambiguous, not queued, and an operator has to decide what happened.
-    """
-    from mission_store import get_needs_review
-
-    return jsonify({
-        'missions': [_mirror_row_to_dict(row) for row in get_needs_review()],
-    })
-
-
-@operator_bp.route('/api/missions/<mission_id>/resolve', methods=['POST'])
-@require_operator
-def api_resolve_review(mission_id):
-    """Record the operator's decision about an interrupted mission.
-
-    'completed' - they checked and the run finished. Its recording (already
-                  'kept' by mission_watcher.flag_for_review, BACKLOG 338) is
-                  left untouched - it is exactly the video this run produced.
-    'requeue'   - put it back in the queue to be run again. The old recording
-                  is discarded: a fresh one is made when it actually reruns,
-                  and a stale video should not follow a mission back into the
-                  ordinary queue as if nothing had happened.
-    'cancelled' - the operator decided the interrupted run should not count
-                  (BACKLOG 338). Its recording is discarded - the whole point
-                  of this outcome is that it must never be mistaken for a
-                  successful run's video.
-
-    Deliberately does NOT dispatch to the rover. Re-queuing makes the mission
-    available for a human to send again; it never moves the robot by itself
-    (plan 2.3).
-    """
-    from mission_store import get_mission, resolve_review
-    from recording_control import stop_recording
-    from satellite_identity import yard_id
-
-    data = request.get_json(silent=True) or {}
-    outcome = (data.get('outcome') or '').strip()
-    if outcome not in ('completed', 'requeue', 'cancelled'):
-        return jsonify({'error': "outcome must be 'completed', 'requeue', or 'cancelled'"}), 400
-
-    mission = get_mission(mission_id)
-    if mission is None:
-        return jsonify({'error': 'Mission not found'}), 404
-    if not mission.get('needs_review'):
-        return jsonify({'error': 'This mission is not awaiting review'}), 400
-
-    status = {'completed': 'completed', 'requeue': 'queued', 'cancelled': 'cancelled'}[outcome]
-    resolve_review(mission_id, status, _now_iso())
-
-    if status != 'completed':
-        # 'queued' (fresh rerun ahead) and 'cancelled' (must never look
-        # successful) both discard the recording left over from the
-        # interrupted run; only 'completed' keeps it.
-        stop_recording(mission_id, yard_id(), keep=False)
-
-    if status == 'completed':
-        notify.notify_mission_control_async(mission_id, 'completed')
-
-    return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': status})
-
-
-@operator_bp.route('/api/conflicts', methods=['GET'])
-@require_operator
-def api_conflicts():
-    """Merges where the losing side was already terminal, so the team can see
-    that reconciliation made a real decision rather than silently picking."""
     from mission_store import get_conflicts
 
     return jsonify({'conflicts': get_conflicts()})
 
 
-@operator_bp.route('/api/health', methods=['GET'])
-@require_operator
-def api_rover_health():
-    """Rover reachability for the console badge. Degraded queue = down."""
-    result = {'rover_url': deps.rover_url(), 'reachable': False}
-    try:
-        resp = requests.get(f'{deps.rover_url()}/health', timeout=2.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            result['reachable'] = data.get('status') == 'ok'
-            result['driver'] = data.get('driver')
-            result['queue_size'] = data.get('queue_size')
-    except requests.exceptions.RequestException:
-        pass
-    return jsonify(result)
 
 # YouTube auto-linking lives in youtube_poll.py. These two wrappers stay so
 # the console remains the one place that knows how to reach Firebase, and so

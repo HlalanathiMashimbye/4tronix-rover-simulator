@@ -18,7 +18,7 @@ from flask import current_app
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from web_server import app as flask_app  # noqa: E402
 import operator_console
-from console import deps, notify  # noqa: E402
+from console import camera, deps, mirror, notify  # noqa: E402
 import mission_store  # noqa: E402
 import recording_control  # noqa: E402
 
@@ -802,7 +802,7 @@ def _seed_mirror(synced_at='2026-07-14T09:00:00Z'):
 
 def test_missions_endpoint_serialises_documents(client):
     sign_in(client)
-    _seed_mirror(synced_at=operator_console._now_iso())
+    _seed_mirror(synced_at=mirror.now_iso())
 
     resp = client.get('/operator/api/missions')
     assert resp.status_code == 200
@@ -840,7 +840,7 @@ def test_missions_endpoint_is_stale_when_never_synced(client):
 
 def test_missions_endpoint_is_fresh_right_after_a_sync(client):
     sign_in(client)
-    _seed_mirror(synced_at=operator_console._now_iso())
+    _seed_mirror(synced_at=mirror.now_iso())
     payload = client.get('/operator/api/missions').get_json()
     assert payload['stale'] is False
 
@@ -855,7 +855,7 @@ def test_missions_endpoint_is_stale_when_last_sync_is_old(client):
 
 def test_missions_endpoint_reports_pending_writes_from_outbox(client):
     sign_in(client)
-    _seed_mirror(synced_at=operator_console._now_iso())
+    _seed_mirror(synced_at=mirror.now_iso())
 
     conn = mission_store._connect()
     for i in range(3):
@@ -1770,7 +1770,7 @@ def test_camera_start_rejects_a_non_numeric_index(client, missions, monkeypatch)
     reaches a command line, but it is still validated rather than trusted."""
     sign_in(client)
     called = []
-    monkeypatch.setattr(operator_console, 'api_camera_start', operator_console.api_camera_start)
+    monkeypatch.setattr(camera, 'api_camera_start', camera.api_camera_start)
     import camera_control
     monkeypatch.setattr(camera_control, 'start', lambda camera_index=None: called.append(1) or (True, 'ok'))
 
