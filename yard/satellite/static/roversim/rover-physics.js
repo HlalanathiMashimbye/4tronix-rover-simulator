@@ -9,8 +9,9 @@ const FULL_SPEED_CM_PER_SECOND = 10;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
-const YARD_HALF_W = 200 - ROVER_MARGIN; // 400 cm wide, origin at centre
-const YARD_HALF_H = 150 - ROVER_MARGIN; // 300 cm tall, origin at centre
+// Must match YARD_W/YARD_H in roverSimRender.ts, which explains the size.
+const YARD_HALF_W = 120 - ROVER_MARGIN; // 240 cm wide, origin at centre
+const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
 const SERVO_FL = 9;
 const SERVO_FR = 15;
 const SERVO_RL = 11;
@@ -165,4 +166,40 @@ export class RoverPhysics {
         };
         this.lastUpdate = Date.now();
     }
+}
+/**
+ * How fast the rover turns on the spot, in degrees per second.
+ *
+ * MEASURED FROM THE PHYSICS, never hardcoded. The turn rate falls out of the
+ * wheel angle, the wheelbase and the turning-circle maths above; writing "32.9"
+ * anywhere would be a second copy of that answer, free to drift the moment any
+ * of those constants change. Running one second of the real model cannot drift.
+ *
+ * Memoised per speed because the block generator asks for it on every block.
+ */
+const spinRateCache = new Map();
+export function spinDegreesPerSecond(speed = 60) {
+    const cached = spinRateCache.get(speed);
+    if (cached !== undefined)
+        return cached;
+    const probe = new RoverPhysics();
+    probe.setCommand('spinRight', speed);
+    probe.update(1);
+    const rate = Math.abs(probe.getState().heading);
+    spinRateCache.set(speed, rate);
+    return rate;
+}
+/**
+ * Seconds of spinning needed to turn through `degrees`.
+ *
+ * This is the whole point of the degrees-based turn blocks: a child asked to
+ * build a square should say "turn 90", not solve 90 / 32.9 with a number the
+ * interface never told them. Rounded to 3dp because that is what ends up in
+ * the generated time.sleep() a learner reads.
+ */
+export function spinSecondsForDegrees(degrees, speed = 60) {
+    const rate = spinDegreesPerSecond(speed);
+    if (rate <= 0)
+        return 0;
+    return Math.round((Math.abs(degrees) / rate) * 1000) / 1000;
 }

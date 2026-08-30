@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { loadBlockly } from '@/lib/loadBlockly';
-import { defineRoverBlocks } from '@/lib/roverBlockly';
+import { defineRoverBlocks, migrateSpinBlocks } from '@/lib/roverBlockly';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
@@ -47,7 +47,7 @@ export function BlocklyViewer({ state }: { state: string }) {
     });
 
     try {
-      Blockly.serialization.workspaces.load(JSON.parse(state), workspace);
+      Blockly.serialization.workspaces.load(JSON.parse(migrateSpinBlocks(state)), workspace);
     } catch {
       // Ignore malformed state; an empty read-only canvas is an acceptable fallback.
     }

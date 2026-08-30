@@ -1,6 +1,7 @@
 // GENERATED FILE - DO NOT EDIT.
 // Built from mission-control/src/lib by scripts/build-roversim.mjs.
 // Edit the TypeScript source and re-run `npm run build:roversim`.
+import { spinDegreesPerSecond, spinSecondsForDegrees } from './rover-physics.js';
 /**
  * Shared rover Blockly definitions, toolbox, and generators.
  *
@@ -50,7 +51,10 @@ export function defineRoverBlocks(Blockly) {
         init: function () {
             this.appendDummyInput()
                 .appendField('Move Forward')
-                .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), 'TIME')
+                // 5 seconds, not 1. At 6cm a second a one-second nudge is 6cm, which in
+                // any yard big enough to keep the rover small is invisible. Five gets
+                // 30cm, so one tap of one block plainly goes somewhere.
+                .appendField(new Blockly.FieldNumber(5, 0.1, 20, 0.5), 'TIME')
                 .appendField('seconds');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
@@ -62,7 +66,7 @@ export function defineRoverBlocks(Blockly) {
         init: function () {
             this.appendDummyInput()
                 .appendField('Move Backward')
-                .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), 'TIME')
+                .appendField(new Blockly.FieldNumber(5, 0.1, 20, 0.5), 'TIME')
                 .appendField('seconds');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
@@ -74,24 +78,24 @@ export function defineRoverBlocks(Blockly) {
         init: function () {
             this.appendDummyInput()
                 .appendField('Spin Left')
-                .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), 'TIME')
-                .appendField('seconds');
+                .appendField(new Blockly.FieldNumber(90, 15, 360, 15), 'DEGREES')
+                .appendField('degrees');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
             this.setColour('#9C27B0');
-            this.setTooltip('Spin the rover left in place');
+            this.setTooltip('Turn left on the spot, by this many degrees');
         },
     };
     Blockly.Blocks['rover_spin_right'] = {
         init: function () {
             this.appendDummyInput()
                 .appendField('Spin Right')
-                .appendField(new Blockly.FieldNumber(0.5, 0.1, 10, 0.1), 'TIME')
-                .appendField('seconds');
+                .appendField(new Blockly.FieldNumber(90, 15, 360, 15), 'DEGREES')
+                .appendField('degrees');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
             this.setColour('#9C27B0');
-            this.setTooltip('Spin the rover right in place');
+            this.setTooltip('Turn right on the spot, by this many degrees');
         },
     };
     Blockly.Blocks['rover_stop'] = {
@@ -342,6 +346,18 @@ export function mergeUplinkHats(workspace) {
  * Generate rover Python from the workspace. Only blocks inside an
  * `rover_on_receive` hat are emitted - matching the yard exactly.
  */
+/**
+ * The four wheel servos, explained once.
+ *
+ * They are the least readable thing the generator emits: four numbered calls
+ * with no clue that 9, 11, 13 and 15 are wheels. A learner moving from Blocks
+ * to Python meets them in the first program they ever look at.
+ */
+const STRAIGHTEN_NOTE = '# Point all four wheels straight ahead';
+/** "1 second", not "1 seconds". This card is about language, so it matters. */
+function seconds(value) {
+    return `${value} second${String(value) === '1' ? '' : 's'}`;
+}
 export function workspaceToPython(workspace) {
     const lines = [];
     function blockToLines(block, indent) {
@@ -356,6 +372,8 @@ export function workspaceToPython(workspace) {
             }
             case 'rover_forward': {
                 const t = block.getFieldValue('TIME');
+                lines.push(`${pad}# Drive forward for ${seconds(t)}`);
+                lines.push(`${pad}${STRAIGHTEN_NOTE}`);
                 lines.push(`${pad}rover.setServo(9, 0)`);
                 lines.push(`${pad}rover.setServo(11, 0)`);
                 lines.push(`${pad}rover.setServo(13, 0)`);
@@ -367,6 +385,8 @@ export function workspaceToPython(workspace) {
             }
             case 'rover_backward': {
                 const t = block.getFieldValue('TIME');
+                lines.push(`${pad}# Drive backwards for ${seconds(t)}`);
+                lines.push(`${pad}${STRAIGHTEN_NOTE}`);
                 lines.push(`${pad}rover.setServo(9, 0)`);
                 lines.push(`${pad}rover.setServo(11, 0)`);
                 lines.push(`${pad}rover.setServo(13, 0)`);
@@ -377,8 +397,11 @@ export function workspaceToPython(workspace) {
                 break;
             }
             case 'rover_spin_left': {
-                const t = block.getFieldValue('TIME');
+                const deg = spinDegrees(block);
+                const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+                lines.push(`${pad}# Turn left ${deg} degrees on the spot`);
                 lines.push(`${pad}rover.stop()`);
+                lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
                 lines.push(`${pad}rover.setServo(9, 50)`);
                 lines.push(`${pad}rover.setServo(15, -50)`);
                 lines.push(`${pad}rover.setServo(11, -50)`);
@@ -389,8 +412,11 @@ export function workspaceToPython(workspace) {
                 break;
             }
             case 'rover_spin_right': {
-                const t = block.getFieldValue('TIME');
+                const deg = spinDegrees(block);
+                const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+                lines.push(`${pad}# Turn right ${deg} degrees on the spot`);
                 lines.push(`${pad}rover.stop()`);
+                lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
                 lines.push(`${pad}rover.setServo(9, 50)`);
                 lines.push(`${pad}rover.setServo(15, -50)`);
                 lines.push(`${pad}rover.setServo(11, -50)`);
@@ -401,11 +427,14 @@ export function workspaceToPython(workspace) {
                 break;
             }
             case 'rover_stop':
+                lines.push(`${pad}# Stop moving`);
                 lines.push(`${pad}rover.stop()`);
                 break;
             case 'rover_steer_left': {
                 const d = block.getFieldValue('DEGREES');
                 const t = block.getFieldValue('TIME');
+                lines.push(`${pad}# Steer left ${d} degrees while driving for ${seconds(t)}`);
+                lines.push(`${pad}# Angle the wheels, drive, then straighten up again`);
                 lines.push(`${pad}rover.setServo(9, -${d})`);
                 lines.push(`${pad}rover.setServo(15, -${d})`);
                 lines.push(`${pad}rover.setServo(11, ${d})`);
@@ -422,6 +451,8 @@ export function workspaceToPython(workspace) {
             case 'rover_steer_right': {
                 const d = block.getFieldValue('DEGREES');
                 const t = block.getFieldValue('TIME');
+                lines.push(`${pad}# Steer right ${d} degrees while driving for ${seconds(t)}`);
+                lines.push(`${pad}# Angle the wheels, drive, then straighten up again`);
                 lines.push(`${pad}rover.setServo(9, ${d})`);
                 lines.push(`${pad}rover.setServo(15, ${d})`);
                 lines.push(`${pad}rover.setServo(11, -${d})`);
@@ -437,6 +468,7 @@ export function workspaceToPython(workspace) {
             }
             case 'rover_wait': {
                 const t = block.getFieldValue('TIME');
+                lines.push(`${pad}# Wait ${seconds(t)} before the next step`);
                 lines.push(`${pad}time.sleep(${t})`);
                 break;
             }
@@ -445,20 +477,24 @@ export function workspaceToPython(workspace) {
                 const dir = block.getFieldValue('DIR');
                 const deg = block.getFieldValue('DEGREES');
                 const angle = dir === 'LEFT' ? deg : dir === 'RIGHT' ? -deg : 0;
+                lines.push(`${pad}# Turn the camera mast to ${angle} degrees`);
                 lines.push(`${pad}rover.setServo(0, ${angle})`);
                 lines.push(`${pad}time.sleep(0.5)`);
                 break;
             }
             case 'rover_read_distance': {
+                lines.push(`${pad}# Measure how far away the nearest thing is, and print it`);
                 lines.push(`${pad}print('Distance: ' + str(round(rover.getDistance())) + ' cm')`);
                 break;
             }
             case 'rover_take_photo': {
+                lines.push(`${pad}# Take a photo with the rover camera`);
                 lines.push(`${pad}take_photo()`);
                 break;
             }
             case 'rover_leds_all': {
                 const rgb = block.getFieldValue('COLOUR');
+                lines.push(`${pad}# Light up every LED in this colour`);
                 lines.push(`${pad}rover.setColor(rover.fromRGB(${rgb}))`);
                 lines.push(`${pad}rover.show()`);
                 break;
@@ -466,12 +502,14 @@ export function workspaceToPython(workspace) {
             case 'rover_led_one': {
                 const led = block.getFieldValue('LED');
                 const rgb = block.getFieldValue('COLOUR');
+                lines.push(`${pad}# Light up LED number ${led} in this colour`);
                 lines.push(`${pad}rover.setPixel(${led}, rover.fromRGB(${rgb}))`);
                 lines.push(`${pad}rover.show()`);
                 break;
             }
             case 'rover_repeat': {
                 const times = block.getFieldValue('TIMES');
+                lines.push(`${pad}# Do the next steps ${times} times over`);
                 lines.push(`${pad}for _ in range(${times}):`);
                 const inner = block.getInputTargetBlock('DO');
                 if (inner) {
@@ -492,9 +530,93 @@ export function workspaceToPython(workspace) {
     return lines.join('\n') + '\n';
 }
 /**
- * Map the workspace to local-simulator commands (movement only - the 2D sim
- * has no concept of mast/LED/photo/wait). Speed is fixed at 60 to match the
- * Python the rover actually runs. Only blocks inside `rover_on_receive` count.
+ * Turning is expressed in DEGREES, and converted to seconds here.
+ *
+ * The blocks used to ask for seconds, which made the most obvious thing a child
+ * would ever try - drive a square - impossible. A 90 degree corner needs 2.736
+ * seconds at speed 60, the field's step was 0.1, and nothing in the interface
+ * told them the rate. Four corners of 2.7s left the square 1.1cm open and the
+ * rover 4.5 degrees off; 2.8s overshot the other way. They were being asked to
+ * solve 90 / 32.9 with a number they had never been given.
+ *
+ * Steer Left and Steer Right already took degrees. Turning on the spot was the
+ * one motion that did not, and the one a square needs.
+ */
+const SPIN_SPEED = 60;
+/**
+ * The turn angle on a spin block, tolerating workspaces saved before this
+ * changed.
+ *
+ * Old missions stored `TIME` in seconds. Blockly drops a field it does not
+ * recognise on load, so without this an archived mission would silently render
+ * as the 90 degree default and its blocks would no longer match the Python
+ * stored alongside them. Converting keeps the picture honest.
+ */
+function spinDegrees(block) {
+    const degrees = block.getFieldValue('DEGREES');
+    if (degrees !== null && degrees !== undefined && degrees !== '')
+        return Number(degrees);
+    const legacySeconds = Number(block.getFieldValue('TIME'));
+    if (Number.isFinite(legacySeconds) && legacySeconds > 0) {
+        return Math.round(legacySeconds * spinDegreesPerSecond(SPIN_SPEED));
+    }
+    return 90;
+}
+/**
+ * Rewrite a saved workspace's spin blocks from seconds to degrees.
+ *
+ * Blockly serialises fields by name and silently drops any it does not
+ * recognise, so a workspace saved before this change would load with its spin
+ * blocks reset to the 90 degree default - and an archived mission would render
+ * as blocks that no longer match the Python stored beside them.
+ *
+ * Converting at load time keeps every existing mission truthful. Returns the
+ * input untouched if it is not JSON we recognise: a mission that will not parse
+ * is better rendered empty than half-rewritten.
+ */
+export function migrateSpinBlocks(serialised) {
+    let parsed;
+    try {
+        parsed = JSON.parse(serialised);
+    }
+    catch {
+        return serialised;
+    }
+    let changed = false;
+    const walk = (node) => {
+        if (Array.isArray(node)) {
+            node.forEach(walk);
+            return;
+        }
+        if (!node || typeof node !== 'object')
+            return;
+        const block = node;
+        if ((block.type === 'rover_spin_left' || block.type === 'rover_spin_right') &&
+            block.fields &&
+            block.fields.DEGREES === undefined &&
+            block.fields.TIME !== undefined) {
+            const seconds = Number(block.fields.TIME);
+            if (Number.isFinite(seconds) && seconds > 0) {
+                block.fields.DEGREES = Math.round(seconds * spinDegreesPerSecond(SPIN_SPEED));
+                delete block.fields.TIME;
+                changed = true;
+            }
+        }
+        Object.values(node).forEach(walk);
+    };
+    walk(parsed);
+    return changed ? JSON.stringify(parsed) : serialised;
+}
+/** The rover has four corner lamps. LED_POSITIONS above is the same order. */
+export const LED_COUNT = 4;
+/**
+ * Map the workspace to local-simulator commands. Speed is fixed at 60 to match
+ * the Python the rover actually runs. Only blocks inside `rover_on_receive`
+ * counts.
+ *
+ * LEDs used to be dropped here, on the grounds that the 2D sim had no concept
+ * of them. It does now: a child who lights the rover up should see it light up,
+ * and there are four real lamps on the corners of the chassis to match.
  */
 export function workspaceToCommands(workspace) {
     const commands = [];
@@ -516,10 +638,18 @@ export function workspaceToCommands(workspace) {
                 out.push({ command: 'reverse', speed: 60, duration: Number(block.getFieldValue('TIME')) });
                 break;
             case 'rover_spin_left':
-                out.push({ command: 'spinLeft', speed: 60, duration: Number(block.getFieldValue('TIME')) });
+                out.push({
+                    command: 'spinLeft',
+                    speed: SPIN_SPEED,
+                    duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+                });
                 break;
             case 'rover_spin_right':
-                out.push({ command: 'spinRight', speed: 60, duration: Number(block.getFieldValue('TIME')) });
+                out.push({
+                    command: 'spinRight',
+                    speed: SPIN_SPEED,
+                    duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+                });
                 break;
             case 'rover_steer_left':
                 out.push({
@@ -540,6 +670,26 @@ export function workspaceToCommands(workspace) {
             case 'rover_stop':
                 out.push({ command: 'stop' });
                 break;
+            case 'rover_leds_all': {
+                const rgb = block.getFieldValue('COLOUR');
+                out.push({ command: 'leds', leds: Array(LED_COUNT).fill(rgb) });
+                break;
+            }
+            case 'rover_led_one': {
+                const rgb = block.getFieldValue('COLOUR');
+                const which = Number(block.getFieldValue('LED'));
+                // Only the chosen lamp changes; the others keep whatever they were.
+                const leds = Array(LED_COUNT).fill(null);
+                if (which >= 0 && which < LED_COUNT)
+                    leds[which] = rgb;
+                out.push({ command: 'leds', leds });
+                break;
+            }
+            case 'rover_wait':
+                // Time passes, and the lamps stay lit through it. Dropping this made a
+                // "lights on, wait, lights off" program flash past in one frame.
+                out.push({ command: 'wait', duration: Number(block.getFieldValue('TIME')) });
+                break;
             case 'rover_repeat': {
                 const times = Number(block.getFieldValue('TIMES'));
                 const loop = [];
@@ -548,7 +698,7 @@ export function workspaceToCommands(workspace) {
                     out.push(...loop);
                 break;
             }
-            // mast / LEDs / photo / wait / distance have no 2D-sim effect
+            // mast / photo / distance still have no 2D-sim effect
             default:
                 break;
         }

@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Code2, Play } from 'lucide-react';
 import { loadBlockly } from '@/lib/loadBlockly';
 import {
   defineRoverBlocks,
+  migrateSpinBlocks,
   ROVER_TOOLBOX,
   ROVER_MAX_INSTANCES,
   mergeUplinkHats,
@@ -19,13 +20,15 @@ interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange?: (code: string) => void;
   onBlocklyStateChange?: (state: string) => void;
+  /** Switch to the Python tab, showing what these blocks generate. */
+  onShowAsPython?: () => void;
 }
 
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
 // so the key name need not match - but the JSON format does (Blockly.serialization).
 const STORAGE_KEY = 'roverWorkspace';
 
-export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange }: BlocklyEditorProps) {
+export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange , onShowAsPython }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
@@ -124,7 +127,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
-          Blockly.serialization.workspaces.load(JSON.parse(saved), workspace);
+          Blockly.serialization.workspaces.load(JSON.parse(migrateSpinBlocks(saved)), workspace);
           if (mergeUplinkHats(workspace)) {
             localStorage.setItem(
               STORAGE_KEY,
@@ -340,17 +343,38 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
 
   return (
     <div ref={containerRef} className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
-      <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground">
+      {/* The buttons are ONE GROUP, pinned right.
+          Adding "Show as Python" as a third child of a justify-between row made
+          it the middle item, so it parked in the centre of whatever space was
+          left and drifted on its own as the panel resized. Grouping the two
+          buttons and pushing the pair right with ml-auto keeps them together at
+          every width; the hint text yields first, then hides. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground sm:block">
           Stack blocks inside “On uplink”, tune the numbers, then run it.
         </p>
-        <button
-          onClick={handleRun}
-          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
-        >
-          <Play className="h-3.5 w-3.5" fill="currentColor" />
-          Run blocks
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Lives on the BLOCKS side, not in the Python tab, because this is
+              where the question occurs to a learner: they are looking at their
+              blocks and want to know what they look like as code. */}
+          {onShowAsPython && (
+            <button
+              onClick={onShowAsPython}
+              title="See the Python your blocks make"
+              className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
+            >
+              <Code2 className="h-3.5 w-3.5 text-primary" />
+              Show as Python
+            </button>
+          )}
+          <button
+            onClick={handleRun}
+            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+          >
+            <Play className="h-3.5 w-3.5" fill="currentColor" />
+            Run blocks
+          </button>
+        </div>
       </div>
 
       {mergedNotice && (

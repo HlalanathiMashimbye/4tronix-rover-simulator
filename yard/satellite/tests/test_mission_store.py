@@ -245,8 +245,8 @@ def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
         '2026-07-02',
     )
 
-    ok, reason, _mission = mission_store.acquire_mission(
-        'x', 'sat-1', '2026-07-03T00:00:00Z', '2026-07-03T00:05:00Z', for_rerun=True,
+    ok, reason, _run = mission_store.acquire_run(
+        'x', 'curiosity', '2026-07-03T00:00:00Z', for_rerun=True,
     )
     assert ok, reason
 
@@ -295,15 +295,17 @@ def test_a_flagged_mission_can_be_rerun():
         {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
          'submittedAt': '2026-08-01T08:00:00Z'},
     ], '2026-08-01T08:00:00Z')
+    mission_store.backfill_missions_to_runs()
     mission_store.flag_for_review('m1', 'interrupted')
 
-    ok, reason, _ = mission_store.acquire_mission(
-        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+    ok, reason, _ = mission_store.acquire_run(
+        'm1', 'y1', '2026-08-02T08:00:00Z', for_rerun=True,
+    )
 
     assert ok, f'rerun refused with {reason}'
-    row = mission_store.get_mission('m1')
-    assert row['needs_review'] == 0, 'rerunning is the operator resolving it'
-    assert row['status'] == 'processing'
+    run = mission_store.get_run('m1', 'y1')
+    assert run['needs_review'] == 0, 'rerunning is the operator resolving it'
+    assert run['status'] == 'processing'
 
 
 def test_a_processing_mission_that_is_not_flagged_still_cannot_be_rerun():
@@ -313,10 +315,15 @@ def test_a_processing_mission_that_is_not_flagged_still_cannot_be_rerun():
          'submittedAt': '2026-08-01T08:00:00Z'},
     ], '2026-08-01T08:00:00Z')
 
-    ok, reason, _ = mission_store.acquire_mission(
-        'm1', 'sat-1', '2026-08-02T08:00:00Z', '2026-08-02T08:05:00Z', for_rerun=True)
+    mission_store.backfill_missions_to_runs()
 
-    assert not ok and reason == 'not-terminal'
+    ok, reason, _ = mission_store.acquire_run(
+        'm1', 'y1', '2026-08-02T08:00:00Z', for_rerun=True,
+    )
+
+    # Not flagged, so nothing says the run is abandoned. Restarting it could
+    # mean two dispatches for one rover.
+    assert not ok and reason == 'already-running'
 
 
 def test_a_deleted_mission_does_not_inflate_the_review_count():
@@ -329,3 +336,85 @@ def test_a_deleted_mission_does_not_inflate_the_review_count():
     mission_store.delete_mission('m1', '2026-08-02T08:00:00Z')
 
     assert mission_store.get_needs_review() == []
+
+
+# ---------------------------------------------------------------------------
+# Recording lifecycle (BACKLOG 335/336/338)
+# ---------------------------------------------------------------------------
+
+def test_recording_columns_exist_after_migrating_an_old_mirror():
+    """A mirror built before this change has no recording_* columns; _migrate
+    (run every boot by init_db) must add them rather than fail on first
+    write, same as it already does for mission_mirror's deleted/deleted_at."""
+    conn = mission_store._connect()
+    conn.execute('DROP TABLE mission_mirror')
+    conn.execute('DROP TABLE runs_mirror')
+    conn.execute('CREATE TABLE mission_mirror (id TEXT PRIMARY KEY, status TEXT NOT NULL)')
+    conn.execute(
+        'CREATE TABLE runs_mirror (mission_id TEXT NOT NULL, yard_id TEXT NOT NULL,'
+        ' status TEXT NOT NULL, PRIMARY KEY (mission_id, yard_id))'
+    )
+    conn.commit()
+    conn.close()
+
+    mission_store.init_db()  # re-runs _migrate against the "old" schema
+
+    conn = mission_store._connect()
+    mission_cols = {r['name'] for r in conn.execute('PRAGMA table_info(mission_mirror)')}
+    run_cols = {r['name'] for r in conn.execute('PRAGMA table_info(runs_mirror)')}
+    conn.close()
+    assert 'recording_status' in mission_cols
+    assert {'recording_status', 'recording_path', 'recording_started_at', 'recording_stopped_at'} <= run_cols
+
+
+def test_set_run_recording_state_writes_both_tables_without_enqueueing():
+    mission_store.upsert_missions([_mission('a')], '2026-07-14T09:00:00Z')
+    mission_store.upsert_runs([{
+        'missionId': 'a', 'yardId': 'curiosity', 'status': 'processing',
+        'statusUpdatedAt': '2026-07-14T09:00:00Z',
+    }], '2026-07-14T09:00:00Z')
+
+    mission_store.set_run_recording_state(
+        'a', 'curiosity', 'recording', path='/tmp/a.mp4', started_at='2026-07-14T09:01:00Z')
+
+    run = mission_store.get_run('a', 'curiosity')
+    assert run['recording_status'] == 'recording'
+    assert run['recording_path'] == '/tmp/a.mp4'
+    assert run['recording_started_at'] == '2026-07-14T09:01:00Z'
+
+    assert mission_store.get_mission('a')['recording_status'] == 'recording'
+    assert not mission_store.mission_has_pending('a')
+    assert mission_store.peek_run_outbox() is None
+
+
+def test_new_runs_default_to_no_recording():
+    mission_store.upsert_missions([_mission('a')], '2026-07-14T09:00:00Z')
+    mission_store.upsert_runs([{
+        'missionId': 'a', 'yardId': 'curiosity', 'status': 'queued',
+        'statusUpdatedAt': '2026-07-14T09:00:00Z',
+    }], '2026-07-14T09:00:00Z')
+    assert mission_store.get_run('a', 'curiosity')['recording_status'] == 'none'
+
+
+def test_resolve_review_updates_the_run_row_too():
+    """Gap fix: resolve_review previously only wrote mission_mirror, leaving
+    the run row stuck at 'processing'/needs_review=1 forever. Any run-level
+    consumer - recording finalization included - needs the run's own state
+    to actually change, not just the mission rollup."""
+    mission_store.upsert_missions([
+        {'id': 'm1', 'status': 'processing', 'yardId': 'y1',
+         'submittedAt': '2026-08-01T08:00:00Z'},
+    ], '2026-08-01T08:00:00Z')
+    mission_store.upsert_runs([{
+        'missionId': 'm1', 'yardId': 'y1', 'status': 'processing',
+        'needsReview': 1, 'reviewReason': 'interrupted',
+        'statusUpdatedAt': '2026-08-01T08:00:00Z',
+    }], '2026-08-01T08:00:00Z')
+
+    mission_store.resolve_review('m1', 'cancelled', '2026-08-02T08:00:00Z')
+
+    run = mission_store.get_run('m1', 'y1')
+    assert run['status'] == 'cancelled'
+    assert run['needs_review'] == 0
+    assert run['review_reason'] is None
+    assert mission_store.get_mission('m1')['status'] == 'cancelled'

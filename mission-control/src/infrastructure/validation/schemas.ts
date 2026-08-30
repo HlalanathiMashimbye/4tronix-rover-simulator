@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
 import { calculatePythonDuration, findMaxSpeedInPython } from '@/lib/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED } from '@/infrastructure/config/limits';
+import { isGeneratedMissionName } from '@/lib/missionNameGenerator';
 
 /**
  * Schema for creating a new mission (anonymous submission)
@@ -36,10 +37,15 @@ export const createMissionSchema = z.object({
     .min(1, 'Learner ID is required')
     .max(100, 'Learner ID too long'),
 
+  /**
+   * nanoid(21), which is what anonymous-auth actually mints. Nothing renders
+   * this, so it is not a channel anyone would read, but it does land on a
+   * world-readable document and a free-form string field there is a loose end
+   * rather than a feature.
+   */
   sessionId: z
     .string()
-    .min(1, 'Session ID is required')
-    .max(100, 'Session ID too long'),
+    .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Session ID has an unexpected format'),
 
   learnerEmail: z
     .string()
@@ -47,10 +53,22 @@ export const createMissionSchema = z.object({
     .max(254, 'Email too long')
     .optional(),
 
+  /**
+   * The name must be one the generator could have produced (AB#402).
+   *
+   * This is the boundary, not the input control. The browser has shown a
+   * read-only name with a re-roll button for a while, but the API accepted any
+   * string up to 100 characters, so anyone posting directly could put whatever
+   * they liked on a world-readable document. 47 of the first 400 missions
+   * carry names the generator could never have made.
+   *
+   * A closed vocabulary rather than a filter of bad words: a blocklist is an
+   * endless argument with the person trying to get past it, while a list of
+   * permitted pairings has nothing to argue with.
+   */
   name: z
     .string()
-    .min(1, 'Mission name is required')
-    .max(100, 'Mission name too long'),
+    .refine(isGeneratedMissionName, 'Mission names are generated, not typed'),
 
   code: z
     .string()

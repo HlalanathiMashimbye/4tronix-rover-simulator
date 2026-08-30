@@ -31,6 +31,17 @@ interface SplitPaneProps {
    * pass '100%' when the split already sits inside a sized flex parent.
    */
   height?: string;
+  /**
+   * Whether the divider can be moved. Default true.
+   *
+   * The mission VIEW sets this false and takes a fixed 70/30. Letting a
+   * learner resize their own video was ambition rather than a need: a video
+   * player wants one shape and looks better holding it, and a draggable
+   * divider beside it invites fiddling with a layout that was already right.
+   * Create Mission keeps the drag, where trading space between an editor and
+   * a preview is a real working need.
+   */
+  resizable?: boolean;
 }
 
 export function SplitPane({
@@ -41,6 +52,7 @@ export function SplitPane({
   maxSplit = 75,
   ariaLabel,
   height,
+  resizable = true,
 }: SplitPaneProps) {
   const [panelSplit, setPanelSplit] = useState(defaultSplit);
 
@@ -131,11 +143,23 @@ export function SplitPane({
   };
 
   return (
-    <div className="workspaceSplitGrid" ref={containerRef}>
+    <div
+      // Two tracks when there is no divider. The lg grid declares three -
+      // left, an auto track for the divider, then right - so with the divider
+      // gone the right panel landed in the AUTO track: sized to its content,
+      // sitting in the middle of the screen, with the third track empty beside
+      // it. A class rather than an inline style, because below lg the grid must
+      // still collapse to one column and an inline rule would outrank that.
+      className={`workspaceSplitGrid${resizable ? '' : ' workspaceSplitGrid--fixed'}`}
+      ref={containerRef}
+    >
       {left}
 
-      {/* Grab-anywhere divider: the mouse control for the split. Sits under
-          the cursor and moves with it exactly. */}
+      {/* No divider when the split is fixed. Rendering an inert one would
+          still read as a handle and invite a drag that does nothing. */}
+      {resizable && (
+      /* Grab-anywhere divider: the mouse control for the split. Sits under
+         the cursor and moves with it exactly. */
       <div
         ref={dividerRef}
         className="workspaceSplitDivider"
@@ -155,6 +179,7 @@ export function SplitPane({
         onDoubleClick={() => setPanelSplit(defaultSplit)}
         title="Drag to resize · double-click to reset"
       />
+      )}
 
       {right}
     </div>

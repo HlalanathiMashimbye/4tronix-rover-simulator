@@ -30,9 +30,12 @@ import requests
 from mission_store import (
     flag_for_review,
     get_mission,
+    get_run,
     mission_has_pending,
-    release_mission,
+    release_run,
+    run_has_pending,
 )
+from recording_control import stop_recording
 
 ROVER_POLL_TIMEOUT = 3.0
 DEFAULT_POLL_INTERVAL = 10  # seconds
@@ -98,17 +101,55 @@ def completed_mission_ids(rover_url):
     return done
 
 
-def autocomplete_finished_missions(rover_url, notify=None):
-    """Complete any 'processing' mission the rover says it finished.
+def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
+    """Complete any 'processing' run the rover says it finished.
 
     `notify` is the mission-control status callback, injected so this module
     does not import the Flask blueprint (which would be a circular import and
     would drag an app context into a background thread).
 
     Returns the list of mission ids completed.
+
+    If yard_id is not provided, it is imported from satellite_identity.
     """
+    from satellite_identity import yard_id as get_yard_id
+    if yard_id is None:
+        try:
+            yard_id = get_yard_id()
+        except Exception:
+            yard_id = 'curiosity'
+
     completed = []
     done, errored = rover_outcomes(rover_url)
+
+    # STOP FILMING AS SOON AS THE ROVER SAYS THE RUN IS OVER.
+    #
+    # Deliberately ahead of everything below, and deliberately outside the
+    # run_has_pending guard those loops use.
+    #
+    # Whether there is anything left to film is a question the ROVER answers,
+    # and it can answer it with no internet at all. Whether Firestore has
+    # caught up is a different question, and it has no business keeping a
+    # camera running.
+    #
+    # Tying the two together meant that on a yard with no network the recording
+    # never stopped. The outbox cannot flush while offline, so run_has_pending
+    # stayed true, so both loops below skipped the run on every pass, so the
+    # writer was never released: the file grew at ~87KB/s (about 7.5GB a day,
+    # on a 64GB card) and had no moov atom, which means every one of them was
+    # unplayable. An operator marking the mission complete by hand still
+    # rescued it, which is the only reason this was survivable.
+    #
+    # keep=True for errors as well as successes. A run the rover could not
+    # execute may still have filmed something worth seeing, and BACKLOG 338
+    # leaves that judgement to a human: only api_resolve_review discards it.
+    for mission_id in set(done) | set(errored):
+        run = get_run(mission_id, yard_id)
+        if run is None:
+            continue
+        if run.get('recording_status') != 'recording':
+            continue
+        stop_recording(mission_id, yard_id, keep=True)
 
     # A run the rover could not execute is flagged, never marked failed. The
     # rule in this module has always been that it may not assert an outcome
@@ -117,28 +158,36 @@ def autocomplete_finished_missions(rover_url, notify=None):
     # an operator with the rover's own reason attached.
     for mission_id, reason in errored.items():
         mission = get_mission(mission_id)
-        if mission is None or mission.get('status') != 'processing':
+        if mission is None:
             continue
-        if mission.get('needs_review'):
+        run = get_run(mission_id, yard_id)
+        if run is None or run.get('status') != 'processing':
             continue
-        if mission_has_pending(mission_id):
+        if run.get('needs_review'):
+            continue
+        if run_has_pending(mission_id, yard_id):
             continue
 
-        flag_for_review(mission_id, f'rover could not run it: {reason}'[:REVIEW_REASON_MAX])
+        # Flag the run for review
+        release_run(mission_id, yard_id, 'processing', _now_iso(),
+                   review_reason=f'rover could not run it: {reason}'[:REVIEW_REASON_MAX])
         print(f'[watcher] Rover reported an error for {mission_id}: {reason}')
 
     for mission_id in done:
         mission = get_mission(mission_id)
-        if mission is None or mission.get('status') != 'processing':
+        if mission is None:
             continue
-        # A mission awaiting a human decision is theirs to resolve, not ours.
-        if mission.get('needs_review'):
+        run = get_run(mission_id, yard_id)
+        if run is None or run.get('status') != 'processing':
             continue
-        # Do not race a flush that is already carrying a change for this row.
-        if mission_has_pending(mission_id):
+        # A run awaiting a human decision is theirs to resolve, not ours.
+        if run.get('needs_review'):
+            continue
+        # Do not race a flush that is already carrying a change for this run.
+        if run_has_pending(mission_id, yard_id):
             continue
 
-        release_mission(mission_id, 'completed', _now_iso())
+        release_run(mission_id, yard_id, 'completed', _now_iso())
         completed.append(mission_id)
         print(f'[watcher] Rover confirmed {mission_id}; marked complete')
 
