@@ -9,7 +9,6 @@
  */
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE = {
-    backdrop: '#1a0f0a',
     groundInner: '#7c4a2b',
     groundMid: '#5a3320',
     groundOuter: '#34190d',
@@ -19,7 +18,6 @@ export const DARK_SIM_PALETTE = {
     grid: 'rgba(255,190,150,0.08)',
     vignetteTop: 'rgba(0,0,0,0.30)',
     vignetteBottom: 'rgba(0,0,0,0.35)',
-    border: 'rgba(255,109,0,0.55)',
     trail: '#2196f3',
 };
 /**
@@ -29,7 +27,6 @@ export const DARK_SIM_PALETTE = {
  * brown so it darkens the sand instead of greying it.
  */
 export const LIGHT_SIM_PALETTE = {
-    backdrop: '#efeae1',
     groundInner: '#e3d5bf',
     groundMid: '#cfbda2',
     groundOuter: '#b6a086',
@@ -39,7 +36,6 @@ export const LIGHT_SIM_PALETTE = {
     grid: 'rgba(88,66,42,0.12)',
     vignetteTop: 'rgba(88,66,42,0.16)',
     vignetteBottom: 'rgba(88,66,42,0.20)',
-    border: 'rgba(45,38,30,0.28)',
     trail: '#1668c9',
 };
 // The physical yard (matches the Qt simulator: 400 x 300 cm).

@@ -358,6 +358,33 @@
     opacity: 0;
   }
 
+  /* A panel and anything seated in its corner.
+     
+     Nested corners have to be concentric or the pair reads as unfinished:
+     the inner radius is the outer one minus everything between the two
+     edges, which is the border plus the padding. Eyeballed, the mission
+     page had a 22.4px card holding an 18.4px canvas across 13px of inset,
+     so the inner corner was 7px too round and the curves ran non-parallel.
+     The mode tabs in the same corner were out by 9px.
+
+     Only applies to a child sharing the parent's corner. A control floating
+     in the middle of a panel is not nested against anything and keeps its
+     own radius.
+     
+     Deriving it means it cannot drift again. Change --panel-pad and the
+     surface follows. The two panels also shared no padding value before
+     this (10px against 12px), so their contents did not line up across
+     the split. */
+  .panel {
+    --panel-pad: 0.75rem;
+    --panel-border: 1px;
+    border-radius: var(--radius-2xl);
+    padding: var(--panel-pad);
+  }
+  .panel-inner {
+    border-radius: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border));
+  }
+
   /* Chunky, toy-like depth for kid-friendly cards and buttons (claymorphic):
      a soft outer lift plus an inner bottom bevel, no neon glow. */
   .clay {
@@ -621,14 +648,18 @@
 /* Blockly Light Theme Overrides */
 
 /*
- * The workspace container is clipped to a 20px corner radius, and the first
- * toolbox category sits 4px from the top - so the arc ate roughly 7px of the
- * 8px coloured border-left that identifies the category ("Uplink" lost most of
- * its orange bar). Starting the list below where the arc straightens keeps the
- * full bar visible on every category.
+ * The first toolbox category sits 4px from the top, so the workspace's corner
+ * arc ate into the 8px coloured border-left that identifies it ("Uplink" lost
+ * most of its orange bar). Starting the list where the arc straightens keeps
+ * the full bar visible on every category.
+ *
+ * Derived from the surface radius rather than the 18px this was pinned at:
+ * that number was measured against a 20px corner, and the corner is now
+ * concentric with the panel around it, so a fixed value would leave a gap the
+ * moment the panel's padding changed.
  */
 .blocklyToolbox {
-  padding-top: 18px !important;
+  padding-top: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border)) !important;
 }
 .blocklySvg {
   background-color: #ffffff !important;
