@@ -12,7 +12,8 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 import recovery  # noqa: E402
 
 # Recovery is scoped by YARD now, not by lock owner: the lease went with
@@ -24,7 +25,7 @@ OTHER = 'durban-yard'
 
 @pytest.fixture(autouse=True)
 def _mirror(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
 
 

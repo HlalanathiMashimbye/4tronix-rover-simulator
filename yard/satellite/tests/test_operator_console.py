@@ -21,7 +21,8 @@ import requests
 
 import operator_console
 from console import camera, deps, mirror, notify  # noqa: E402
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 import recording_control  # noqa: E402
 
 # The yard the seeded missions belong to, and the one the satellite defaults
@@ -169,7 +170,7 @@ def missions(tmp_path, monkeypatch):
     import mission_store
     import satellite_identity
 
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'mirror.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'mirror.db'))
     monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(tmp_path / 'sat.json'))
     satellite_identity.reset_cache()
     mission_store.init_db()

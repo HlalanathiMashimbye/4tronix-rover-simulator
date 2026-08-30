@@ -11,12 +11,13 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'missions.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'missions.db'))
     mission_store.init_db()
 
 

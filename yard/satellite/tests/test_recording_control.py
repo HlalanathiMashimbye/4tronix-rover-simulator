@@ -22,7 +22,8 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 import recording_control  # noqa: E402
 
 YARD = 'curiosity'
@@ -71,7 +72,7 @@ class FakeConnection:
 
 @pytest.fixture(autouse=True)
 def _isolated_state(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
     monkeypatch.setenv('RECORDING_DIR', str(tmp_path / 'recordings'))
     monkeypatch.setattr(recording_control, '_writers', {})
