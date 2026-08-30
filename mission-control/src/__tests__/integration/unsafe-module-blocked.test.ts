@@ -27,7 +27,7 @@ describe('unsafe import blocking (integration)', () => {
     const safeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-001',
       code: `
 rover.forward(100)
@@ -52,7 +52,7 @@ rover.forward(50)
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-002',
       code: `
 import os
@@ -77,7 +77,7 @@ os.system('rm -rf /')
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-003',
       code: `
 import subprocess
@@ -100,7 +100,7 @@ subprocess.run(['echo', 'hacked'])
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-004',
       code: `
 import socket
@@ -122,7 +122,7 @@ s = socket.socket()
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-005',
       code: `
 from os import path
@@ -144,7 +144,7 @@ print(path.exists('/'))
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-006',
       code: `
 rover.hack_mainframe()
@@ -167,7 +167,7 @@ rover.delete_all_files()
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-007',
       code: `
 code = "rover.forward(100)"
@@ -189,7 +189,7 @@ eval(code)
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-008',
       code: `
 exec("import os; os.system('ls')")
@@ -210,7 +210,7 @@ exec("import os; os.system('ls')")
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-009',
       code: `
 with open('/etc/passwd', 'r') as f:
@@ -232,7 +232,7 @@ with open('/etc/passwd', 'r') as f:
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-010',
       code: `
 import os
@@ -257,7 +257,7 @@ eval("print('test')")
     const safeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-011',
       code: `
 for i in range(4):
@@ -283,7 +283,7 @@ for i in range(4):
     const safeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-012',
       code: `
 print("Starting mission")
@@ -305,7 +305,7 @@ print("Mission complete")
     const unsafeMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-013',
       code: `
 rover.forward(100)
@@ -348,7 +348,7 @@ rover.backward(50)
     const invalidMissionData = {
       yardId: 'curiosity',
       learnerId: 'test-learner',
-      name: 'Test Mission',
+      name: 'Red Explorer',
       sessionId: 'test-session-015',
       code: '',
     };

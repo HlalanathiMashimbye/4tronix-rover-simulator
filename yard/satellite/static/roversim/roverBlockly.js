@@ -51,7 +51,10 @@ export function defineRoverBlocks(Blockly) {
         init: function () {
             this.appendDummyInput()
                 .appendField('Move Forward')
-                .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), 'TIME')
+                // 5 seconds, not 1. At 6cm a second a one-second nudge is 6cm, which in
+                // any yard big enough to keep the rover small is invisible. Five gets
+                // 30cm, so one tap of one block plainly goes somewhere.
+                .appendField(new Blockly.FieldNumber(5, 0.1, 20, 0.5), 'TIME')
                 .appendField('seconds');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
@@ -63,7 +66,7 @@ export function defineRoverBlocks(Blockly) {
         init: function () {
             this.appendDummyInput()
                 .appendField('Move Backward')
-                .appendField(new Blockly.FieldNumber(1, 0.1, 10, 0.1), 'TIME')
+                .appendField(new Blockly.FieldNumber(5, 0.1, 20, 0.5), 'TIME')
                 .appendField('seconds');
             this.setPreviousStatement(true, null);
             this.setNextStatement(true, null);
