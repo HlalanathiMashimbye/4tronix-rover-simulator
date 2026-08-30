@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import styles from './ManualControlRealtime.module.css';
 import { RoverPhysics, RoverState } from '@/lib/rover-physics';
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 interface ManualControlRealtimeProps {
-  onTrajectoryUpdate: (trajectory: RoverState[]) => void;
+  onTrajectoryUpdate: (trajectory: TrajectoryPoint[]) => void;
   onReset?: () => void;
   resetVersion?: number;
 }
@@ -43,9 +44,31 @@ const KEY_MAP: Record<string, DriveBlock> = {
   e: BLOCKS[5],
 };
 
+/** One physics state as the simulator wants it. Manual driving has no lamps. */
+function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
+  return {
+    x: state.x,
+    y: state.y,
+    heading: state.heading,
+    speedL: state.speedL,
+    speedR: state.speedR,
+    servos: {
+      '9': state.servos[9],
+      '15': state.servos[15],
+      '11': state.servos[11],
+      '13': state.servos[13],
+    },
+    hitWall: state.hitWall,
+    leds: [null, null, null, null],
+  };
+}
+
+/** Bounded so a long drive cannot grow the trail for ever. */
+const MAX_TRAIL_POINTS = 3000;
+
 export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersion = 0 }: ManualControlRealtimeProps) {
   const roverRef = useRef<RoverPhysics>(new RoverPhysics());
-  const trajectoryRef = useRef<RoverState[]>([]);
+  const trajectoryRef = useRef<TrajectoryPoint[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isActive, setIsActive] = useState(false);
@@ -81,13 +104,41 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
   useEffect(() => {
     const updateLoop = () => {
       const newState = roverRef.current.update();
-      trajectoryRef.current.push(newState);
+      // Converted here, once per frame, rather than re-mapping the whole trail
+      // on every frame further up. See the note on onTrajectoryUpdate below.
+      trajectoryRef.current.push(toTrajectoryPoint(newState));
 
-      if (trajectoryRef.current.length > 1000) {
-        trajectoryRef.current = trajectoryRef.current.slice(-1000);
+      /**
+       * A sliding window, and callers must treat it as one.
+       *
+       * The cap keeps a long drive from growing without bound, but it means
+       * this array does NOT only ever grow: past the limit the oldest points
+       * fall off the front. A parent tracking "how much have I seen" by length
+       * will conclude nothing new ever arrives and freeze the rover on screen,
+       * which is exactly what used to happen after about sixteen seconds of
+       * driving. Send the whole thing; let the consumer take it as given.
+       *
+       * 3000 points is roughly fifty seconds at 60fps, long enough that the
+       * trail rarely eats its own tail while a child is exploring.
+       */
+      if (trajectoryRef.current.length > MAX_TRAIL_POINTS) {
+        trajectoryRef.current = trajectoryRef.current.slice(-MAX_TRAIL_POINTS);
       }
 
-      onTrajectoryUpdate([...trajectoryRef.current]);
+      /**
+       * A SHALLOW copy, and that distinction is the whole point.
+       *
+       * The workspace used to receive RoverStates and map the entire trail into
+       * fresh TrajectoryPoints on every animation frame. At sixty frames a
+       * second against a three-thousand-point trail that is ~180,000 object
+       * allocations per second, which drove React into "maximum update depth"
+       * and eventually killed the dev server outright.
+       *
+       * Each point is now built once, when it happens. This copy exists only so
+       * React sees a new array identity and re-renders; it copies references,
+       * not objects.
+       */
+      onTrajectoryUpdate(trajectoryRef.current.slice());
       animationFrameRef.current = requestAnimationFrame(updateLoop);
     };
 
@@ -107,7 +158,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
   const runBlock = useCallback((block: DriveBlock) => {
     if (!startedRef.current) {
       startedRef.current = true;
-      trajectoryRef.current = [roverRef.current.getState()];
+      trajectoryRef.current = [toTrajectoryPoint(roverRef.current.getState())];
     }
     if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
     roverRef.current.setCommand(block.command, block.speed);

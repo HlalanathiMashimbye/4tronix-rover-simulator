@@ -23,16 +23,22 @@ from google.cloud.firestore_v1 import FieldFilter
 
 from mission_store import (
     clear_dirty,
+    clear_run_dirty,
     delete_outbox,
+    delete_run_outbox,
     get_meta,
     log_conflict,
     mark_attempt,
+    mark_run_attempt,
     active_mission_ids,
+    get_active_runs,
     forget_mission,
     newest_submitted_at,
     peek_outbox,
+    peek_run_outbox,
     set_meta,
     upsert_missions,
+    upsert_runs,
 )
 
 # Read-cost budget. Firestore's free tier allows 50,000 document reads a day,
@@ -171,6 +177,53 @@ def should_local_win(local_payload, remote_data):
     return local_payload.get('statusUpdatedAt', '') >= remote_data.get('statusUpdatedAt', '')
 
 
+# Fields an operator's decision owns. A satellite replaying stale machine events
+# must not write these over the top of a human's choice.
+_DECIDED_FIELDS = ('status', 'statusUpdatedAt', 'completedAt', 'needsReview', 'reviewReason')
+
+
+def merge_run_payload(local_payload, remote_data):
+    """Which fields of a queued run write may still be applied. Returns a dict.
+
+    RUNS USED TO HAVE NO MERGE RULE AT ALL, and the comment saying so was
+    correct at the time: only the yard that owned a run ever wrote it, so there
+    was nothing to arbitrate.
+
+    Operator bookkeeping ended that. Complete, cancel, attach-video and resolve
+    now happen in Mission Control, because they are desk jobs and tying them to
+    a Pi on venue wifi meant a yard losing signal made the record unsettleable
+    from anywhere. So a run document has two writers, and they meet here.
+
+    THE CASE THIS EXISTS FOR, which is not hypothetical. The yard is offline all
+    afternoon and its outbox fills up. An operator settles missions from the
+    desk in the meantime. The yard gets signal back that evening and replays
+    hours of stale machine events over decisions a human already made, and every
+    one of them silently wins, because a merge with no rule always does.
+
+    The rule: a human decision outranks a replayed machine event, and the later
+    human wins. Nothing else changes, so a yard that was simply online and
+    working behaves exactly as it did before.
+
+    Non-status fields survive regardless. A video the satellite attached locally
+    is not in conflict with a status somebody set in the cloud, and dropping the
+    whole entry would lose it for good.
+    """
+    decided_at = remote_data.get('decidedAt')
+
+    # No remote decision: nothing to defer to, so this is the old behaviour.
+    if not decided_at:
+        return dict(local_payload)
+
+    # A local event that happened AFTER the operator decided is news, not a
+    # replay. The rover really did finish after they cancelled it, and the run
+    # should say so.
+    local_stamp = local_payload.get('statusUpdatedAt') or ''
+    if local_stamp > decided_at:
+        return dict(local_payload)
+
+    return {k: v for k, v in local_payload.items() if k not in _DECIDED_FIELDS}
+
+
 def _maybe_log_conflict(mission_id, local_payload, remote_data, local_won):
     """Record a merge only when the LOSING side was already terminal.
 
@@ -244,6 +297,116 @@ def flush_one(firestore_client, entry, collection_name='missions'):
         return False
 
 
+def flush_run_one(firestore_client, entry):
+    """Apply one run outbox entry to Firestore. Returns True only on confirmation.
+
+    Mirrors flush_one but writes to the runs subcollection at
+    missions/{missionId}/runs/{yardId}. No merge rule applied - runs are
+    scoped to one yard so only that yard ever writes them.
+    """
+    from firebase_admin import firestore
+
+    mission_id = entry['mission_id']
+    yard_id = entry['yard_id']
+    ref = (
+        firestore_client
+        .collection('missions')
+        .document(mission_id)
+        .collection('runs')
+        .document(yard_id)
+    )
+
+    outcome = {'suppressed': None}
+
+    try:
+        @firestore.transactional
+        def _apply(transaction):
+            snap = ref.get(transaction=transaction)
+            remote = (snap.to_dict() or {}) if getattr(snap, 'exists', False) else {}
+            local_payload = json.loads(entry['payload'])
+
+            # Evaluated INSIDE the transaction, so a decision made in Mission
+            # Control between the read and the write cannot be missed.
+            writable = merge_run_payload(local_payload, remote)
+
+            if len(writable) < len(local_payload):
+                outcome['suppressed'] = remote.get('decidedBy') or 'an operator'
+
+            # FORCE_KEY is an instruction to the merge, not part of a run. It
+            # used to be written straight through to Firestore here, where run
+            # documents are world-readable, because this function never had the
+            # strip that flush_one has always had.
+            writable.pop(FORCE_KEY, None)
+
+            if writable:
+                transaction.set(ref, writable, merge=True)
+
+        _apply(firestore_client.transaction())
+
+        if outcome['suppressed']:
+            # Never silent. A dropped write that nobody can see is exactly how
+            # the old no-rule merge hid, and an operator who watches a status
+            # revert deserves a line in the log naming the reason.
+            print(
+                f'[sync] {mission_id}/{yard_id}: kept the decision '
+                f'{outcome["suppressed"]} made in Mission Control; '
+                'the local status change was older'
+            )
+
+        delete_run_outbox(entry['seq'])
+        clear_run_dirty(mission_id, yard_id)
+        return True
+
+    except Exception as e:
+        mark_run_attempt(entry['seq'], str(e))
+        return False
+
+
+
+# The last pull failure printed, so a permanent one is reported once rather
+# than every cycle.
+_last_pull_error = None
+
+
+def _log_pull_failure(error):
+    """Print a pull failure, but not the same one over and over.
+
+    A missing composite index does not resolve itself: the pull fails
+    identically every cycle, and at one line each it buried everything else in
+    the dev log within a minute - including the line saying which index to
+    create. Some failures are transient and worth seeing repeat; this one is a
+    standing condition, and repeating it costs the reader the rest of the log.
+
+    Repeats are counted and reported when the error changes or clears, so a
+    genuinely stuck satellite still looks stuck rather than silent.
+    """
+    global _last_pull_error
+
+    message = str(error)
+    if message == _last_pull_error:
+        _pull_failure_repeats[0] += 1
+        return
+
+    if _last_pull_error is not None and _pull_failure_repeats[0]:
+        print(f'[sync] (previous error repeated {_pull_failure_repeats[0]} more times)')
+
+    _pull_failure_repeats[0] = 0
+    _last_pull_error = message
+    print(f'[sync] Failed to pull from Firestore: {message}')
+
+
+_pull_failure_repeats = [0]
+
+
+def _clear_pull_failure():
+    """Called after a successful pull, so the next failure prints again."""
+    global _last_pull_error
+    if _last_pull_error is not None and _pull_failure_repeats[0]:
+        print(f'[sync] (previous error repeated {_pull_failure_repeats[0]} more times)')
+    _last_pull_error = None
+    _pull_failure_repeats[0] = 0
+
+
 def sync_from_firestore(firestore_client, collection_name='missions', yard_id=None):
     """Pull only what changed, rather than the whole collection every cycle.
 
@@ -286,9 +449,10 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
             # Firestore just now or it will report itself as stale.
             set_meta('last_synced_at', _now_iso())
 
+        _clear_pull_failure()
         return True
     except Exception as e:
-        print(f'[sync] Failed to pull from Firestore: {e}')
+        _log_pull_failure(e)
         return False
 
 
@@ -339,19 +503,26 @@ def reconcile_active(firestore_client, collection_name='missions', yard_id=None)
 
 
 def sync_cycle(firestore_client, collection_name='missions', yard_id=None):
-    """One cycle: flush the outbox completely, and only then pull.
+    """One cycle: flush runs BEFORE missions, then pull both.
 
-    A failed flush stops the whole cycle rather than skipping ahead. Entries
-    apply in `seq` order because the Pi has no real-time clock, so its
-    wall-clock timestamps cannot be trusted for ordering (plan 7.2).
+    Push-before-pull ordering: runs are the execution source of truth, so they
+    flush first. A failed flush stops the whole cycle. Entries apply in `seq`
+    order (the Pi's wall-clock timestamps cannot be trusted for ordering).
     """
+    # Flush run outbox first: runs are the execution ground truth
+    while True:
+        entry = peek_run_outbox()
+        if entry is None:
+            break
+        if not flush_run_one(firestore_client, entry):
+            return False
+
+    # Then flush mission outbox (program-only data)
     while True:
         entry = peek_outbox()
         if entry is None:
             break
         if not flush_one(firestore_client, entry, collection_name):
-            # Retry the same entry next cycle. Do NOT pull: the mirror would be
-            # overwritten with a Firestore state that predates this entry.
             return False
 
     ok = sync_from_firestore(firestore_client, collection_name, yard_id=yard_id)

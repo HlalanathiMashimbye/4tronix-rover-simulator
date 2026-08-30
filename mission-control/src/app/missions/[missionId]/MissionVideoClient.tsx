@@ -6,30 +6,30 @@ import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { getFirestoreClient } from '@/lib/firebase';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { RoverSimulator } from '@/components/mission/RoverSimulator';
-import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { yardLabel, yardPlace } from '@/infrastructure/config/yards';
+import { yardLabel } from '@/infrastructure/config/yards';
+import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
+import { durationLabel } from '@/lib/missionDuration';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-}
-
-type RunOption = { id: string; label: string; kind: 'sim' | 'real'; youtubeId?: string };
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
   const [mission, setMission] = useState<Mission | null>(null);
+  // Every yard's attempt, so the carousel can show more than the one video the
+  // mission document carries. Empty is ordinary - a mission nobody has run.
+  const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedRunId, setSelectedRunId] = useState('sim');
+  // Null until the mission loads, then the first run - which is the real one
+  // when there is one. A child opening their mission sees the rover, not a
+  // simulation they have already watched in the editor.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [codeView, setCodeView] = useState<'blocks' | 'python'>('blocks');
   const [copied, setCopied] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -41,33 +41,32 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
     [mission]
   );
 
-  // Run selector entries: the simulated run is always present; real yard runs
-  // are added as they are attached. A dropdown handles any number of runs.
-  const runs = useMemo<RunOption[]>(() => {
-    const list: RunOption[] = [{ id: 'sim', label: 'Simulated run', kind: 'sim' }];
-    const realId = getYouTubeId(mission?.youtubeUrl || mission?.videoUrl);
-    if (realId) {
-      // Name the city, not "Real run". Once Durban and Limpopo have rovers this
-      // selector is how a learner tells the runs apart, and "which yard" only
-      // means something to them as a place they could point to on a map.
-      const place = yardPlace(mission?.yardId);
-      list.push({
-        id: 'real-1',
-        label: place ? `Real run · ${place}` : 'Real run',
-        kind: 'real',
-        youtubeId: realId,
-      });
-    }
-    return list;
-  }, [mission]);
+  // Real runs come FIRST, which is the point: a child needs to see that an
+  // actual rover drove their code. See lib/missionRuns for the reasoning.
+  const runs = useMemo<RunOption[]>(
+    () => buildRunOptions(mission, missionRuns),
+    [mission, missionRuns],
+  );
 
   useEffect(() => {
     const fetchMission = async () => {
       try {
         const repository = new FirestoreMissionRepository(getFirestoreClient());
         const loadedMission = await repository.findById(missionId);
-        if (loadedMission) setMission(loadedMission);
-        else setError('Mission not found');
+        if (!loadedMission) {
+          setError('Mission not found');
+          return;
+        }
+        setMission(loadedMission);
+
+        // Runs are a separate read, and a failure here is not a failure to
+        // show the mission: the carousel falls back to the video on the mission
+        // document, and worst case to the simulation alone.
+        try {
+          setMissionRuns(await repository.findRuns(missionId));
+        } catch (runError) {
+          console.warn('Could not load runs for this mission:', runError);
+        }
       } catch (err) {
         console.error('Fetch mission error:', err);
         setError('Failed to load mission');
@@ -108,8 +107,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   const starred = isFavorite(mission.id);
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
-  const durationMs = mission.executionMetadata?.duration_ms;
-  const durationLabel = durationMs ? `${Math.round(durationMs / 1000)}s` : 'Not yet';
+  // Was mission.executionMetadata?.duration_ms - a key no mission document
+  // has ever carried, so this always read "Not yet", including under footage
+  // of a rover that had clearly finished. See lib/missionDuration.
+  const duration = durationLabel(simTrajectory, selectedRun);
   const dateLabel = new Date(mission.completedAt || mission.submittedAt).toLocaleDateString();
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
@@ -163,54 +164,50 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
               {dateLabel}
             </span>
           </div>
-          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            Run
-            <select
-              value={selectedRunId}
-              onChange={(e) => setSelectedRunId(e.target.value)}
-              className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none transition-colors focus:border-primary"
-            >
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
-        {/* Body fills the remaining viewport height; nothing scrolls except the
-            code. Same draggable divider as Create Mission - a fixed 2/5 - 3/5
-            split meant a long mission's code and its footage both stayed
-            cramped with no way to trade space between them. height="100%"
-            because this sits inside an already-sized flex parent, unlike
-            Create Mission which owns the viewport. */}
+        {/* Fixed at 60/40, video to code, and the number came from the
+            simulator's geometry rather than taste.
+
+            The yard is a 400x300 world - 4:3 - letterboxed by computeLayout
+            inside whatever canvas it gets. So a WIDER panel makes it worse,
+            not better. Measured, at a 1400px viewport:
+
+              70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
+              65/35  canvas 716x469 (1.53)  64px each side
+              60/40  canvas 664x490 (1.35)  24px each side
+
+            The two media want opposite shapes and no split serves both: 16:9
+            video wants width, the 4:3 yard wants less of it. 60/40 is chosen
+            because the failures are not equivalent. A letterboxed video is
+            what every player does and nobody remarks on it; a yard floating in
+            grey with a hand's width of nothing down each side reads as a
+            rendering fault, which is exactly how it was reported.
+
+            The 320px floor on the right track keeps the code readable, so this
+            does not squeeze the editor to buy the change.
+
+            height="100%" because this sits inside an already-sized flex
+            parent, unlike Create Mission which owns the viewport. */}
         <SplitPane
-          ariaLabel="Resize footage and code panels"
-          defaultSplit={40}
+          ariaLabel="Footage and code panels"
+          defaultSplit={60}
+          resizable={false}
           height="100%"
           left={
             <div className="flex min-h-0 flex-col gap-2">
-            <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/30">
-              {selectedRun.kind === 'real' && selectedRun.youtubeId ? (
-                <div className="flex h-full w-full items-center justify-center p-2">
-                  <YouTubeEmbed
-                    key={selectedRun.id}
-                    youtubeId={selectedRun.youtubeId}
-                    title={missionName}
-                  />
-                </div>
-              ) : (
-                <div className="h-full w-full p-2">
-                  <RoverSimulator trajectory={simTrajectory} isPlaying editorMode="code" />
-                </div>
-              )}
-            </div>
-            <div className="grid shrink-0 grid-cols-3 gap-2">
-              <Stat label="Status" value={discoveryStatus} />
-              <Stat label="Duration" value={durationLabel} mono />
-              <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
-            </div>
+              <RunStackCarousel
+                runs={runs}
+                selectedId={selectedRun.id}
+                onSelect={setSelectedRunId}
+                missionName={missionName}
+                trajectory={simTrajectory}
+              />
+              <div className="grid shrink-0 grid-cols-3 gap-2">
+                <Stat label="Status" value={discoveryStatus} />
+                <Stat label="Duration" value={duration} mono />
+                <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
+              </div>
             </div>
           }
           /* Code (scrolls internally) + remix */
@@ -281,7 +278,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 className="clay clay-press inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-mars px-4 py-2.5 font-display text-sm font-bold text-primary-foreground"
               >
                 <Zap className="h-4 w-4" fill="currentColor" />
-                Try it
+                Remix
               </button>
             </div>
             </div>

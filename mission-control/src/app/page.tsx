@@ -7,6 +7,7 @@ import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-r
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getFirestoreClient } from '@/lib/firebase';
+import { MobileSearch } from '@/components/layout/MobileSearch';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { getDiscoveryStatus, type DiscoveryStatus } from '@/lib/discoveryStatus';
 import { useFavorites } from '@/lib/useFavorites';
@@ -23,10 +24,29 @@ type StatusFilter = 'all' | 'favorites' | DiscoveryStatus;
  */
 const FEED_SIZE = 24;
 
+/**
+ * How many extra pages one "keep looking" walks before stopping.
+ *
+ * 20 pages is roughly 500 missions, several times the whole archive as it
+ * stands. It exists so a search cannot turn into an unbounded read bill on a
+ * collection that only ever grows.
+ */
+const ARCHIVE_SEARCH_PAGES = 20;
+
+/** The one definition of what the search box matches. */
+function matchesQuery(missions: Mission[], query: string): Mission[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return missions;
+  return missions.filter(
+    (m) => (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q),
+  );
+}
+
 export default function LandingPage() {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [cursor, setCursor] = useState<MissionCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [searchingArchive, setSearchingArchive] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Search and filter state lives in SearchContext because the controls now
@@ -109,6 +129,57 @@ export default function LandingPage() {
     }
   };
 
+  /**
+   * Keep fetching pages until the current search finds something.
+   *
+   * WHY THIS HAS TO EXIST. The filter below runs over the missions already
+   * loaded, which is 24 on arrival. Everything older was simply unfindable:
+   * searching for a mission from last month returned "No missions match", and
+   * the child was told their own work did not exist. It got worse every week,
+   * because every new submission pushed another mission out of the window -
+   * which is precisely the thing this story is named after.
+   *
+   * Driven by an explicit tap rather than by typing. Firestore bills per
+   * document, so walking the archive on every keystroke would put a real cost
+   * on an idle habit. On a deliberate "keep looking" it is bounded and worth it.
+   *
+   * CAPPED, and the cap is admitted to the learner rather than hidden. Without
+   * a search index this is a linear walk, so at some archive size the honest
+   * answer is "I looked through this much and stopped". Better than paging
+   * forever, and far better than the confident lie it replaces.
+   */
+  const searchArchive = async () => {
+    if (searchingArchive) return;
+    setSearchingArchive(true);
+    setError(null);
+
+    try {
+      const repository = new FirestoreMissionRepository(getFirestoreClient());
+      let nextCursor = cursor;
+      let pagesFetched = 0;
+      let pool: Mission[] = missions;
+
+      while (nextCursor && pagesFetched < ARCHIVE_SEARCH_PAGES) {
+        const page = await repository.findRecent(FEED_SIZE, nextCursor);
+        pagesFetched += 1;
+
+        const seen = new Set(pool.map((m) => m.id));
+        pool = [...pool, ...page.missions.filter((m) => !seen.has(m.id))];
+        nextCursor = page.nextCursor;
+
+        setMissions(pool);
+        setCursor(nextCursor);
+
+        if (matchesQuery(pool, query).length > 0) break;
+      }
+    } catch (err) {
+      console.error('[Landing] Archive search failed:', err);
+      setError('Could not search older missions. Check your connection and try again.');
+    } finally {
+      setSearchingArchive(false);
+    }
+  };
+
   const counts = useMemo(() => {
     let completed = 0;
     for (const m of missions) {
@@ -118,12 +189,11 @@ export default function LandingPage() {
   }, [missions]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return missions.filter((m) => {
+    const named = matchesQuery(missions, query);
+    return named.filter((m) => {
       if (statusFilter === 'favorites' && !isFavorite(m.id)) return false;
       if (statusFilter !== 'all' && statusFilter !== 'favorites' && getDiscoveryStatus(m.status) !== statusFilter) return false;
-      if (!q) return true;
-      return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
+      return true;
     });
   }, [missions, query, statusFilter, isFavorite]);
 
@@ -140,6 +210,12 @@ export default function LandingPage() {
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
+      {/* Phone-only. The navbar's search is hidden below md, so without this a
+          learner on a phone had no way to search or filter the feed at all. */}
+      <div className="mx-auto w-full max-w-page pt-3">
+        <MobileSearch />
+      </div>
+
       {/* Feed: the only thing that scrolls */}
       <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pt-4 pb-5">
         {loading ? (
@@ -164,9 +240,20 @@ export default function LandingPage() {
             cta
           />
         ) : filtered.length === 0 ? (
+          /* "No missions match" was a lie whenever older pages existed. The
+             feed had only looked at the 24 it happened to have loaded, and
+             every new submission pushed one more mission out of reach, so a
+             child searching for their own work was told it did not exist.
+             Say what was actually searched, and offer to search further. */
           <EmptyState
-            title="No missions match"
-            subtitle="Try a different name, code, or filter."
+            title={cursor && query ? 'Not in the missions loaded so far' : 'No missions match'}
+            subtitle={
+              cursor && query
+                ? `Searched the ${missions.length} most recent missions. Older ones have not been looked at yet.`
+                : 'Try a different name, code, or filter.'
+            }
+            onSearchArchive={cursor && query ? searchArchive : undefined}
+            searching={searchingArchive}
             onClear={() => {
               // Clears the navbar's controls; setActiveFilter marks this as a
               // filter change, so the stagger replays on the restored list.
@@ -214,11 +301,15 @@ function EmptyState({
   subtitle,
   cta,
   onClear,
+  onSearchArchive,
+  searching,
 }: {
   title: string;
   subtitle: string;
   cta?: boolean;
   onClear?: () => void;
+  onSearchArchive?: () => void;
+  searching?: boolean;
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -235,6 +326,15 @@ function EmptyState({
           <Plus className="h-4 w-4" strokeWidth={2.5} />
           Create Mission
         </Link>
+      )}
+      {onSearchArchive && (
+        <button
+          onClick={onSearchArchive}
+          disabled={searching}
+          className="clay clay-press mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-mars px-5 py-2.5 font-display text-sm font-bold text-primary-foreground disabled:opacity-60"
+        >
+          {searching ? 'Looking through older missions…' : 'Search older missions'}
+        </button>
       )}
       {onClear && (
         <button

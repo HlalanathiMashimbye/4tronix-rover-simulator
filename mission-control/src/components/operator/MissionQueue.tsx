@@ -1,9 +1,22 @@
 'use client';
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { AlertTriangle, Blocks, Code2, Loader2, Radio } from 'lucide-react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  AlertTriangle,
+  Blocks,
+  Check,
+  Code2,
+  Copy,
+  Hourglass,
+  Loader2,
+  Radio,
+  Rocket,
+  Layers,
+  CheckCircle2,
+} from 'lucide-react';
 
 import {
+  subscribeToYardCompleted,
   subscribeToYardQueue,
   type QueueMission,
 } from '@/lib/services/operatorQueueService';
@@ -14,6 +27,9 @@ import {
   yardLabel,
 } from '@/infrastructure/config/yards';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
+import { MissionActions } from '@/components/operator/MissionActions';
+import { MobileSearch } from '@/components/layout/MobileSearch';
+import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
 
 /**
  * The live queue for the yard this operator has selected (AB#375/376/377).
@@ -38,20 +54,114 @@ import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
  * handle: a child says "mine is Rock Lover" and the operator finds that row.
  * That works without anyone knowing whose it is.
  */
-export function MissionQueue() {
+export function MissionQueue({ role }: { role: 'operator' | 'admin' }) {
   const yardId = useSyncExternalStore(subscribeToYard, readStoredYard, serverYardSnapshot);
 
   // Keyed by yard, so switching yards REMOUNTS rather than resetting state
   // inside an effect. React's own answer to "reset all state when a prop
   // changes", and it means there is no window where the previous yard's queue
   // is on screen under the new yard's heading.
-  return <YardQueue key={yardId} yardId={yardId} />;
+  return <YardQueue key={yardId} yardId={yardId} role={role} />;
 }
 
-function YardQueue({ yardId }: { yardId: string }) {
+function YardQueue({ yardId, role }: { yardId: string; role: 'operator' | 'admin' }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [done, setDone] = useState<QueueMission[] | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  async function copyCode(mission: QueueMission) {
+    try {
+      await navigator.clipboard.writeText(mission.code);
+      setCopiedId(mission.id);
+      // Long enough to read, short enough that the next copy is unambiguous.
+      window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
+    } catch {
+      // Clipboard access can be refused (insecure origin, denied permission).
+      // Say so rather than showing "Copied" over an empty clipboard, which
+      // would send an operator to paste nothing into the yard.
+      window.prompt('Copy this, then paste it into the yard code editor:', mission.code);
+    }
+  }
+
+  const { query, activeFilter } = useSearch();
+
+  // The same control the learner feed uses, for the same reason: an operator
+  // at a busy event is looking for one mission among a queue, and asking them
+  // to read down a list is the thing search exists to avoid. Registered here
+  // so the navbar renders it, exactly as the feed does.
+  const counts = useMemo(() => {
+    const all = missions ?? [];
+    return {
+      all: all.length,
+      queued: all.filter((m) => m.status === 'queued').length,
+      processing: all.filter((m) => m.status === 'processing').length,
+      review: all.filter((m) => m.needsReview).length,
+    };
+  }, [missions]);
+
+  useRegisterSearchFilters([
+    { key: 'all', label: 'All in queue', count: counts.all, icon: Layers },
+    { key: 'queued', label: 'Waiting', count: counts.queued, icon: Hourglass },
+    { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
+    { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
+    // Where attaching a video happens. A mission leaves the queue the moment it
+    // is marked complete, which is exactly when the operator goes off to upload
+    // the recording, so without a way back to it the attach action would be
+    // unreachable. Count is what has loaded rather than what exists: this list
+    // is bounded, and a total would need a billed aggregate query for a number
+    // nobody acts on.
+    { key: 'done', label: 'Done', count: done?.length ?? 0, icon: CheckCircle2 },
+  ]);
+
+  const source = useMemo(
+    () => (activeFilter === 'done' ? (done ?? []) : (missions ?? [])),
+    [activeFilter, done, missions],
+  );
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return source.filter((m) => {
+      if (activeFilter === 'review' && !m.needsReview) return false;
+      if (activeFilter === 'queued' && m.status !== 'queued') return false;
+      if (activeFilter === 'processing' && m.status !== 'processing') return false;
+      if (!q) return true;
+      // Name and code, the same two fields the learner feed searches. There is
+      // deliberately nothing about the learner to search on - see above.
+      return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
+    });
+  }, [source, query, activeFilter]);
+
+  // Only while the operator is looking at it. Completed missions accumulate
+  // forever, so a listener on them is a read bill that grows with the life of
+  // the project, and most console sessions never open this view.
+  useEffect(() => {
+    if (activeFilter !== 'done') return;
+
+    const unsubscribe = subscribeToYardCompleted(
+      yardId,
+      (next) => {
+        setDone(next);
+        setError(null);
+      },
+      () => {
+        setDone(null);
+        setError(
+          'Could not load finished missions. If this yard is new, the index for this view may not be deployed yet.',
+        );
+      },
+    );
+
+    // Cleared on the way OUT rather than on the way in. Clearing it in the
+    // effect body would be a setState during an effect, which costs a second
+    // render pass on every filter change and is what react-hooks flags.
+    return () => {
+      unsubscribe();
+      setDone(null);
+    };
+  }, [yardId, activeFilter]);
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -97,32 +207,57 @@ function YardQueue({ yardId }: { yardId: string }) {
 
   if (missions.length === 0) {
     return (
-      <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
-        <div className="max-w-sm space-y-2">
-          <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
-          <p className="text-sm text-muted-foreground">
-            No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
-            appear here as learners send them.
-          </p>
+      <>
+        <MobileSearch />
+        <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
+          <div className="max-w-sm space-y-2">
+            <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
+            <p className="text-sm text-muted-foreground">
+              No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
+              appear here as learners send them.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
+    <>
+    <MobileSearch />
     <div className="clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
+      {flash && (
+        <p
+          role="status"
+          className="mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-foreground"
+        >
+          {flash}
+        </p>
+      )}
+
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
-          Queue{' '}
+          {activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
-            ({missions.length} at {yardLabel(yardId) ?? yardId})
+            ({visible.length === source.length
+              ? `${source.length} at ${yardLabel(yardId) ?? yardId}`
+              : `${visible.length} of ${source.length} at ${yardLabel(yardId) ?? yardId}`})
           </span>
         </h2>
       </div>
 
+      {/* A filter that matches nothing is not an empty yard, and saying so
+          stops an operator concluding the queue broke. */}
+      {visible.length === 0 && (
+        <p className="mt-6 text-center text-sm text-muted-foreground">
+          No mission in this queue matches that. Clear the search or pick a
+          different filter.
+        </p>
+      )}
+
       <ol className="mt-3 grid gap-2">
-        {missions.map((mission, index) => {
+        {visible.map((mission, index) => {
           const isOpen = expanded === mission.id;
 
           return (
@@ -165,6 +300,30 @@ function YardQueue({ yardId }: { yardId: string }) {
                   </span>
                 )}
 
+                {/* The manual bridge to the yard, and deliberately manual.
+                    Mission Control cannot reach the satellite: it is behind
+                    carrier NAT with no inbound path, which is why Firestore is
+                    the only channel between them. So the operator keeps both
+                    open in tabs, copies the Python here, and pastes it into
+                    the yard's /code/ editor to run.
+
+                    This is a fallback that should survive automated dispatch
+                    rather than be replaced by it - it is the path that works
+                    when the venue's internet does not. */}
+                <button
+                  onClick={() => copyCode(mission)}
+                  disabled={!mission.code}
+                  title="Copy the Python, then paste it into the yard's code editor"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {copiedId === mission.id ? (
+                    <Check className="h-3 w-3 text-primary" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                  {copiedId === mission.id ? 'Copied' : 'Copy'}
+                </button>
+
                 <button
                   onClick={() => setExpanded(isOpen ? null : mission.id)}
                   className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
@@ -179,6 +338,7 @@ function YardQueue({ yardId }: { yardId: string }) {
               </div>
 
               {isOpen && (
+                <>
                 <div className="mt-3 border-t border-border/50 pt-3">
                   {/* The blocks the learner actually built, which the Flask
                       console structurally cannot show: the satellite's SQLite
@@ -194,11 +354,26 @@ function YardQueue({ yardId }: { yardId: string }) {
                     </pre>
                   )}
                 </div>
+                <MissionActions
+                  mission={mission}
+                  yardId={yardId}
+                  isAdmin={role === 'admin'}
+                  onResult={(message) => {
+                    setFlash(message);
+                    // Collapse it. For complete and cancel the row is about to
+                    // leave this view anyway, and leaving a panel open over a
+                    // mission that no longer belongs here reads as a bug.
+                    setExpanded(null);
+                    window.setTimeout(() => setFlash((f) => (f === message ? null : f)), 4000);
+                  }}
+                />
+                </>
               )}
             </li>
           );
         })}
       </ol>
     </div>
+    </>
   );
 }

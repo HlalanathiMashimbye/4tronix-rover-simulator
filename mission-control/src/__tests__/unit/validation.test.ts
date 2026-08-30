@@ -14,7 +14,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'curiosity',
         learnerId: 'learner-123',
         sessionId: 'test-session-123',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.forward(100)\nrover.wait(2)',
       };
 
@@ -30,7 +30,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'yard-1',
         learnerId: 'learner-456',
         sessionId: 'session-456',
-        name: 'Turn Left Mission',
+        name: 'Rock Mapper',
         code: 'rover.turn_left(50)',  // Updated to use approved command
       };
 
@@ -76,7 +76,7 @@ describe('Mission Schema Validation', () => {
       const result = validateMission(invalidData);
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('sessionId: Session ID is required');
+      expect(result.errors).toContain('sessionId: Session ID has an unexpected format');
     });
 
     it('should reject empty code', () => {
@@ -110,7 +110,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'yard-1',
         learnerId: 'learner-123',
         sessionId: 'session-123',
-        name: 'Too Long Mission',
+        name: 'Dust Nomad',
         code: 'a'.repeat(10001),
       };
 
@@ -143,7 +143,7 @@ describe('Mission Schema Validation', () => {
       const result = validateMission(invalidData);
 
       expect(result.success).toBe(false);
-      expect(result.errors).toContain('sessionId: Session ID too long');
+      expect(result.errors).toContain('sessionId: Session ID has an unexpected format');
     });
 
     it('should reject missing required fields', () => {
@@ -177,7 +177,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'rover-yard-1',
         learnerId: 'learner_abc123',
         sessionId: 'sess_abc123',
-        name: 'Zod Parse Mission',
+        name: 'Solar Probe',
         code: 'rover.forward(100)\nrover.stop()',
       };
 

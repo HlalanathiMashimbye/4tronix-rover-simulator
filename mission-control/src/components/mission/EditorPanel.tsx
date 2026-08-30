@@ -6,7 +6,7 @@ import { ManualControlRealtime } from '@/components/mission/ManualControlRealtim
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
-import type { RoverState } from '@/lib/rover-physics';
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
 
@@ -30,11 +30,14 @@ interface EditorPanelProps {
   onEditorModeChange: (mode: EditorMode) => void;
   error: string | null;
 
-  onManualTrajectory: (trajectory: RoverState[]) => void;
+  onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
   onResetSimulation: () => void;
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
+  onBlocklyCode: (code: string) => void;
+  blocklyCode: string;
+  onShowAsPython: () => void;
   onBlocklyStateChange?: (state: string) => void;
 }
 
@@ -47,6 +50,9 @@ export function EditorPanel({
   manualResetVersion,
   onGenerateCommands,
   onCodeChange,
+  onBlocklyCode,
+  blocklyCode,
+  onShowAsPython,
   onBlocklyStateChange,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
@@ -96,8 +102,8 @@ export function EditorPanel({
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} onBlocklyStateChange={onBlocklyStateChange} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} />}
+        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} />}
+        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} />}
       </div>
 
     </div>

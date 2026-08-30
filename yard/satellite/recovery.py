@@ -60,16 +60,22 @@ def _rover_completed(rover_url, mission_id):
     return False
 
 
-def recover_interrupted_missions(owner, rover_url=None):
+def recover_interrupted_missions(yard_id, rover_url=None):
     """Run once at startup. Returns (resolved, flagged) mission id lists.
 
     `rover_url` is optional: without it every interrupted mission goes straight
     to review, which is the safe outcome rather than a degraded one.
+
+    Takes a yard rather than a lock owner since AB#364 removed the lease. One
+    satellite serves one yard, so "processing runs here" is the same set as
+    "runs this satellite was executing" - and this is now the ONLY thing that
+    recovers a run whose satellite died mid-drive, which the lease expiry used
+    to do by guessing from a clock. Asking the rover is the better answer.
     """
     resolved, flagged = [], []
 
-    for mission in find_interrupted(owner):
-        mission_id = mission['id']
+    for run in find_interrupted(yard_id):
+        mission_id = run['mission_id']
 
         if rover_url and _rover_completed(rover_url, mission_id):
             # The rover is the only authority that can settle this without a

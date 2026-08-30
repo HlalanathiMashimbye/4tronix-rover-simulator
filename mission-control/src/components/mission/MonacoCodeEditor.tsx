@@ -1,14 +1,22 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
-import { Play, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Play } from 'lucide-react';
 import { type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
+import { checkLearnerCode, type CodeProblem } from '@/lib/learnerCodeCheck';
+import {
+  ROVER_COMMAND_HELP,
+  commandAt,
+  helpAsMarkdown,
+} from '@/lib/roverCommandHelp';
 
 interface MonacoCodeEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange?: (code: string) => void;
+  /** The Python the learner's blocks produce, if they have built any. */
+  blocklyCode?: string;
 }
 
 // The real rover API: speed is 0-100, and you control how long a move lasts
@@ -30,14 +38,15 @@ rover.stop()
 // Snippets the palette inserts. Colours echo the Blockly categories so the
 // Python tab reads as "the same blocks, written out".
 const SNIPPETS: { label: string; colour: string; code: string }[] = [
-  { label: 'Forward', colour: '#2196F3', code: 'rover.forward(60)\ntime.sleep(1)\nrover.stop()\n' },
-  { label: 'Backward', colour: '#2196F3', code: 'rover.reverse(60)\ntime.sleep(1)\nrover.stop()\n' },
-  { label: 'Spin left', colour: '#9C27B0', code: 'rover.spinLeft(60)\ntime.sleep(0.5)\nrover.stop()\n' },
-  { label: 'Spin right', colour: '#9C27B0', code: 'rover.spinRight(60)\ntime.sleep(0.5)\nrover.stop()\n' },
+  { label: 'Forward', colour: '#2196F3', code: '# Drive forward for 1 second. 60 is the speed, 0 to 100.\nrover.forward(60)\ntime.sleep(1)\nrover.stop()\n' },
+  { label: 'Backward', colour: '#2196F3', code: '# Drive backwards for 1 second. reverse means backwards.\nrover.reverse(60)\ntime.sleep(1)\nrover.stop()\n' },
+  { label: 'Spin left', colour: '#9C27B0', code: '# Spin left on the spot for half a second\nrover.spinLeft(60)\ntime.sleep(0.5)\nrover.stop()\n' },
+  { label: 'Spin right', colour: '#9C27B0', code: '# Spin right on the spot for half a second\nrover.spinRight(60)\ntime.sleep(0.5)\nrover.stop()\n' },
   {
     label: 'Steer left',
     colour: '#00BCD4',
     code:
+      '# Steer left: angle the wheels, drive, then straighten up again\n' +
       'rover.setServo(9, -20)\nrover.setServo(15, -20)\nrover.setServo(11, 20)\nrover.setServo(13, 20)\n' +
       'rover.forward(60)\ntime.sleep(1)\nrover.stop()\n' +
       'rover.setServo(9, 0)\nrover.setServo(11, 0)\nrover.setServo(13, 0)\nrover.setServo(15, 0)\n',
@@ -46,6 +55,7 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
     label: 'Steer right',
     colour: '#00BCD4',
     code:
+      '# Steer right: angle the wheels, drive, then straighten up again\n' +
       'rover.setServo(9, 20)\nrover.setServo(15, 20)\nrover.setServo(11, -20)\nrover.setServo(13, -20)\n' +
       'rover.forward(60)\ntime.sleep(1)\nrover.stop()\n' +
       'rover.setServo(9, 0)\nrover.setServo(11, 0)\nrover.setServo(13, 0)\nrover.setServo(15, 0)\n',
@@ -56,10 +66,10 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCodeEditorProps) {
+export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '' }: MonacoCodeEditorProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<Array<{ line: number; message: string }>>([]);
+  const [editorReady, setEditorReady] = useState(false);
   // Monaco editor + namespace instances (provided untyped by the editor lib).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null);
@@ -67,17 +77,32 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCod
   const monacoRef = useRef<any>(null);
 
   useEffect(() => {
-    // Load saved code from localStorage
     const saved = localStorage.getItem('rover_monaco_code');
-    const initialCode = saved || DEFAULT_CODE;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of editor contents from localStorage
+
+    // SHOW THE BLOCKS' PYTHON WHEN THERE IS NOTHING TO LOSE.
+    //
+    // The two tabs were entirely independent: this editor only ever loaded its
+    // own localStorage draft, while the Python the blocks generate went
+    // straight to the submission and was never displayed. So a learner who
+    // built something and then opened this tab to see what it looked like -
+    // the exact thing AB#413's comments are written for - saw a default
+    // snippet instead of their own program.
+    //
+    // Only when the draft is untouched. Somebody's hand-written code is theirs,
+    // and silently replacing it with a generated version would be far worse
+    // than the problem this fixes. There is a button below for the rest.
+    const untouched = !saved || saved.trim() === DEFAULT_CODE.trim();
+    const initialCode = untouched && blocklyCode.trim() ? blocklyCode : saved || DEFAULT_CODE;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of editor contents from storage or the block workspace
     setCode(initialCode);
 
     if (onCodeChange) {
       onCodeChange(initialCode);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to hydrate from storage
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to hydrate
   }, []);
+
 
   // Monaco's own internal services (tokenization, model disposal, etc.) use
   // a "Canceled" sentinel error for work that gets interrupted - normally
@@ -101,66 +126,116 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange }: MonacoCod
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
-
-    // Validate on mount
-    validateCode(code);
+    setEditorReady(true);
   };
 
-  const validateCode = (codeToValidate: string) => {
-    const errors: Array<{ line: number; message: string }> = [];
+  /**
+   * Teach the commands where the learner meets them.
+   *
+   * A child writing Python rather than dragging blocks had nothing at all:
+   * rover.reverse(60) with no hint that reverse means backwards, or that 60 is
+   * a speed rather than a distance. Hovering explains a command; typing offers
+   * the list with the same words. Same source as the block comments, so the two
+   * halves of the app never explain the same command differently.
+   */
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!editorReady || !monaco) return;
 
-    // Only flag genuinely unsafe lines (mirrors the server-side allowlist).
-    // Real rover code uses time.sleep(), for-loops, print() and rover.setServo()
-    // alongside the movement calls, so we do not require every line to be a
-    // rover command.
-    const dangerousPatterns = [
-      { pattern: /\bimport\b/, message: 'Import statements are not allowed' },
-      { pattern: /\bopen\(/, message: 'File operations are not allowed' },
-      { pattern: /\beval\(/, message: 'eval() is not allowed' },
-      { pattern: /\bexec\(/, message: 'exec() is not allowed' },
-      { pattern: /\b__import__\b/, message: '__import__ is not allowed' },
-      { pattern: /\bos\./, message: 'The os module is not allowed' },
-      { pattern: /\bsys\./, message: 'The sys module is not allowed' },
-    ];
-
-    codeToValidate.split('\n').forEach((line, index) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return;
-      for (const { pattern, message } of dangerousPatterns) {
-        if (pattern.test(line)) {
-          errors.push({ line: index + 1, message });
-          return;
-        }
-      }
+    const hover = monaco.languages.registerHoverProvider('python', {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco model/position types
+      provideHover(model: any, position: any) {
+        const name = commandAt(
+          model.getLineContent(position.lineNumber),
+          position.column,
+        );
+        const markdown = name && helpAsMarkdown(name);
+        return markdown ? { contents: [{ value: markdown }] } : null;
+      },
     });
 
-    setValidationErrors(errors);
+    const completion = monaco.languages.registerCompletionItemProvider('python', {
+      triggerCharacters: ['.'],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco model/position types
+      provideCompletionItems(model: any, position: any) {
+        const word = model.getWordUntilPosition(position);
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: word.startColumn,
+          endColumn: word.endColumn,
+        };
 
-    // Update Monaco editor markers
-    if (editorRef.current && monacoRef.current) {
-      const model = editorRef.current.getModel();
-      if (model) {
-        const markers = errors.map(err => ({
-          startLineNumber: err.line,
-          startColumn: 1,
-          endLineNumber: err.line,
-          endColumn: model.getLineMaxColumn(err.line),
-          message: err.message,
-          severity: monacoRef.current.MarkerSeverity.Error,
-        }));
-        monacoRef.current.editor.setModelMarkers(model, 'rover-validator', markers);
-      }
-    }
-  };
+        return {
+          suggestions: Object.entries(ROVER_COMMAND_HELP).map(([name, help]) => ({
+            label: name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            detail: help.summary,
+            documentation: { value: helpAsMarkdown(name) ?? help.summary },
+            insertText: help.example,
+            range,
+          })),
+        };
+      },
+    });
+
+    // Disposed on unmount, or switching tabs twice would register the provider
+    // again and show every suggestion doubled.
+    return () => {
+      hover.dispose();
+      completion.dispose();
+    };
+  }, [editorReady]);
+
+  /**
+   * THE REAL RULES, not a second opinion.
+   *
+   * This used to be seven hand-written regexes for import/eval/os, which meant
+   * the editor stayed silent on everything a learner actually gets wrong: a
+   * speed of 6300, a mistyped command, a bracket that never closes. The
+   * allowlist analyser had known about the first two since PR #78, with line
+   * numbers, and nothing asked it. Mission "Elsje" reached the yard carrying
+   * rover.forward(6300) because of exactly that gap.
+   *
+   * DERIVED FROM THE CODE rather than pushed into state by a handler. Doing it
+   * on keystroke and on mount missed the case that matters most: a draft
+   * restored from localStorage. A learner who closed the tab with a bad speed
+   * in it came back to a clean-looking editor and had to type something before
+   * anyone mentioned the problem, which is the same silence this story is
+   * about, just later in the day. Derived state cannot fall out of step with
+   * the thing it describes.
+   */
+  const validationErrors: CodeProblem[] = useMemo(() => checkLearnerCode(code), [code]);
+
+  // Monaco's own squiggles, which are what put the problem ON the line rather
+  // than in a list underneath it. Separate from the calculation above because
+  // this one genuinely is a side effect on something outside React, and it has
+  // to wait for the editor to exist.
+  useEffect(() => {
+    if (!editorReady || !editorRef.current || !monacoRef.current) return;
+
+    const model = editorRef.current.getModel();
+    if (!model) return;
+
+    monacoRef.current.editor.setModelMarkers(
+      model,
+      'rover-validator',
+      validationErrors.map((err) => ({
+        startLineNumber: err.line,
+        startColumn: 1,
+        endLineNumber: err.line,
+        endColumn: model.getLineMaxColumn(err.line),
+        message: err.message,
+        severity: monacoRef.current.MarkerSeverity.Error,
+      })),
+    );
+  }, [validationErrors, editorReady]);
 
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';
     setCode(newCode);
     localStorage.setItem('rover_monaco_code', newCode);
     setError(null);
-
-    // Validate code in real-time
-    validateCode(newCode);
 
     // Notify parent of code change
     if (onCodeChange) {

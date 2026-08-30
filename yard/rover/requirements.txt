@@ -1,2 +1,9 @@
 flask>=2.0.0
+python-dotenv>=1.0.0
 pytest>=7.0.0
+
+# Optional at runtime. The rover reaches analytics through the Telemetry
+# interface in telemetry.py, and falls back to NullTelemetry when this is
+# absent - a rover with no metrics still drives. Installed here so a full
+# checkout can send events; do not make anything import it directly.
+posthog>=3.0.0

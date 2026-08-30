@@ -56,13 +56,23 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
 try:  # pragma: no cover - trivial import probe
     import playwright.sync_api  # noqa: F401
 except ImportError:
-    collect_ignore = ['test_blockly_codegen.py', 'test_status_page.py']
+    collect_ignore.append('test_blockly_codegen.py')
+    collect_ignore.append('test_status_page.py')
+
+# requirements-test.txt deliberately excludes opencv-python/numpy to keep CI
+# light (recording_control.py imports them lazily for exactly this reason);
+# test_recording_control.py exercises the real encode/decode path, so it needs
+# them installed. Same collection-time skip as the playwright guard above.
+try:  # pragma: no cover - trivial import probe
+    import cv2  # noqa: F401
+except ImportError:
+    collect_ignore.append('test_recording_control.py')
 
 
 def pytest_report_header(config):
     if collect_ignore:
         return (
-            'playwright not installed: skipping browser tests '
+            'optional dependencies not installed: skipping '
             f'({", ".join(collect_ignore)})'
         )
     return None

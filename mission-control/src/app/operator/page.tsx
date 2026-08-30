@@ -56,7 +56,7 @@ export default async function OperatorPage() {
           )}
         </div>
 
-        <MissionQueue />
+        <MissionQueue role={session.role} />
 
         <div className="flex justify-end">
           <SignOutButton />

@@ -5,18 +5,31 @@ This is a thin adapter that translates HTTP requests to service calls.
 All business logic is in the RoverQueueService.
 """
 
+import atexit
 import os
 import re
 import logging
 import subprocess
+from pathlib import Path
 
+from dotenv import load_dotenv
 from flask import Flask, request, jsonify, Response, stream_with_context, send_file
+from werkzeug.exceptions import HTTPException
 import queue as queue_module
 
 from drivers import create_driver
 from service import RoverQueueService, PHOTO_PATH
+from telemetry import Telemetry, NullTelemetry, create_telemetry
+
+# Load the rover's own configuration without traversing into a parent app.
+load_dotenv(Path(__file__).resolve().parent / '.env')
 
 app = Flask(__name__)
+
+# Never None. NullTelemetry until create_app picks something, so a call on
+# this is always safe - see telemetry.py.
+telemetry: Telemetry = NullTelemetry()
+_error_handler_registered = False
 
 # Mast-camera detection is fixed at boot (the CSI sensor is probed once), so
 # we detect on first request and cache it for the process lifetime. A reboot
@@ -47,9 +60,22 @@ def get_camera_status():
 service: RoverQueueService = None
 
 
-def create_app(queue_service: RoverQueueService = None) -> Flask:
-    """Create Flask app with optional injected service (for testing)"""
-    global service
+def create_app(queue_service: RoverQueueService = None,
+               telemetry_backend: Telemetry = None) -> Flask:
+    """Create Flask app with optional injected service and telemetry.
+
+    Both are injected the same way and for the same reason: the server should
+    not decide what drives the rover, nor what records it.
+    """
+    global telemetry, service, _error_handler_registered
+
+    if telemetry_backend is not None:
+        telemetry = telemetry_backend
+    elif isinstance(telemetry, NullTelemetry):
+        telemetry = create_telemetry(debug=bool(
+            app.debug or os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true')
+        ))
+        atexit.register(telemetry.shutdown)
 
     if queue_service:
         service = queue_service
@@ -58,6 +84,18 @@ def create_app(queue_service: RoverQueueService = None) -> Flask:
         driver = create_driver()
         service = RoverQueueService(driver)
         service.start_processor()
+
+    if not _error_handler_registered:
+        @app.errorhandler(Exception)
+        def capture_unhandled_exception(error):
+            if isinstance(error, HTTPException):
+                return error
+
+            telemetry.capture_exception(error)
+
+            return jsonify({'error': 'Internal server error'}), 500
+
+        _error_handler_registered = True
 
     return app
 
@@ -75,6 +113,11 @@ def queue_add():
     if result.get('status') == 'error':
         return jsonify(result), 400
 
+    telemetry.capture(
+        'instruction_queue_submitted',
+        properties={'instruction_count': result['added']},
+    )
+
     return jsonify(result)
 
 
@@ -82,6 +125,12 @@ def queue_add():
 def queue_clear():
     """Clear the queue and emergency stop"""
     result = service.clear_queue()
+
+    telemetry.capture(
+        'rover_emergency_stop_requested',
+        properties={'cleared_instruction_count': result['cleared']},
+    )
+
     return jsonify(result)
 
 
@@ -134,9 +183,9 @@ def photo():
 def main():
     global service
 
-    # Create driver and service
     driver = create_driver()
     service = RoverQueueService(driver)
+    create_app(service)
 
     driver_name = driver.__class__.__name__
     if driver_name == 'FakeRoverDriver':

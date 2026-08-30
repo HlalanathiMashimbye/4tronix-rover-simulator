@@ -534,3 +534,173 @@ def test_a_mission_with_unflushed_writes_is_never_pruned():
 
     assert mission_store.get_mission('gone') is not None
     assert mission_store.outbox_count() == 1
+
+
+# --- Operator bookkeeping from the desk (AB#379) ----------------------------
+#
+# Mission Control became a second writer of run documents when complete,
+# cancel, attach-video and resolve moved off the satellite. These pin the rule
+# that settles the two: a human decision outranks a replayed machine event.
+
+def test_run_merge_unchanged_when_nobody_decided_remotely():
+    """The ordinary case. A yard that is online and working is untouched."""
+    local = {'status': 'completed', 'statusUpdatedAt': '2026-08-29T10:00:00Z'}
+
+    assert sync_worker.merge_run_payload(local, {}) == local
+    assert sync_worker.merge_run_payload(local, {'status': 'processing'}) == local
+
+
+def test_stale_satellite_replay_cannot_undo_a_desk_decision():
+    """The case this rule exists for.
+
+    The yard was offline all afternoon. An operator marked the mission complete
+    from the desk. The yard reconnects that evening and replays a 'processing'
+    it recorded hours earlier. Without the rule it wins, because a merge with
+    no rule always does, and the operator watches their decision revert.
+    """
+    local = {'status': 'processing', 'statusUpdatedAt': '2026-08-29T10:00:00Z'}
+    remote = {
+        'status': 'completed',
+        'decidedAt': '2026-08-29T14:30:00Z',
+        'decidedBy': 'operator@example.com',
+    }
+
+    assert sync_worker.merge_run_payload(local, remote) == {}
+
+
+def test_a_rover_that_finished_after_the_decision_still_wins():
+    """Not everything late is stale.
+
+    An operator cancels a mission at 14:30 believing it stuck. The rover was in
+    fact still driving and finished at 14:35. That is news rather than a replay,
+    and the run should record what actually happened.
+    """
+    local = {'status': 'completed', 'statusUpdatedAt': '2026-08-29T14:35:00Z'}
+    remote = {'status': 'cancelled', 'decidedAt': '2026-08-29T14:30:00Z'}
+
+    assert sync_worker.merge_run_payload(local, remote) == local
+
+
+def test_a_locally_attached_video_survives_a_remote_decision():
+    """Suppress the conflict, not the whole entry.
+
+    The video is not in conflict with the status somebody set in the cloud, and
+    dropping the entry wholesale would lose the only link to the recording.
+    """
+    local = {
+        'status': 'processing',
+        'statusUpdatedAt': '2026-08-29T10:00:00Z',
+        'youtubeUrl': 'https://youtu.be/abcdefghijk',
+    }
+    remote = {'status': 'completed', 'decidedAt': '2026-08-29T14:30:00Z'}
+
+    assert sync_worker.merge_run_payload(local, remote) == {
+        'youtubeUrl': 'https://youtu.be/abcdefghijk',
+    }
+
+
+def test_a_stale_review_flag_cannot_reopen_a_resolved_review():
+    """Resolving is a decision too.
+
+    recovery.py flags an interrupted run. The operator resolves it from the
+    desk. The satellite must not re-raise the flag when it reconnects, or the
+    review list refills with work somebody already did.
+    """
+    local = {
+        'status': 'processing',
+        'statusUpdatedAt': '2026-08-29T09:00:00Z',
+        'needsReview': True,
+        'reviewReason': 'Satellite restarted mid-mission',
+    }
+    remote = {'status': 'completed', 'needsReview': False, 'decidedAt': '2026-08-29T14:30:00Z'}
+
+    assert sync_worker.merge_run_payload(local, remote) == {}
+
+
+# flush_run_one had no test at all before this. It is the function that
+# actually writes a run to Firestore, so the rule above is only worth as much
+# as its application here.
+
+class FakeRunDoc:
+    def __init__(self, store, key):
+        self._store, self._id = store, key
+
+    def get(self, transaction=None):
+        return FakeSnap(self._store.get(self._id))
+
+    def collection(self, name):
+        assert name == 'runs'
+        return FakeRunCollection(self._store, self._id)
+
+
+class FakeRunCollection:
+    def __init__(self, store, prefix=''):
+        self._store, self._prefix = store, prefix
+
+    def document(self, doc_id):
+        return FakeRunDoc(self._store, f'{self._prefix}/{doc_id}' if self._prefix else doc_id)
+
+
+class FakeRunTransaction:
+    def __init__(self, store):
+        self._store = store
+
+    def set(self, ref, fields, merge=False):
+        if merge:
+            self._store.setdefault(ref._id, {}).update(fields)
+        else:
+            self._store[ref._id] = dict(fields)
+
+
+class FakeRunFirestore:
+    def __init__(self, store):
+        self._store = store
+
+    def collection(self, name):
+        assert name == 'missions'
+        return FakeRunCollection(self._store)
+
+    def transaction(self):
+        return FakeRunTransaction(self._store)
+
+
+def _run_entry(payload, seq=1):
+    return {'seq': seq, 'mission_id': 'm1', 'yard_id': 'curiosity',
+            'payload': json.dumps(payload)}
+
+
+def test_the_private_merge_key_never_reaches_a_run_document():
+    """FORCE_KEY is an instruction to the merge, not part of a run.
+
+    It was written straight through to Firestore, where run documents are
+    world-readable (firestore.rules allows public read on runs), because this
+    path never had the strip that flush_one has always had. Every run an
+    operator stopped carried it.
+    """
+    store = {}
+    entry = _run_entry({
+        'status': 'queued',
+        'statusUpdatedAt': '2026-08-29T10:00:00Z',
+        sync_worker.FORCE_KEY: True,
+    })
+
+    assert sync_worker.flush_run_one(FakeRunFirestore(store), entry) is True
+
+    written = store['m1/curiosity']
+    assert written['status'] == 'queued'
+    assert sync_worker.FORCE_KEY not in written
+
+
+def test_flush_leaves_a_desk_decision_standing():
+    """End to end through the real flush, not just the rule."""
+    store = {'m1/curiosity': {
+        'status': 'completed',
+        'decidedAt': '2026-08-29T14:30:00Z',
+        'decidedBy': 'operator@example.com',
+    }}
+    entry = _run_entry({'status': 'processing', 'statusUpdatedAt': '2026-08-29T10:00:00Z'})
+
+    # True: the entry is consumed rather than retried forever. It was applied,
+    # and applying it correctly meant writing nothing.
+    assert sync_worker.flush_run_one(FakeRunFirestore(store), entry) is True
+    assert store['m1/curiosity']['status'] == 'completed'

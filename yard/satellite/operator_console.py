@@ -41,6 +41,7 @@ shadow Python's stdlib `operator` module.
 import os
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -71,9 +72,6 @@ IDENTITY_TOOLKIT_SIGN_IN = (
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'
 )
 
-# Active lease renewals: mission_id -> threading.Timer
-_active_leases = {}
-
 # Lazily initialised firebase_admin handles. Kept behind functions so tests
 # can monkeypatch _firestore / _verify_id_token without firebase-admin or
 # real credentials.
@@ -93,15 +91,51 @@ def _web_api_key():
     )
 
 
+# Remembered so the login page and the status page do not each retry a broken
+# credential, and so the reason is printed once rather than per request.
+_admin_config_error = None
+
+
 def _admin_configured():
-    return bool(
-        os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
-        or (
-            os.environ.get('FIREBASE_PROJECT_ID')
-            and os.environ.get('FIREBASE_CLIENT_EMAIL')
-            and os.environ.get('FIREBASE_PRIVATE_KEY')
-        )
-    )
+    """Whether this satellite can actually authenticate, not whether some
+    variables happen to be set.
+
+    This used to require GOOGLE_APPLICATION_CREDENTIALS or all three
+    FIREBASE_* key variables, which meant it reported "not configured" for a
+    satellite running on Application Default Credentials - the mode staging,
+    prod and now local dev all use. Sign-in was refused while the credential
+    underneath it worked perfectly.
+
+    Asking the real question instead: try to build the Firebase app, and say
+    yes if it built. _init_firebase memoises, so this costs one attempt and
+    then nothing.
+    """
+    global _admin_config_error
+    try:
+        _init_firebase()
+        _admin_config_error = None
+        return True
+    except Exception as error:
+        message = str(error)
+        if message != _admin_config_error:
+            _admin_config_error = message
+            print(f'[operator] Firebase credentials unavailable: {message}')
+        return False
+
+
+def _clean_env(name):
+    """An env value with surrounding quotes and whitespace removed, or None.
+
+    .env files keep their quotes when a shell is not doing the parsing, and a
+    quoted empty string is still empty.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return None
+    value = raw.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        value = value[1:-1]
+    return value or None
 
 
 def _init_firebase():
@@ -120,23 +154,55 @@ def _init_firebase():
         if _firebase_app is not None:
             return _firebase_app
 
-        if os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'):
-            cred = credentials.ApplicationDefault()
-        else:
-            # \n in the private key survives .env files as the two characters
-            # backslash-n; decode them back to newlines (mission-control does
-            # the same in its firebase-admin bootstrap).
-            private_key = os.environ['FIREBASE_PRIVATE_KEY'].strip().strip('"').replace('\\n', '\n')
+        # Same three-way choice as mission-control's firebase-admin.ts, and
+        # deliberately so: the two used to disagree, and the satellite quietly
+        # talked to a different Firebase project for weeks.
+        #
+        #   both key variables set   -> that service account
+        #   neither set              -> Application Default Credentials
+        #   exactly one set          -> refuse, because it is a broken .env
+        client_email = _clean_env('FIREBASE_CLIENT_EMAIL')
+        private_key = _clean_env('FIREBASE_PRIVATE_KEY')
+
+        if client_email and private_key:
             cred = credentials.Certificate({
                 'type': 'service_account',
-                'project_id': os.environ['FIREBASE_PROJECT_ID'],
-                'client_email': os.environ['FIREBASE_CLIENT_EMAIL'],
-                'private_key': private_key,
+                'project_id': _clean_env('FIREBASE_PROJECT_ID'),
+                'client_email': client_email,
+                # \n in the private key survives .env files as the two
+                # characters backslash-n; decode them back to newlines.
+                'private_key': private_key.replace('\\n', '\n'),
                 'token_uri': 'https://oauth2.googleapis.com/token',
             })
+        elif client_email or private_key:
+            # Falling back to ADC here would authenticate as a DIFFERENT
+            # identity than the one intended, silently. Fail instead.
+            missing = 'FIREBASE_PRIVATE_KEY' if client_email else 'FIREBASE_CLIENT_EMAIL'
+            raise RuntimeError(
+                f'Incomplete Firebase service account config: {missing} is not '
+                f'set while the other half is. Set both, or unset both to use '
+                f'Application Default Credentials.'
+            )
+        else:
+            cred = credentials.ApplicationDefault()
+
+        # Pass the project EXPLICITLY, as mission-control does.
+        #
+        # Without it firebase_admin infers the project from the credential, and
+        # under ADC that is whatever `gcloud config get-value project` happens
+        # to say - which on this machine was still the retired project. The
+        # satellite would then report one project while FIREBASE_PROJECT_ID
+        # said another, which is exactly the kind of disagreement that hid the
+        # env drift in the first place.
+        options = {}
+        project_id = _clean_env('FIREBASE_PROJECT_ID')
+        if project_id:
+            options['projectId'] = project_id
 
         try:
-            _firebase_app = firebase_admin.initialize_app(cred, name='operator-console')
+            _firebase_app = firebase_admin.initialize_app(
+                cred, options, name='operator-console',
+            )
         except ValueError:
             # Already registered by something this lock didn't cover (e.g. a
             # prior dev-server run that left firebase_admin's process-wide
@@ -208,45 +274,6 @@ def _notify_mission_control_async(mission_id, status):
 def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
-def _expires_iso():
-    from datetime import timedelta
-    return (datetime.now(timezone.utc) + timedelta(seconds=LEASE_TTL_SECONDS)).isoformat().replace('+00:00', 'Z')
-
-LEASE_RENEW_INTERVAL = 60  # seconds
-
-
-def _start_lease_renewal(mission_id):
-    """Keep the lease alive locally while a mission runs.
-
-    Mirror-only by design: a renewal carries no new information for Firestore
-    (the lease is re-sent with the next real status change), and queueing one
-    every 60 seconds would fill the outbox with entries that mean nothing.
-    """
-    def _renew():
-        try:
-            from mission_store import renew_lease
-            renew_lease(mission_id, _expires_iso(), _now_iso())
-        except Exception as e:
-            print(f'[lease] Failed to renew lease for {mission_id}: {e}')
-
-        timer = threading.Timer(LEASE_RENEW_INTERVAL, _renew)
-        timer.daemon = True
-        _active_leases[mission_id] = timer
-        timer.start()
-
-    timer = threading.Timer(LEASE_RENEW_INTERVAL, _renew)
-    timer.daemon = True
-    _active_leases[mission_id] = timer
-    timer.start()
-
-
-def _stop_lease_renewal(mission_id):
-    """Cancel the renewal timer for a mission."""
-    timer = _active_leases.pop(mission_id, None)
-    if timer:
-        timer.cancel()
-
-
 # Event-day escape hatch: OPERATOR_AUTH=off skips login entirely. Firebase
 # sign-in needs internet, and venue wifi (science centre) can be too flaky to
 # get operators through the front door. The satellite only serves the yard's
@@ -259,11 +286,80 @@ def auth_disabled():
     return os.environ.get('OPERATOR_AUTH', '').strip().lower() in ('off', 'disabled', '0', 'false')
 
 
+# How long a sign-in lasts before the operator must authenticate again, and how
+# often a live session is re-checked against Firebase.
+#
+# The satellite verified the token once at sign-in and then trusted the Flask
+# session for as long as the browser kept it. Mission Control re-verifies on
+# every request with checkRevoked, so removing an operator there took effect at
+# once - and did nothing at all here. Someone whose access was revoked kept the
+# yard console, including Send, which moves a physical rover.
+#
+# It cannot simply copy Mission Control: this console exists to work with no
+# internet, so a check that fails closed would lock an operator out of a rover
+# mid-event because venue wifi dropped. The compromise is deliberate and has
+# two halves.
+SESSION_MAX_AGE = int(os.environ.get('OPERATOR_SESSION_MAX_AGE', 12 * 3600))
+SESSION_RECHECK_EVERY = int(os.environ.get('OPERATOR_SESSION_RECHECK', 300))
+
+
+def _session_expired(operator, now):
+    started = operator.get('signed_in_at')
+    return started is None or (now - started) > SESSION_MAX_AGE
+
+
+def _still_authorised(operator, now):
+    """Re-check a live session against Firebase, at most every few minutes.
+
+    FAILS OPEN when Firebase cannot be reached. That is the offline-first
+    trade: an operator standing at a rover with no internet keeps working, and
+    the bound on how long a revoked session can survive is SESSION_MAX_AGE
+    rather than forever.
+
+    FAILS CLOSED when Firebase answers and says no - the account is gone,
+    disabled, or no longer holds a role. That is the case that matters, since
+    it is the one an admin just acted on.
+    """
+    if operator.get('uid') == OFFLINE_OPERATOR['uid']:
+        return True
+
+    if now - operator.get('checked_at', 0) < SESSION_RECHECK_EVERY:
+        return True
+
+    try:
+        from firebase_admin import auth
+        user = auth.get_user(operator['uid'], app=_init_firebase())
+    except Exception:
+        # Unreachable, or the credential is unavailable. Keep working.
+        operator['checked_at'] = now
+        session.modified = True
+        return True
+
+    if user.disabled:
+        return False
+
+    role = (user.custom_claims or {}).get('role')
+    if role not in ('operator', 'admin'):
+        return False
+
+    # Pick up a promotion or demotion without needing a re-login.
+    operator['role'] = role
+    operator['checked_at'] = now
+    session.modified = True
+    return True
+
+
 def current_operator():
     """The signed-in operator, or the offline stub when auth is disabled."""
     operator = session.get('operator')
+
     if operator:
+        now = time.time()
+        if _session_expired(operator, now) or not _still_authorised(operator, now):
+            session.pop('operator', None)
+            return OFFLINE_OPERATOR if auth_disabled() else None
         return operator
+
     return OFFLINE_OPERATOR if auth_disabled() else None
 
 
@@ -357,10 +453,15 @@ def api_login():
     if role not in ('operator', 'admin'):
         return jsonify({'error': 'This account does not have operator access'}), 403
 
+    now = time.time()
     session['operator'] = {
         'uid': claims.get('user_id') or claims.get('sub'),
         'email': claims.get('email') or email,
         'role': role,
+        # Both are what bound the session: one caps its life, the other paces
+        # the re-check against Firebase. See current_operator.
+        'signed_in_at': now,
+        'checked_at': now,
     }
     return jsonify({'status': 'ok', 'role': role})
 
@@ -399,6 +500,9 @@ def _mirror_row_to_dict(row):
         # The resolve endpoint has existed all along with no way to reach it.
         'needsReview': bool(row.get('needs_review')),
         'reviewReason': row.get('review_reason'),
+        # BACKLOG 335/336/338. recording_path/timestamps stay run-internal -
+        # a filesystem path on the satellite isn't operator-facing information.
+        'recordingStatus': row.get('recording_status') or 'none',
     }
 
 
@@ -475,87 +579,152 @@ def _dispatch_to_rover(mission, mission_id=None):
     return True, None
 
 
+def _begin_recording(mission_id, yard):
+    """Start recording right after a successful dispatch (BACKLOG 335).
+
+    Best-effort and never surfaced as a request failure: by the time this
+    runs the rover has already been dispatched, which is irreversible, so a
+    camera hiccup here is a warning to log, not a reason to fail the response.
+    Returns whether recording actually started, for the caller to pass on to
+    the operator as a soft signal.
+    """
+    from recording_control import start_recording
+    from mission_store import set_run_recording_state
+
+    ok, detail = start_recording(mission_id, yard)
+    if ok:
+        set_run_recording_state(mission_id, yard, 'recording', path=detail, started_at=_now_iso())
+    else:
+        current_app.logger.warning('Recording did not start for %s/%s: %s', mission_id, yard, detail)
+    return ok
+
+
 @operator_bp.route('/api/missions/<mission_id>/send', methods=['POST'])
 @require_operator
 def api_send_to_rover(mission_id):
-    """Claim the mission locally, then push its Python onto the rover queue.
+    """Claim the run for this mission+yard locally, then push Python to rover queue.
 
     Firestore is deliberately NOT touched here (plan PR 3): the request path
     runs entirely off SQLite so the console keeps working with no internet, and
     the sync worker is the only thing that talks to Firestore. The lock is
-    still atomic - acquire_mission uses BEGIN IMMEDIATE - so two simultaneous
-    taps still produce exactly one dispatch.
-    """
-    from mission_store import acquire_mission, release_mission
-    from satellite_identity import satellite_id
+    still atomic - acquire_run uses BEGIN IMMEDIATE - so two simultaneous
+    taps still produce exactly one dispatch to this yard's rover.
 
-    owner = satellite_id()
+    Concurrency is scoped to (mission_id, yard_id): the same mission can run
+    simultaneously on different yards.
+
+    A camera readiness check (BACKLOG 334) runs before the lock is even
+    touched: readiness has nothing to do with which mission is being sent, so
+    there is no claim to roll back on failure. Refusing here, rather than
+    after dispatch, is the whole point - a mission with no camera up produces
+    a run nobody will ever have video of.
+    """
+    from mission_store import acquire_run, release_run, get_mission
+    from recording_control import is_ready
+    from satellite_identity import yard_id
+
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'sending a mission - a run with no video cannot be reviewed later.',
+        }), 503
+
     now = _now_iso()
-    expires = _expires_iso()
+    yard = yard_id()
 
     # The SQLite transaction serialises across processes; this serialises the
     # rover dispatch that follows it within this process.
     with _acquire_lock:
-        ok, reason, mission = acquire_mission(mission_id, owner, now, expires)
+        ok, reason, run = acquire_run(mission_id, yard, now)
 
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
             'not-queued': ('Only queued missions can be sent to the rover', 400),
-            'locked-by-other': ('Mission is locked by another operator', 409),
+            'already-running': ('Mission is already running at this yard', 409),
         }
         msg, code = messages.get(reason, ('Lock failed', 500))
         return jsonify({'error': msg}), code
 
+    mission = get_mission(mission_id)
+    if not mission:
+        release_run(mission_id, yard, 'queued', _now_iso())
+        return jsonify({'error': 'Mission not found'}), 404
+
     ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
         # Nothing reached the rover, so put it back rather than holding the
-        # lock for a full lease period.
-        release_mission(mission_id, 'queued', _now_iso())
+        # run stuck in 'processing' with nothing driving it.
+        release_run(mission_id, yard, 'queued', _now_iso())
         return err
 
-    _start_lease_renewal(mission_id)
+    recording_started = _begin_recording(mission_id, yard)
     _notify_mission_control_async(mission_id, 'processing')
-    return jsonify({'status': 'ok', 'missionId': mission_id})
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
 @operator_bp.route('/api/missions/<mission_id>/rerun', methods=['POST'])
 @require_operator
 def api_rerun(mission_id):
-    """Re-run a finished mission. Clears the previous run's completion and
-    video so the mission reflects the new run, not stale data."""
-    from mission_store import acquire_mission, release_mission
-    from satellite_identity import satellite_id
+    """Re-run a finished mission at this yard. Clears the run's completion
+    and video so the new run starts fresh without stale data.
 
-    owner = satellite_id()
+    Gets the same camera readiness check and recording start as Send (BACKLOG
+    334/335): a rerun is a real dispatch to the rover, so a rerun with no
+    video would defeat the point exactly as much as a first run would.
+    """
+    from mission_store import acquire_run, release_run, get_mission, get_run
+    from recording_control import is_ready
+    from satellite_identity import yard_id
+
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'rerunning a mission - a run with no video cannot be reviewed later.',
+        }), 503
+
     now = _now_iso()
-    expires = _expires_iso()
+    yard = yard_id()
 
     with _acquire_lock:
-        ok, reason, mission = acquire_mission(mission_id, owner, now, expires, for_rerun=True)
+        existing_run = get_run(mission_id, yard)
+        if existing_run and existing_run.get('status') not in ('completed', 'failed', 'cancelled'):
+            return jsonify({'error': 'Run is still processing at this yard'}), 409
 
-    previous_status = (mission or {}).get('status', 'completed')
+        # What to go back to if the rover never takes it. NOT 'queued': this
+        # mission already finished once, and rolling a failed re-dispatch back
+        # to 'queued' would erase that. The learner reads the mission's status
+        # as Completed or Pending, so the wrong rollback tells a child their
+        # finished mission is waiting again.
+        previous = existing_run.get('status') if existing_run else 'queued'
+
+        ok, reason, run = acquire_run(mission_id, yard, now, for_rerun=True)
 
     if not ok:
         messages = {
             'not-found': ('Mission not found', 404),
-            'not-terminal': ('Only finished or cancelled missions can be rerun', 400),
-            'locked-by-other': ('Mission is locked by another operator', 409),
+            'not-queued': ('Unable to queue run at this yard', 400),
+            'already-running': ('Run is already going at this yard', 409),
         }
-        msg, code = messages.get(reason, ('Lock failed', 500))
+        msg, code = messages.get(reason, ('Could not start the run', 500))
         return jsonify({'error': msg}), code
+
+    mission = get_mission(mission_id)
+    if not mission:
+        release_run(mission_id, yard, previous, _now_iso())
+        return jsonify({'error': 'Mission not found'}), 404
 
     ok, err = _dispatch_to_rover(_mirror_row_to_dict(mission), mission_id=mission_id)
     if not ok:
-        # Nothing ran, so restore what the mission was before the lock. Marking
-        # it 'failed' would misreport an unreachable rover as a failed run, and
-        # 'failed' reaches the learner as a run that went wrong.
-        release_mission(mission_id, previous_status, _now_iso())
+        # Nothing reached the rover, so restore what was there before.
+        release_run(mission_id, yard, previous, _now_iso())
         return err
 
-    _start_lease_renewal(mission_id)
+    recording_started = _begin_recording(mission_id, yard)
     _notify_mission_control_async(mission_id, 'processing')
-    return jsonify({'status': 'ok', 'missionId': mission_id})
+    return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
 @operator_bp.route('/api/missions/<mission_id>', methods=['GET'])
@@ -573,7 +742,7 @@ def api_mission(mission_id):
 @operator_bp.route('/api/missions/<mission_id>/stop', methods=['POST'])
 @require_operator
 def api_stop_mission(mission_id):
-    """Halt the rover mid-run and put the mission back in the queue.
+    """Halt the rover mid-run and cancel the run.
 
     The gap this fills: until now an operator standing next to a moving rover,
     in a hall full of children, had no control that stopped it. The rover has
@@ -585,10 +754,15 @@ def api_stop_mission(mission_id):
     ordering is the whole point. A failed status write is a tidy-up problem; a
     rover that keeps driving because a database call raised is not.
 
-    The mission goes back to 'queued' rather than 'failed' or 'cancelled': the
-    code did not do anything wrong, somebody just needed the rover to stop, and
-    it should be re-runnable with one tap. 'failed' would also reach the learner
-    as a run that went wrong, which it did not.
+    The run goes to 'cancelled' rather than 'failed': the code did not do
+    anything wrong, somebody just needed the rover to stop, and 'failed' would
+    reach the learner as a run that went wrong, which it did not. 'cancelled'
+    is what api_cancel_mission already uses for exactly that property - reads
+    as "Pending" to the learner, nobody is shown a rejection - and it is still
+    one tap away from running again via rerun. Its recording (BACKLOG 338) is
+    discarded in the same request: an operator stopping the rover in real time
+    has already made the call, unlike a rover-reported error, which waits for
+    a review decision instead (see mission_watcher.flag_for_review).
 
     Deliberately works whatever state THIS mission is in. The button is on
     screen at all times, and refusing to stop a rover because the mission you
@@ -597,12 +771,17 @@ def api_stop_mission(mission_id):
     not the running one, the rover is still cleared and only the status write
     is skipped.
     """
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    was_running = mission.get('status') == 'processing'
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    was_running = run and run.get('status') == 'processing' if run else False
 
     try:
         resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
@@ -620,27 +799,35 @@ def api_stop_mission(mission_id):
 
     if not was_running:
         # Rover cleared, nothing to record: this mission was not the one on it.
-        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': mission.get('status')})
+        run_status = run.get('status') if run else 'queued'
+        return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': run_status})
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'queued', _now_iso(), operator_decision=True)
-    _notify_mission_control_async(mission_id, 'queued')
-    return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': 'queued'})
+    release_run(mission_id, yard, 'cancelled', _now_iso(), operator_decision=True)
+    stop_recording(mission_id, yard, keep=False)
+    _notify_mission_control_async(mission_id, 'cancelled')
+    return jsonify({
+        'status': 'ok', 'missionId': mission_id, 'newStatus': 'cancelled', 'recordingDiscarded': True,
+    })
 
 
 @operator_bp.route('/api/missions/<mission_id>/complete', methods=['POST'])
 @require_operator
 def api_mark_complete(mission_id):
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') not in ('queued', 'processing'):
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be marked complete'}), 400
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'completed', _now_iso())
+    release_run(mission_id, yard, 'completed', _now_iso())
+    stop_recording(mission_id, yard, keep=True)
     _notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -653,22 +840,27 @@ def api_attach_youtube(mission_id):
     if not url or not any(p.match(url) for p in YOUTUBE_URL_PATTERNS):
         return jsonify({'error': 'Use a youtube.com/watch?v=... or youtu.be/... URL'}), 400
 
-    from mission_store import get_mission, set_mission_field
+    from mission_store import get_mission, get_run, set_run_field
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') != 'completed':
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') != 'completed':
         return jsonify({'error': 'Attach the video after the mission is marked complete'}), 400
 
-    set_mission_field(mission_id, {'youtube_url': url}, {'youtubeUrl': url})
+    set_run_field(mission_id, yard, {'youtube_url': url}, {'youtubeUrl': url},
+                  mirror_to_mission=('youtube_url',))
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
 @operator_bp.route('/api/missions/<mission_id>/cancel', methods=['POST'])
 @require_operator
 def api_cancel_mission(mission_id):
-    """Take a mission out of the queue without running it.
+    """Take a run out of the queue without executing it at this yard.
 
     The gap this fills: a learner submits a duplicate, or code that is never
     going to do anything, and today the only options are run it or leave it in
@@ -677,17 +869,31 @@ def api_cancel_mission(mission_id):
     Cancel rather than delete, deliberately. The mission is a child's work and
     the record of it should survive; 'cancelled' also reads as "Pending" on the
     learner's side (discoveryStatus.ts), so nobody is shown a rejection.
+
+    A 'processing' run being cancelled here still gets its recording discarded
+    (BACKLOG 338), for the same reason STOP does: a run that ends up
+    'cancelled' should never carry a video a future upload step could mistake
+    for a successful run - however the cancellation happened to reach it. This
+    route does not itself stop the rover; that gap is pre-existing and
+    unrelated to recording.
     """
-    from mission_store import get_mission, release_mission
+    from mission_store import get_mission, get_run, release_run
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
 
     mission = get_mission(mission_id)
     if mission is None:
         return jsonify({'error': 'Mission not found'}), 404
-    if mission.get('status') not in ('queued', 'processing'):
+
+    yard = yard_id()
+    run = get_run(mission_id, yard)
+    if not run or run.get('status') not in ('queued', 'processing'):
         return jsonify({'error': 'Only queued or running missions can be cancelled'}), 400
 
-    _stop_lease_renewal(mission_id)
-    release_mission(mission_id, 'cancelled', _now_iso())
+    was_running = run.get('status') == 'processing'
+    release_run(mission_id, yard, 'cancelled', _now_iso())
+    if was_running:
+        stop_recording(mission_id, yard, keep=False)
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
@@ -823,7 +1029,6 @@ def api_delete_mission(mission_id):
     if mission.get('deleted'):
         return jsonify({'error': 'This mission is already deleted'}), 400
 
-    _stop_lease_renewal(mission_id)
     delete_mission(mission_id, _now_iso())
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
@@ -924,9 +1129,18 @@ def api_integrations():
                 'id': 'firestore',
                 'name': 'Firestore',
                 'why': 'Syncs missions with mission-control.',
+                # Says which credential is actually in use rather than
+                # assuming a service account: ADC is what staging, prod and
+                # local dev all use, and reporting it as a missing key sent
+                # people looking for a variable that should not be set.
                 **state(_admin_configured(),
-                        'Service account present' if _admin_configured()
-                        else 'Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY'),
+                        ('Authenticated as ' + (
+                            'a service account' if _clean_env('FIREBASE_CLIENT_EMAIL')
+                            else 'Application Default Credentials'
+                        )) if _admin_configured()
+                        else 'Cannot reach Firebase. Run `gcloud auth application-default '
+                             'login`, or set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY '
+                             'together. The reason is in the satellite log.'),
             },
             {
                 'id': 'youtube',
@@ -966,19 +1180,30 @@ def api_needs_review():
 def api_resolve_review(mission_id):
     """Record the operator's decision about an interrupted mission.
 
-    'completed' - they checked and the run finished.
-    'requeue'   - put it back in the queue to be run again.
+    'completed' - they checked and the run finished. Its recording (already
+                  'kept' by mission_watcher.flag_for_review, BACKLOG 338) is
+                  left untouched - it is exactly the video this run produced.
+    'requeue'   - put it back in the queue to be run again. The old recording
+                  is discarded: a fresh one is made when it actually reruns,
+                  and a stale video should not follow a mission back into the
+                  ordinary queue as if nothing had happened.
+    'cancelled' - the operator decided the interrupted run should not count
+                  (BACKLOG 338). Its recording is discarded - the whole point
+                  of this outcome is that it must never be mistaken for a
+                  successful run's video.
 
     Deliberately does NOT dispatch to the rover. Re-queuing makes the mission
     available for a human to send again; it never moves the robot by itself
     (plan 2.3).
     """
     from mission_store import get_mission, resolve_review
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
 
     data = request.get_json(silent=True) or {}
     outcome = (data.get('outcome') or '').strip()
-    if outcome not in ('completed', 'requeue'):
-        return jsonify({'error': "outcome must be 'completed' or 'requeue'"}), 400
+    if outcome not in ('completed', 'requeue', 'cancelled'):
+        return jsonify({'error': "outcome must be 'completed', 'requeue', or 'cancelled'"}), 400
 
     mission = get_mission(mission_id)
     if mission is None:
@@ -986,9 +1211,14 @@ def api_resolve_review(mission_id):
     if not mission.get('needs_review'):
         return jsonify({'error': 'This mission is not awaiting review'}), 400
 
-    status = 'completed' if outcome == 'completed' else 'queued'
-    _stop_lease_renewal(mission_id)
+    status = {'completed': 'completed', 'requeue': 'queued', 'cancelled': 'cancelled'}[outcome]
     resolve_review(mission_id, status, _now_iso())
+
+    if status != 'completed':
+        # 'queued' (fresh rerun ahead) and 'cancelled' (must never look
+        # successful) both discard the recording left over from the
+        # interrupted run; only 'completed' keeps it.
+        stop_recording(mission_id, yard_id(), keep=False)
 
     if status == 'completed':
         _notify_mission_control_async(mission_id, 'completed')
