@@ -18,108 +18,23 @@ import sync_worker  # noqa: E402
 
 
 # --- Fakes -----------------------------------------------------------------
+#
+# The Firestore doubles live in tests/firestore_fakes.py, shared with
+# test_operator_console.py. Both files used to carry their own copy of the
+# same classes under slightly different names, drifting apart wherever one
+# file's tests needed something the other's did not. See that module and
+# ports.py for why.
 
-class FakeSnap:
-    def __init__(self, data):
-        self._data = data
-        self.exists = data is not None
+from tests.firestore_fakes import (  # noqa: E402
+    FakeFirestore,
+    FakeSnapshot,
+    FakeTransaction,
+)
 
-    def to_dict(self):
-        return dict(self._data) if self._data else None
-
-
-class FakeDocRef:
-    def __init__(self, store, doc_id, meter=None):
-        self._store, self._id, self._meter = store, doc_id, meter
-
-    def get(self, transaction=None):
-        if self._meter is not None and transaction is None:
-            self._meter['docs_read'] += 1
-        return FakeSnap(self._store.get(self._id))
-
-
-class FakeTransaction:
-    def __init__(self, store):
-        self._store = store
-
-    def update(self, ref, fields):
-        self._store.setdefault(ref._id, {}).update(fields)
-
-
-class FakeStreamDoc:
-    def __init__(self, doc_id, data):
-        self.id, self._data = doc_id, data
-
-    def to_dict(self):
-        return dict(self._data)
-
-
-class FakeQuery:
-    """Supports the where/order_by/limit chain and counts documents read.
-
-    Read counting is the point: the naive worker pulled 200 docs every 30s,
-    which is 576,000 reads/day against a 50,000/day quota. Tests assert the
-    cost, not just the behaviour.
-    """
-
-    def __init__(self, store, meter, rows=None):
-        self._store = store
-        self._meter = meter
-        self._rows = list(store.items()) if rows is None else rows
-
-    def where(self, field=None, op=None, value=None, filter=None):
-        # Support both signatures: where(field, op, value) and where(filter=FieldFilter(...))
-        if filter is not None:
-            # FieldFilter object: extract field, op, value from it
-            field = filter.field_path
-            op = filter.op_string
-            value = filter.value
-
-        def keep(item):
-            v = item[1].get(field)
-            if op == '==':
-                return v == value
-            if op == '>':
-                return v is not None and v > value
-            raise AssertionError(f'fake does not support operator {op}')
-        return FakeQuery(self._store, self._meter, [i for i in self._rows if keep(i)])
-
-    def order_by(self, field, direction=None):
-        rows = sorted(self._rows, key=lambda i: i[1].get(field) or '',
-                      reverse=(direction == 'DESCENDING'))
-        return FakeQuery(self._store, self._meter, rows)
-
-    def limit(self, n):
-        return FakeQuery(self._store, self._meter, self._rows[:n])
-
-    def stream(self):
-        self._meter['queries'] += 1
-        # Firestore bills a minimum of one read even for an empty result.
-        self._meter['docs_read'] += max(1, len(self._rows))
-        return [FakeStreamDoc(k, v) for k, v in self._rows]
-
-
-class FakeCollection(FakeQuery):
-    def document(self, doc_id):
-        return FakeDocRef(self._store, doc_id, self._meter)
-
-
-class FakeFirestore:
-    """Records reads so a test can assert the quota cost of a cycle."""
-
-    def __init__(self, store):
-        self._store = store
-        self.meter = {'queries': 0, 'docs_read': 0}
-
-    @property
-    def pulls(self):
-        return self.meter['queries']
-
-    def collection(self, name):
-        return FakeCollection(self._store, self.meter)
-
-    def transaction(self):
-        return FakeTransaction(self._store)
+# This suite called the snapshot double FakeSnap; the shared name is
+# FakeSnapshot. Aliased rather than renamed at every call site to keep this
+# change a move rather than a rewrite.
+FakeSnap = FakeSnapshot
 
 
 @pytest.fixture(autouse=True)
@@ -628,47 +543,11 @@ def test_a_stale_review_flag_cannot_reopen_a_resolved_review():
 # actually writes a run to Firestore, so the rule above is only worth as much
 # as its application here.
 
-class FakeRunDoc:
-    def __init__(self, store, key):
-        self._store, self._id = store, key
-
-    def get(self, transaction=None):
-        return FakeSnap(self._store.get(self._id))
-
-    def collection(self, name):
-        assert name == 'runs'
-        return FakeRunCollection(self._store, self._id)
-
-
-class FakeRunCollection:
-    def __init__(self, store, prefix=''):
-        self._store, self._prefix = store, prefix
-
-    def document(self, doc_id):
-        return FakeRunDoc(self._store, f'{self._prefix}/{doc_id}' if self._prefix else doc_id)
-
-
-class FakeRunTransaction:
-    def __init__(self, store):
-        self._store = store
-
-    def set(self, ref, fields, merge=False):
-        if merge:
-            self._store.setdefault(ref._id, {}).update(fields)
-        else:
-            self._store[ref._id] = dict(fields)
-
-
-class FakeRunFirestore:
-    def __init__(self, store):
-        self._store = store
-
-    def collection(self, name):
-        assert name == 'missions'
-        return FakeRunCollection(self._store)
-
-    def transaction(self):
-        return FakeRunTransaction(self._store)
+# The run-subcollection doubles that used to sit here were a second copy of
+# the Firestore fakes above, differing only in supporting missions/{id}/runs
+# nesting and set(merge=). The shared FakeFirestore does both, so this is now
+# just a name for what these tests are exercising.
+FakeRunFirestore = FakeFirestore
 
 
 def _run_entry(payload, seq=1):

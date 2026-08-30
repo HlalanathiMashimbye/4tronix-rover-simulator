@@ -19,6 +19,7 @@ import os
 import threading
 from datetime import datetime, timezone
 
+from ports import FirestoreClient
 from mission_store import (
     clear_dirty,
     clear_run_dirty,
@@ -243,7 +244,7 @@ def _maybe_log_conflict(mission_id, local_payload, remote_data, local_won):
         )
 
 
-def flush_one(firestore_client, entry, collection_name='missions'):
+def flush_one(firestore_client: FirestoreClient, entry, collection_name='missions'):
     """Apply one outbox entry to Firestore. Returns True only on confirmation.
 
     The merge rule is evaluated INSIDE the transaction, so a remote change that
@@ -295,7 +296,7 @@ def flush_one(firestore_client, entry, collection_name='missions'):
         return False
 
 
-def flush_run_one(firestore_client, entry):
+def flush_run_one(firestore_client: FirestoreClient, entry):
     """Apply one run outbox entry to Firestore. Returns True only on confirmation.
 
     Mirrors flush_one but writes to the runs subcollection at
@@ -405,7 +406,7 @@ def _clear_pull_failure():
     _pull_failure_repeats[0] = 0
 
 
-def sync_from_firestore(firestore_client, collection_name='missions', yard_id=None):
+def sync_from_firestore(firestore_client: FirestoreClient, collection_name='missions', yard_id=None):
     """Pull only what changed, rather than the whole collection every cycle.
 
     Returns True on success. Rows with pending local writes are protected by
@@ -459,7 +460,7 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
         return False
 
 
-def reconcile_active(firestore_client, collection_name='missions', yard_id=None):
+def reconcile_active(firestore_client: FirestoreClient, collection_name='missions', yard_id=None):
     """Re-read the missions the MIRROR still considers unfinished.
 
     An incremental pull keyed on submittedAt cannot see a mission whose status
@@ -505,7 +506,7 @@ def reconcile_active(firestore_client, collection_name='missions', yard_id=None)
         return False
 
 
-def sync_cycle(firestore_client, collection_name='missions', yard_id=None):
+def sync_cycle(firestore_client: FirestoreClient, collection_name='missions', yard_id=None):
     """One cycle: flush runs BEFORE missions, then pull both.
 
     Push-before-pull ordering: runs are the execution source of truth, so they
