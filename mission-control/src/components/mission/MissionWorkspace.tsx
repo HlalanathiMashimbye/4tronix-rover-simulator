@@ -57,10 +57,23 @@ export function MissionWorkspace() {
   // way. A ref, not state: nothing renders from it, and it must be readable by
   // the effect below in the same tick the prompt closes.
   const awaitingEmailChoiceRef = useRef(false);
-  // A name is generated up front so the learner never faces a blank,
-  // unnamed mission — they can only re-roll it, not type their own, so it is
-  // always present and always valid.
-  const [missionName, setMissionName] = useState(() => generateRandomMissionName());
+  /**
+   * A name is generated so the learner never faces a blank, unnamed mission:
+   * they can only re-roll it, not type their own.
+   *
+   * Generated on mount rather than in useState's initialiser. That initialiser
+   * runs during render, which happens on the server too - this is a client
+   * component but Next still server-renders the first HTML - so the server
+   * picked one name, the browser picked another, and React threw a hydration
+   * mismatch on every single load of this page. The name is random by design,
+   * so there is no way to make the two agree; the fix is not to render one
+   * until the browser is the only thing rendering.
+   */
+  const [missionName, setMissionName] = useState('');
+
+  useEffect(() => {
+    setMissionName(generateRandomMissionName());
+  }, []);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
   /**
