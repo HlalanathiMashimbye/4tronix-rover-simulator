@@ -257,7 +257,7 @@ export function RoverSimulator({
   const hasTrajectory = trajectory.length > 0;
 
   return (
-    <div className="flex h-full flex-col gap-2 rounded-2xl border border-border/60 bg-card/40 p-3 clay">
+    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
@@ -274,7 +274,7 @@ export function RoverSimulator({
 
       <div
         ref={wrapRef}
-        className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-border"
+        className="panel-inner relative min-h-0 w-full flex-1 overflow-hidden border border-border"
         // Same source as the canvas base, so the letterbox around the yard can
         // never disagree with what is painted inside it. This used to be a
         // hardcoded near-black, which stayed dark on the light theme.

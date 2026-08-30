@@ -405,7 +405,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-border bg-white">
+      <div className="panel-inner relative min-h-0 flex-1 overflow-hidden border-2 border-border bg-white">
         <div
           ref={blocklyDivRef}
           className="h-full w-full min-h-0 overflow-hidden"
