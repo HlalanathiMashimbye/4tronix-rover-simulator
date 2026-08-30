@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Rocket, Plus, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
-import { getLearnerID } from '@/lib/getLearnerID';
+import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import {
   subscribeMissionsByLearnerId,
   subscribeMissionsByLearnerEmail,
-} from '@/lib/services/missionQueryService';
+} from '@/infrastructure/persistence/missionQueryService';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
@@ -16,7 +16,7 @@ import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useLearner } from '@/contexts/LearnerContext';
 import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
 import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
-import { useFavorites } from '@/lib/useFavorites';
+import { useFavorites } from '@/hooks/useFavorites';
 
 export function MissionHistory() {
   const { learnerEmail, openEmailPrompt } = useLearner();

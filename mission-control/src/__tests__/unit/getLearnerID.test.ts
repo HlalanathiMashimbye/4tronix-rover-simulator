@@ -4,7 +4,7 @@
  * @jest-environment jsdom
  */
 
-import { getLearnerID, clearLearnerID, hasLearnerID } from '@/lib/getLearnerID';
+import { getLearnerID, clearLearnerID, hasLearnerID } from '@/infrastructure/browser/getLearnerID';
 
 // Mock localStorage
 const localStorageMock = (() => {

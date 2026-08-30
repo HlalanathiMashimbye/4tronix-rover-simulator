@@ -6,7 +6,7 @@
  * people to ignore the bell entirely.
  */
 
-import { selectUnread } from '@/lib/useCompletionNotifications';
+import { selectUnread } from '@/hooks/useCompletionNotifications';
 import type { Mission } from '@/core/domain/entities/Mission';
 
 const SEEN_AT = '2026-08-10T12:00:00.000Z';

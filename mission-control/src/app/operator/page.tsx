@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ShieldCheck, Users } from 'lucide-react';
 
-import { getOperatorSession } from '@/lib/auth/dal';
+import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
 import { SignOutButton } from '@/components/operator/SignOutButton';
 import { YardPicker } from '@/components/operator/YardPicker';

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-import { getOperatorSession } from '@/lib/auth/dal';
+import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { TeamManager } from '@/components/operator/TeamManager';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 

@@ -25,7 +25,7 @@ import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useCompletionNotifications } from '@/lib/useCompletionNotifications';
+import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },

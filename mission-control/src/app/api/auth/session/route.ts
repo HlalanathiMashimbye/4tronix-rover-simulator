@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admin';
-import { SESSION_COOKIE } from '@/lib/auth/dal';
+import { SESSION_COOKIE } from '@/infrastructure/auth/dal';
 
 /** Long enough to cover an event day, so nobody is signed out mid-session. */
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;

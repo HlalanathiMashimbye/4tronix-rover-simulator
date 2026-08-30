@@ -19,7 +19,7 @@ import {
   subscribeToYardCompleted,
   subscribeToYardQueue,
   type QueueMission,
-} from '@/lib/services/operatorQueueService';
+} from '@/infrastructure/persistence/operatorQueueService';
 import {
   readStoredYard,
   serverYardSnapshot,

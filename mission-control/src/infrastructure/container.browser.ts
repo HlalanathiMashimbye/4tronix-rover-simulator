@@ -13,7 +13,7 @@
 
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { getFirestoreClient } from '@/lib/firebase';
+import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 
 /** Unprivileged. Firestore rules apply. */
 export function browserMissionRepository(): IMissionRepository {

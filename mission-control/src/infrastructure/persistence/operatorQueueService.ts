@@ -22,7 +22,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
-import { getFirestoreClient } from '@/lib/firebase';
+import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
 
 /**

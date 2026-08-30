@@ -22,13 +22,13 @@ import {
   SESSION_COOKIE,
   UnauthorizedError,
   ForbiddenError,
-} from '@/lib/auth/dal';
+} from '@/infrastructure/auth/dal';
 
 // getOperatorSession is memoised with React cache, which dedupes within a
 // request. Re-import per test so each starts from a clean slate.
 async function freshDal() {
   jest.resetModules();
-  return import('@/lib/auth/dal');
+  return import('@/infrastructure/auth/dal');
 }
 
 beforeEach(() => {

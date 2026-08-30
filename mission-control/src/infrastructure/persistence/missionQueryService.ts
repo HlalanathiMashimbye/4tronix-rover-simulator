@@ -21,7 +21,7 @@ import {
   Unsubscribe,
   Timestamp,
 } from 'firebase/firestore';
-import { getFirestoreClient } from '@/lib/firebase';
+import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 import { Mission } from '@/core/domain/entities/Mission';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
