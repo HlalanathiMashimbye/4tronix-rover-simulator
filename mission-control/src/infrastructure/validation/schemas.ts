@@ -17,8 +17,8 @@
 
 import { z } from 'zod';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
-import { calculatePythonDuration, findMaxSpeedInPython } from '@/lib/calculateMissionDuration';
-import { MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED } from '@/infrastructure/config/limits';
+import { calculatePythonDuration } from '@/lib/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
 import { isGeneratedMissionName } from '@/lib/missionNameGenerator';
 
 /**
@@ -111,11 +111,18 @@ export type UpdateMissionDto = z.infer<typeof updateMissionSchema>;
 /**
  * Validation helper that returns formatted error messages
  *
- * Performs four-phase validation:
+ * Performs three-phase validation:
  * 1. Schema validation (Zod)
  * 2. Allowlist validation (User Story 21)
- * 3. Mission time limit validation (User Story 401)
- * 4. Speed limit validation (User Story 401)
+ * 3. Mission time limit validation (AB#401)
+ *
+ * There is deliberately no speed phase here. ROVER_ARGUMENT_LIMITS already
+ * caps every motion command at 0-100 in phase 2, with a message that names the
+ * line and suggests a value, and phase 2 returns before anything after it can
+ * run. A second speed check at this layer could never fire. The rover keeps
+ * its own copy in mission_validator.py, which is a different matter: nothing
+ * on the yard enforces the allowlist, so that one is the only guard on the
+ * LAN boundary.
  *
  * @param data - Mission submission data
  * @returns Validation result with errors if any
@@ -160,24 +167,16 @@ export function validateMission(data: unknown): {
     return { success: false, errors: allowlistErrors };
   }
 
-  // Phase 3: Mission time limit validation (User Story 401)
+  // Phase 3: mission time limit (AB#401). The allowlist caps a single sleep at
+  // 60 seconds but never adds them up, so a loop is how a mission gets long.
   const duration = calculatePythonDuration(result.data.code);
   if (duration > MISSION_TIME_LIMIT_SECONDS) {
     return {
       success: false,
       errors: [
-        `code: Mission time limit exceeded. A mission cannot exceed ${MISSION_TIME_LIMIT_SECONDS} seconds. Please reduce the time values in your mission.`,
-      ],
-    };
-  }
-
-  // Phase 4: Speed limit validation (User Story 401)
-  const maxSpeed = findMaxSpeedInPython(result.data.code);
-  if (maxSpeed > MAX_ROVER_SPEED) {
-    return {
-      success: false,
-      errors: [
-        `code: Speed limit exceeded. The maximum rover speed is ${MAX_ROVER_SPEED}.`,
+        `code: This mission runs for about ${Math.round(duration)} seconds, and a mission ` +
+          `cannot be longer than ${MISSION_TIME_LIMIT_SECONDS}. Shorten a drive, or repeat ` +
+          `it fewer times.`,
       ],
     };
   }

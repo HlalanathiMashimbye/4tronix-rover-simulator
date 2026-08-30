@@ -67,6 +67,33 @@ class TestRoverQueueService:
         assert result['added'] == 3
         assert len(result['instructions']) == 3
 
+    def test_rejected_batch_queues_nothing(self):
+        """A batch with one over-limit mission leaves the queue untouched.
+
+        Validation used to happen inside the append loop, so a valid
+        instruction ahead of the rejected one was already queued and would run,
+        while the reply said 'added': 0 and no subscriber was ever notified.
+        """
+        over_limit = 'for _ in range(20):\n    time.sleep(10)\n'
+
+        result = self.service.add_instructions([
+            {'cmd': 'forward', 'params': {'speed': 60, 'seconds': 1}},
+            {'cmd': 'run_python', 'params': {'code': over_limit}},
+        ])
+
+        assert result['status'] == 'error'
+        assert result['added'] == 0
+        assert self.service.get_status()['pending_count'] == 0
+
+    def test_valid_python_mission_is_queued(self):
+        """A mission inside both ceilings still goes through."""
+        result = self.service.add_instructions([
+            {'cmd': 'run_python', 'params': {'code': 'rover.forward(60)\ntime.sleep(2)\n'}},
+        ])
+
+        assert result['status'] == 'ok'
+        assert result['added'] == 1
+
     def test_add_empty_instructions(self):
         """Adding empty list returns error"""
         result = self.service.add_instructions([])

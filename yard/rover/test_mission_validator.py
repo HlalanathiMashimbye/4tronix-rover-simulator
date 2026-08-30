@@ -35,8 +35,25 @@ class TestCalculatePythonDuration:
         assert calculate_python_duration(code) == 6
 
     def test_mixed_loop_and_non_loop(self):
+        # 1 outside + (2 x 2) inside + 1 after = 6. This asserted 7 while the
+        # tracker guessed loop depth from four-space indentation: the line that
+        # LEAVES the loop was counted before the loop was popped, so the
+        # trailing sleep was billed twice.
         code = 'time.sleep(1)\nfor _ in range(2):\n    time.sleep(2)\ntime.sleep(1)'
-        assert calculate_python_duration(code) == 7
+        assert calculate_python_duration(code) == 6
+
+    def test_sequential_loops_are_not_multiplied(self):
+        code = (
+            'for _ in range(2):\n'
+            '    time.sleep(1)\n'
+            'for _ in range(3):\n'
+            '    time.sleep(1)'
+        )
+        assert calculate_python_duration(code) == 5
+
+    def test_comments_and_blank_lines_do_not_end_a_loop(self):
+        code = '# a square\nfor _ in range(4):\n\n    # drive\n    time.sleep(5)\n'
+        assert calculate_python_duration(code) == 20
 
 
 class TestFindMaxSpeedInPython:

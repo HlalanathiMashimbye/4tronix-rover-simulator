@@ -19,8 +19,6 @@ import os
 import threading
 from datetime import datetime, timezone
 
-from google.cloud.firestore_v1 import FieldFilter
-
 from mission_store import (
     clear_dirty,
     clear_run_dirty,
@@ -416,6 +414,11 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
     try:
         col = firestore_client.collection(collection_name)
         cursor = newest_submitted_at(yard_id=yard_id)
+
+        # Imported here rather than at module scope: every other cloud import
+        # in the satellite is lazy so the module stays importable, and
+        # testable, without the Firebase stack present.
+        from google.cloud.firestore_v1 import FieldFilter
 
         # Scope every pull to this yard. Without it the mirror ingested EVERY
         # yard's missions: the parameter was accepted here and never used, so a

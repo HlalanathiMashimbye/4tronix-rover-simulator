@@ -8,39 +8,42 @@ from limits import MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED
 
 def calculate_python_duration(code: str) -> float:
     """
-    Calculate total mission duration from Python code.
-    Looks for 'time.sleep(N)' patterns and sums them, accounting for loops.
+    Total seconds a mission will sleep for, `for _ in range(n)` loops multiplied out.
+
+    A parse rather than an execution, so it is a floor and not a guarantee: a
+    `while` loop, or a sleep whose argument is a variable, is invisible here.
+
+    Mirrors calculatePythonDuration in mission-control/src/lib/calculateMissionDuration.ts.
     """
     total_seconds = 0.0
-    loop_multipliers = []
-    lines = code.split('\n')
 
-    for line in lines:
+    # Each entry is a loop we are inside: the indent its `for` header sat at,
+    # and how many times it runs. Recording the header's own indent is what
+    # makes sequential loops work - assuming four spaces per level, as this
+    # first did, stacked the second `for` on top of the first and multiplied
+    # two sibling loops together.
+    loops = []
+
+    for line in code.split('\n'):
         trimmed = line.strip()
+        if not trimmed:
+            continue
+        indent = len(line) - len(line.lstrip())
 
-        # Track loop entry (for N in range(M))
+        # Anything at or left of a loop header is outside that loop.
+        while loops and indent <= loops[-1][0]:
+            loops.pop()
+
         loop_match = re.match(r'^for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)', trimmed)
         if loop_match:
-            times = int(loop_match.group(1)) or 1
-            loop_multipliers.append(times)
+            loops.append((indent, int(loop_match.group(1)) or 1))
 
-        # Detect time.sleep calls
         sleep_match = re.search(r'time\.sleep\s*\(\s*([\d.]+)\s*\)', trimmed)
         if sleep_match:
-            sleep_time = float(sleep_match.group(1)) or 0
             multiplier = 1
-            # Multiply by all active loop depths
-            for loop_times in loop_multipliers:
-                multiplier *= loop_times
-            total_seconds += sleep_time * multiplier
-
-        # Track loop exit (simplistic - counts indentation changes)
-        if loop_multipliers and trimmed and not trimmed.startswith('for'):
-            indent = len(line) - len(line.lstrip())
-            # Estimate loop indent: (depth - 1) * 4 spaces
-            expected_loop_indent = (len(loop_multipliers) - 1) * 4
-            if indent <= expected_loop_indent:
-                loop_multipliers.pop()
+            for _, times in loops:
+                multiplier *= times
+            total_seconds += float(sleep_match.group(1)) * multiplier
 
     return total_seconds
 

@@ -1,142 +1,74 @@
 /**
- * Calculate total mission duration from Blockly workspace, accounting for loops.
- * Returns the total seconds the mission will execute.
+ * How long a mission will actually take to run.
+ *
+ * Used for the safety ceiling (AB#401) in two places: the Blockly editor warns
+ * while the learner builds, and validateMission refuses at submit.
  */
 
+import { workspaceToCommands } from '@/lib/roverBlockly';
+
+/**
+ * Total seconds a Blockly workspace will run for, loops expanded.
+ *
+ * This deliberately delegates to `workspaceToCommands` rather than walking the
+ * blocks again. The first version of this function walked them itself and read
+ * `getFieldValue('TIME')` off every motion block, which was true when it was
+ * written and stopped being true one commit later: spin blocks now carry
+ * DEGREES, so `TIME` came back null and every turn counted as zero. A 656
+ * second spin-only mission measured as 0 and sailed past the editor guard, only
+ * to be refused at submit - the exact surprise the ceiling exists to prevent.
+ *
+ * `workspaceToCommands` is where "what will this workspace do" already lives:
+ * it expands repeats, converts spin degrees to seconds through the physics
+ * model, and is what the simulator itself runs. Summing its durations means
+ * this can no longer disagree with the thing it is measuring.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function calculateBlocklyDuration(workspace: any): number {
-  let totalSeconds = 0;
+  if (!workspace?.getTopBlocks) return 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function blockDuration(block: any, multiplier: number = 1): number {
-    if (!block) return 0;
-
-    let duration = 0;
-    const type = block.type;
-
-    switch (type) {
-      case 'rover_on_receive': {
-        const innerBlock = block.getInputTargetBlock('DO');
-        duration = blockDuration(innerBlock, multiplier);
-        break;
-      }
-      // Blocks with 'TIME' field that contribute to duration
-      case 'rover_forward':
-      case 'rover_backward':
-      case 'rover_spin_left':
-      case 'rover_spin_right':
-      case 'rover_steer_left':
-      case 'rover_steer_right':
-      case 'rover_wait': {
-        const t = block.getFieldValue('TIME');
-        duration = (Number(t) || 0) * multiplier;
-        break;
-      }
-      // Repeat block multiplies inner duration
-      case 'rover_repeat': {
-        const times = Number(block.getFieldValue('TIMES')) || 1;
-        const innerBlock = block.getInputTargetBlock('DO');
-        duration = blockDuration(innerBlock, multiplier * times);
-        break;
-      }
-      // Blocks without duration
-      default:
-        break;
-    }
-
-    // Process next block in chain
-    const nextBlock = block.getNextBlock?.();
-    if (nextBlock) {
-      duration += blockDuration(nextBlock, multiplier);
-    }
-
-    return duration;
-  }
-
-  // Process all top-level uplink hats
-  if (workspace && workspace.getTopBlocks && typeof workspace.getTopBlocks === 'function') {
-    workspace
-      .getTopBlocks(true)
-      .filter((b: {type: string}) => b.type === 'rover_on_receive')
-      .forEach((b: {type: string; getInputTargetBlock?: (key: string) => unknown; getNextBlock?: () => unknown}) => {
-        totalSeconds += blockDuration(b);
-      });
-  }
-
-  return totalSeconds;
+  return workspaceToCommands(workspace).reduce(
+    (total, command) => total + (Number(command.duration) || 0),
+    0,
+  );
 }
 
 /**
- * Calculate total mission duration from Python code string.
- * Looks for 'time.sleep(N)' patterns and sums them, accounting for loops.
+ * Total seconds a Python program will sleep for, `for _ in range(n)` loops
+ * multiplied out.
+ *
+ * A parse rather than an execution, so it is a floor and not a guarantee: a
+ * `while` loop, or a sleep whose argument is a variable, is invisible here. It
+ * catches the case the ceiling is actually for, which is a learner stacking up
+ * blocks until the yard is tied up for ten minutes.
  */
 export function calculatePythonDuration(code: string): number {
   let totalSeconds = 0;
-  let inLoop = false;
-  let loopDepth = 0;
-  const loopMultipliers: number[] = [];
 
-  const lines = code.split('\n');
+  // Each entry is a loop we are currently inside: the indent its `for` header
+  // sat at, and how many times it runs. Recording the header's own indent is
+  // what makes sequential loops work - assuming four spaces per level, as this
+  // first did, left `for` number two stacked on top of `for` number one and
+  // multiplied two sibling loops together.
+  const loops: { indent: number; times: number }[] = [];
 
-  for (const line of lines) {
+  for (const line of code.split('\n')) {
     const trimmed = line.trim();
+    if (!trimmed) continue;
+    const indent = line.length - line.trimStart().length;
 
-    // Track loop entry
-    if (trimmed.match(/^for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)/)) {
-      const match = trimmed.match(/^for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)/);
-      if (match) {
-        const times = Number(match[1]) || 1;
-        loopMultipliers.push(times);
-        loopDepth++;
-        inLoop = true;
-      }
-    }
+    // Anything at or left of a loop header is outside that loop.
+    while (loops.length && indent <= loops[loops.length - 1].indent) loops.pop();
 
-    // Detect time.sleep calls
+    const loopMatch = trimmed.match(/^for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)/);
+    if (loopMatch) loops.push({ indent, times: Number(loopMatch[1]) || 1 });
+
     const sleepMatch = trimmed.match(/time\.sleep\s*\(\s*([\d.]+)\s*\)/);
     if (sleepMatch) {
       const sleepTime = Number(sleepMatch[1]) || 0;
-      let multiplier = 1;
-      // Multiply by all active loop depths
-      for (const loopTimes of loopMultipliers) {
-        multiplier *= loopTimes;
-      }
-      totalSeconds += sleepTime * multiplier;
-    }
-
-    // Track loop exit (simplistic - counts ':' dedent)
-    // This is a heuristic that works for standard indentation
-    if (inLoop && loopDepth > 0 && trimmed.length > 0) {
-      const indent = line.length - line.trimLeft().length;
-      // If line indent is <= loop indent, exit loop
-      // We assume 4 spaces per indent level
-      const expectedLoopIndent = (loopDepth - 1) * 4;
-      if (indent <= expectedLoopIndent && !trimmed.startsWith('for')) {
-        loopDepth--;
-        loopMultipliers.pop();
-        inLoop = loopDepth > 0;
-      }
+      totalSeconds += sleepTime * loops.reduce((acc, l) => acc * l.times, 1);
     }
   }
 
   return totalSeconds;
-}
-
-/**
- * Find all speed values in Python code and return the maximum.
- * Returns 0 if no speed values found (no speed limit check needed).
- */
-export function findMaxSpeedInPython(code: string): number {
-  let maxSpeed = 0;
-
-  // Match rover.forward(N), rover.reverse(N), rover.spinLeft(N), rover.spinRight(N)
-  const speedPattern = /rover\.(forward|reverse|spinLeft|spinRight|steerLeft|steerRight)\s*\(\s*(\d+)\s*\)/g;
-
-  let match;
-  while ((match = speedPattern.exec(code)) !== null) {
-    const speed = Number(match[2]) || 0;
-    maxSpeed = Math.max(maxSpeed, speed);
-  }
-
-  return maxSpeed;
 }

@@ -1,178 +1,115 @@
 /**
- * Unit Tests for Mission Duration and Speed Limit Validation (User Story 401)
+ * Unit tests for the mission time ceiling (AB#401).
+ *
+ * The Blockly cases build blocks shaped like the real ones, spin blocks
+ * included, because the first version of this measured spins through a `TIME`
+ * field they no longer have and every turn counted as zero.
  */
 
-import { calculateBlocklyDuration, calculatePythonDuration, findMaxSpeedInPython } from '@/lib/calculateMissionDuration';
-import { MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED } from '@/infrastructure/config/limits';
+import { calculateBlocklyDuration, calculatePythonDuration } from '@/lib/calculateMissionDuration';
+import { workspaceToPython } from '@/lib/roverBlockly';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/infrastructure/config/limits';
+
+type Block = Record<string, unknown>;
+
+const drive = (type: 'rover_forward' | 'rover_backward', time: number, next: Block | null = null) => ({
+  type,
+  getFieldValue: (n: string) => (n === 'TIME' ? time : null),
+  getNextBlock: () => next,
+});
+
+/** A spin block as it is today: DEGREES, and no TIME anywhere. */
+const spin = (degrees: number, next: Block | null = null) => ({
+  type: 'rover_spin_right',
+  getFieldValue: (n: string) => (n === 'DEGREES' ? degrees : null),
+  getNextBlock: () => next,
+});
+
+const repeat = (times: number, body: Block | null, next: Block | null = null) => ({
+  type: 'rover_repeat',
+  getFieldValue: (n: string) => (n === 'TIMES' ? times : null),
+  getInputTargetBlock: () => body,
+  getNextBlock: () => next,
+});
+
+const workspace = (chain: Block | null) => ({
+  getTopBlocks: () => [
+    { type: 'rover_on_receive', getInputTargetBlock: () => chain, getNextBlock: () => null },
+  ],
+});
 
 describe('calculateBlocklyDuration', () => {
-  it('should return 0 for empty workspace', () => {
-    const mockWorkspace = {
-      getTopBlocks: () => [],
-    };
-    expect(calculateBlocklyDuration(mockWorkspace)).toBe(0);
+  it('is zero for an empty workspace', () => {
+    expect(calculateBlocklyDuration({ getTopBlocks: () => [] })).toBe(0);
   });
 
-  it('should sum single block durations', () => {
-    const mockBlock = {
-      type: 'rover_forward',
-      getFieldValue: (name: string) => {
-        if (name === 'TIME') return 5;
-        return null;
-      },
-      getNextBlock: () => null,
-    };
-
-    const mockWorkspace = {
-      getTopBlocks: () => [
-        {
-          type: 'rover_on_receive',
-          getInputTargetBlock: () => mockBlock,
-          getNextBlock: () => null,
-        },
-      ],
-    };
-
-    expect(calculateBlocklyDuration(mockWorkspace)).toBe(5);
+  it('sums a single block', () => {
+    expect(calculateBlocklyDuration(workspace(drive('rover_forward', 5)))).toBe(5);
   });
 
-  it('should sum multiple blocks in sequence', () => {
-    const mockBlock1 = {
-      type: 'rover_forward',
-      getFieldValue: (name: string) => (name === 'TIME' ? 3 : null),
-      getNextBlock: () => mockBlock2,
-    };
-
-    const mockBlock2 = {
-      type: 'rover_backward',
-      getFieldValue: (name: string) => (name === 'TIME' ? 2 : null),
-      getNextBlock: () => null,
-    };
-
-    const mockWorkspace = {
-      getTopBlocks: () => [
-        {
-          type: 'rover_on_receive',
-          getInputTargetBlock: () => mockBlock1,
-          getNextBlock: () => null,
-        },
-      ],
-    };
-
-    expect(calculateBlocklyDuration(mockWorkspace)).toBe(5);
+  it('sums blocks in sequence', () => {
+    const chain = drive('rover_forward', 3, drive('rover_backward', 2));
+    expect(calculateBlocklyDuration(workspace(chain))).toBe(5);
   });
 
-  it('should account for loops multiplying duration', () => {
-    const mockBlock1 = {
-      type: 'rover_forward',
-      getFieldValue: (name: string) => (name === 'TIME' ? 2 : null),
-      getNextBlock: () => null,
-    };
+  it('multiplies a repeat by its count', () => {
+    expect(calculateBlocklyDuration(workspace(repeat(3, drive('rover_forward', 2))))).toBe(6);
+  });
 
-    const mockRepeat = {
-      type: 'rover_repeat',
-      getFieldValue: (name: string) => (name === 'TIMES' ? 3 : null),
-      getInputTargetBlock: () => mockBlock1,
-      getNextBlock: () => null,
-    };
+  it('counts the time a spin takes, now that spins are measured in degrees', () => {
+    // The regression: reading getFieldValue('TIME') here returned null and a
+    // turn of any size measured as zero seconds.
+    expect(calculateBlocklyDuration(workspace(spin(360)))).toBeGreaterThan(1);
+  });
 
-    const mockWorkspace = {
-      getTopBlocks: () => [
-        {
-          type: 'rover_on_receive',
-          getInputTargetBlock: () => mockRepeat,
-          getNextBlock: () => null,
-        },
-      ],
-    };
+  it('does not let a spin-only mission slip under the ceiling', () => {
+    // Twenty repeats of three full turns. Really about eleven minutes.
+    const mission = workspace(repeat(20, spin(360, spin(360, spin(360)))));
+    expect(calculateBlocklyDuration(mission)).toBeGreaterThan(MISSION_TIME_LIMIT_SECONDS);
+  });
 
-    expect(calculateBlocklyDuration(mockWorkspace)).toBe(6); // 2 * 3
+  it('agrees with the Python it generates', () => {
+    // The two halves of the ceiling measure the same mission by different
+    // routes, and a learner meets both. They must not disagree.
+    const square = workspace(repeat(4, drive('rover_forward', 5, spin(90))));
+    expect(calculateBlocklyDuration(square)).toBeCloseTo(
+      calculatePythonDuration(workspaceToPython(square)),
+      2,
+    );
   });
 });
 
 describe('calculatePythonDuration', () => {
-  it('should return 0 for code with no sleep calls', () => {
-    const code = 'rover.forward(60)\nrover.stop()';
-    expect(calculatePythonDuration(code)).toBe(0);
+  it('is zero when nothing sleeps', () => {
+    expect(calculatePythonDuration('rover.forward(60)\nrover.stop()')).toBe(0);
   });
 
-  it('should sum single time.sleep calls', () => {
-    const code = 'rover.forward(60)\ntime.sleep(2.5)\nrover.stop()';
-    expect(calculatePythonDuration(code)).toBe(2.5);
+  it('sums sleeps', () => {
+    expect(calculatePythonDuration('time.sleep(2)\ntime.sleep(3)')).toBe(5);
   });
 
-  it('should sum multiple time.sleep calls', () => {
-    const code = 'time.sleep(1)\nrover.forward(60)\ntime.sleep(2)\nrover.stop()';
-    expect(calculatePythonDuration(code)).toBe(3);
+  it('multiplies a loop body by its count', () => {
+    expect(calculatePythonDuration('for _ in range(3):\n    time.sleep(2)')).toBe(6);
   });
 
-  it('should multiply sleep time by loop repetitions', () => {
-    const code = `for _ in range(3):
-    time.sleep(2)`;
-    expect(calculatePythonDuration(code)).toBe(6); // 2 * 3
+  it('multiplies nested loops together', () => {
+    const code = 'for _ in range(4):\n    for _ in range(5):\n        time.sleep(2)';
+    expect(calculatePythonDuration(code)).toBe(40);
   });
 
-  it('should handle nested loops', () => {
-    const code = `for _ in range(2):
-    for _ in range(3):
-        time.sleep(1)`;
-    expect(calculatePythonDuration(code)).toBe(6); // 1 * 2 * 3
+  it('counts a block after the loop once', () => {
+    expect(calculatePythonDuration('for _ in range(3):\n    time.sleep(10)\ntime.sleep(1)')).toBe(31);
   });
 
-  it('should handle mixed loop and non-loop code', () => {
-    const code = `time.sleep(1)
-for _ in range(2):
-    time.sleep(2)
-time.sleep(1)`;
-    expect(calculatePythonDuration(code)).toBe(7); // 1 + (2 * 2) + 1, but loop exit detection is after the 2nd sleep(1)
-  });
-});
-
-describe('findMaxSpeedInPython', () => {
-  it('should return 0 for code with no speed calls', () => {
-    const code = 'time.sleep(1)\nrover.stop()';
-    expect(findMaxSpeedInPython(code)).toBe(0);
+  it('does not multiply two loops that merely follow each other', () => {
+    // The old tracker assumed four spaces per nesting level, so the second
+    // `for` stacked on the first and this measured 2 + 6 instead of 2 + 3.
+    const code = 'for _ in range(2):\n    time.sleep(1)\nfor _ in range(3):\n    time.sleep(1)';
+    expect(calculatePythonDuration(code)).toBe(5);
   });
 
-  it('should find forward speed', () => {
-    const code = 'rover.forward(75)';
-    expect(findMaxSpeedInPython(code)).toBe(75);
-  });
-
-  it('should find maximum speed across multiple calls', () => {
-    const code = 'rover.forward(50)\nrover.spinLeft(80)\nrover.reverse(60)';
-    expect(findMaxSpeedInPython(code)).toBe(80);
-  });
-
-  it('should handle various rover methods', () => {
-    const code = `rover.forward(40)
-rover.reverse(50)
-rover.spinLeft(90)
-rover.spinRight(70)
-rover.steerLeft(60)
-rover.steerRight(55)`;
-    expect(findMaxSpeedInPython(code)).toBe(90);
-  });
-});
-
-describe('Mission Limits Validation', () => {
-  it('should allow missions at exactly the time limit', () => {
-    const code = `time.sleep(${MISSION_TIME_LIMIT_SECONDS})`;
-    expect(calculatePythonDuration(code)).toBe(MISSION_TIME_LIMIT_SECONDS);
-  });
-
-  it('should detect missions exceeding time limit', () => {
-    const code = `time.sleep(${MISSION_TIME_LIMIT_SECONDS + 1})`;
-    expect(calculatePythonDuration(code)).toBeGreaterThan(MISSION_TIME_LIMIT_SECONDS);
-  });
-
-  it('should allow speed at exactly the limit', () => {
-    const code = `rover.forward(${MAX_ROVER_SPEED})`;
-    expect(findMaxSpeedInPython(code)).toBe(MAX_ROVER_SPEED);
-  });
-
-  it('should detect speed exceeding limit', () => {
-    const code = `rover.forward(${MAX_ROVER_SPEED + 1})`;
-    expect(findMaxSpeedInPython(code)).toBeGreaterThan(MAX_ROVER_SPEED);
+  it('ignores comments and blank lines between loop and body', () => {
+    const code = '# a square\nfor _ in range(4):\n\n    # drive\n    time.sleep(5)\n';
+    expect(calculatePythonDuration(code)).toBe(20);
   });
 });
