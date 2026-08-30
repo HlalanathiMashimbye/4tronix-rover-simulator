@@ -49,6 +49,7 @@ import requests
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session
 
 import youtube_poll
+from console import deps, notify
 
 operator_bp = Blueprint('operator', __name__, url_prefix='/operator')
 
@@ -72,203 +73,6 @@ IDENTITY_TOOLKIT_SIGN_IN = (
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'
 )
 
-# Lazily initialised firebase_admin handles. Kept behind functions so tests
-# can monkeypatch _firestore / _verify_id_token without firebase-admin or
-# real credentials.
-_firebase_app = None
-# start_polling and start_sync_worker are both spawned as daemon threads at
-# server startup (web_server.py) and each call into _init_firebase() as their
-# very first action - without this lock, both can pass the `is not None`
-# check before either finishes building credentials, and the second
-# firebase_admin.initialize_app() call raises "app already exists".
-_firebase_lock = threading.Lock()
-
-
-def _web_api_key():
-    return (
-        os.environ.get('FIREBASE_WEB_API_KEY')
-        or os.environ.get('NEXT_PUBLIC_FIREBASE_API_KEY')
-    )
-
-
-# Remembered so the login page and the status page do not each retry a broken
-# credential, and so the reason is printed once rather than per request.
-_admin_config_error = None
-
-
-def _admin_configured():
-    """Whether this satellite can actually authenticate, not whether some
-    variables happen to be set.
-
-    This used to require GOOGLE_APPLICATION_CREDENTIALS or all three
-    FIREBASE_* key variables, which meant it reported "not configured" for a
-    satellite running on Application Default Credentials - the mode staging,
-    prod and now local dev all use. Sign-in was refused while the credential
-    underneath it worked perfectly.
-
-    Asking the real question instead: try to build the Firebase app, and say
-    yes if it built. _init_firebase memoises, so this costs one attempt and
-    then nothing.
-    """
-    global _admin_config_error
-    try:
-        _init_firebase()
-        _admin_config_error = None
-        return True
-    except Exception as error:
-        message = str(error)
-        if message != _admin_config_error:
-            _admin_config_error = message
-            print(f'[operator] Firebase credentials unavailable: {message}')
-        return False
-
-
-def _clean_env(name):
-    """An env value with surrounding quotes and whitespace removed, or None.
-
-    .env files keep their quotes when a shell is not doing the parsing, and a
-    quoted empty string is still empty.
-    """
-    raw = os.environ.get(name)
-    if raw is None:
-        return None
-    value = raw.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
-        value = value[1:-1]
-    return value or None
-
-
-def _init_firebase():
-    """Initialise firebase_admin once, from env credentials."""
-    global _firebase_app
-    if _firebase_app is not None:
-        return _firebase_app
-
-    import firebase_admin
-    from firebase_admin import credentials
-
-    with _firebase_lock:
-        # Re-check inside the lock: whichever thread lost the race to
-        # acquire it has almost certainly arrived here because the winner
-        # already finished initialising.
-        if _firebase_app is not None:
-            return _firebase_app
-
-        # Same three-way choice as mission-control's firebase-admin.ts, and
-        # deliberately so: the two used to disagree, and the satellite quietly
-        # talked to a different Firebase project for weeks.
-        #
-        #   both key variables set   -> that service account
-        #   neither set              -> Application Default Credentials
-        #   exactly one set          -> refuse, because it is a broken .env
-        client_email = _clean_env('FIREBASE_CLIENT_EMAIL')
-        private_key = _clean_env('FIREBASE_PRIVATE_KEY')
-
-        if client_email and private_key:
-            cred = credentials.Certificate({
-                'type': 'service_account',
-                'project_id': _clean_env('FIREBASE_PROJECT_ID'),
-                'client_email': client_email,
-                # \n in the private key survives .env files as the two
-                # characters backslash-n; decode them back to newlines.
-                'private_key': private_key.replace('\\n', '\n'),
-                'token_uri': 'https://oauth2.googleapis.com/token',
-            })
-        elif client_email or private_key:
-            # Falling back to ADC here would authenticate as a DIFFERENT
-            # identity than the one intended, silently. Fail instead.
-            missing = 'FIREBASE_PRIVATE_KEY' if client_email else 'FIREBASE_CLIENT_EMAIL'
-            raise RuntimeError(
-                f'Incomplete Firebase service account config: {missing} is not '
-                f'set while the other half is. Set both, or unset both to use '
-                f'Application Default Credentials.'
-            )
-        else:
-            cred = credentials.ApplicationDefault()
-
-        # Pass the project EXPLICITLY, as mission-control does.
-        #
-        # Without it firebase_admin infers the project from the credential, and
-        # under ADC that is whatever `gcloud config get-value project` happens
-        # to say - which on this machine was still the retired project. The
-        # satellite would then report one project while FIREBASE_PROJECT_ID
-        # said another, which is exactly the kind of disagreement that hid the
-        # env drift in the first place.
-        options = {}
-        project_id = _clean_env('FIREBASE_PROJECT_ID')
-        if project_id:
-            options['projectId'] = project_id
-
-        try:
-            _firebase_app = firebase_admin.initialize_app(
-                cred, options, name='operator-console',
-            )
-        except ValueError:
-            # Already registered by something this lock didn't cover (e.g. a
-            # prior dev-server run that left firebase_admin's process-wide
-            # app registry populated) - reuse it instead of crashing.
-            _firebase_app = firebase_admin.get_app(name='operator-console')
-
-    return _firebase_app
-
-
-def _firestore():
-    from firebase_admin import firestore
-    return firestore.client(app=_init_firebase())
-
-
-def _verify_id_token(id_token):
-    from firebase_admin import auth
-    return auth.verify_id_token(id_token, app=_init_firebase())
-
-
-def _rover_url():
-    getter = current_app.config.get('ROVER_URL_GETTER')
-    return getter() if getter else os.environ.get('ROVER_URL', 'http://marspi.local:8523')
-
-
-def _mission_control_url():
-    getter = current_app.config.get('MISSION_CONTROL_URL_GETTER')
-    return getter() if getter else os.environ.get('MISSION_CONTROL_URL', 'http://localhost:3000')
-
-
-def _notify_mission_control(mission_id, status):
-    """Best-effort status-email trigger, called after Firestore is already
-    updated. Must never raise - a learner missing an email is far cheaper
-    than an operator unable to run the rover because mission-control happens
-    to be down.
-    """
-    try:
-        requests.post(
-            f'{_mission_control_url()}/api/missions/{mission_id}/notify',
-            json={'status': status},
-            timeout=NOTIFY_TIMEOUT,
-        )
-    except requests.exceptions.RequestException:
-        current_app.logger.warning(
-            'Failed to notify mission-control of status change (mission=%s, status=%s)',
-            mission_id, status,
-        )
-
-
-def _notify_mission_control_async(mission_id, status):
-    """Fire _notify_mission_control on a background thread so a slow or
-    unreachable mission-control - a Cloud Run cold start, or the venue wifi
-    the operator console already has to tolerate - never delays the
-    operator's response. The rover dispatch / Firestore write this follows
-    has already succeeded by the time this is called.
-
-    Flask's app context is thread-local and does not propagate to new
-    threads automatically, so it's captured here (while still on the
-    request's thread) and re-pushed inside the background thread.
-    """
-    app = current_app._get_current_object()
-
-    def run():
-        with app.app_context():
-            _notify_mission_control(mission_id, status)
-
-    threading.Thread(target=run, daemon=True).start()
 
 
 def _now_iso():
@@ -328,7 +132,7 @@ def _still_authorised(operator, now):
 
     try:
         from firebase_admin import auth
-        user = auth.get_user(operator['uid'], app=_init_firebase())
+        user = auth.get_user(operator['uid'], app=deps.init_firebase())
     except Exception:
         # Unreachable, or the credential is unavailable. Keep working.
         operator['checked_at'] = now
@@ -409,7 +213,7 @@ def login_page():
         return redirect('/')
     return render_template(
         'operator_login.html',
-        configured=bool(_web_api_key() and _admin_configured()),
+        configured=bool(deps.web_api_key() and deps.admin_configured()),
     )
 
 
@@ -419,7 +223,7 @@ def login_page():
 
 @operator_bp.route('/api/login', methods=['POST'])
 def api_login():
-    if not (_web_api_key() and _admin_configured()):
+    if not (deps.web_api_key() and deps.admin_configured()):
         return jsonify({'error': 'Operator console is not configured (Firebase credentials missing)'}), 503
 
     data = request.get_json(silent=True) or {}
@@ -431,7 +235,7 @@ def api_login():
     try:
         resp = requests.post(
             IDENTITY_TOOLKIT_SIGN_IN,
-            params={'key': _web_api_key()},
+            params={'key': deps.web_api_key()},
             json={'email': email, 'password': password, 'returnSecureToken': True},
             timeout=LOGIN_TIMEOUT,
         )
@@ -442,7 +246,7 @@ def api_login():
         return jsonify({'error': 'Invalid email or password'}), 401
 
     try:
-        claims = _verify_id_token(resp.json()['idToken'])
+        claims = deps.verify_id_token(resp.json()['idToken'])
     except Exception:
         return jsonify({
             'error': 'Could not verify the sign-in token. Check that the satellite and '
@@ -566,7 +370,7 @@ def _dispatch_to_rover(mission, mission_id=None):
 
     try:
         resp = requests.post(
-            f'{_rover_url()}/queue/add',
+            f'{deps.rover_url()}/queue/add',
             json=[{'cmd': 'run_python', 'params': params}],
             timeout=ROVER_TIMEOUT,
         )
@@ -660,7 +464,7 @@ def api_send_to_rover(mission_id):
         return err
 
     recording_started = _begin_recording(mission_id, yard)
-    _notify_mission_control_async(mission_id, 'processing')
+    notify.notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
@@ -723,7 +527,7 @@ def api_rerun(mission_id):
         return err
 
     recording_started = _begin_recording(mission_id, yard)
-    _notify_mission_control_async(mission_id, 'processing')
+    notify.notify_mission_control_async(mission_id, 'processing')
     return jsonify({'status': 'ok', 'missionId': mission_id, 'recordingStarted': recording_started})
 
 
@@ -784,7 +588,7 @@ def api_stop_mission(mission_id):
     was_running = run and run.get('status') == 'processing' if run else False
 
     try:
-        resp = requests.post(f'{_rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
+        resp = requests.post(f'{deps.rover_url()}/queue/clear', timeout=ROVER_TIMEOUT)
     except requests.exceptions.RequestException:
         return jsonify({
             'error': 'Could not reach the rover to stop it. If it is still moving, '
@@ -804,7 +608,7 @@ def api_stop_mission(mission_id):
 
     release_run(mission_id, yard, 'cancelled', _now_iso(), operator_decision=True)
     stop_recording(mission_id, yard, keep=False)
-    _notify_mission_control_async(mission_id, 'cancelled')
+    notify.notify_mission_control_async(mission_id, 'cancelled')
     return jsonify({
         'status': 'ok', 'missionId': mission_id, 'newStatus': 'cancelled', 'recordingDiscarded': True,
     })
@@ -828,7 +632,7 @@ def api_mark_complete(mission_id):
 
     release_run(mission_id, yard, 'completed', _now_iso())
     stop_recording(mission_id, yard, keep=True)
-    _notify_mission_control_async(mission_id, 'completed')
+    notify.notify_mission_control_async(mission_id, 'completed')
     return jsonify({'status': 'ok', 'missionId': mission_id})
 
 
@@ -1133,11 +937,11 @@ def api_integrations():
                 # assuming a service account: ADC is what staging, prod and
                 # local dev all use, and reporting it as a missing key sent
                 # people looking for a variable that should not be set.
-                **state(_admin_configured(),
+                **state(deps.admin_configured(),
                         ('Authenticated as ' + (
-                            'a service account' if _clean_env('FIREBASE_CLIENT_EMAIL')
+                            'a service account' if deps.clean_env('FIREBASE_CLIENT_EMAIL')
                             else 'Application Default Credentials'
-                        )) if _admin_configured()
+                        )) if deps.admin_configured()
                         else 'Cannot reach Firebase. Run `gcloud auth application-default '
                              'login`, or set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY '
                              'together. The reason is in the satellite log.'),
@@ -1154,7 +958,7 @@ def api_integrations():
                 'id': 'mission_control',
                 'name': 'Mission Control',
                 'why': 'Receives status changes so learners get their emails.',
-                **state(True, _mission_control_url()),
+                **state(True, deps.mission_control_url()),
             },
         ],
     })
@@ -1221,7 +1025,7 @@ def api_resolve_review(mission_id):
         stop_recording(mission_id, yard_id(), keep=False)
 
     if status == 'completed':
-        _notify_mission_control_async(mission_id, 'completed')
+        notify.notify_mission_control_async(mission_id, 'completed')
 
     return jsonify({'status': 'ok', 'missionId': mission_id, 'newStatus': status})
 
@@ -1240,9 +1044,9 @@ def api_conflicts():
 @require_operator
 def api_rover_health():
     """Rover reachability for the console badge. Degraded queue = down."""
-    result = {'rover_url': _rover_url(), 'reachable': False}
+    result = {'rover_url': deps.rover_url(), 'reachable': False}
     try:
-        resp = requests.get(f'{_rover_url()}/health', timeout=2.0)
+        resp = requests.get(f'{deps.rover_url()}/health', timeout=2.0)
         if resp.status_code == 200:
             data = resp.json()
             result['reachable'] = data.get('status') == 'ok'
@@ -1258,7 +1062,7 @@ def api_rover_health():
 
 def check_for_new_videos():
     """Run one YouTube poll, using this module's Firestore accessor."""
-    return youtube_poll.check_for_new_videos(_firestore, MISSIONS_COLLECTION)
+    return youtube_poll.check_for_new_videos(deps.firestore_client, MISSIONS_COLLECTION)
 
 
 def start_polling():

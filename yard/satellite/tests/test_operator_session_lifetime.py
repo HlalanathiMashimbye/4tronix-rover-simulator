@@ -18,7 +18,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-import operator_console  # noqa: E402
+import operator_console
+from console import deps  # noqa: E402
 from operator_console import (  # noqa: E402
     SESSION_MAX_AGE,
     OFFLINE_OPERATOR,
@@ -69,7 +70,7 @@ def _firebase_returns(monkeypatch, user=None, error=None):
     fake = types.ModuleType('firebase_admin')
     fake.auth = FakeAuth
     monkeypatch.setitem(sys.modules, 'firebase_admin', fake)
-    monkeypatch.setattr(operator_console, '_init_firebase', lambda: object())
+    monkeypatch.setattr(deps, 'init_firebase', lambda: object())
 
 
 class TestTheSessionIsBounded:
@@ -124,7 +125,7 @@ class TestOfflineKeepsWorking:
     def test_the_offline_stub_is_never_checked(self, monkeypatch):
         def explode(*a, **k):
             raise AssertionError('must not call Firebase for the offline stub')
-        monkeypatch.setattr(operator_console, '_init_firebase', explode)
+        monkeypatch.setattr(deps, 'init_firebase', explode)
 
         assert _still_authorised(dict(OFFLINE_OPERATOR), time.time()) is True
 
@@ -135,7 +136,7 @@ class TestTheCheckIsPaced:
         # every page of the console.
         def explode(*a, **k):
             raise AssertionError('should not re-check this soon')
-        monkeypatch.setattr(operator_console, '_init_firebase', explode)
+        monkeypatch.setattr(deps, 'init_firebase', explode)
 
         just_checked = _op(checked_at=time.time())
         assert _still_authorised(just_checked, time.time()) is True
