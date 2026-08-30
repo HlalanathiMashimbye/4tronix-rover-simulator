@@ -57,8 +57,8 @@ export function calculateBlocklyDuration(workspace: any): number {
   if (workspace && workspace.getTopBlocks && typeof workspace.getTopBlocks === 'function') {
     workspace
       .getTopBlocks(true)
-      .filter((b: any) => b.type === 'rover_on_receive')
-      .forEach((b: any) => {
+      .filter((b: {type: string}) => b.type === 'rover_on_receive')
+      .forEach((b: {type: string; getInputTargetBlock?: (key: string) => unknown; getNextBlock?: () => unknown}) => {
         totalSeconds += blockDuration(b);
       });
   }

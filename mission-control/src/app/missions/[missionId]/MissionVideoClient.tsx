@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
@@ -20,6 +21,7 @@ import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
+  const router = useRouter();
   const [mission, setMission] = useState<Mission | null>(null);
   // Every yard's attempt, so the carousel can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
@@ -269,10 +271,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                   // otherwise the Python, and open the matching editor mode.
                   if (mission.blocklyState) {
                     localStorage.setItem('roverWorkspace', mission.blocklyState);
-                    window.location.href = '/mission?mode=blockly';
+                    router.push('/mission?mode=blockly');
                   } else {
                     localStorage.setItem('rover_monaco_code', mission.code);
-                    window.location.href = '/mission?mode=code';
+                    router.push('/mission?mode=code');
                   }
                 }}
                 className="clay clay-press inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-mars px-4 py-2.5 font-display text-sm font-bold text-primary-foreground"

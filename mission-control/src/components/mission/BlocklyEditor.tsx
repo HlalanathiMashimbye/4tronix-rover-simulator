@@ -188,7 +188,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       flyoutObserverRef.current = flyoutObserver;
 
       // Validate mission duration and time limit on every change.
-      let lastValidState: any = null;
+      let lastValidState: Record<string, unknown> | null = null;
       workspace.addChangeListener(() => {
         try {
           // Save valid state before checking duration
