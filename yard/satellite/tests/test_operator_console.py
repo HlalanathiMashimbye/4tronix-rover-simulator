@@ -30,88 +30,17 @@ YARD = 'curiosity'
 # Fakes
 # ---------------------------------------------------------------------------
 
-class FakeSnapshot:
-    def __init__(self, data):
-        self._data = data
-        self.exists = data is not None
+# The Firestore doubles live in tests/firestore_fakes.py, shared with
+# test_sync_worker.py. This file used to carry its own copy of the same
+# classes; see that module and ports.py for why there is now one set.
+from tests.firestore_fakes import FakeCollection, FakeFirestore  # noqa: E402
 
-    def to_dict(self):
-        return dict(self._data) if self._data else None
+# This suite's query doubles were a narrower version of the shared ones
+# (equality filters only, order_by and limit ignored). The shared FakeQuery
+# does all of it for real, so these are aliases now.
+FakeQueryCollection = FakeCollection
+FakeQueryFirestore = FakeFirestore
 
-
-class FakeDocRef:
-    def __init__(self, store, mission_id):
-        self._store = store
-        self._id = mission_id
-
-    def get(self, transaction=None):
-        return FakeSnapshot(self._store.get(self._id))
-
-    def update(self, fields):
-        self._store[self._id].update(fields)
-
-
-class FakeTransaction:
-    """Applies writes immediately. The fake has no rollback, which is fine:
-    these tests exercise the lock decision logic, not Firestore's atomicity."""
-
-    def update(self, ref, fields):
-        ref.update(fields)
-
-
-class FakeCollection:
-    def __init__(self, store):
-        self._store = store
-
-    def document(self, mission_id):
-        return FakeDocRef(self._store, mission_id)
-
-
-class FakeFirestore:
-    def __init__(self, store):
-        self._store = store
-
-    def collection(self, name):
-        return FakeCollection(self._store)
-
-    def transaction(self):
-        return FakeTransaction()
-
-
-class FakeStreamDoc:
-    def __init__(self, doc_id, data):
-        self.id = doc_id
-        self._data = data
-
-    def to_dict(self):
-        return dict(self._data)
-
-
-class FakeQueryCollection(FakeCollection):
-    """FakeCollection + where()/order_by()/limit()/stream() for query-style reads."""
-
-    def __init__(self, store, docs=None):
-        super().__init__(store)
-        self._docs = list(store.items()) if docs is None else docs
-
-    def where(self, field, op, value):
-        assert op == '==', 'fake only supports equality filters'
-        filtered = [(k, v) for k, v in self._docs if v.get(field) == value]
-        return FakeQueryCollection(self._store, filtered)
-
-    def order_by(self, field, direction=None):
-        return self
-
-    def limit(self, n):
-        return self
-
-    def stream(self):
-        return [FakeStreamDoc(k, v) for k, v in self._docs]
-
-
-class FakeQueryFirestore(FakeFirestore):
-    def collection(self, name):
-        return FakeQueryCollection(self._store)
 
 
 class FakeResponse:

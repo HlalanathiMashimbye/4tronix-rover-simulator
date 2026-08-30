@@ -48,6 +48,8 @@ from functools import wraps
 import requests
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, session
 
+import youtube_poll
+
 operator_bp = Blueprint('operator', __name__, url_prefix='/operator')
 
 # Timeouts (seconds)
@@ -62,11 +64,9 @@ MISSIONS_COLLECTION = 'missions'
 MAX_FINISHED_PAGE = 200
 
 # Accepts standard watch URLs and short youtu.be links (mirrors what the
-# learner-facing mission page can embed).
-YOUTUBE_URL_PATTERNS = (
-    re.compile(r'^https?://(www\.)?youtube\.com/watch\?v=[\w-]+'),
-    re.compile(r'^https?://youtu\.be/[\w-]+'),
-)
+# learner-facing mission page can embed). Defined in youtube_poll, which owns
+# what a YouTube URL means; re-exported here for the attach route below.
+YOUTUBE_URL_PATTERNS = youtube_poll.YOUTUBE_URL_PATTERNS
 
 IDENTITY_TOOLKIT_SIGN_IN = (
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'
@@ -1120,8 +1120,8 @@ def api_integrations():
     def state(configured, detail):
         return {'configured': bool(configured), 'detail': detail}
 
-    yt_key = bool(_youtube_api_key())
-    yt_channel = bool(_youtube_channel_id())
+    yt_key = bool(youtube_poll.api_key())
+    yt_channel = bool(youtube_poll.channel_id())
 
     return jsonify({
         'integrations': [
@@ -1252,148 +1252,15 @@ def api_rover_health():
         pass
     return jsonify(result)
 
-# YouTube video fetching implementation
-
-def _youtube_api_key():
-    return os.environ.get('YOUTUBE_API_KEY')
-
-
-def _youtube_channel_id():
-    return os.environ.get('YOUTUBE_CHANNEL_ID')
-
+# YouTube auto-linking lives in youtube_poll.py. These two wrappers stay so
+# the console remains the one place that knows how to reach Firebase, and so
+# the names web_server.py and the tests already use keep working.
 
 def check_for_new_videos():
-    """Poll the YouTube channel for uploads matching a completed mission's ID.
-
-    Candidates come from the local mirror, not Firestore. The previous version
-    streamed every completed mission out of Firestore on each pass: at one read
-    per completed mission every five minutes, that was ~21,000 reads/day on
-    this yard and rising with every child who finished a run - roughly 80% of
-    the satellite's entire Firestore bill, for a list the mirror already had.
-
-    (The old approach could not narrow that query either: a mission has no
-    `youtubeUrl` field at all until one is attached, and Firestore's `== None`
-    matches documents where the field is present and null, not absent. SQL has
-    no such trouble.)
-
-    Firestore is now touched only to WRITE a link that was actually found, so a
-    quiet poll - which is nearly all of them - costs nothing at all.
-    """
-    print('[youtube-poll] Checking for new videos...')
-
-    api_key = _youtube_api_key()
-    channel_id = _youtube_channel_id()
-    if not api_key or not channel_id:
-        print('[youtube-poll] Missing YOUTUBE_API_KEY or YOUTUBE_CHANNEL_ID; skipping poll')
-        return
-
-    from mission_store import completed_without_video
-    from satellite_identity import yard_id
-
-    unlinked_ids = completed_without_video(yard_id=yard_id())
-    if not unlinked_ids:
-        # Nothing to look for, so do not spend a YouTube API call either.
-        return
-
-    # The uploads playlist id is the channel id with UC -> UU.
-    uploads_playlist = channel_id.replace('UC', 'UU', 1)
-
-    try:
-        response = requests.get(
-            'https://www.googleapis.com/youtube/v3/playlistItems',
-            params={
-                'part': 'snippet',
-                'playlistId': uploads_playlist,
-                'maxResults': 50,
-                'key': api_key,
-            },
-            timeout=10.0,
-        )
-    except requests.exceptions.RequestException as e:
-        print(f'[youtube-poll] Could not reach the YouTube API: {e}')
-        return
-
-    if response.status_code != 200:
-        print(f'[youtube-poll] YouTube API error: HTTP {response.status_code}')
-        return
-
-    videos = response.json().get('items', [])
-
-    # Built on the first actual match, not up front: constructing the client is
-    # the only thing here that can fail when the yard is offline, and a poll
-    # that matches nothing should not be able to log an error about Firestore.
-    missions_ref = None
-
-    # Match mission ids embedded in video descriptions.
-    for mission_id in unlinked_ids:
-        for video in videos:
-            description = video.get('snippet', {}).get('description', '')
-
-            if f'MissionID: {mission_id}' in description:
-                video_id = video.get('snippet', {}).get('resourceId', {}).get('videoId')
-                if not video_id:
-                    continue
-                youtube_url = f'https://www.youtube.com/watch?v={video_id}'
-
-                # Plan 7.5: this poll writes to Firestore directly rather than
-                # through the outbox (it only runs online anyway, since it needs
-                # the YouTube API). Skip any mission with a pending local write,
-                # or this would land between the flush's read and write and be
-                # clobbered - or clobber it.
-                if _has_pending_writes(mission_id):
-                    print(f'[youtube-poll] Skipping {mission_id}: local writes pending')
-                    break
-
-                try:
-                    if missions_ref is None:
-                        missions_ref = _firestore().collection(MISSIONS_COLLECTION)
-                    missions_ref.document(mission_id).update({'youtubeUrl': youtube_url})
-                except Exception as e:
-                    # Leave the mirror alone so this mission is still a
-                    # candidate next pass; the link is not lost, just not
-                    # written yet.
-                    print(f'[youtube-poll] Could not link {mission_id}: {e}')
-                    break
-
-                _mirror_youtube_url(mission_id, youtube_url)
-                print(f'[youtube-poll] Linked mission {mission_id} to video {video_id}')
-                break
-
-
-def _has_pending_writes(mission_id):
-    """True if the outbox still holds an unflushed change for this mission."""
-    try:
-        from mission_store import mission_has_pending
-        return mission_has_pending(mission_id)
-    except Exception:
-        # If we cannot tell, assume there are: skipping one poll cycle is
-        # cheaper than racing a flush.
-        return True
-
-
-def _mirror_youtube_url(mission_id, url):
-    """Keep the mirror in step with a direct Firestore write, so the console
-    shows the link without waiting for the next pull."""
-    try:
-        from mission_store import set_mirror_only
-        set_mirror_only(mission_id, {'youtube_url': url})
-    except Exception:
-        pass
+    """Run one YouTube poll, using this module's Firestore accessor."""
+    return youtube_poll.check_for_new_videos(_firestore, MISSIONS_COLLECTION)
 
 
 def start_polling():
-    """Run check_for_new_videos every 5 minutes.
-
-    A bad poll (Firestore hiccup, YouTube API down, anything unexpected)
-    must never stop the loop - the reschedule always has to run, or the
-    feature silently dies until the satellite is restarted.
-    """
-    try:
-        check_for_new_videos()
-    except Exception as e:
-        print(f'[youtube-poll] Unexpected error during poll: {e}')
-
-    timer = threading.Timer(300, start_polling)
-    timer.daemon = True
-    timer.start()
-
+    """Start the five-minute YouTube poll loop."""
+    youtube_poll.poll_forever(check_for_new_videos)
