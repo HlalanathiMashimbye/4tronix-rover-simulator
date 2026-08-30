@@ -52,11 +52,11 @@ def _save_config(cfg):
 
 
 def _notify_within_app(app, mission_id, status):
-    """_notify_mission_control reads current_app config, and Flask's app
+    """notify_mission_control reads current_app config, and Flask's app
     context is thread-local, so push one inside the watcher's thread."""
-    from operator_console import _notify_mission_control
+    from console.notify import notify_mission_control
     with app.app_context():
-        _notify_mission_control(mission_id, status)
+        notify_mission_control(mission_id, status)
 
 
 def _local_ip():
@@ -92,6 +92,7 @@ ROVER_URL = _load_config().get('rover_url') or os.environ.get('ROVER_URL', 'http
 # ROVER_URL from /status apply to the console too.
 app.config['ROVER_URL_GETTER'] = lambda: ROVER_URL
 import operator_console  # noqa: E402  (needs app + config above)
+from console import deps  # noqa: E402
 app.register_blueprint(operator_console.operator_bp)
 
 # Request timeout for rover API calls
@@ -381,7 +382,6 @@ if __name__ == '__main__':
     # records that it finished, so a mission no longer sits in 'processing'
     # (holding its lease) because someone turned to the next child.
     from mission_watcher import start_mission_watcher
-    from operator_console import _notify_mission_control
     threading.Thread(
         target=start_mission_watcher,
         args=(lambda: app.config.get('ROVER_URL_GETTER', lambda: os.environ.get(
@@ -399,7 +399,7 @@ if __name__ == '__main__':
     # Same reasoning as start_polling above: the first pull is a synchronous
     # Firestore call, so it must not block server startup.
     threading.Thread(
-        target=start_sync_worker, args=(operator_console._firestore,),
+        target=start_sync_worker, args=(deps.firestore_client,),
         daemon=True,
     ).start()
 
