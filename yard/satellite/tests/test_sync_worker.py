@@ -67,7 +67,14 @@ class FakeQuery:
         self._meter = meter
         self._rows = list(store.items()) if rows is None else rows
 
-    def where(self, field, op, value):
+    def where(self, field=None, op=None, value=None, filter=None):
+        # Support both signatures: where(field, op, value) and where(filter=FieldFilter(...))
+        if filter is not None:
+            # FieldFilter object: extract field, op, value from it
+            field = filter._field
+            op = filter._op
+            value = filter._value
+
         def keep(item):
             v = item[1].get(field)
             if op == '==':
