@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminMissionRepository } from '@/infrastructure/container';
+import { adminMissionRepository } from '@/infrastructure/container.server';
 import { MissionService } from '@/core/application/services/MissionService';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';

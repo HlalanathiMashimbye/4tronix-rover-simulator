@@ -71,6 +71,29 @@ describe('the dependency rule', () => {
   });
 });
 
+describe('the server/browser boundary', () => {
+  it('no client component reaches the privileged container', () => {
+    /**
+     * container.server.ts builds repositories on the Firebase Admin SDK,
+     * which bypasses Firestore rules entirely. A 'use client' file importing
+     * it pulls firebase-admin toward the browser bundle - which is how this
+     * rule was learnt: merging both builders into one container.ts broke
+     * `next build` with 44 module-not-found errors for child_process, dns and
+     * fs, because the bundler refused to ship Node internals to a browser.
+     *
+     * `import 'server-only'` in that file makes this a build error too. This
+     * test states the rule in a form a reader can see without running a build.
+     */
+    const offenders = [...sourceFiles('app'), ...sourceFiles('components'), ...sourceFiles('contexts')]
+      .filter((f) => {
+        const src = read(f);
+        return src.includes("'use client'") && src.includes('container.server');
+      });
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('the composition root', () => {
   it('is the only production code that constructs a repository', () => {
     /**

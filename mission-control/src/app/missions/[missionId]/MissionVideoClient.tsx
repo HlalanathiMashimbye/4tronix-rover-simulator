@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
-import { browserMissionRepository } from '@/infrastructure/container';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';

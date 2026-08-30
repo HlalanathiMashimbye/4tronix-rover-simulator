@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
-import { browserMissionRepository } from '@/infrastructure/container';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { MobileSearch } from '@/components/layout/MobileSearch';
