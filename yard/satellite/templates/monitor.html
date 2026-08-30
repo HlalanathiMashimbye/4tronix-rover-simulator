@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rover Monitor</title>
-    <script src="https://unpkg.com/blockly@13.2.0/blockly.min.js"></script>
+    <!-- Served locally, not from a CDN: the satellite runs on mobile data at a
+         venue and /code/ has to load when that drops. See
+         mission-control/scripts/vendor-blockly.mjs. -->
+    <script src="/static/vendor/blockly/blockly.min.js"></script>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
         * {
@@ -1018,6 +1021,8 @@
                     try {
                         const state = JSON.parse(blocklyState);
                         const ws = Blockly.inject(el, {
+                            // Self-hosted Blockly resolves its icons from here.
+                            media: '/static/vendor/blockly/media/',
                             readOnly: true,
                             scrollbars: false,
                             zoom: { controls: false, wheel: false },
