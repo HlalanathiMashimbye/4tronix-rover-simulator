@@ -1,228 +1,57 @@
-# 4tronix-rover-simulator
+# 4tronix M.A.R.S. Rover: Mission Control
 
-Simulator library to allow dev and test of code for the Raspberry Pi-based 4tronix M.A.R.S. Rover without being connected to the actual Rover.
+A remote-driving platform for the 4tronix M.A.R.S. Rover, built for UCT's
+INF4027W course. A learner writes a mission in a browser (Blockly or Python),
+it runs on a real rover in a physical yard, and the learner watches the video.
 
-## Mission Control platform (hub + yard)
+The system has three deployable parts:
 
-This repo also hosts the Mission Control web platform built on top of the simulator.
-From the repo root, `npm run dev` starts the full stack, waits for the web ports,
-and opens the two browser pages you actually use:
+| Service | Where it runs | What it is |
+|---|---|---|
+| **Mission Control** (`mission-control/`) | Cloud Run | The learner-facing Next.js app: write a mission, watch it run, browse history |
+| **Yard satellite** (`yard/satellite`) | A Raspberry Pi in the yard | Operator console, camera control, offline-first sync to Firestore |
+| **Rover server** (`yard/rover`) | A Raspberry Pi on the rover | Runs the mission's Python against the rover's motors, servos and LEDs |
 
-| Service | URL | What it is |
-|---------|-----|------------|
-| Hub (`mission-control`) | http://localhost:3000 | Learner-facing Mission Control app |
-| Yard satellite UI | http://localhost:3001 | Operator/run surface — Blockly editor + TV monitor |
-| Rover backend | http://localhost:8523 | Yard rover server (`yard/rover`) |
+Cloud infrastructure (Firebase, Cloud Run, DNS) is defined in `infra/`
+(Terraform). `yard/docs/architecture.md` covers the yard's own design; a
+repo-wide architecture doc covering how the three parts fit together and how
+the layers inside each map to MVC is planned but not yet written.
+
+## Running it locally
 
 ```bash
 npm install      # first time only; a postinstall hook also installs mission-control/
 npm run dev      # start hub + satellite + rover, then open 3000 and 3001
 ```
 
+| Service | URL |
+|---|---|
+| Mission Control (`mission-control`) | http://localhost:3000 |
+| Yard satellite UI | http://localhost:3001 |
+| Rover server | http://localhost:8523 |
+
 Run a single service with `npm run dev:control`, `npm run dev:satellite`, or
-`npm run dev:yard`. The satellite port can be overridden with the `SATELLITE_PORT`
-env var.
-
-Useful terminal output is kept to the essentials: which driver is active and
-which ports are serving.
-
-## Getting things set up
-
-We normally use the [Python](https://www.python.org) programming language to program the M.A.R.S. Rover, so this simulator is also all written in Python. The simulator uses a few Python libraries, so the first time you use this on a particular computer you'll need to take some steps to download those libraries.
-
-### First Time (on any particular computer) Setup
-
-1. Open a Windows Terminal window. (Press the Windows key, then type Terminal. If you don't have Terminal installed, [install it](https://www.microsoft.com/store/productId/9N0DX20HK701). If you don't want to, you can run Command Prompt instead.)
-2. Find the path to the folder that this code is in. (If you're in VS Code, you can right click the README.md tab at the top of this page, and select **Reveal in File Explorer**. In the Windows File Explorer that opens, click in the address bar at the top to select the folder path then hit Ctrl-C.)
-
-3. You need to get the terminal (or command) window into this directory. So type `cd` then a space, and then the path you just determined in the previous step (you can use Ctrl-V to paste it in if you copied it to the clipboard). So something like this:
-
-```
-cd \dev\4tronix-rover-simulator
-```
-
-4. Next, we create something called a Python _virtual environment_. That's essentially a place to put all the libraries this code uses. Run this command:
-
-```
-python -m venv .venv
-```
-
-5. Next, you need to activate this environment. (Activating it means telling the command window to use this Python environment.):
-
-```
-# Windows:
-.\.venv\Scripts\activate
-# macOS / Linux:
-source .venv/bin/activate
-```
-
-Once you've done this, the terminal or command window should change its prompt to show that the environment is activated by showing `(env)` at the start
-
-6. Now that the environment has been activated, you need to tell Python to fetch all of the modules that this code uses:
-
-```
-pip install -r requirements.txt
-```
-
-This should show messages describing what modules it is downloading. It might show a `WARNING` starting with something like "You are using pip version 21.2.3; however..." You can ignore this. (You might also spot a reference to something called `itsdangerous`. This is a misleadingly named module, so you don't need to be alarmed.)
-
-Once you've done the steps just described, you're now ready to use the simulator. The virtual environment you just created contains everything it needs.
-
-So the next thing you'll probably want to do is run the simulator.
-
-## Simulator User Interface (UI)
-
-> **Note:** This standalone Qt simulator is the original, still-working way to
-> dev and test rover code locally. The current platform is **Mission Control**
-> (see the section at the top, `npm run dev`), which runs its own browser-based
-> simulator. Use this desktop simulator for quick, offline Python experiments;
-> use Mission Control for the full learner experience.
-
-The [roversimui.py](roversimui.py) displays a simple representation of the Rover. This lets us see:
-
-* Where the Rover is
-* Which way the Rover is pointing
-* Where the Rover's steerable wheels are pointing
-
-This simulator runs as a standalone application. Programs that want to control the Rover run as separate applications, and send messages to the Simulator UI to tell it what to do. (This is because the system we're using to open a window and draw the Rover (called [Qt](https://doc.qt.io/qtforpython-6/)) wants to be in control of the program execution so that it can respond to clicks on the window, and repaint things as necessary. So you can't really run code that controls the robot in a normal way in a Qt application. That's why the Qt code is all in a separate program.)
-
-You can run the simulator in the debugger, but you probably don't want to because you'll most likely want to debug the programs you're working on that are trying to control the Rover. You could actually run two copies of Visual Studio (or whatever you're using to debug your Python programs), one to run the simulator and one to debug your own program, but you don't have to. So here's how to run the Simulator UI on its own outside of a debugger.
-
-If you've just finished the 'first time' steps from the preceding section, and you've still got your Terminal (or Command Prompt) open, you can skip straight to step 4. But if you've rebooted since then, or closed that window, follow all of these steps.
-
-1. Open a Windows Terminal window (or Command Prompt.)
-2. Find the path to the folder that this code is in. (If you're in VS Code, you can right click the README.md tab at the top of this page, and select **Reveal in File Explorer**. In the Windows File Explorer that opens, click in the address bar at the top to select the folder path then hit Ctrl-C.)
-3. You need to get the terminal (or command) window into this directory. So type `cd` then a space, and then the path you just determined in the previous step (you can use Ctrl-V to paste it in if you copied it to the clipboard). So something like this:
-
-```
-cd \dev\4tronix-rover-simulator
-```
-
-4. Activate the environment by running this command:
-
-```
-# Windows:
-.\.venv\Scripts\activate
-# macOS / Linux:
-source .venv/bin/activate
-```
-
-The terminal or command window should change its prompt to show that the environment is activated by showing `(.venv)` at the start.
-
-6. Start the emulator UI with this command:
-
-```
-python .\roversimui.py
-```
-
-This should show a window with a small, simple representation of the Rover and its steerable wheels.
-
-
-## Using the Simulator
-
-Once the simulator UI is running, you can run Python programs to control it. Have in mind that if, for example, you have started the emulator using Visual Studio Code, then you should start a new terminal to control the Rover. Normally, programs that control the M.A.R.S. Rover have something like this near the top:
-
-```py
-import rover
-```
-
-If you change that to this:
-
-```py
-import roversimulator as rover
-```
-
-this tells Python that anything in the code that uses the `rover` module should use the simulator instead.
-
-Here's a simple example using the forward and spin functions to start drawing a square. 
-Complete square code is in [examples/square.py](examples/square.py), Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
-```py
-import roversimulator as rover
-import time
-
-rover.forward(100) # 100 is the speed, not distance #TODO: turtle interface
-time.sleep(10) # 10 seconds
-rover.stop()
-time.sleep(0.5) # take a short break
-
-
-rover.spinRight(100) # 100 is the speed, not degrees
-time.sleep(2.5) # 2.5s is about 90 degrees
-rover.stop()
-time.sleep(0.5) # take a short break
-
-```
-
-Here's a simple example of direct servo control which is in the [examples/very-simple-example.py](examples/very-simple-example.py) file. Which you can run by opening and then running it (e.g. by pressing F5 in Visual Studio).
-
-```py
-import roversimulator as rover
-import time
-
-# Servo numbers (so we know which servos control which wheel)
-servo_FL = 9
-servo_RL = 11
-servo_FR = 15
-servo_RR = 13
-servo_MA = 0
-
-
-# Get the rover moving forward at full speed.
-#
-# First, make all the steerable wheels point forwards.
-rover.setServo(servo_FL, 0)
-rover.setServo(servo_FR, 0)
-rover.setServo(servo_RL, 0)
-rover.setServo(servo_RR, 0)
-# And now it's full speed ahead.
-rover.forward(100)
-
-
-# Let it move for 3 seconds
-time.sleep(3)
-
-
-# Now adjust the servo positions so that it's steering left
-rover.setServo(servo_FL, -20)
-rover.setServo(servo_FR, -20)
-rover.setServo(servo_RL, 20)
-rover.setServo(servo_RR, 20)
-
-
-# Let it move for another 3 seconds
-time.sleep(3)
-
-# Now steer right
-rover.setServo(servo_FL, 20)
-rover.setServo(servo_FR, 20)
-rover.setServo(servo_RL, -20)
-rover.setServo(servo_RR, -20)
-
-
-# Let it move for another 3 seconds
-time.sleep(3)
-
-# Straighten up.
-rover.setServo(servo_FL, 0)
-rover.setServo(servo_FR, 0)
-rover.setServo(servo_RL, 0)
-rover.setServo(servo_RR, 0)
-
-
-# Let it move for another 3 seconds
-time.sleep(3)
-
-
-# ...and rest.
-rover.forward(0)
-```
-
-## Other Setups
-
-| Folder | Description |
-|--------|-------------|
-| [examples/](examples/) | Ready-to-run sample programs for the simulator (`square.py`, `very-simple-example.py`, `move-rover.py`) |
-| [real-rover/](real-rover/README.md) | Controlling the real M.A.R.S. Rover hardware |
-| [web_interface/](web_interface/README.md) | Browser-based control interface (experimental) |
-| [yard/](yard/README.md) | Classroom setup with tablets and TV monitor |
-
+`npm run dev:yard`. The satellite port can be overridden with the
+`SATELLITE_PORT` env var. `FakeRoverDriver` is selected automatically when no
+real rover is reachable, so the full loop (submit, dispatch, run, video) works
+on a laptop with no hardware.
+
+## Documentation
+
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md) - operating the deployed system
+- [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md) - what is and isn't covered
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) - open work, referenced by ID from code
+  comments across the yard
+- [`mission-control/README.md`](mission-control/README.md),
+  [`yard/README.md`](yard/README.md), [`infra/README.md`](infra/README.md) -
+  setup and structure for each part
+- [`docs/INF4027W_Team06_Iteration2_ReadMe2026.md`](docs/INF4027W_Team06_Iteration2_ReadMe2026.md) -
+  the iteration 2 submission readme for markers
+
+## Legacy upstream simulator
+
+This repository began as a fork of the original 4tronix M.A.R.S. Rover
+desktop simulator (a PyQt6 app plus Raspberry Pi web tooling). None of that
+code runs as part of the platform above; it's kept for provenance and because
+the rover's physics model is still specified by reading it. See
+[`legacy/README.md`](legacy/README.md) for what's there and why.

@@ -7,8 +7,8 @@ statement of the steering model in Python.
 
 Dependency-free rover physics for HEADLESS use (no PyQt6 / cv2), a faithful
 port of the SAME 4-wheel steering model used by:
-  - roversimui.py        (the interactive visual simulator / "real" reference)
-  - rover-physics.ts     (the browser manual-control physics)
+  - legacy/simulator/roversimui.py  (the interactive visual simulator / "real" reference)
+  - rover-physics.ts                (the browser manual-control physics)
 
 WHY IT IS DEPRECATED
   1. Its stated purpose is gone. It existed to feed `sim_recorder.py`, which
@@ -34,7 +34,7 @@ rather than merely written down.
 
 import math
 
-# Physical constants — keep in sync with roversimui.py and rover-physics.ts
+# Physical constants — keep in sync with legacy/simulator/roversimui.py and rover-physics.ts
 FULL_SPEED_CM_PER_SECOND = 10
 VEHICLE_WIDTH_CM = 16
 VEHICLE_HEIGHT_CM = 18
@@ -48,7 +48,7 @@ SERVO_RR = 13
 
 
 class RoverPhysics:
-    """Stateful 4-wheel-steering model (port of rover-physics.ts / roversimui.py).
+    """Stateful 4-wheel-steering model (port of rover-physics.ts / legacy/simulator/roversimui.py).
 
     Pose: heading in degrees, 0 = up (north), increasing clockwise.
     """
@@ -124,7 +124,7 @@ class RoverPhysics:
         """Advance the pose by dt seconds using the 4-wheel steering model.
 
         Mirrors RoverPhysics.update in rover-physics.ts (including the original
-        roversimui.py behaviour of using the front-left servo angle and the left
+        legacy/simulator/roversimui.py behaviour of using the front-left servo angle and the left
         wheel speed for all four wheels, then averaging).
         """
 
@@ -171,7 +171,7 @@ class RoverPhysics:
             return (updated_x, updated_y, self.heading + heading_change_deg)
 
         # Use the front-left servo angle and left wheel speed for all four wheels
-        # (matches rover-physics.ts / roversimui.py), then average.
+        # (matches rover-physics.ts / legacy/simulator/roversimui.py), then average.
         angle = self.servos[SERVO_FL]
         x_fl, y_fl, h_fl = calculate_steered_position(True, angle, self.speed_l)
         x_fr, y_fr, h_fr = calculate_steered_position(False, angle, self.speed_l)

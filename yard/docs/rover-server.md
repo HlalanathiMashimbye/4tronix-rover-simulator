@@ -9,9 +9,16 @@ If you're setting up a new M.A.R.S. Rover from scratch:
 - [Assembly Instructions](https://4tronix.co.uk/blog/?p=2112) - Step-by-step build guide
 - [Assembly Video](https://www.youtube.com/watch?v=Np8ZQQd85oc) - Video walkthrough
 
-## Known-Working Pi Configuration (as of March 2026)
+## Known-Working Pi Configuration (as of March 2026) - HISTORICAL, Pi since rebuilt
 
-This is the verified working setup inspected directly from the Pi on 22 March 2026.
+This is a factual record of what was inspected directly on the Pi on 22 March
+2026, kept as-is rather than edited to match current architecture. It predates
+`yard/rover/vendor/` and, at the time, this Pi was running
+`real-rover/rover_server.py` rather than the current `yard/rover/rover_server.py`
+- an older deployment this doc's rebuild guide below no longer produces. As of
+2026-08, the rover Pi is bare (Group 1 is rebuilding it from scratch): follow
+"Pi Setup (New SD Card)" below, not this section, and note the vendored
+library described in `yard/rover/vendor/README.md` before setting `PYTHONPATH`.
 
 ### OS
 - **Raspbian GNU/Linux 11 (Bullseye)**, image dated **22 October 2024**
@@ -304,14 +311,28 @@ bash rover.sh
 
 ### 4. Symlink driveRover.py
 
-The 4tronix `rover.sh` installs an older `driveRover.py`. Replace it with a symlink to the repo version so it stays up to date:
+The 4tronix `rover.sh` installs an older `driveRover.py`. Replace it with a symlink to the repo version so it stays up to date. This one is not the running control library (that's `rover.py`, vendored into `yard/rover/vendor/` - see below), it's the manual joystick/keyboard driving script `rover.sh` bundles, kept here for provenance in `legacy/real-rover/`:
 
 ```bash
 rm ~/marsrover/driveRover.py
-ln -s ~/4tronix-rover-simulator/real-rover/driveRover.py ~/marsrover/driveRover.py
+ln -s ~/4tronix-rover-simulator/legacy/real-rover/driveRover.py ~/marsrover/driveRover.py
 ```
 
-### 5. Calibrate Servos
+### 5. `rover.py` and `pca9685.py` (which library actually runs)
+
+`rover.sh` also installs `rover.py` into `~/marsrover`, but the rover server
+does **not** run that copy. `yard/rover/vendor/rover.py` is a
+version-controlled copy of the same library, and `yard/deploy/rover-server.service`
+puts it ahead of `~/marsrover` on `PYTHONPATH` so `import rover` resolves
+there instead. `~/marsrover` still has to exist, though: `rover.py` imports a
+sibling module, `pca9685`, which `rover.sh` installs and which is not vendored
+(it is a low-level I2C PWM driver, and there is no verified copy to vendor
+safely without a Pi to test it against). `PYTHONPATH` therefore lists both
+directories, vendor first: `import rover` gets the vendored copy, `import
+pca9685` keeps searching and finds it in `~/marsrover`. See
+`yard/rover/vendor/README.md` for the full explanation.
+
+### 6. Calibrate Servos
 
 Before first use, calibrate the wheel servos:
 ```bash

@@ -1,11 +1,23 @@
-# Real Rover Server
+# Real Rover Server (superseded, kept for provenance)
 
-This directory contains the server to control the actual 4tronix M.A.R.S. Rover hardware.
+> **This is not what the rover runs.** The satellite dispatches to
+> `yard/rover/rover_server.py`, which speaks `/queue/add`, `/queue/clear` and
+> `/health` - APIs this folder's `rover_server.py` never implemented. And
+> `rover.py`, the 4tronix control library this folder used to hold, has moved
+> to `yard/rover/vendor/rover.py`, because that's what the running system
+> actually imports. See `yard/rover/vendor/README.md` and
+> `yard/docs/rover-server.md`.
+
+This directory contains the *original* server to control the actual 4tronix
+M.A.R.S. Rover hardware, from before the yard/satellite queue architecture
+existed.
 
 ## Files
 
-- **rover.py**: Official 4tronix rover control library (from http://4tronix.co.uk/rover/rover.py)
-- **rover_server.py**: HTTP server that exposes the same API as the simulator UI
+- **rover_server.py**: HTTP server exposing a single `POST /`, the same shape
+  the old simulator UI (`legacy/simulator/roversimui.py`) spoke. Nothing in
+  the current system calls it.
+- `rover.py` used to live here; it has moved, see above.
 
 ## Installation
 

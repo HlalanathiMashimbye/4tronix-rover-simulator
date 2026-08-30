@@ -3,7 +3,7 @@
 // Edit the TypeScript source and re-run `npm run build:roversim`.
 /**
  * Client-side rover physics engine for real-time manual control
- * Based on roversimui.py Rover class
+ * Based on legacy/simulator/roversimui.py Rover class
  */
 const FULL_SPEED_CM_PER_SECOND = 10;
 const VEHICLE_WIDTH_CM = 16;

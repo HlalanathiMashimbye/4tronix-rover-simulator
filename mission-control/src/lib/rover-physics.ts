@@ -1,6 +1,6 @@
 /**
  * Client-side rover physics engine for real-time manual control
- * Based on roversimui.py Rover class
+ * Based on legacy/simulator/roversimui.py Rover class
  */
 
 const FULL_SPEED_CM_PER_SECOND = 10;
