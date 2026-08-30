@@ -431,7 +431,7 @@ def sync_from_firestore(firestore_client, collection_name='missions', yard_id=No
         if cursor:
             # Incremental: missions submitted since the newest one we hold.
             query = (
-                scoped.where('submittedAt', '>', cursor)
+                scoped.where(filter=FieldFilter('submittedAt', '>', cursor))
                 .order_by('submittedAt')
                 .limit(INCREMENTAL_LIMIT)
             )
