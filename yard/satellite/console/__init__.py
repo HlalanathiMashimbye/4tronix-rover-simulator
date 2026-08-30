@@ -16,4 +16,4 @@ console, which is why its tests patched seven private names on one module.
 # blueprint. operator_console imports this package, so pulling them in here
 # keeps registration in one place rather than scattered across the facade.
 from console.blueprint import operator_bp  # noqa: E402,F401
-from console import auth, camera, health, review  # noqa: E402,F401
+from console import auth, camera, config, health, missions, review  # noqa: E402,F401

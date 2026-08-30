@@ -17,6 +17,8 @@ from flask import current_app
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from web_server import app as flask_app  # noqa: E402
+import requests
+
 import operator_console
 from console import camera, deps, mirror, notify  # noqa: E402
 import mission_store  # noqa: E402
@@ -240,12 +242,12 @@ def client(missions, monkeypatch, tmp_path):
     # _notify_mission_control_async normally runs on a real background
     # thread; run it inline instead so assertions right after client.post()
     # aren't racing it.
-    monkeypatch.setattr(operator_console.threading, 'Thread', SyncThread)
+    monkeypatch.setattr(threading, 'Thread', SyncThread)
     # Nothing schedules a Timer any more (the lease renewal went with AB#364),
     # but the fake stays: it turns any timer a future change introduces into a
     # recorded call rather than a real one firing mid-suite.
     RecordingTimer.reset()
-    monkeypatch.setattr(operator_console.threading, 'Timer', RecordingTimer)
+    monkeypatch.setattr(threading, 'Timer', RecordingTimer)
     # Default every test to "camera ready, recording starts/stops cleanly" -
     # recording_control would otherwise try a real websocket connection to
     # localhost:8890 on every /send or /rerun call, which is slow and always
@@ -353,7 +355,7 @@ def test_stop_cancels_the_mission_and_discards_its_recording(client, missions, m
         calls.append(url)
         return FakeResponse(200, {'status': 'success'})
 
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
     monkeypatch.setattr(
         recording_control, 'stop_recording',
         lambda mission_id, yard, keep: (discard_calls.append((mission_id, yard, keep)), (True, 'ok'))[1],
@@ -375,7 +377,7 @@ def test_stop_still_clears_the_rover_when_this_mission_is_not_running(client, mi
     sign_in(client)
     calls = []
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda url, **k: (calls.append(url), FakeResponse(200, {'status': 'success'}))[1],
     )
 
@@ -389,9 +391,9 @@ def test_stop_still_clears_the_rover_when_this_mission_is_not_running(client, mi
 def test_stop_reports_an_unreachable_rover_rather_than_claiming_success(client, missions, monkeypatch):
     sign_in(client)
     def boom(*a, **k):
-        raise operator_console.requests.exceptions.ConnectionError()
+        raise requests.exceptions.ConnectionError()
 
-    monkeypatch.setattr(operator_console.requests, 'post', boom)
+    monkeypatch.setattr(requests, 'post', boom)
     resp = client.post('/operator/api/missions/p1/stop')
 
     assert resp.status_code == 503
@@ -422,7 +424,7 @@ def test_the_force_marker_never_reaches_firestore(client, missions, monkeypatch)
     from sync_worker import FORCE_KEY
 
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: FakeResponse(200, {'status': 'success'}),
     )
     client.post('/operator/api/missions/p1/stop')
@@ -481,7 +483,7 @@ def test_apis_reject_unauthenticated_requests(client):
 def test_login_rejects_wrong_password(client, monkeypatch):
     monkeypatch.setattr(deps, 'web_api_key', lambda: 'test-key')
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: FakeResponse(400, {'error': {'message': 'INVALID_PASSWORD'}}),
     )
     resp = client.post('/operator/api/login', json={'email': 'x@y.z', 'password': 'nope'})
@@ -491,7 +493,7 @@ def test_login_rejects_wrong_password(client, monkeypatch):
 def test_login_rejects_accounts_without_operator_role(client, monkeypatch):
     monkeypatch.setattr(deps, 'web_api_key', lambda: 'test-key')
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: FakeResponse(200, {'idToken': 'tok'}),
     )
     monkeypatch.setattr(
@@ -505,7 +507,7 @@ def test_login_rejects_accounts_without_operator_role(client, monkeypatch):
 def test_login_reports_verify_failures_with_actionable_message(client, monkeypatch):
     monkeypatch.setattr(deps, 'web_api_key', lambda: 'test-key')
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: FakeResponse(200, {'idToken': 'tok'}),
     )
     monkeypatch.setattr(
@@ -521,7 +523,7 @@ def test_login_reports_verify_failures_with_actionable_message(client, monkeypat
 def test_login_accepts_operator_and_sets_session(client, monkeypatch):
     monkeypatch.setattr(deps, 'web_api_key', lambda: 'test-key')
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: FakeResponse(200, {'idToken': 'tok'}),
     )
     monkeypatch.setattr(
@@ -551,7 +553,7 @@ def test_send_pushes_run_python_and_marks_processing(client, missions, monkeypat
         calls.append((url, json))
         return FakeResponse(200, {'status': 'ok', 'added': 1})
 
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
 
     resp = client.post('/operator/api/missions/q1/send')
     assert resp.status_code == 200
@@ -581,7 +583,7 @@ def test_send_rejects_missions_that_are_not_queued(client, missions, monkeypatch
     """
     sign_in(client)
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: pytest.fail('rover must not be called'),
     )
     assert client.post('/operator/api/missions/p1/send').status_code == 409
@@ -594,7 +596,7 @@ def test_send_refuses_dispatch_when_camera_is_not_ready(client, missions, monkey
     sign_in(client)
     monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (False, 'no frame received'))
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: pytest.fail('rover must not be called when the camera is not ready'),
     )
 
@@ -607,7 +609,7 @@ def test_send_refuses_dispatch_when_camera_is_not_ready(client, missions, monkey
 
 def test_send_starts_recording_after_a_successful_dispatch(client, missions, monkeypatch):
     sign_in(client)
-    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: FakeResponse(200, {}))
     started = []
     monkeypatch.setattr(
         recording_control, 'start_recording',
@@ -628,7 +630,7 @@ def test_send_does_not_fail_the_request_when_recording_fails_to_start(client, mi
     """The rover is already moving by the time recording starts - a camera
     hiccup here is a warning to log, not a reason to fail the response."""
     sign_in(client)
-    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: FakeResponse(200, {}))
     monkeypatch.setattr(recording_control, 'start_recording', lambda mission_id, yard: (False, 'camera dropped'))
 
     resp = client.post('/operator/api/missions/q1/send')
@@ -642,9 +644,9 @@ def test_send_reports_rover_offline_and_keeps_mission_queued(client, missions, m
     sign_in(client)
 
     def fake_post(*a, **k):
-        raise operator_console.requests.exceptions.ConnectionError()
+        raise requests.exceptions.ConnectionError()
 
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
 
     resp = client.post('/operator/api/missions/q1/send')
     assert resp.status_code == 503
@@ -658,7 +660,7 @@ def test_send_404s_for_unknown_mission(client):
 
 def test_send_notifies_mission_control_after_marking_processing(client, missions, monkeypatch):
     sign_in(client)
-    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: FakeResponse(200, {}))
 
     calls = []
     monkeypatch.setattr(
@@ -675,9 +677,9 @@ def test_send_does_not_notify_when_rover_dispatch_fails(client, monkeypatch):
     sign_in(client)
 
     def fake_post(*a, **k):
-        raise operator_console.requests.exceptions.ConnectionError()
+        raise requests.exceptions.ConnectionError()
 
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
 
     calls = []
     monkeypatch.setattr(
@@ -692,7 +694,7 @@ def test_send_does_not_notify_when_rover_dispatch_fails(client, monkeypatch):
 
 def test_rerun_notifies_mission_control(client, missions, monkeypatch):
     sign_in(client)
-    monkeypatch.setattr(operator_console.requests, 'post', lambda *a, **k: FakeResponse(200, {}))
+    monkeypatch.setattr(requests, 'post', lambda *a, **k: FakeResponse(200, {}))
 
     calls = []
     monkeypatch.setattr(
@@ -907,7 +909,7 @@ def test_poll_links_mission_with_no_youtube_field_at_all(missions, firestore_mis
     assert 'youtubeUrl' not in firestore_missions['c1']
     monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: fake_playlist_response('c1'),
     )
 
@@ -926,7 +928,7 @@ def test_poll_skips_missions_that_already_have_a_link(missions, monkeypatch, you
         lambda: pytest.fail('Firestore must not be read to build the candidate list'),
     )
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: pytest.fail('YouTube API must not be called when nothing is unlinked'),
     )
 
@@ -947,7 +949,7 @@ def test_poll_never_reads_firestore_to_find_candidates(missions, firestore_missi
 
     monkeypatch.setattr(deps, 'firestore_client', lambda: CountingFirestore(firestore_missions))
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: FakeResponse(200, {'items': [{
             'snippet': {'description': 'nothing matching here', 'resourceId': {'videoId': 'vid999'}},
         }]}),
@@ -973,7 +975,7 @@ def test_poll_skips_entirely_when_credentials_missing(missions, monkeypatch):
 
 def test_poll_survives_youtube_api_error_response(missions, firestore_missions, monkeypatch, youtube_env):
     monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-    monkeypatch.setattr(operator_console.requests, 'get', lambda *a, **k: FakeResponse(500))
+    monkeypatch.setattr(requests, 'get', lambda *a, **k: FakeResponse(500))
 
     operator_console.check_for_new_videos()
 
@@ -984,9 +986,9 @@ def test_poll_survives_youtube_network_error(missions, firestore_missions, monke
     monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
 
     def fake_get(*a, **k):
-        raise operator_console.requests.exceptions.ConnectionError()
+        raise requests.exceptions.ConnectionError()
 
-    monkeypatch.setattr(operator_console.requests, 'get', fake_get)
+    monkeypatch.setattr(requests, 'get', fake_get)
 
     operator_console.check_for_new_videos()
 
@@ -1010,7 +1012,7 @@ def test_poll_survives_firestore_error(missions, monkeypatch, youtube_env):
     # as matching a video and attempting the write, rather than returning early
     # with nothing to do and passing for the wrong reason.
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: FakeResponse(200, {'items': [{
             'snippet': {
                 'description': f'MissionID: c1',
@@ -1043,7 +1045,7 @@ def test_start_polling_reschedules_even_when_check_raises(monkeypatch):
         def start(self):
             pass
 
-    monkeypatch.setattr(operator_console.threading, 'Timer', FakeTimer)
+    monkeypatch.setattr(threading, 'Timer', FakeTimer)
 
     operator_console.start_polling()
 
@@ -1057,7 +1059,7 @@ def test_start_polling_reschedules_even_when_check_raises(monkeypatch):
 def test_notify_mission_control_posts_status_to_the_notify_endpoint(monkeypatch):
     calls = []
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda url, json=None, timeout=None: calls.append((url, json, timeout)) or FakeResponse(200, {}),
     )
     monkeypatch.setenv('MISSION_CONTROL_URL', 'https://mission-control.example')
@@ -1066,7 +1068,7 @@ def test_notify_mission_control_posts_status_to_the_notify_endpoint(monkeypatch)
         notify.notify_mission_control('mission-1', 'completed')
 
     assert calls == [
-        ('https://mission-control.example/api/missions/mission-1/notify', {'status': 'completed'}, operator_console.NOTIFY_TIMEOUT),
+        ('https://mission-control.example/api/missions/mission-1/notify', {'status': 'completed'}, notify.NOTIFY_TIMEOUT),
     ]
 
 
@@ -1098,9 +1100,9 @@ def test_notify_mission_control_async_runs_on_a_real_background_thread(monkeypat
 
 def test_notify_mission_control_swallows_network_errors(monkeypatch):
     def fake_post(*a, **k):
-        raise operator_console.requests.exceptions.ConnectionError()
+        raise requests.exceptions.ConnectionError()
 
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
 
     with flask_app.app_context():
         notify.notify_mission_control('mission-1', 'completed')  # must not raise
@@ -1126,13 +1128,13 @@ def _ok_rover(monkeypatch, calls=None):
         if calls is not None:
             calls.append((url, json))
         return FakeResponse(200, {'status': 'ok', 'added': 1})
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+    monkeypatch.setattr(requests, 'post', fake_post)
 
 
 def _no_rover(monkeypatch):
     def fake_post(url, json=None, timeout=None):
-        raise operator_console.requests.exceptions.ConnectionError('rover offline')
-    monkeypatch.setattr(operator_console.requests, 'post', fake_post)
+        raise requests.exceptions.ConnectionError('rover offline')
+    monkeypatch.setattr(requests, 'post', fake_post)
 
 
 def test_send_marks_the_run_processing_and_stamps_when_it_started(client, missions, monkeypatch):
@@ -1178,7 +1180,7 @@ def test_a_run_already_processing_is_never_silently_restarted(client, missions, 
     """
     sign_in(client)
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda *a, **k: pytest.fail('rover must not be called'),
     )
 
@@ -1370,7 +1372,7 @@ def test_youtube_poll_skips_a_mission_with_pending_local_writes(
 
     monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: fake_playlist_response('c1'),
     )
 
@@ -1387,7 +1389,7 @@ def test_youtube_poll_writes_when_nothing_is_pending(
 
     monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
     monkeypatch.setattr(
-        operator_console.requests, 'get',
+        requests, 'get',
         lambda *a, **k: fake_playlist_response('c1'),
     )
 
@@ -1436,7 +1438,7 @@ def test_requeuing_returns_it_to_the_queue_without_touching_the_rover(client, mi
 
     rover_calls = []
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda url, json=None, timeout=None: (rover_calls.append(url), FakeResponse(200))[1],
     )
 
@@ -1568,7 +1570,7 @@ def test_cancel_takes_a_queued_mission_out_without_running_it(client, missions, 
     sign_in(client)
     rover_calls = []
     monkeypatch.setattr(
-        operator_console.requests, 'post',
+        requests, 'post',
         lambda url, json=None, timeout=None: (rover_calls.append(url), FakeResponse(200))[1],
     )
 
