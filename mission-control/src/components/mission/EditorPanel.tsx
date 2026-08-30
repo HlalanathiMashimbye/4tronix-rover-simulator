@@ -6,7 +6,7 @@ import { ManualControlRealtime } from '@/components/mission/ManualControlRealtim
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
-import type { RoverState } from '@/lib/rover-physics';
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
 
@@ -30,7 +30,7 @@ interface EditorPanelProps {
   onEditorModeChange: (mode: EditorMode) => void;
   error: string | null;
 
-  onManualTrajectory: (trajectory: RoverState[]) => void;
+  onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
   onResetSimulation: () => void;
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;

@@ -127,24 +127,21 @@ export function MissionWorkspace() {
    * long enough to fill the buffer. Reset appeared to fix it only because it
    * zeroed the cursor.
    */
-  const handleManualTrajectory = useCallback((realtimeTrajectory: RoverState[]) => {
-    setTrajectory(
-      realtimeTrajectory.map((state) => ({
-        x: state.x,
-        y: state.y,
-        heading: state.heading,
-        speedL: state.speedL,
-        speedR: state.speedR,
-        servos: {
-          '9': state.servos[9],
-          '15': state.servos[15],
-          '11': state.servos[11],
-          '13': state.servos[13],
-        },
-        hitWall: state.hitWall,
-        leds: [null, null, null, null],
-      })),
-    );
+  /**
+   * The manual controller owns the whole path; take it as given.
+   *
+   * Two separate bugs met here. It first tracked a cursor into the child's
+   * array, which froze the rover once the child's sliding window stopped the
+   * length growing. Replacing that with a full re-map fixed the freeze and
+   * introduced a worse problem: mapping a three-thousand-point trail into fresh
+   * objects sixty times a second is ~180,000 allocations per second, which
+   * drove React into "maximum update depth" and killed the dev server.
+   *
+   * The child now converts each point once as it happens, so this is a plain
+   * assignment of an array it already built.
+   */
+  const handleManualTrajectory = useCallback((points: TrajectoryPoint[]) => {
+    setTrajectory(points);
     setIsPlaying(true);
   }, []);
 
