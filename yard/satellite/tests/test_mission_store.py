@@ -12,12 +12,13 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'missions.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'missions.db'))
     mission_store.init_db()
 
 
@@ -180,7 +181,7 @@ def test_get_missions_scopes_to_a_yard(tmp_path, monkeypatch):
     """A satellite must never list, and therefore never dispatch, a mission
     belonging to another yard."""
     import mission_store
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
 
     mission_store.upsert_missions([
@@ -199,7 +200,7 @@ def test_actionable_missions_are_never_capped(tmp_path, monkeypatch):
     """A flat newest-N cap drops the oldest rows, which are exactly the ones an
     operator still has work to do on. Queued work must never be hidden."""
     import mission_store
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
 
     # 30 finished missions, all newer than the queued one.
@@ -220,7 +221,7 @@ def test_actionable_missions_are_never_capped(tmp_path, monkeypatch):
 
 def test_cancelled_missions_are_reachable_and_scoped_to_the_yard(tmp_path, monkeypatch):
     import mission_store
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
     mission_store.upsert_missions(
         [
@@ -238,7 +239,7 @@ def test_cancelled_missions_can_be_put_back_in_the_queue(tmp_path, monkeypatch):
     """The rerun path rejected 'cancelled' as not-terminal, so the console's
     "put back in queue" button could never have worked."""
     import mission_store
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
     mission_store.upsert_missions(
         [{'id': 'x', 'yardId': 'curiosity', 'status': 'cancelled', 'submittedAt': '2026-07-01'}],

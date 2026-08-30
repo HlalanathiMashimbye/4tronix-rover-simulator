@@ -13,7 +13,8 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
+import mission_store
+import store.db as store_db  # noqa: E402
 import sync_worker  # noqa: E402
 
 
@@ -39,7 +40,7 @@ FakeSnap = FakeSnapshot
 
 @pytest.fixture(autouse=True)
 def _mirror(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
     # firebase_admin's real decorator expects a real transaction; the fake
     # applies writes directly, so pass the function through.

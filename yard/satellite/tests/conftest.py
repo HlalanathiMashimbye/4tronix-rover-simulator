@@ -40,10 +40,11 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     own seeded mirror (`missions`) redirect DB_PATH themselves and run after
     this, so they are unaffected.
     """
-    import mission_store
+    import mission_store  # noqa: F401  (kept: init_db below is reached through it)
+    import store.db as store_db
     import satellite_identity
 
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'isolated-mirror.db'))
+    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'isolated-mirror.db'))
     monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(tmp_path / 'isolated-sat.json'))
     satellite_identity.reset_cache()
     # Create the schema, so a test that reads the mirror without seeding it
