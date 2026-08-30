@@ -218,7 +218,13 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
               <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
                 {hasBlocks ? (
-                  <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs font-semibold">
+                  <div
+                    // p-px, not p-0.5: rounded-lg is 14.4 and the buttons are
+                    // rounded-md at 12.4, so the track between them has to be 2px
+                    // (1px border + 1px padding) for the corners to stay
+                    // concentric. At p-0.5 it was a pixel out.
+                    className="inline-flex rounded-lg border border-border bg-card p-px text-xs font-semibold"
+                  >
                     <button
                       onClick={() => setCodeView('blocks')}
                       className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'bg-gradient-mars text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
