@@ -20,11 +20,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 import operator_console
 from console import deps  # noqa: E402
-from operator_console import (  # noqa: E402
+from console import auth  # noqa: E402
+from console.auth import (  # noqa: E402
     SESSION_MAX_AGE,
     OFFLINE_OPERATOR,
-    _session_expired,
-    _still_authorised,
+    session_expired,
+    still_authorised,
 )
 
 
@@ -54,7 +55,7 @@ def flask_session(monkeypatch):
     class Session(dict):
         modified = False
     s = Session()
-    monkeypatch.setattr(operator_console, 'session', s)
+    monkeypatch.setattr(auth, 'session', s)
     return s
 
 
@@ -75,39 +76,39 @@ def _firebase_returns(monkeypatch, user=None, error=None):
 
 class TestTheSessionIsBounded:
     def test_a_fresh_session_has_not_expired(self):
-        assert _session_expired(_op(), time.time()) is False
+        assert session_expired(_op(), time.time()) is False
 
     def test_a_session_older_than_the_maximum_has(self):
         old = _op(signed_in_at=time.time() - SESSION_MAX_AGE - 1)
-        assert _session_expired(old, time.time()) is True
+        assert session_expired(old, time.time()) is True
 
     def test_a_session_with_no_timestamp_is_treated_as_expired(self):
         # Sessions minted before this existed carry no signed_in_at. Expiring
         # them costs one re-login; trusting them forever is the bug.
         stale = _op()
         del stale['signed_in_at']
-        assert _session_expired(stale, time.time()) is True
+        assert session_expired(stale, time.time()) is True
 
 
 class TestRevocationTakesEffect:
     def test_an_operator_whose_role_was_removed_loses_the_session(self, monkeypatch):
         """The case /operator/team's Remove button creates."""
         _firebase_returns(monkeypatch, user=FakeUser(role=None))
-        assert _still_authorised(_op(), time.time()) is False
+        assert still_authorised(_op(), time.time()) is False
 
     def test_a_disabled_account_loses_the_session(self, monkeypatch):
         _firebase_returns(monkeypatch, user=FakeUser(disabled=True))
-        assert _still_authorised(_op(), time.time()) is False
+        assert still_authorised(_op(), time.time()) is False
 
     def test_a_still_valid_operator_keeps_it(self, monkeypatch):
         _firebase_returns(monkeypatch, user=FakeUser(role='operator'))
-        assert _still_authorised(_op(), time.time()) is True
+        assert still_authorised(_op(), time.time()) is True
 
     def test_a_promotion_is_picked_up_without_re_login(self, monkeypatch):
         _firebase_returns(monkeypatch, user=FakeUser(role='admin'))
         operator = _op(role='operator')
 
-        assert _still_authorised(operator, time.time()) is True
+        assert still_authorised(operator, time.time()) is True
         assert operator['role'] == 'admin'
 
 
@@ -120,14 +121,14 @@ class TestOfflineKeepsWorking:
         session instead.
         """
         _firebase_returns(monkeypatch, error=ConnectionError('no internet'))
-        assert _still_authorised(_op(), time.time()) is True
+        assert still_authorised(_op(), time.time()) is True
 
     def test_the_offline_stub_is_never_checked(self, monkeypatch):
         def explode(*a, **k):
             raise AssertionError('must not call Firebase for the offline stub')
         monkeypatch.setattr(deps, 'init_firebase', explode)
 
-        assert _still_authorised(dict(OFFLINE_OPERATOR), time.time()) is True
+        assert still_authorised(dict(OFFLINE_OPERATOR), time.time()) is True
 
 
 class TestTheCheckIsPaced:
@@ -139,4 +140,4 @@ class TestTheCheckIsPaced:
         monkeypatch.setattr(deps, 'init_firebase', explode)
 
         just_checked = _op(checked_at=time.time())
-        assert _still_authorised(just_checked, time.time()) is True
+        assert still_authorised(just_checked, time.time()) is True
