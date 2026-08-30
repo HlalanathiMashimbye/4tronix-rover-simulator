@@ -186,17 +186,27 @@ class RoverQueueService(RoverQueuePort):
         if not isinstance(instructions, list):
             instructions = [instructions]
 
+        # Check the whole batch against the time and speed ceilings (AB#401)
+        # BEFORE queueing any of it. Validating inside the append loop meant a
+        # batch whose second instruction was rejected had already queued the
+        # first: the rover ran it, the reply said 'added': 0, and
+        # _notify_subscribers() never fired, so nothing watching the queue
+        # heard about the instruction that was about to move a robot.
+        for instr in instructions:
+            if instr.get('cmd') != 'run_python':
+                continue
+            code = instr.get('params', {}).get('code', '')
+            is_valid, errors = validate_mission_code(code)
+            if not is_valid:
+                return {
+                    'status': 'error',
+                    'error': '; '.join(errors) if errors else 'Mission validation failed',
+                    'added': 0,
+                }
+
         added = []
         with self._queue_lock:
             for instr in instructions:
-                # Validate run_python missions against time and speed limits (User Story 401)
-                if instr.get('cmd') == 'run_python':
-                    code = instr.get('params', {}).get('code', '')
-                    is_valid, errors = validate_mission_code(code)
-                    if not is_valid:
-                        error_msg = '; '.join(errors) if errors else 'Mission validation failed'
-                        return {'status': 'error', 'error': error_msg, 'added': 0}
-
                 instruction = {
                     'id': self._uuid_provider(),
                     'cmd': instr.get('cmd'),

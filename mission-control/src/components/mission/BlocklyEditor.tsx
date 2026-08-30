@@ -47,6 +47,8 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   // merged away on load. Without this, blocks they'd placed just vanish
   // from under them with no explanation, on a page that never even asked.
   const [mergedNotice, setMergedNotice] = useState(false);
+  /** Seconds this workspace runs for, when that is over the ceiling. */
+  const [overBudget, setOverBudget] = useState<number | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
   // Loading (and the Monaco/AMD conflict that used to make this silently
@@ -187,29 +189,34 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         );
       flyoutObserverRef.current = flyoutObserver;
 
-      // Validate mission duration and time limit on every change.
-      let lastValidState: Record<string, unknown> | null = null;
-      workspace.addChangeListener(() => {
+      // Auto-save on every change, and keep the running time in view so the
+      // ceiling is never a surprise at submit (AB#401).
+      //
+      // This used to undo the offending change and raise an alert(). Two
+      // problems with that. Blockly fires this listener for UI events too -
+      // clicks, selections, scrolling the canvas - so a workspace that was
+      // already over the limit, a remix opened from a mission page or anything
+      // saved before the ceiling existed, would rewind one real edit every time
+      // the learner so much as clicked. And the undo ran between
+      // disableEvents() and enableEvents() with no finally, so a throw in there
+      // left events off and killed autosave for the rest of the session,
+      // silently, inside the catch below.
+      //
+      // Warning instead of undoing keeps the learner's work theirs. Submit is
+      // still a hard refusal, which is where the story puts the stop.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      workspace.addChangeListener((event: any) => {
+        // Selections and viewport moves change nothing worth measuring.
+        if (event?.isUiEvent) return;
         try {
-          // Save valid state before checking duration
-          lastValidState = Blockly.serialization.workspaces.save(workspace);
+          localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(Blockly.serialization.workspaces.save(workspace))
+          );
 
-          // Check if duration exceeds limit
           const duration = calculateBlocklyDuration(workspace);
-          if (duration > MISSION_TIME_LIMIT_SECONDS) {
-            // Undo the change that caused the overage
-            Blockly.Events.disableEvents();
-            workspace.undo(false);
-            Blockly.Events.enableEvents();
-
-            alert(
-              'Mission time limit exceeded. A mission cannot exceed 120 seconds. Please reduce the seconds on your blocks.'
-            );
-            return;
-          }
-
-          // Duration is OK, save it
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(lastValidState));
+          const over = duration > MISSION_TIME_LIMIT_SECONDS ? Math.round(duration) : null;
+          setOverBudget((previous) => (previous === over ? previous : over));
         } catch {
           // Non-fatal - a transient change event during load can race; ignore.
         }
@@ -381,6 +388,20 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         <div className="flex flex-shrink-0 items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2 text-xs">
           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
           <p className="text-buzz">Merged an extra uplink into one mission.</p>
+        </div>
+      )}
+
+      {overBudget !== null && (
+        <div
+          role="status"
+          className="flex flex-shrink-0 items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-2 text-xs"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <p className="text-destructive">
+            This mission runs for about {overBudget} seconds. The most a mission can take is{' '}
+            {MISSION_TIME_LIMIT_SECONDS}, so shorten a drive or repeat it fewer times before you
+            send it.
+          </p>
         </div>
       )}
 
