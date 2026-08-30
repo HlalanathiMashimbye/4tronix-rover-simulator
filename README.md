@@ -13,9 +13,9 @@ The system has three deployable parts:
 | **Rover server** (`yard/rover`) | A Raspberry Pi on the rover | Runs the mission's Python against the rover's motors, servos and LEDs |
 
 Cloud infrastructure (Firebase, Cloud Run, DNS) is defined in `infra/`
-(Terraform). `yard/docs/architecture.md` covers the yard's own design; a
-repo-wide architecture doc covering how the three parts fit together and how
-the layers inside each map to MVC is planned but not yet written.
+(Terraform). [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how the
+three parts fit together and how the layers inside each map to MVC;
+`yard/docs/architecture.md` goes deeper on the yard alone.
 
 ## Running it locally
 
@@ -37,6 +37,18 @@ real rover is reachable, so the full loop (submit, dispatch, run, video) works
 on a laptop with no hardware.
 
 ## Documentation
+
+Start with these three. They exist so this project can be picked up without
+the people who built it (AB#358).
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - how the system is shaped,
+  and why. Read the constraints in the roadmap first.
+- [`ROADMAP.md`](ROADMAP.md) - where it is going, what is deliberately
+  deferred, and the known gaps
+- [`CHANGELOG.md`](CHANGELOG.md) - what has happened, and why each change was
+  made
+
+Then:
 
 - [`docs/RUNBOOK.md`](docs/RUNBOOK.md) - operating the deployed system
 - [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md) - what is and isn't covered
