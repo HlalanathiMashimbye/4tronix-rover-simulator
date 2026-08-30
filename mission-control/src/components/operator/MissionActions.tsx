@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Check, Loader2, Trash2, Video, X } from 'lucide-react';
 
-import type { QueueMission } from '@/lib/services/operatorQueueService';
+import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 
 /**
  * The five desk actions for one mission (AB#379).

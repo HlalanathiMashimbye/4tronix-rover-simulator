@@ -32,7 +32,7 @@ import { missionEmailComposer } from '@/infrastructure/email/missionStatusTempla
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
-import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/lib/auth/dal';
+import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { isKnownYard } from '@/infrastructure/config/yards';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {

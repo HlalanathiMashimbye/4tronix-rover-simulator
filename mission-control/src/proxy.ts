@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-import { SESSION_COOKIE } from '@/lib/auth/dal';
+import { SESSION_COOKIE } from '@/infrastructure/auth/dal';
 
 /**
  * Optimistic gate for the operator surface (AB#341).

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Code2, Play } from 'lucide-react';
-import { loadBlockly } from '@/lib/loadBlockly';
+import { loadBlockly } from '@/infrastructure/cdn/loadBlockly';
 import {
   defineRoverBlocks,
   migrateSpinBlocks,

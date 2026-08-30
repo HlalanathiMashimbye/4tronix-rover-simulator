@@ -18,7 +18,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 const subscribeToYardQueue = jest.fn();
 
-jest.mock('@/lib/services/operatorQueueService', () => ({
+jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToYardQueue: (...args: unknown[]) => subscribeToYardQueue(...args),
 }));
 

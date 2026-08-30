@@ -21,13 +21,13 @@ jest.mock('firebase/firestore', () => ({
   onSnapshot: (...args: unknown[]) => onSnapshot(...args),
 }));
 
-jest.mock('@/lib/firebase', () => ({ getFirestoreClient: () => ({}) }));
+jest.mock('@/infrastructure/persistence/firebase-client', () => ({ getFirestoreClient: () => ({}) }));
 
 import {
   subscribeToYardQueue,
   ACTIVE_STATUSES,
   QUEUE_LIMIT,
-} from '@/lib/services/operatorQueueService';
+} from '@/infrastructure/persistence/operatorQueueService';
 
 function doc(id: string, data: Record<string, unknown>) {
   return { id, data: () => data };

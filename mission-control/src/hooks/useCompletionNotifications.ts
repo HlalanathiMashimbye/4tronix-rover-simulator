@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Mission } from '@/core/domain/entities/Mission';
-import { subscribeRecentCompletions } from '@/lib/services/missionQueryService';
+import { subscribeRecentCompletions } from '@/infrastructure/persistence/missionQueryService';
 
 const SEEN_KEY = 'mars-rover-notifications-seen';
 const DISMISSED_KEY = 'mars-rover-notifications-dismissed';

@@ -9,9 +9,9 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { getFirestoreClient } from '@/lib/firebase';
-import { getOrCreateSession, clearSession } from '@/lib/anonymous-auth';
-import { getLearnerID } from '@/lib/getLearnerID';
+import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
+import { getOrCreateSession, clearSession } from '@/infrastructure/browser/anonymous-auth';
+import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';

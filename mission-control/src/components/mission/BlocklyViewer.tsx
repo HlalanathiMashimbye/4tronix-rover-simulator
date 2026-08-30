@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { loadBlockly } from '@/lib/loadBlockly';
+import { loadBlockly } from '@/infrastructure/cdn/loadBlockly';
 import { defineRoverBlocks, migrateSpinBlocks } from '@/lib/roverBlockly';
 
 /**

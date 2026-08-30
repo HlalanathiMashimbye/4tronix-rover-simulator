@@ -13,7 +13,7 @@ import {
   serverSoundSnapshot,
   setMuted,
   subscribeToSound,
-} from '@/lib/soundPreference';
+} from '@/hooks/soundPreference';
 
 export function RunStackCarousel({
   runs,

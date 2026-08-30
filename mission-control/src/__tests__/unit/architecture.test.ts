@@ -71,6 +71,31 @@ describe('the dependency rule', () => {
   });
 });
 
+describe('src/lib stays small', () => {
+  it('holds only the yard-shared modules and named UI helpers', () => {
+    /**
+     * lib was the grab-bag: 23 files holding Firebase clients, browser
+     * storage, React hooks, CDN loading, domain rules and UI helpers, with
+     * nothing in the name to say which was which. Everything with a real
+     * home has gone to it. This keeps it from refilling, which a README
+     * alone did not do the first time.
+     *
+     * See src/lib/README.md for why each of these earns its place.
+     */
+    const SHARED_WITH_YARD = [
+      'rover-physics', 'simulateCommands', 'parseRoverCode',
+      'roverSimRender', 'roverBlockly',
+    ];
+    const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns'];
+
+    const actual = sourceFiles('lib')
+      .map((f) => f.replace(/^lib\//, '').replace(/\.tsx?$/, ''))
+      .sort();
+
+    expect(actual).toEqual([...SHARED_WITH_YARD, ...UI_HELPERS].sort());
+  });
+});
+
 describe('the server/browser boundary', () => {
   it('no client component reaches the privileged container', () => {
     /**

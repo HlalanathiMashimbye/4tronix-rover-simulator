@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { AlertTriangle, Lock } from 'lucide-react';
 
-import { getFirebaseAuth } from '@/lib/firebase';
+import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
 
 /**
  * Operator sign-in (AB#342).

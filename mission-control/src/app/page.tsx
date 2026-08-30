@@ -9,7 +9,7 @@ import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { getDiscoveryStatus, type DiscoveryStatus } from '@/core/domain/services/discoveryStatus';
-import { useFavorites } from '@/lib/useFavorites';
+import { useFavorites } from '@/hooks/useFavorites';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
