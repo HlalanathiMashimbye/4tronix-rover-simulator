@@ -29,7 +29,7 @@ is where _connect() actually reads it.
 from store.db import (  # noqa: F401
     DB_PATH,
     DEFAULT_FINISHED_PAGE,
-    _ADDED_COLUMNS,
+    _SCHEMA,
     _FORCE_KEY,
     _db_lock,
     _now_iso,
@@ -38,6 +38,9 @@ from store.db import (  # noqa: F401
     _migrate,
 )
 from store.outbox import (  # noqa: F401
+    MAX_FLUSH_ATTEMPTS,
+    parked_entries,
+    unpark_outbox,
     outbox_count,
     write_and_enqueue,
     peek_outbox,
