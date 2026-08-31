@@ -11,6 +11,11 @@ import type { Firestore as AdminFirestore } from 'firebase-admin/firestore';
 
 jest.mock('nanoid', () => ({ nanoid: jest.fn(() => 'testmissionid12345') }));
 
+let runIdCounter = 0;
+jest.mock('crypto', () => ({
+  randomUUID: jest.fn(() => `run-id-${++runIdCounter}`),
+}));
+
 function adminFirestore(runDocs: Array<{ id: string; data: Record<string, unknown> }>) {
   const set = jest.fn(
     async (_payload: Record<string, unknown>, _options?: { merge?: boolean }) => undefined,
@@ -18,7 +23,7 @@ function adminFirestore(runDocs: Array<{ id: string; data: Record<string, unknow
   const runsGet = jest.fn(async () => ({
     docs: runDocs.map((d) => ({ id: d.id, data: () => d.data })),
   }));
-  const runDoc = jest.fn((_yardId: string) => ({ set }));
+  const runDoc = jest.fn((_runId: string) => ({ set }));
   const runsCollection = jest.fn(() => ({ get: runsGet, doc: runDoc }));
 
   const firestore = {
@@ -33,8 +38,8 @@ function adminFirestore(runDocs: Array<{ id: string; data: Record<string, unknow
 describe('findRuns', () => {
   it('reads every yard that attempted the mission', async () => {
     const { firestore } = adminFirestore([
-      { id: 'curiosity', data: { status: 'completed', youtubeUrl: 'https://youtu.be/a' } },
-      { id: 'durban-1', data: { status: 'processing' } },
+      { id: 'run-id-1', data: { yardId: 'curiosity', status: 'completed', youtubeUrl: 'https://youtu.be/a' } },
+      { id: 'run-id-2', data: { yardId: 'durban-1', status: 'processing' } },
     ]);
 
     const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
@@ -43,16 +48,16 @@ describe('findRuns', () => {
     expect(runs[0].youtubeUrl).toBe('https://youtu.be/a');
   });
 
-  it('takes the yard from the document id, not a stored field', async () => {
-    // The id IS the yard. A stale or wrong yardId field must never win, or a
-    // run could claim to belong to a yard that never ran it.
+  it('takes the runId from the document id, not a stored field', async () => {
+    // The id IS the runId. A stale or wrong runId field must never win, or a
+    // run could be confused with another execution attempt.
     const { firestore } = adminFirestore([
-      { id: 'curiosity', data: { yardId: 'somewhere-else', status: 'completed' } },
+      { id: 'run-id-1', data: { runId: 'wrong-id', yardId: 'curiosity', status: 'completed' } },
     ]);
 
     const runs = await new FirestoreMissionRepository(firestore).findRuns('m1');
 
-    expect(runs[0].yardId).toBe('curiosity');
+    expect(runs[0].runId).toBe('run-id-1');
   });
 
   it('returns an empty list for a mission nobody has run', async () => {
@@ -71,18 +76,19 @@ describe('findRuns', () => {
 });
 
 describe('upsertRun', () => {
-  it('writes to the yard document and merges', async () => {
+  it('writes to the run document and merges', async () => {
     // Merge matters: the video is attached minutes after the run finishes, so
     // a later status write must not wipe a youtubeUrl set earlier.
     const { firestore, set, runDoc } = adminFirestore([]);
 
     await new FirestoreMissionRepository(firestore).upsertRun('m1', {
+      runId: 'run-id-1',
       yardId: 'curiosity',
       status: 'completed',
       completedAt: '2026-08-27T10:00:00Z',
     });
 
-    expect(runDoc).toHaveBeenCalledWith('curiosity');
+    expect(runDoc).toHaveBeenCalledWith('run-id-1');
     const [payload, options] = set.mock.calls[0];
     expect(options).toEqual({ merge: true });
     expect(payload).toMatchObject({ yardId: 'curiosity', status: 'completed' });
@@ -92,6 +98,7 @@ describe('upsertRun', () => {
     const { firestore, set } = adminFirestore([]);
 
     await new FirestoreMissionRepository(firestore).upsertRun('m1', {
+      runId: 'run-id-1',
       yardId: 'curiosity',
       status: 'queued',
       youtubeUrl: undefined,
@@ -103,15 +110,15 @@ describe('upsertRun', () => {
     expect(payload).not.toHaveProperty('completedAt');
   });
 
-  it('writes each yard to its own document, so two yards never collide', async () => {
-    // The reason no lock is needed: separate documents, so a concurrent write
-    // from another yard cannot overwrite this one.
+  it('writes each run to its own document, so two yards can run the same mission concurrently', async () => {
+    // Each run has a unique runId, so concurrent attempts from different yards
+    // never overwrite each other.
     const { firestore, runDoc } = adminFirestore([]);
     const repository = new FirestoreMissionRepository(firestore);
 
-    await repository.upsertRun('m1', { yardId: 'curiosity', status: 'processing' });
-    await repository.upsertRun('m1', { yardId: 'durban-1', status: 'processing' });
+    await repository.upsertRun('m1', { runId: 'run-id-1', yardId: 'curiosity', status: 'processing' });
+    await repository.upsertRun('m1', { runId: 'run-id-2', yardId: 'durban-1', status: 'processing' });
 
-    expect(runDoc.mock.calls.map((c) => c[0])).toEqual(['curiosity', 'durban-1']);
+    expect(runDoc.mock.calls.map((c) => c[0])).toEqual(['run-id-1', 'run-id-2']);
   });
 });

@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { adminMissionRepository } from '@/infrastructure/container.server';
@@ -144,7 +145,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // flushed one. The decision falls back to the mission's own status and the
     // write creates the run.
     const runs = await repository.findRuns(id);
-    const run = runs.find((r) => r.yardId === command.yardId) ?? null;
+    // The LATEST run at this yard, not the first match. Runs are keyed by
+    // runId now precisely so a yard can attempt a mission twice, and an
+    // operator pressing "mark complete" means the run in front of them, not
+    // the one from last week that happens to sort first.
+    const run =
+      runs
+        .filter((r) => r.yardId === command.yardId)
+        .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null;
 
     const snapshot: RunSnapshot = {
       runStatus: run?.status ?? null,
@@ -203,8 +211,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const decidedAt = new Date().toISOString();
+    // For offline yards, the run may not exist yet. Generate a runId if needed.
+    const runId = run?.runId ?? nanoid();
 
-    await repository.applyBookkeeping(id, command.yardId, {
+    await repository.applyBookkeeping(id, runId, command.yardId, {
       status: decision.change.status,
       clearsReview: decision.change.clearsReview,
       youtubeUrl,

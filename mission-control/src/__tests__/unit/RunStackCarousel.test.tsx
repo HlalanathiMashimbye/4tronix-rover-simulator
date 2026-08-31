@@ -43,6 +43,7 @@ const YARDS = [
 
 function run(yardId: string, id: string, completedAt: string): MissionRun {
   return {
+    runId: `run-${id}`,
     yardId,
     status: 'completed',
     youtubeUrl: `https://youtu.be/${id}`,

@@ -101,13 +101,15 @@ describe('POST /api/cron/youtube-link', () => {
         { videoId: 'abc', description: 'MissionID: m1' },
       ]);
       findRuns.mockResolvedValue([
-        { yardId: 'curiosity', status: 'completed', completedAt: '2026-08-30T10:00:00Z' },
+        { runId: 'r-77', yardId: 'curiosity', status: 'completed', completedAt: '2026-08-30T10:00:00Z' },
       ]);
 
       const body = await (await POST(request('right-secret'))).json();
 
       expect(body).toMatchObject({ success: true, linked: 1, missions: ['m1'] });
-      expect(applyBookkeeping).toHaveBeenCalledWith('m1', 'curiosity', expect.objectContaining({
+      // The runId names WHICH attempt the video belongs to, now that a yard
+      // can run the same mission more than once.
+      expect(applyBookkeeping).toHaveBeenCalledWith('m1', 'r-77', 'curiosity', expect.objectContaining({
         youtubeUrl: 'https://www.youtube.com/watch?v=abc',
         decidedBy: 'youtube-auto-link',
       }));
@@ -118,7 +120,7 @@ describe('POST /api/cron/youtube-link', () => {
         { videoId: 'abc', description: 'MissionID: m1' },
       ]);
       findRuns.mockResolvedValue([
-        { yardId: 'curiosity', status: 'completed', youtubeUrl: 'https://y/abc' },
+        { runId: 'r-1', yardId: 'curiosity', status: 'completed', youtubeUrl: 'https://y/abc' },
       ]);
 
       const body = await (await POST(request('right-secret'))).json();
@@ -134,7 +136,7 @@ describe('POST /api/cron/youtube-link', () => {
       ]);
       findRuns.mockImplementation(async (id: string) => {
         if (id === 'bad') throw new Error('Firestore said no');
-        return [{ yardId: 'curiosity', status: 'completed' }];
+        return [{ runId: 'r-2', yardId: 'curiosity', status: 'completed' }];
       });
 
       const body = await (await POST(request('right-secret'))).json();
