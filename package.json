@@ -8,11 +8,5 @@
     "dev:yard": "node scripts/dev-yard.js",
     "dev:all": "node scripts/dev-launcher.js",
     "dev": "node scripts/dev-launcher.js"
-  },
-  "dependencies": {
-    "firebase": "^12.16.0"
-  },
-  "devDependencies": {
-    "typescript": "^7.0.2"
   }
 }
