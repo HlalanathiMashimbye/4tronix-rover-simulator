@@ -66,12 +66,6 @@ variable "environments" {
   }
 }
 
-variable "firebase_credential_source" {
-  description = "\"adc\" to authenticate to Firestore as the runtime service account (no key stored anywhere), or \"service-account\" to mount FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY from Secret Manager. See the module variable for the full reasoning."
-  type        = string
-  default     = "service-account"
-}
-
 variable "domains" {
   description = "Optional public hostname per environment (e.g. staging = mission-control-staging.example.com). When set, Terraform provisions a Google-managed cert and HTTPS on the load balancer; point DNS A records at terraform output lb_ip_addresses first. When empty, that env is HTTP-only on the LB IP (fine for a short demo, not for real mail links)."
   type        = map(string)

@@ -3,42 +3,34 @@
  *
  * Singleton pattern to ensure Firebase Admin is initialized once.
  *
- * Two credential sources, chosen by what the environment provides:
+ * Credentials come from Application Default Credentials, and only from there.
+ * On Cloud Run the runtime service account already holds roles/datastore.user
+ * in the same project Firestore lives in; locally you sign in once with
+ * `gcloud auth application-default login`. Either way no credential is stored
+ * in the repo, in a .env, or in Secret Manager: nothing to rotate, nothing to
+ * leak, nothing to copy onto a second laptop.
  *
- * - **Service account** (FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY).
- *   Used for local development and anywhere outside the Firestore project.
+ * There used to be a service-account branch reading FIREBASE_CLIENT_EMAIL and
+ * FIREBASE_PRIVATE_KEY. Every deployment we run has Firestore in the same
+ * project as the service (infra/impact.tfvars sets firebase_credential_source
+ * = "adc"), so the branch authenticated nothing and existed only as a
+ * documented reason to put a private key in a .env file. It is gone. The one
+ * genuine cross-project case, copying between two Firestore projects, lives in
+ * scripts/migrate-to-project.mjs, which takes its credentials explicitly.
  *
- * - **Application Default Credentials** (neither of the above set).
- *   On Cloud Run the runtime service account already holds
- *   roles/datastore.user in the same project Firestore lives in, so no
- *   credentials need to exist at all: no key to store in Secret Manager,
- *   none to rotate, none to leak.
- *
- * FIREBASE_PROJECT_ID is required either way. ADC can technically infer the
- * project from the metadata server, but requiring it keeps "no config at all"
- * a loud error instead of silently authenticating against whatever project a
- * developer's gcloud happens to point at.
+ * FIREBASE_PROJECT_ID is still required. ADC can infer the project from the
+ * metadata server, but requiring it keeps "no config at all" a loud error
+ * instead of silently authenticating against whatever project a developer's
+ * gcloud happens to point at.
  */
 
-import { initializeApp, getApps, cert, applicationDefault, App } from 'firebase-admin/app';
+import { initializeApp, getApps, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 
 let app: App | undefined;
 let firestoreInstance: Firestore | undefined;
 let authInstance: Auth | undefined;
-
-type FirebaseAdminConfig =
-  | {
-      credentialSource: 'service-account';
-      projectId: string;
-      clientEmail: string;
-      privateKey: string;
-    }
-  | {
-      credentialSource: 'application-default';
-      projectId: string;
-    };
 
 function normalizeEnvValue(value?: string): string | undefined {
   if (!value) {
@@ -57,14 +49,12 @@ function normalizeEnvValue(value?: string): string | undefined {
   return trimmedValue;
 }
 
-function getFirebaseAdminConfig(): FirebaseAdminConfig {
+function resolveProjectId(): string {
   const projectId = normalizeEnvValue(
     process.env.FIREBASE_PROJECT_ID ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
     process.env.REACT_APP_FIREBASE_PROJECT_ID
   );
-  const clientEmail = normalizeEnvValue(process.env.FIREBASE_CLIENT_EMAIL);
-  const privateKey = normalizeEnvValue(process.env.FIREBASE_PRIVATE_KEY);
 
   if (!projectId) {
     throw new Error(
@@ -72,32 +62,28 @@ function getFirebaseAdminConfig(): FirebaseAdminConfig {
         'Missing Firebase Admin environment variables: FIREBASE_PROJECT_ID.',
         'The /api/missions route uses the Firebase Admin SDK.',
         'Client-side Firebase config such as NEXT_PUBLIC_FIREBASE_* or REACT_APP_FIREBASE_* is not enough on its own.',
-        'Set FIREBASE_PROJECT_ID, and either both of FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY,',
-        'or neither of them to use Application Default Credentials (the runtime service account on Cloud Run).',
+        'Set FIREBASE_PROJECT_ID and sign in with `gcloud auth application-default login`.',
       ].join(' ')
     );
   }
 
-  if (clientEmail && privateKey) {
-    return { credentialSource: 'service-account', projectId, clientEmail, privateKey };
-  }
-
-  // Exactly one half of the pair is set. That is nearly always a broken .env
-  // rather than a deliberate choice, and silently falling back to ADC here
-  // would authenticate as a DIFFERENT identity than the one intended. Fail loudly.
-  if (clientEmail || privateKey) {
-    const missing = clientEmail ? 'FIREBASE_PRIVATE_KEY' : 'FIREBASE_CLIENT_EMAIL';
-    const present = clientEmail ? 'FIREBASE_CLIENT_EMAIL' : 'FIREBASE_PRIVATE_KEY';
+  // Refused rather than ignored. Someone with these still set believes they
+  // are authenticating as that service account; silently using ADC instead
+  // would run as a different identity with different permissions, which is
+  // the failure this is worth a hard stop to prevent.
+  if (process.env.FIREBASE_CLIENT_EMAIL || process.env.FIREBASE_PRIVATE_KEY) {
     throw new Error(
       [
-        `Incomplete Firebase Admin service account config: ${present} is set but ${missing} is not.`,
-        'Set both to authenticate with a service account, or unset both to use',
-        'Application Default Credentials.',
+        'FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY are set, but the service-account',
+        'credential path has been removed. Authentication is Application Default',
+        'Credentials only: run `gcloud auth application-default login`, delete both',
+        'variables from your .env, and delete the key itself in the Google Cloud',
+        'console, since a key that still exists is still a way in.',
       ].join(' ')
     );
   }
 
-  return { credentialSource: 'application-default', projectId };
+  return projectId;
 }
 
 /**
@@ -115,23 +101,16 @@ export function initializeFirebaseAdmin(): App {
     return app;
   }
 
-  const config = getFirebaseAdminConfig();
+  // Resolved first, deliberately: applicationDefault() throws its own opaque
+  // error when no credential is present, and evaluating it inside the object
+  // literal would let that beat the far more useful messages above to the
+  // console.
+  const projectId = resolveProjectId();
 
-  app = initializeApp(
-    config.credentialSource === 'service-account'
-      ? {
-          credential: cert({
-            projectId: config.projectId,
-            clientEmail: config.clientEmail,
-            // \n survives .env files as the two characters backslash-n.
-            privateKey: config.privateKey.replace(/\\n/g, '\n'),
-          }),
-        }
-      : {
-          credential: applicationDefault(),
-          projectId: config.projectId,
-        }
-  );
+  app = initializeApp({
+    credential: applicationDefault(),
+    projectId,
+  });
 
   return app;
 }
@@ -159,8 +138,7 @@ export function getFirestoreInstance(): Firestore {
  * back as a role-gated route, so the server needs to verify sessions again.
  *
  * Shares initializeFirebaseAdmin() with Firestore, so it inherits the same
- * credential decision: ADC on Cloud Run (no key to store, rotate or leak) and a
- * service account elsewhere.
+ * credentials.
  */
 export function getFirebaseAdminAuth(): Auth {
   if (authInstance) {

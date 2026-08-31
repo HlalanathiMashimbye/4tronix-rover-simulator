@@ -11,10 +11,11 @@ The public mission-control web app has no operator surface at all; this
 console is the only operator UI and it lives on the yard's local network.
 
 Configuration (environment):
-  FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY
-      Service account for Firestore + token verification (same variable
-      names as mission-control's .env, so one env file can feed both).
-      GOOGLE_APPLICATION_CREDENTIALS (path to a JSON key) also works.
+  FIREBASE_PROJECT_ID
+      The project for Firestore + token verification (same variable name as
+      mission-control's .env, so one env file can feed both). Credentials
+      come from Application Default Credentials only:
+      `gcloud auth application-default login`.
   FIREBASE_WEB_API_KEY (or NEXT_PUBLIC_FIREBASE_API_KEY)
       Web API key used for the email/password sign-in REST call.
   OPERATOR_SESSION_SECRET

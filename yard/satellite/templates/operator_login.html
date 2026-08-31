@@ -147,7 +147,7 @@
             {% if not configured %}
             <div class="alert tone-bad" role="alert">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                <span>This satellite can&rsquo;t reach Firebase, so sign-in is unavailable. Either run <code>gcloud auth application-default login</code>, or set <code>FIREBASE_CLIENT_EMAIL</code> and <code>FIREBASE_PRIVATE_KEY</code> together. The reason is printed in the satellite&rsquo;s log.</span>
+                <span>This satellite can&rsquo;t reach Firebase, so sign-in is unavailable. Run <code>gcloud auth application-default login</code> on this satellite. The reason is printed in the satellite&rsquo;s log.</span>
             </div>
             {% endif %}
 

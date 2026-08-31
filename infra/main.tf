@@ -44,8 +44,6 @@ module "mission_control" {
   resend_from_email        = var.resend_from_email
   resend_sandbox_recipient = var.resend_sandbox_recipient
 
-  firebase_credential_source = var.firebase_credential_source
-
   deploy_service_account_email = module.github_wif.deploy_service_account_email
 
   depends_on = [google_project_service.apis]

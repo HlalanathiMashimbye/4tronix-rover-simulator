@@ -12,8 +12,9 @@
 # The NEXT_PUBLIC_* values are inlined into the client bundle at BUILD time, so
 # they have to be here rather than set on the service. They are the public
 # Firebase web config, which ships to every browser anyway. Server secrets
-# (FIREBASE_PRIVATE_KEY, RESEND_API_KEY) are NOT here: Cloud Run mounts those
-# from Secret Manager at runtime.
+# (RESEND_API_KEY) are NOT here: Cloud Run mounts those from Secret Manager at
+# runtime. There is no Firebase secret to mount; the service authenticates to
+# Firestore as its own runtime service account.
 #
 # Invoked by scripts/deploy-demo.sh, which reads the values from
 # mission-control/.env so nobody has to paste them.

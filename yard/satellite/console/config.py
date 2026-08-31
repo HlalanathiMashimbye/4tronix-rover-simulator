@@ -112,18 +112,16 @@ def api_integrations():
                 'id': 'firestore',
                 'name': 'Firestore',
                 'why': 'Syncs missions with mission-control.',
-                # Says which credential is actually in use rather than
-                # assuming a service account: ADC is what staging, prod and
-                # local dev all use, and reporting it as a missing key sent
-                # people looking for a variable that should not be set.
+                # One credential mode now, so this no longer has to guess
+                # which one is in use. The failure hint names the one command
+                # that fixes it: pointing people at FIREBASE_CLIENT_EMAIL and
+                # FIREBASE_PRIVATE_KEY sent them looking for variables that
+                # are now refused outright.
                 **state(deps.admin_configured(),
-                        ('Authenticated as ' + (
-                            'a service account' if deps.clean_env('FIREBASE_CLIENT_EMAIL')
-                            else 'Application Default Credentials'
-                        )) if deps.admin_configured()
+                        'Authenticated with Application Default Credentials'
+                        if deps.admin_configured()
                         else 'Cannot reach Firebase. Run `gcloud auth application-default '
-                             'login`, or set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY '
-                             'together. The reason is in the satellite log.'),
+                             'login` on this satellite. The reason is in the satellite log.'),
             },
             {
                 'id': 'youtube',

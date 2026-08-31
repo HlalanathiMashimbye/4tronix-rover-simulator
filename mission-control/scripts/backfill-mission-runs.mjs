@@ -28,7 +28,7 @@
  *   --undo    delete every run document this would create (rollback)
  */
 
-import { initializeApp, cert, applicationDefault } from 'firebase-admin/app';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const args = process.argv.slice(2);
@@ -45,20 +45,10 @@ function requireEnv(name) {
 }
 
 const projectId = requireEnv('FIREBASE_PROJECT_ID');
-const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-const privateKey = process.env.FIREBASE_PRIVATE_KEY;
-
-initializeApp(
-  clientEmail && privateKey
-    ? {
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey: privateKey.trim().replace(/^"|"$/g, '').replace(/\\n/g, '\n'),
-        }),
-      }
-    : { credential: applicationDefault(), projectId },
-);
+initializeApp({
+  credential: applicationDefault(),
+  projectId,
+});
 
 const db = getFirestore();
 
