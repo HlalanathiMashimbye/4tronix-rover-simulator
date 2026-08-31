@@ -286,17 +286,19 @@ def sign_in(client):
 # Auth gating
 # ---------------------------------------------------------------------------
 
-def test_root_opens_the_code_station_without_a_session(client):
+def test_root_opens_the_station_hub_without_a_session(client):
     """The yard used to open on the Firestore queue, behind a sign-in.
 
     That put reaching Firebase between an operator and the one thing a yard
     has to do, on a box whose point is working when the venue wifi does not.
-    Copy, paste, run talks to the rover over the LAN and needs nothing else.
+    The hub needs neither.
     """
     resp = client.get('/')
+    page = resp.get_data(as_text=True)
 
-    assert resp.status_code == 302
-    assert resp.headers['Location'].endswith('/code/')
+    assert resp.status_code == 200
+    for station in ('/code/', '/monitor/', '/settings'):
+        assert station in page
 
 
 def test_root_does_not_send_anyone_to_a_login(client):

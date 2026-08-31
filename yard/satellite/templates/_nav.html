@@ -20,7 +20,11 @@
     <span class="brand-mark"></span>
     <span class="brand-txt"><b>Mars Yard</b><small>Satellite Console</small></span>
   </a>
-  <nav class="topnav">
+  <button class="navtoggle" id="navToggle" type="button" aria-expanded="false" aria-controls="topnav" aria-label="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+  </button>
+  <nav class="topnav" id="topnav">
+    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}>Home</a>
     {# No Queue item: running a mission here is copy, paste, run, which is the
        Code station. The Firestore-backed queue needed a sign-in and an
        internet connection to show anything, on a box that has to work without
@@ -109,6 +113,26 @@ window.YardStatus = window.YardStatus || (function () {
     YardStatus.onError(function () {
       dot.className = 'sys-dot bad';
       txt.textContent = 'Rover offline';
+    });
+  }
+
+  // The nav collapses to a hamburger below 760px, where four items plus the
+  // rover chip do not fit beside the brand. Toggled in JS rather than with a
+  // checkbox hack so aria-expanded stays honest for a screen reader.
+  var toggle = document.getElementById('navToggle');
+  var topnav = document.getElementById('topnav');
+  if (toggle && topnav) {
+    toggle.addEventListener('click', function () {
+      var open = topnav.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    // Tapping a link on a phone should not leave the menu hanging open behind
+    // the page it just navigated to.
+    topnav.addEventListener('click', function (e) {
+      if (e.target.closest('a')) {
+        topnav.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+      }
     });
   }
 

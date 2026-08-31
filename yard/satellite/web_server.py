@@ -126,7 +126,11 @@ def _check_camera():
 
 @app.route('/')
 def index():
-    """The yard opens on the code station.
+    """The station hub.
+
+    No sign-in and no Firestore. This used to be the mission queue behind an
+    operator login, which put a Firebase round trip in front of the one thing
+    a yard has to be able to do on a night when the venue wifi is down.
 
     It used to open on the Firestore-backed mission queue, behind a sign-in.
     That made the one thing a yard has to be able to do - run a mission -
@@ -134,10 +138,10 @@ def index():
     the venue wifi does not. Pasting code into /code/ and pressing run talks
     to the rover over the LAN and needs nothing else, so that is the door.
 
-    /code/ and /monitor/ were already login-free: tablets and the TV are
-    pointed at those URLs once during setup and never sign in.
+    /code/ and /monitor/ are login-free for the same reason: tablets and the
+    TV are pointed at those URLs once during setup and never sign in.
     """
-    return redirect('/code/')
+    return render_template('home.html', server_ip=_local_ip(), server_port=SERVER_PORT)
 
 
 @app.route('/settings')
