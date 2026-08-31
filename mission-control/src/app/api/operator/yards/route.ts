@@ -22,9 +22,21 @@ const addSchema = z.object({
   city: z.string().trim().min(1, 'Give the city. This is the part a learner reads.'),
 });
 
+/**
+ * Everything about a yard except its id.
+ *
+ * THE ID IS NOT EDITABLE, here or anywhere. It is the rover's hostname and
+ * every mission ever run there carries it, so changing it is a migration that
+ * has to write formerIds and leave the old value resolving, not a text field.
+ * Correcting a venue's name or moving it to a new suburb is an edit; renaming
+ * the rover is not.
+ */
 const patchSchema = z.object({
   id: z.string().trim().min(1),
-  active: z.boolean(),
+  active: z.boolean().optional(),
+  name: z.string().trim().min(1, 'The venue needs a name.').optional(),
+  area: z.string().trim().min(1, 'The suburb cannot be blank.').optional(),
+  city: z.string().trim().min(1, 'The city cannot be blank. It is what a learner reads.').optional(),
 });
 
 function authFailure(error: unknown) {
@@ -120,18 +132,33 @@ export async function PATCH(request: NextRequest) {
 
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ success: false, error: 'Send an id and active.' }, { status: 400 });
+    return NextResponse.json(
+      { success: false, error: parsed.error.issues[0]?.message ?? 'Send an id and what to change.' },
+      { status: 400 },
+    );
   }
+
+  const { id, active, ...details } = parsed.data;
 
   const repository = adminYardRepository();
   const yards = await repository.findAll();
-  if (!yards.some((y) => y.id === parsed.data.id)) {
+  const existing = yards.find((y) => y.id === id);
+  if (!existing) {
     return NextResponse.json({ success: false, error: 'No such yard.' }, { status: 404 });
   }
 
-  // Retiring, never deleting: the yard goes on resolving for every mission
-  // ever run there, it just leaves the sign-in list.
-  await repository.setActive(parsed.data.id, parsed.data.active);
+  if (Object.keys(details).length > 0) {
+    // Merged onto the existing yard, so an edit to one field cannot blank the
+    // others and cannot drop createdAt, addedBy or formerIds.
+    await repository.save({ ...existing, ...details });
+  }
+
+  if (active !== undefined) {
+    // Retiring, never deleting: the yard goes on resolving for every mission
+    // ever run there, it just leaves the sign-in list.
+    await repository.setActive(id, active);
+  }
+
   clearYardCache();
 
   return NextResponse.json({ success: true, yards: await repository.findAll() });

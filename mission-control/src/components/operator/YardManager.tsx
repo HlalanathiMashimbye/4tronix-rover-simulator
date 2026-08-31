@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, MapPin, Plus, RotateCcw } from 'lucide-react';
+import { Check, Loader2, MapPin, Pencil, Plus, RotateCcw, X } from 'lucide-react';
 
 import { selectableYards, type Yard } from '@/core/domain/entities/Yard';
 
@@ -63,27 +63,13 @@ export function YardManager({ initialYards }: { initialYards: Yard[] }) {
 
       <ul className="mt-3.5 flex flex-col gap-2">
         {active.map((yard) => (
-          <li
+          <YardRow
             key={yard.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2"
-          >
-            <span className="min-w-0">
-              <span className="block truncate text-sm font-semibold text-foreground">
-                {yard.name}, {yard.area}
-              </span>
-              <span className="block truncate text-xs text-muted-foreground">
-                {yard.city} · <span className="font-mono">{yard.id}</span>
-              </span>
-            </span>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => send('PATCH', { id: yard.id, active: false }, yard.id)}
-              className="shrink-0 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive disabled:opacity-50"
-            >
-              Retire
-            </button>
-          </li>
+            yard={yard}
+            busy={busy !== null}
+            onSave={(details) => send('PATCH', { id: yard.id, ...details }, yard.id)}
+            onRetire={() => send('PATCH', { id: yard.id, active: false }, yard.id)}
+          />
         ))}
       </ul>
 
@@ -148,6 +134,98 @@ export function YardManager({ initialYards }: { initialYards: Yard[] }) {
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * One yard, readable until you ask to change it.
+ *
+ * The id is shown and never editable. It is the rover's hostname and every
+ * mission ever run here carries it, so renaming it is a migration that has to
+ * write formerIds and leave the old value resolving, not a text field.
+ */
+function YardRow({
+  yard, busy, onSave, onRetire,
+}: {
+  yard: Yard;
+  busy: boolean;
+  onSave: (details: { name: string; area: string; city: string }) => Promise<boolean>;
+  onRetire: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ name: yard.name, area: yard.area, city: yard.city });
+
+  function cancel() {
+    setDraft({ name: yard.name, area: yard.area, city: yard.city });
+    setEditing(false);
+  }
+
+  if (!editing) {
+    return (
+      <li className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2">
+        <span className="min-w-0">
+          <span className="block truncate text-sm font-semibold text-foreground">
+            {yard.name}, {yard.area}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {yard.city} · <span className="font-mono">{yard.id}</span>
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            aria-label={`Edit ${yard.name}`}
+            disabled={busy}
+            onClick={() => setEditing(true)}
+            className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground disabled:opacity-50"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRetire}
+            className="rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-destructive/60 hover:text-destructive disabled:opacity-50"
+          >
+            Retire
+          </button>
+        </span>
+      </li>
+    );
+  }
+
+  return (
+    <li className="rounded-lg border border-primary/40 bg-background/40 px-3 py-2.5">
+      <p className="text-[11px] text-muted-foreground">
+        Editing <span className="font-mono text-foreground">{yard.id}</span>. The id is the
+        rover&apos;s hostname and every mission here carries it, so it cannot be changed.
+      </p>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+        <Field label="Venue" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
+        <Field label="Suburb" value={draft.area} onChange={(v) => setDraft({ ...draft, area: v })} />
+        <Field label="City" value={draft.city} onChange={(v) => setDraft({ ...draft, city: v })} />
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => { if (await onSave(draft)) setEditing(false); }}
+          className="clay-press inline-flex items-center gap-1 rounded-lg bg-gradient-mars px-3 py-2 font-display text-xs font-bold text-primary-foreground disabled:opacity-50"
+        >
+          <Check className="h-3 w-3" />
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={cancel}
+          className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <X className="h-3 w-3" />
+          Cancel
+        </button>
+      </div>
+    </li>
   );
 }
 
