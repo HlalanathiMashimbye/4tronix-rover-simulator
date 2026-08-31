@@ -10,7 +10,6 @@ integrations are actually configured.
 import os
 
 import tunables
-import youtube_poll
 from flask import jsonify, request
 
 from console import deps
@@ -130,8 +129,6 @@ def api_integrations():
     def state(configured, detail):
         return {'configured': bool(configured), 'detail': detail}
 
-    yt_key = bool(youtube_poll.api_key())
-    yt_channel = bool(youtube_poll.channel_id())
 
     return jsonify({
         'integrations': [
@@ -149,14 +146,6 @@ def api_integrations():
                         if deps.admin_configured()
                         else 'Cannot reach Firebase. Run `gcloud auth application-default '
                              'login` on this satellite. The reason is in the satellite log.'),
-            },
-            {
-                'id': 'youtube',
-                'name': 'YouTube auto-link',
-                'why': 'Finds uploaded videos by the MissionID in their description.',
-                **state(yt_key and yt_channel,
-                        'Key and channel set' if yt_key and yt_channel
-                        else 'Set YOUTUBE_API_KEY and YOUTUBE_CHANNEL_ID (manual linking still works)'),
             },
             {
                 'id': 'mission_control',
