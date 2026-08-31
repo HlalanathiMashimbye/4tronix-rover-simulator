@@ -286,23 +286,21 @@ def sign_in(client):
 # Auth gating
 # ---------------------------------------------------------------------------
 
-def test_root_redirects_to_login_without_session(client):
+def test_root_opens_the_code_station_without_a_session(client):
+    """The yard used to open on the Firestore queue, behind a sign-in.
+
+    That put reaching Firebase between an operator and the one thing a yard
+    has to do, on a box whose point is working when the venue wifi does not.
+    Copy, paste, run talks to the rover over the LAN and needs nothing else.
+    """
     resp = client.get('/')
+
     assert resp.status_code == 302
-    assert '/operator/login' in resp.headers['Location']
+    assert resp.headers['Location'].endswith('/code/')
 
 
-def test_root_shows_station_hub_when_signed_in(client):
-    sign_in(client)
-    resp = client.get('/')
-    assert resp.status_code == 200
-    page = resp.get_data(as_text=True)
-    # All four stations reachable from the hub
-    assert '/operator/' in page
-    assert '/code/' in page
-    assert '/monitor/' in page
-    assert '/status' in page
-    assert 'op@test.com' in page
+def test_root_does_not_send_anyone_to_a_login(client):
+    assert '/operator/login' not in client.get('/').headers.get('Location', '')
 
 
 def test_code_and_monitor_stay_public(client):
@@ -319,10 +317,6 @@ def test_operator_root_redirects_to_the_queue(client):
     assert resp.headers['Location'].endswith('/')
 
 
-def test_hub_redirects_to_login_without_session(client):
-    resp = client.get('/')
-    assert resp.status_code == 302
-    assert '/operator/login' in resp.headers['Location']
 
 
 def test_mission_page_redirects_to_login_without_session(client):
@@ -335,7 +329,7 @@ def test_mission_page_redirects_to_login_without_session(client):
 
 def test_auth_off_opens_console_and_hub_without_session(client, monkeypatch):
     monkeypatch.setenv('OPERATOR_AUTH', 'off')
-    assert client.get('/').status_code == 200
+    assert client.get('/code/').status_code == 200
     assert client.get('/operator/mission/p1').status_code == 200
     login = client.get('/operator/login')
     assert login.status_code == 302  # login page steps aside
@@ -533,7 +527,7 @@ def test_login_accepts_operator_and_sets_session(client, monkeypatch):
     )
     resp = client.post('/operator/api/login', json={'email': 'op@test.com', 'password': 'pw'})
     assert resp.status_code == 200
-    assert client.get('/').status_code == 200  # the queue, no longer behind /operator/
+    assert client.get('/code/').status_code == 200
 
 
 def test_login_reports_missing_configuration(client, monkeypatch):

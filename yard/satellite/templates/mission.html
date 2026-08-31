@@ -699,7 +699,7 @@
                 document.getElementById('mTitle').textContent = 'Mission not found';
                 document.getElementById('mCode').textContent = '';
                 document.getElementById('rail').innerHTML =
-                    '<div class="missing">This mission is not in the queue. It may have been deleted.<br><br><a class="back" href="/">Back to the queue</a></div>';
+                    '<div class="missing">This mission is not here. It may have been deleted.<br><br><a class="back" href="/code/">Back to the code station</a></div>';
                 return;
             }
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
