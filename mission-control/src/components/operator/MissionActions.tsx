@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Loader2, Trash2, Video, X } from 'lucide-react';
+import { Check, Loader2, MessageSquare, Trash2, Video, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 
@@ -20,7 +20,7 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  * therefore belongs somewhere that works when the yard's network does not.
  */
 
-type Action = 'complete' | 'cancel' | 'attach-video' | 'resolve';
+type Action = 'complete' | 'cancel' | 'attach-video' | 'resolve' | 'feedback';
 
 export function MissionActions({
   mission,
@@ -36,6 +36,7 @@ export function MissionActions({
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [url, setUrl] = useState('');
+  const [feedback, setFeedback] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const settled = mission.status === 'completed' || mission.status === 'cancelled';
@@ -209,6 +210,47 @@ export function MissionActions({
         </div>
       )}
 
+      {settled && (
+        <div className="rounded-xl border border-border/60 bg-background/40 p-2.5">
+          <label
+            htmlFor={`feedback-${mission.id}`}
+            className="flex items-center gap-1.5 text-xs font-semibold text-foreground"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-primary" />
+            Leave a note for the learner
+          </label>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {/* This queue reads mission documents and feedback lives on the
+                run, so we cannot say whether one already exists without a
+                second read per row. Sending again replaces it either way. */}
+            They read this on their mission page. &quot;Good job!&quot;, or what to
+            change next time. Sending again replaces an earlier note.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <input
+              id={`feedback-${mission.id}`}
+              type="text"
+              maxLength={280}
+              value={feedback}
+              onChange={(event) => setFeedback(event.target.value)}
+              placeholder="Nice square! Try 90 degrees to close it exactly."
+              className="min-w-0 flex-1 rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            />
+            <ActionButton
+              label="Send"
+              busy={pending === 'feedback'}
+              disabled={feedback.trim().length === 0}
+              onClick={() =>
+                run('feedback', 'feedback', { text: feedback.trim() }).then(() => setFeedback(''))
+              }
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {280 - feedback.length} characters left. Your name is shown with it.
+          </p>
+        </div>
+      )}
+
       {error && (
         <p role="alert" className="text-xs font-medium text-destructive">
           {error}
@@ -229,6 +271,8 @@ function successMessage(action: Action, name?: string): string {
       return `Attached the video to ${mission}.`;
     case 'resolve':
       return `Resolved the review on ${mission}.`;
+    case 'feedback':
+      return `Sent your note on ${mission}. The learner sees it on their mission page.`;
   }
 }
 

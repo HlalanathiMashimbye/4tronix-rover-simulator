@@ -130,6 +130,31 @@ export function decideAttachVideo(snapshot: RunSnapshot): Decision {
 }
 
 /**
+ * Whether an operator may leave feedback on this run.
+ *
+ * Only on a run that actually happened. Feedback on a queued mission would be
+ * a comment on something nobody has watched yet, and the learner opening it
+ * would see a verdict on a run that has not occurred.
+ *
+ * Failed runs deliberately DO accept feedback: a mission that did not work is
+ * the one a child most needs a sentence about. The learner-facing status still
+ * reads Pending rather than Failed - that rule is unchanged and lives in
+ * discoveryStatus - so this is the only channel through which "the turn was
+ * too small, try 90 degrees" can reach them at all.
+ */
+export function decideFeedback(snapshot: RunSnapshot): Decision {
+  const status = effectiveStatus(snapshot);
+  if (status !== 'completed' && status !== 'failed') {
+    return {
+      ok: false,
+      error: 'Wait until the mission has run before leaving feedback on it.',
+    };
+  }
+  // Status untouched: a note about a run is not a state change.
+  return { ok: true, change: { status: null, clearsReview: false } };
+}
+
+/**
  * Record what happened to a mission the satellite could not account for.
  *
  * The endpoint behind this has existed since recovery shipped and has never had

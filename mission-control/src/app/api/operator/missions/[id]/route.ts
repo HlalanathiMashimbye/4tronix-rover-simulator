@@ -39,6 +39,7 @@ import {
   decideAttachVideo,
   decideCancel,
   decideComplete,
+  decideFeedback,
   decideResolve,
   type Decision,
   type RunSnapshot,
@@ -57,6 +58,17 @@ const bodySchema = z.discriminatedUnion('action', [
     action: z.literal('resolve'),
     yardId,
     outcome: z.enum(['completed', 'requeue']),
+  }),
+  z.object({
+    action: z.literal('feedback'),
+    yardId,
+    /**
+     * Capped at 280 characters, and that cap is the boundary rather than a
+     * form hint: this text lands on a world-readable run document that a child
+     * reads. Long enough for "the turn was too small, try 90 degrees for a
+     * square", short enough that it cannot become an essay or a payload.
+     */
+    text: z.string().trim().min(1, 'Write something before sending it.').max(280),
   }),
 ]);
 
@@ -126,6 +138,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let decision: Decision;
     let youtubeUrl: string | undefined;
+    let feedback: string | undefined;
 
     switch (command.action) {
       case 'complete':
@@ -152,6 +165,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       case 'resolve':
         decision = decideResolve(snapshot, command.outcome);
         break;
+      case 'feedback':
+        feedback = command.text;
+        decision = decideFeedback(snapshot);
+        break;
     }
 
     if (!decision.ok) {
@@ -168,6 +185,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       status: decision.change.status,
       clearsReview: decision.change.clearsReview,
       youtubeUrl,
+      feedback,
       decidedAt,
       decidedBy: session.email ?? session.uid,
     });

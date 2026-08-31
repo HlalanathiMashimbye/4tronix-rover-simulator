@@ -17,6 +17,7 @@ import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
+import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
 
 
 export default function MissionVideoClient({ missionId }: { missionId: string }) {
@@ -209,6 +210,9 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 <Stat label="Duration" value={duration} mono />
                 <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
               </div>
+              {/* Under the stats, where a learner looks after watching. Renders
+                  nothing when no operator has written anything. */}
+              <OperatorFeedback runs={missionRuns} />
             </div>
           }
           /* Code (scrolls internally) + remix */

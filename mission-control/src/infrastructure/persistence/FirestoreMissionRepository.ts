@@ -285,6 +285,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
       status?: MissionStatus | null;
       youtubeUrl?: string;
       clearsReview?: boolean;
+      feedback?: string;
       decidedAt: string;
       decidedBy: string;
     },
@@ -322,6 +323,15 @@ export class FirestoreMissionRepository implements IMissionRepository {
       // Mirrored onto the mission for the same reason as status: missions that
       // predate the run model still read their video from there.
       missionFields.youtubeUrl = change.youtubeUrl;
+    }
+
+    if (change.feedback !== undefined) {
+      // Run only, never mirrored onto the mission. Feedback is about one
+      // yard's attempt, and a second yard's run should not inherit a note
+      // written about the first.
+      runFields.feedback = change.feedback;
+      runFields.feedbackBy = change.decidedBy;
+      runFields.feedbackAt = change.decidedAt;
     }
 
     if (change.clearsReview) {
@@ -373,6 +383,13 @@ export class FirestoreMissionRepository implements IMissionRepository {
       needsReview: data.needsReview,
       reviewReason: data.reviewReason ?? null,
       statusUpdatedAt: data.statusUpdatedAt ?? null,
+      // An operator's note to the learner. This mapper is an explicit
+      // allowlist, so a field absent here is silently dropped between
+      // Firestore and the page - which is exactly what happened when these
+      // three were added to the entity and not to this list.
+      feedback: data.feedback,
+      feedbackBy: data.feedbackBy,
+      feedbackAt: data.feedbackAt,
     };
   }
 

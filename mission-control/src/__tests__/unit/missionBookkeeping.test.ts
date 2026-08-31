@@ -10,6 +10,7 @@ import {
   decideAttachVideo,
   decideCancel,
   decideComplete,
+  decideFeedback,
   decideResolve,
   effectiveStatus,
   type RunSnapshot,
@@ -127,5 +128,41 @@ describe('resolve a review', () => {
     // desk can see, and it has to be enough.
     const result = decideResolve(snapshot({ runStatus: null, needsReview: true }), 'completed');
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('leaving a note for the learner', () => {
+  it('allows it on a run that finished', () => {
+    expect(decideFeedback(snapshot({ runStatus: 'completed' })).ok).toBe(true);
+  });
+
+  it('allows it on a run that FAILED, which is when it matters most', () => {
+    /**
+     * A mission that did not work is the one a child most needs a sentence
+     * about. The learner-facing status still reads Pending rather than Failed
+     * (that rule lives in discoveryStatus and is unchanged), so this note is
+     * the only channel through which "the turn was too small, try 90 degrees"
+     * can reach them at all.
+     */
+    expect(decideFeedback(snapshot({ runStatus: 'failed' })).ok).toBe(true);
+  });
+
+  it('refuses on a run that has not happened yet', () => {
+    // A comment on something nobody has watched, which the learner would open
+    // as a verdict on a run that has not occurred.
+    for (const runStatus of ['queued', 'processing'] as const) {
+      const decision = decideFeedback(snapshot({ runStatus }));
+      expect(decision.ok).toBe(false);
+      if (!decision.ok) expect(decision.error).toMatch(/before leaving feedback/i);
+    }
+  });
+
+  it('changes no status: a note is not a state change', () => {
+    const decision = decideFeedback(snapshot({ runStatus: 'completed' }));
+    expect(decision.ok).toBe(true);
+    if (decision.ok) {
+      expect(decision.change.status).toBeNull();
+      expect(decision.change.clearsReview).toBe(false);
+    }
   });
 });
