@@ -92,7 +92,7 @@ export function MissionDetail({
               const yard = findYardIn(yards, run.yardId);
               const mine = run.yardId === yardId;
               return (
-                <li key={run.yardId} className="flex items-center justify-between gap-2 text-xs">
+                <li key={run.runId} className="flex items-center justify-between gap-2 text-xs">
                   <span className="min-w-0 truncate">
                     <span className={mine ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
                       {yard ? yardLabelOf(yard) : run.yardId}

@@ -202,10 +202,13 @@ export function subscribeToMissionRuns(
     (snapshot) => {
       onRuns(
         snapshot.docs.map((doc) => ({
-          ...(doc.data() as Omit<MissionRun, 'yardId'>),
-          // The document id IS the yard, so it is authoritative over any
-          // yardId the document happens to carry.
-          yardId: doc.id,
+          ...(doc.data() as Omit<MissionRun, 'runId'>),
+          // The document id IS the runId (PR #139) and is authoritative over
+          // any stored copy. The yard comes from the field; satellite-written
+          // documents that predate the field keyed the doc BY yard, so the id
+          // is the honest fallback rather than an empty string.
+          runId: doc.id,
+          yardId: (doc.data() as { yardId?: string }).yardId ?? doc.id,
         })),
       );
     },
