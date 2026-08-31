@@ -1,4 +1,4 @@
-import { yardPlace } from '@/infrastructure/config/yards';
+import { findYardIn, type Yard } from '@/core/domain/entities/Yard';
 import { watchableRuns, type MissionRun } from '@/core/domain/entities/MissionRun';
 
 /**
@@ -69,9 +69,19 @@ const SIM_OPTION: RunOption = {
   kind: 'sim',
 };
 
+/**
+ * `yards` is passed in rather than imported.
+ *
+ * It used to read a hardcoded registry, which stopped being true the moment an
+ * admin could add a venue: a mission run at a yard added this morning would
+ * have shown a learner no location at all. The list comes from the server that
+ * rendered the page, so this stays a pure function and adding a yard needs no
+ * deploy.
+ */
 export function buildRunOptions(
   mission: { youtubeUrl?: string; videoUrl?: string; yardId?: string } | null | undefined,
   runs: MissionRun[] = [],
+  yards: Yard[] = [],
 ): RunOption[] {
   if (!mission) return [SIM_OPTION];
 
@@ -91,7 +101,7 @@ export function buildRunOptions(
       // back to the date rather than repeating the sublabel - two cards both
       // reading "Real rover / Real rover" tell you nothing about which is
       // which, and look like a bug.
-      label: yardPlace(run.yardId) ?? runDateLabel(run.completedAt),
+      label: findYardIn(yards, run.yardId)?.city ?? runDateLabel(run.completedAt),
       sublabel: 'Real rover',
       kind: 'real',
       youtubeId,
@@ -112,7 +122,7 @@ export function buildRunOptions(
     if (youtubeId || hostedVideoUrl) {
       options.push({
         id: 'real-legacy',
-        label: yardPlace(mission.yardId) ?? 'Real rover',
+        label: findYardIn(yards, mission.yardId)?.city ?? 'Real rover',
         sublabel: 'Real rover',
         kind: 'real',
         videoUrl: hostedVideoUrl,

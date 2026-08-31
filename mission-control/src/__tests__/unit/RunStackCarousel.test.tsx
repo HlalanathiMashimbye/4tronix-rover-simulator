@@ -28,6 +28,19 @@ import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { buildRunOptions } from '@/lib/missionRuns';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 
+// The yard list is passed in now rather than imported from a registry, so
+// a venue an admin adds today resolves without a deploy.
+const YARDS = [
+  {
+    id: 'curiosity',
+    name: 'Cape Town Science Centre',
+    area: 'Observatory',
+    city: 'Cape Town',
+    active: true,
+  },
+];
+
+
 function run(yardId: string, id: string, completedAt: string): MissionRun {
   return {
     yardId,
@@ -41,7 +54,7 @@ function renderCarousel(
   runs = buildRunOptions({ yardId: 'curiosity' }, [
     run('curiosity', 'aaaaaaaaaaa', '2026-08-06T10:00:00Z'),
     run('yard-b', 'bbbbbbbbbbb', '2026-08-05T10:00:00Z'),
-  ]),
+  ], YARDS),
 ) {
   const onSelect = jest.fn();
   render(
@@ -100,6 +113,7 @@ describe('RunStackCarousel', () => {
         youtubeUrl: 'https://youtu.be/aaaaaaaaaaa',
       },
       [],
+      YARDS,
     );
 
     renderCarousel(runs);
@@ -113,7 +127,7 @@ describe('RunStackCarousel', () => {
   });
 
   it('disables navigation when there is only one run', () => {
-    renderCarousel(buildRunOptions({ yardId: 'curiosity' }, []));
+    renderCarousel(buildRunOptions({ yardId: 'curiosity' }, [], YARDS));
 
     expect(screen.getByRole('button', { name: /show previous rover run/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /show next rover run/i })).toBeDisabled();

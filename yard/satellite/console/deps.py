@@ -21,7 +21,7 @@ from flask import current_app
 # can replace firestore_client / verify_id_token without firebase-admin or
 # real credentials.
 _firebase_app = None
-# start_polling and start_sync_worker are both spawned as daemon threads at
+# start_sync_worker is spawned as a daemon thread at
 # server startup (web_server.py) and each call into init_firebase() as their
 # very first action - without this lock, both can pass the `is not None`
 # check before either finishes building credentials, and the second
