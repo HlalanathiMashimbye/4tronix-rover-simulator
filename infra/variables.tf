@@ -71,3 +71,9 @@ variable "domains" {
   type        = map(string)
   default     = {}
 }
+
+variable "cron_environment" {
+  description = "Which environment runs the YouTube auto-link schedule, or \"\" for none. Only one may: the environments share a Firestore."
+  type        = string
+  default     = ""
+}

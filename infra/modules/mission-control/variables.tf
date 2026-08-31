@@ -35,3 +35,21 @@ variable "domains" {
   type        = map(string)
   default     = {}
 }
+
+variable "cron_environment" {
+  description = <<-EOT
+    Which environment runs the YouTube auto-link schedule, or "" for none.
+
+    Only one may: staging and prod share a project and therefore a Firestore,
+    so two schedulers would race on the same runs. Defaults to none so the
+    unsafe state has to be asked for rather than arrived at.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "cron_schedule" {
+  description = "Cron expression for the YouTube auto-link job. A poll that finds nothing is essentially free, so this is about how long a learner waits."
+  type        = string
+  default     = "*/15 * * * *"
+}

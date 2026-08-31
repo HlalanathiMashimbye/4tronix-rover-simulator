@@ -8,6 +8,7 @@
 locals {
   required_apis = [
     "run.googleapis.com",
+    "cloudscheduler.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
     "iam.googleapis.com",
@@ -41,6 +42,7 @@ module "mission_control" {
   environments = var.environments
   domains      = var.domains
 
+  cron_environment         = var.cron_environment
   resend_from_email        = var.resend_from_email
   resend_sandbox_recipient = var.resend_sandbox_recipient
 

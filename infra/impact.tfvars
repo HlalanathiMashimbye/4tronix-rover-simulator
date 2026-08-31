@@ -34,6 +34,14 @@ domains = {
   staging = "marsyard.labs.ws"
 }
 
+# Which environment runs the YouTube auto-link schedule. Exactly one may:
+# both environments point at this project and therefore share one Firestore,
+# so two schedulers would race to attach the same video to the same run.
+#
+# staging, because that is the environment actually serving learners; prod is
+# deliberately not deployed. Move this the day prod comes up, do not add to it.
+cron_environment = "staging"
+
 # Email. The domain marsyard.sapient.rocks is verified in Resend (DKIM + SPF
 # MX/TXT + DMARC live in GoDaddy), so mail can now go to any learner address
 # and no longer has to come from Resend's shared onboarding@resend.dev sender.

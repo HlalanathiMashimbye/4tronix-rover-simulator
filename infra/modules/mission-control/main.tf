@@ -30,9 +30,51 @@ resource "google_secret_manager_secret" "resend_api_key" {
 # lets the initial apply succeed; the REAL values are added out-of-band
 # afterwards (README step 5) and become the new "latest". The placeholder
 # hello image never reads them.
+# The YouTube channel the auto-linker reads. Real values are added
+# out-of-band like Resend's; a poll with either unset simply does not link.
+resource "google_secret_manager_secret" "youtube_api_key" {
+  secret_id = "youtube-api-key"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_channel_id" {
+  secret_id = "youtube-channel-id"
+  replication {
+    auto {}
+  }
+}
+
+# The shared secret Cloud Scheduler presents to /api/cron/youtube-link.
+#
+# GENERATED, not seeded with a placeholder. Both sides of this are Terraform's
+# to write, so there is nobody to hand a real value to afterwards, and a
+# CHANGE_ME here would not be a config gap: it would be a working password
+# that is the same string in every repo that copied this file. Rotate by
+# tainting this resource.
+resource "random_password" "cron_secret" {
+  length  = 48
+  special = false
+}
+
+resource "google_secret_manager_secret" "cron_secret" {
+  secret_id = "cron-secret"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "cron_secret" {
+  secret      = google_secret_manager_secret.cron_secret.id
+  secret_data = random_password.cron_secret.result
+}
+
 resource "google_secret_manager_secret_version" "seed" {
   for_each = {
-    resend_api_key = google_secret_manager_secret.resend_api_key.id
+    resend_api_key     = google_secret_manager_secret.resend_api_key.id
+    youtube_api_key    = google_secret_manager_secret.youtube_api_key.id
+    youtube_channel_id = google_secret_manager_secret.youtube_channel_id.id
   }
   secret      = each.value
   secret_data = "CHANGE_ME-set-real-value-via-gcloud-secrets-versions-add"
@@ -52,7 +94,10 @@ locals {
   # Resend is unrelated to how Firestore is authenticated: a third-party API
   # key with no ADC equivalent, so it stays.
   secrets = {
-    RESEND_API_KEY = google_secret_manager_secret.resend_api_key
+    RESEND_API_KEY     = google_secret_manager_secret.resend_api_key
+    YOUTUBE_API_KEY    = google_secret_manager_secret.youtube_api_key
+    YOUTUBE_CHANNEL_ID = google_secret_manager_secret.youtube_channel_id
+    CRON_SECRET        = google_secret_manager_secret.cron_secret
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
@@ -250,4 +295,39 @@ resource "google_service_account_iam_member" "deploy_acts_as_runtime" {
   service_account_id = google_service_account.runtime[each.key].name
   role               = "roles/iam.serviceAccountUser"
   member             = "serviceAccount:${var.deploy_service_account_email}"
+}
+
+# --- YouTube auto-link schedule -------------------------------------------
+#
+# EXACTLY ONE ENVIRONMENT MAY RUN THIS. Staging and prod are both pointed at
+# the same project, so they share one Firestore: two schedulers would race to
+# attach the same video to the same run and double every write for nothing.
+# var.cron_environment names the one that does, and defaults to none, so the
+# unsafe state is the one you have to ask for.
+resource "google_cloud_scheduler_job" "youtube_link" {
+  for_each = var.cron_environment == "" ? {} : { (var.cron_environment) = true }
+
+  name        = "youtube-link-${each.key}"
+  description = "Attach uploaded videos to the runs they show, by MissionID in the description."
+  region      = var.region
+  schedule    = var.cron_schedule
+  time_zone   = "Africa/Johannesburg"
+
+  # A poll that finds nothing costs one YouTube quota unit and no Firestore
+  # reads, so frequency is about how long a child waits, not about cost.
+  http_target {
+    http_method = "POST"
+    uri         = "${local.app_urls[each.key]}/api/cron/youtube-link"
+
+    headers = {
+      "Content-Type"  = "application/json"
+      "x-cron-secret" = random_password.cron_secret.result
+    }
+  }
+
+  retry_config {
+    retry_count = 1
+  }
+
+  depends_on = [google_cloud_run_v2_service.mission_control]
 }
