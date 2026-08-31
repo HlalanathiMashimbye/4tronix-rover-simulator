@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run · Mars Yard</title>
+    <link rel="stylesheet" href="/static/yard-base.css">
+    <style>
+        .run-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.4rem; align-items: start; }
+        @media (max-width: 860px) { .run-grid { grid-template-columns: 1fr; } }
+        .sync-field input[type=text] { width: 100%; min-height: 40px; }
+        .run-code { width: 100%; min-height: 190px; resize: vertical; font-family: var(--mono); font-size: 0.78rem; line-height: 1.5; }
+        .yt-box { width: 100%; min-height: 120px; resize: vertical; font-family: var(--mono); font-size: 0.74rem; line-height: 1.5; }
+        .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
+        .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
+        @keyframes recpulse { 50% { opacity: 0.35; } }
+        @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
+        .step { color: var(--text-faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+    </style>
+</head>
+<body class="console">
+    {% set nav_active = 'run' %}{% include "_nav.html" %}
+
+    <main class="page" style="max-width: 1080px;">
+        <div class="eyebrow">Station</div>
+        <h1 class="page-title">Run a mission</h1>
+        <p class="page-sub">Everything for one mission, from the code you copied to the video you hand back. Closing the mission itself happens in Mission Control.</p>
+
+        <div class="run-grid">
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+                <div class="card">
+                    <span class="step">Step 1</span>
+                    <h3 class="h-card" style="margin-top:0.3rem;">The mission</h3>
+
+                    <div class="row" style="margin-bottom:0.7rem;">
+                        <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
+                        <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
+                    </div>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Mission ID</span>
+                        <input type="text" id="missionId" spellcheck="false" placeholder="from Mission Control">
+                        <span class="sync-hint">This is what links the YouTube upload back to the mission. Copy it from the mission in Mission Control.</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Mission name</span>
+                        <input type="text" id="missionName" spellcheck="false" placeholder="Lunar Mapper">
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Python</span>
+                        <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
+                    </label>
+                </div>
+
+                <div class="card">
+                    <span class="step">Step 2</span>
+                    <h3 class="h-card" style="margin-top:0.3rem;">Record, then run</h3>
+                    <p class="sync-hint" style="margin:0 0 0.7rem;">Start recording before you send it, so the rover's first move is in the video.</p>
+                    <div class="row">
+                        <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
+                        <button class="btn primary" id="runBtn" type="button">Send to rover</button>
+                        <button class="btn" id="stopBtn" type="button">Stop rover</button>
+                    </div>
+                    <div class="camera-msg" id="runMsg" style="margin-top:0.6rem;"></div>
+                </div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:1rem;">
+                <div class="card">
+                    <span class="step">Step 3</span>
+                    <h3 class="h-card" style="margin-top:0.3rem;">Take the video</h3>
+                    <p class="sync-hint" style="margin:0 0 0.7rem;">Saves to this device over the local network. No internet needed.</p>
+                    <div id="recordings"><span class="skel"></span></div>
+                </div>
+
+                <div class="card">
+                    <span class="step">Step 4</span>
+                    <h3 class="h-card" style="margin-top:0.3rem;">Upload to YouTube</h3>
+                    <p class="sync-hint" style="margin:0 0 0.7rem;">Paste this as the video's description in YouTube Studio. The MissionID line is what makes the platform find the upload and attach it to the mission on its own, so nobody has to paste a link back.</p>
+                    <label class="sync-field">
+                        <span class="sync-label">Title</span>
+                        <input type="text" id="ytTitle" readonly>
+                    </label>
+                    <label class="sync-field">
+                        <span class="sync-label">Description</span>
+                        <textarea class="yt-box" id="ytDesc" readonly></textarea>
+                    </label>
+                    <div class="row">
+                        <button class="btn primary" id="ytCopy" type="button">Copy description</button>
+                        <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <p class="hub-note">
+            Mark the mission complete in Mission Control, not here. Two places to close a mission is
+            how one ends up completed in one and still running in the other.
+        </p>
+    </main>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const missionId = $('missionId'), missionName = $('missionName'), code = $('code');
+    let recordingName = null;
+
+    function flash(el, text, tone) {
+        el.dataset.tone = tone || '';
+        el.textContent = text;
+        setTimeout(() => { el.textContent = ''; el.dataset.tone = ''; }, 5000);
+    }
+
+    // ---- Step 1: import -----------------------------------------------
+    // One button rather than "right-click, paste". navigator.clipboard.readText
+    // needs a secure context and the yard is plain HTTP on a LAN address, so
+    // the read is attempted and then falls back to a prompt rather than the
+    // button simply doing nothing on the machine it matters on.
+    async function readClipboard() {
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                return await navigator.clipboard.readText();
+            }
+        } catch (e) { /* insecure context or permission refused */ }
+        return window.prompt('Paste the mission here (Python, or Blockly JSON):') || '';
+    }
+
+    function applyImport(text) {
+        text = (text || '').trim();
+        if (!text) return flash($('importMsg'), 'Nothing on the clipboard', 'bad');
+
+        // A Blockly workspace is JSON. It needs the Blockly engine to become
+        // Python, which lives on /code/, so hand it over there rather than
+        // half-supporting it here.
+        if (text.startsWith('{')) {
+            try {
+                JSON.parse(text);
+                localStorage.setItem('roverWorkspace', text);
+                flash($('importMsg'), 'Blocks saved. Open Code to run them.', 'ok');
+                return;
+            } catch (e) { /* not JSON after all, treat as Python */ }
+        }
+        code.value = text;
+        flash($('importMsg'), 'Python imported', 'ok');
+        paintYouTube();
+    }
+
+    $('importBtn').addEventListener('click', async () => applyImport(await readClipboard()));
+
+    // ---- Step 4: the description that links the upload ----------------
+    // "MissionID: <id>" is matched literally by the auto-linker, so it is
+    // built here rather than typed by hand at the end of a long day.
+    function paintYouTube() {
+        const id = missionId.value.trim();
+        const name = missionName.value.trim() || 'Rover mission';
+        $('ytTitle').value = `${name} · Mars Yard rover run`;
+        $('ytDesc').value = id
+            ? `${name}, driven by a real rover at the Mars Yard.\n\nMissionID: ${id}`
+            : 'Fill in the Mission ID above and this becomes the description to paste.';
+    }
+    missionId.addEventListener('input', paintYouTube);
+    missionName.addEventListener('input', paintYouTube);
+
+    $('ytCopy').addEventListener('click', async () => {
+        const text = $('ytDesc').value;
+        try {
+            await navigator.clipboard.writeText(text);
+            flash($('ytMsg'), 'Copied', 'ok');
+        } catch (e) {
+            // Same insecure-context problem as the import, the other way round.
+            $('ytDesc').select();
+            flash($('ytMsg'), 'Press Ctrl/Cmd-C to copy', '');
+        }
+    });
+
+    // ---- Step 2: record and run ---------------------------------------
+    function runName() {
+        return (missionId.value.trim() || missionName.value.trim() || 'run');
+    }
+
+    $('recBtn').addEventListener('click', async () => {
+        const btn = $('recBtn'), dot = $('recDot');
+        btn.disabled = true;
+        try {
+            if (!recordingName) {
+                const resp = await fetch('/api/recording/start', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: runName() }),
+                });
+                const d = await resp.json();
+                if (!resp.ok) throw new Error(d.error || 'Could not start recording');
+                recordingName = d.name;
+                dot.classList.add('on');
+                btn.lastChild.textContent = ' Stop recording';
+                flash($('runMsg'), 'Recording', 'ok');
+            } else {
+                const resp = await fetch('/api/recording/stop', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: recordingName, keep: true }),
+                });
+                await resp.json();
+                recordingName = null;
+                dot.classList.remove('on');
+                btn.lastChild.textContent = ' Start recording';
+                flash($('runMsg'), 'Saved. It is in Step 3.', 'ok');
+                loadRecordings();
+            }
+        } catch (e) {
+            flash($('runMsg'), e.message, 'bad');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    $('runBtn').addEventListener('click', async () => {
+        const python = code.value.trim();
+        if (!python) return flash($('runMsg'), 'No code to send', 'bad');
+        try {
+            const resp = await fetch('/api/queue/add', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify([{ cmd: 'run_python', params: { code: python } }]),
+            });
+            const d = await resp.json();
+            if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
+            flash($('runMsg'), 'Sent to rover', 'ok');
+        } catch (e) {
+            flash($('runMsg'), e.message, 'bad');
+        }
+    });
+
+    $('stopBtn').addEventListener('click', async () => {
+        try {
+            await fetch('/api/queue/clear', { method: 'POST' });
+            flash($('runMsg'), 'Rover queue cleared', 'ok');
+        } catch (e) {
+            flash($('runMsg'), 'Could not reach the rover', 'bad');
+        }
+    });
+
+    // ---- Step 3: the recordings ---------------------------------------
+    function humanBytes(n) {
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+        return (n / 1024 / 1024).toFixed(1) + ' MB';
+    }
+
+    async function loadRecordings() {
+        const box = $('recordings');
+        try {
+            const resp = await fetch('/api/recordings');
+            const list = (await resp.json()).recordings || [];
+            if (!list.length) {
+                box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
+                return;
+            }
+            box.innerHTML = list.slice(0, 8).map((r) =>
+                '<div class="kv"><a class="k" style="text-decoration:none" download href="/api/recordings/'
+                + encodeURIComponent(r.name) + '">' + r.name + '</a>'
+                + '<span class="v">' + humanBytes(r.bytes) + '</span></div>').join('');
+        } catch (e) {
+            box.innerHTML = '<div class="kv"><span class="k">Could not read recordings</span></div>';
+        }
+    }
+
+    paintYouTube();
+    loadRecordings();
+})();
+</script>
+</body>
+</html>

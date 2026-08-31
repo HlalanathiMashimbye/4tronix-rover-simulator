@@ -271,6 +271,15 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 
 .console { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
 
+/* Labelled form field. Was defined privately inside settings.html, so the run
+   station rendered its labels, inputs and hints inline on one line: the
+   drift this layer exists to stop. One definition, both pages. */
+.console .sync-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
+.console .sync-label { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
+.console .sync-input-row { display: flex; align-items: center; gap: 0.5rem; }
+.console .sync-unit { color: var(--text-faint); font-size: var(--fs-sm); }
+.console .sync-hint { color: var(--text-dim); font-size: 0.7rem; line-height: 1.45; }
+
 /* ---- One screen, no page scroll ---------------------------------------- */
 .console.fixed-shell { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
 .console.fixed-shell .topbar { flex: 0 0 auto; }

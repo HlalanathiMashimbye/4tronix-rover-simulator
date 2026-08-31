@@ -79,12 +79,9 @@
         .camera-msg[data-tone="bad"] { color: var(--bad); }
         .camera-msg[data-tone="ok"]  { color: var(--ok); }
 
-        .sync-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
-        .sync-label { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
-        .sync-input-row { display: flex; align-items: center; gap: 0.5rem; }
+        /* Field styles now live in yard-base.css under .console. Only the
+           narrow numeric input is specific to this page's sync controls. */
         .sync-input-row input { width: 88px; min-height: 40px; }
-        .sync-unit { color: var(--text-faint); font-size: var(--fs-sm); }
-        .sync-hint { color: var(--text-dim); font-size: 0.7rem; line-height: 1.45; }
         .sync-estimate {
             padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 10px;
             background: var(--surface-2); color: var(--text-dim);

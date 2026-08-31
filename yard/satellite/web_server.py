@@ -144,6 +144,26 @@ def index():
     return render_template('home.html', server_ip=_local_ip(), server_port=SERVER_PORT)
 
 
+@app.route('/run/')
+def run_station():
+    """The operator's station for one mission, start to handover.
+
+    Deliberately not /code/. That is an editor, used on a tablet mid-activity
+    with a child watching, and its job is to get code onto the rover. This is
+    the bookkeeping around a run: which mission it is, recording it, getting
+    the video off the box, and the YouTube description that makes the upload
+    link itself back.
+
+    No "mark complete" here on purpose: closing a mission is Mission Control's
+    job, and having two places to do it is how a mission ends up completed in
+    one and processing in the other.
+
+    Login-free like the rest of the console, for the same reason: none of this
+    can depend on reaching Firebase.
+    """
+    return render_template('run.html', server_ip=_local_ip(), server_port=SERVER_PORT)
+
+
 @app.route('/settings')
 def settings():
     """Diagnostics and the satellite's tunables.

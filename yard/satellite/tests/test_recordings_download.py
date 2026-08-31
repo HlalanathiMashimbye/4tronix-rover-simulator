@@ -106,3 +106,34 @@ class TestRecordingACopyPasteRun:
 
     def test_stop_refuses_without_a_name(self, client):
         assert client.post('/api/recording/stop', json={}).status_code == 400
+
+
+class TestRunStation:
+    """The operator's station for one mission: import, record, download, and
+    the YouTube description that makes the upload link itself back."""
+
+    def test_run_station_serves_without_a_session(self, client):
+        resp = client.get('/run/')
+
+        assert resp.status_code == 200
+
+    def test_it_carries_the_pieces_of_the_manual_loop(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+
+        for piece in ('importBtn', 'missionId', 'recBtn', 'recordings', 'ytDesc'):
+            assert piece in page, piece
+
+    def test_it_does_not_offer_to_complete_the_mission(self, client):
+        """Closing a mission is Mission Control's job. Two places to do it is
+        how one ends up completed in one and still running in the other."""
+        page = client.get('/run/').get_data(as_text=True).lower()
+
+        assert 'mark complete' not in page
+        assert '/complete' not in page
+
+    def test_the_description_template_carries_the_linking_line(self, client):
+        """`MissionID: <id>` is matched literally by the auto-linker, so the
+        page must build that exact shape rather than something near it."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert 'MissionID: ${id}' in page
