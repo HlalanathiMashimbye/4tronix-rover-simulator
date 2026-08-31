@@ -1,9 +1,21 @@
 /**
  * Mission Name Generator
  *
- * Generates friendly mission names by pairing two words, e.g. "Helios Explorer",
- * "Red Pathfinder". No numeric suffix and no dashes (per David's feedback):
- * names are for humans to recognise and re-roll, and they need not be unique.
+ * Generates friendly mission names from three words, e.g. "Swift Helios
+ * Explorer", "Brave Red Pathfinder". No numeric suffix and no dashes (per
+ * David's feedback): names are for humans to recognise and re-roll.
+ *
+ * ON "UNIQUE" (Story AB#330). The story asks for a unique name. These are not
+ * unique and cannot be: a closed vocabulary has a fixed size, and the only
+ * ways to guarantee uniqueness are a numeric suffix, which David rejected, or
+ * a round-trip collision check against Firestore on every page load, which
+ * costs a read per learner to solve a problem nobody has reported.
+ *
+ * What the widening from two words to three does buy is scarcity. 20x20 = 400
+ * names across 121 missions made repeats a mathematical certainty; three lists
+ * give 8,000, so a learner is unlikely to meet their own name twice and the
+ * re-roll button handles the rest. If true uniqueness is ever actually needed,
+ * that is a different story and it has to reopen David's decision first.
  *
  * THE WORD LISTS ARE A SAFETY CONTROL, NOT DECORATION (AB#402).
  *
@@ -22,6 +34,29 @@
  * it is enforced server-side in validation/schemas.ts. Adding a word here adds
  * it to what a learner may publish, so treat this list as reviewed content.
  */
+
+const PART0_WORDS = [
+  'Swift',
+  'Brave',
+  'Bright',
+  'Bold',
+  'Clever',
+  'Curious',
+  'Daring',
+  'Eager',
+  'Gentle',
+  'Happy',
+  'Jolly',
+  'Kind',
+  'Lucky',
+  'Mighty',
+  'Nimble',
+  'Plucky',
+  'Proud',
+  'Quiet',
+  'Steady',
+  'Sunny',
+];
 
 const PART1_WORDS = [
   'Red',
@@ -72,13 +107,13 @@ const PART2_WORDS = [
 /**
  * Generate a random mission name
  *
- * @returns A two-word name like "Helios Explorer" (no number, no dashes)
+ * @returns A three-word name like "Swift Helios Explorer" (no number, no dashes)
  */
 export function generateRandomMissionName(): string {
-  const part1 = PART1_WORDS[Math.floor(Math.random() * PART1_WORDS.length)];
-  const part2 = PART2_WORDS[Math.floor(Math.random() * PART2_WORDS.length)];
+  const pick = (words: readonly string[]) =>
+    words[Math.floor(Math.random() * words.length)];
 
-  return `${part1} ${part2}`;
+  return `${pick(PART0_WORDS)} ${pick(PART1_WORDS)} ${pick(PART2_WORDS)}`;
 }
 
 /**
@@ -101,21 +136,43 @@ export function generateMissionNameSuggestions(count: number = 3): string[] {
 /**
  * Whether a name is one this generator could have produced.
  *
- * Exactly two known words separated by exactly one space. Deliberately strict:
- * anything that is not a pairing from the lists above is free text, whatever it
- * happens to say, and free text is the thing being prevented.
+ * Known words separated by single spaces, and nothing else. Deliberately
+ * strict: anything that is not a combination from the lists above is free
+ * text, whatever it happens to say, and free text is the thing being
+ * prevented.
+ *
+ * Two-word names are still accepted. 121 missions carry them, generated before
+ * the adjective was added, and a learner re-opening an old mission or a stale
+ * browser tab submitting one must not be told their name is invalid. Both
+ * shapes are closed vocabularies, so accepting the older one costs no safety.
  */
 export function isGeneratedMissionName(name: string): boolean {
   const parts = name.split(' ');
-  if (parts.length !== 2) return false;
+  const inList = (list: readonly string[], word: string) => list.includes(word);
 
-  return (
-    (PART1_WORDS as readonly string[]).includes(parts[0]) &&
-    (PART2_WORDS as readonly string[]).includes(parts[1])
-  );
+  if (parts.length === 3) {
+    return (
+      inList(PART0_WORDS, parts[0]) &&
+      inList(PART1_WORDS, parts[1]) &&
+      inList(PART2_WORDS, parts[2])
+    );
+  }
+
+  // Legacy shape, still present on missions created before AB#330.
+  if (parts.length === 2) {
+    return inList(PART1_WORDS, parts[0]) && inList(PART2_WORDS, parts[1]);
+  }
+
+  return false;
 }
 
-/** Every name this generator can produce. Exported for tests and for review. */
+/**
+ * Every name this generator can produce: 20 x 20 x 20 = 8,000. Exported for
+ * tests and for review - adding a word here adds it to what a learner may
+ * publish on a world-readable document.
+ */
 export function allGeneratedMissionNames(): string[] {
-  return PART1_WORDS.flatMap((a) => PART2_WORDS.map((b) => `${a} ${b}`));
+  return PART0_WORDS.flatMap((a) =>
+    PART1_WORDS.flatMap((b) => PART2_WORDS.map((c) => `${a} ${b} ${c}`)),
+  );
 }
