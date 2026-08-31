@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Blocks,
@@ -20,21 +20,16 @@ import {
   subscribeToYardQueue,
   type QueueMission,
 } from '@/infrastructure/persistence/operatorQueueService';
-import {
-  readStoredYard,
-  serverYardSnapshot,
-  subscribeToYard,
-  yardLabel,
-} from '@/infrastructure/config/yards';
+
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { MissionActions } from '@/components/operator/MissionActions';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
 
 /**
- * The live queue for the yard this operator has selected (AB#375/376/377).
+ * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
  *
- * The yard comes from the same store YardPicker writes, so changing the picker
+ * The yard comes from the session, chosen at sign-in, so it cannot change
  * tears this subscription down and opens one against the new yard. That is the
  * whole reason the yard is a runtime selection rather than a claim.
  *
@@ -54,17 +49,30 @@ import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
  * handle: a child says "mine is Rock Lover" and the operator finds that row.
  * That works without anyone knowing whose it is.
  */
-export function MissionQueue({ role }: { role: 'operator' | 'admin' }) {
-  const yardId = useSyncExternalStore(subscribeToYard, readStoredYard, serverYardSnapshot);
-
-  // Keyed by yard, so switching yards REMOUNTS rather than resetting state
-  // inside an effect. React's own answer to "reset all state when a prop
-  // changes", and it means there is no window where the previous yard's queue
-  // is on screen under the new yard's heading.
-  return <YardQueue key={yardId} yardId={yardId} role={role} />;
+export function MissionQueue({
+  role,
+  yardId,
+  yardName,
+}: {
+  role: 'operator' | 'admin';
+  yardId: string;
+  yardName: string;
+}) {
+  // Still keyed by yard. It cannot change without a sign-out now, but the key
+  // costs nothing and keeps the guarantee: no window where one yard's queue is
+  // on screen under another's heading.
+  return <YardQueue key={yardId} yardId={yardId} yardName={yardName} role={role} />;
 }
 
-function YardQueue({ yardId, role }: { yardId: string; role: 'operator' | 'admin' }) {
+function YardQueue({
+  yardId,
+  yardName,
+  role,
+}: {
+  yardId: string;
+  yardName: string;
+  role: 'operator' | 'admin';
+}) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -213,7 +221,7 @@ function YardQueue({ yardId, role }: { yardId: string; role: 'operator' | 'admin
           <div className="max-w-sm space-y-2">
             <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
             <p className="text-sm text-muted-foreground">
-              No missions queued at {yardLabel(yardId) ?? 'this yard'}. New submissions
+              No missions queued at {yardName}. New submissions
               appear here as learners send them.
             </p>
           </div>
@@ -241,8 +249,8 @@ function YardQueue({ yardId, role }: { yardId: string; role: 'operator' | 'admin
           {activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
             ({visible.length === source.length
-              ? `${source.length} at ${yardLabel(yardId) ?? yardId}`
-              : `${visible.length} of ${source.length} at ${yardLabel(yardId) ?? yardId}`})
+              ? `${source.length} at ${yardName}`
+              : `${visible.length} of ${source.length} at ${yardName}`})
           </span>
         </h2>
       </div>

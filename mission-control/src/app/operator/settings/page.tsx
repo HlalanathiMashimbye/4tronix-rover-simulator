@@ -4,6 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { SettingsManager } from '@/components/operator/SettingsManager';
+import { YardManager } from '@/components/operator/YardManager';
+import { adminYardRepository } from '@/infrastructure/container.server';
 import {
   SETTINGS,
   describeSetting,
@@ -38,6 +40,7 @@ export default async function OperatorSettingsPage() {
   const names = Object.keys(SETTINGS) as SettingName[];
   const values = await Promise.all(names.map((name) => readSetting(name)));
   const settings = names.map((name, i) => describeSetting(name, values[i]));
+  const yards = await adminYardRepository().findAll();
 
   return (
     <main className="relative flex min-h-[calc(100vh-64px)] flex-col overflow-y-auto px-4 sm:px-6">
@@ -59,7 +62,8 @@ export default async function OperatorSettingsPage() {
         </p>
       </header>
 
-      <div className="mx-auto w-full max-w-page pb-8">
+      <div className="mx-auto grid w-full max-w-page gap-3 pb-8 lg:grid-cols-2 lg:items-start">
+        <YardManager initialYards={yards} />
         <SettingsManager initialSettings={settings} />
       </div>
     </main>

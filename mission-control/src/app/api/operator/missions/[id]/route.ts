@@ -33,7 +33,6 @@ import { MissionNotificationService } from '@/core/application/services/MissionN
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
-import { isKnownYard } from '@/infrastructure/config/yards';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {
   decideAttachVideo,
@@ -45,10 +44,15 @@ import {
   type RunSnapshot,
 } from '@/core/domain/services/missionBookkeeping';
 
-const yardId = z
-  .string()
-  .min(1)
-  .refine(isKnownYard, 'That yard is not one this platform knows about.');
+/**
+ * Not checked against a list here. It is checked against the SESSION's yard
+ * below, and that one was validated against the live yards at sign-in.
+ *
+ * It used to refine against the hardcoded KNOWN_YARDS, which stopped being
+ * true the moment yards became data an admin can add: a venue added this
+ * morning would have been refused here while appearing everywhere else.
+ */
+const yardId = z.string().min(1);
 
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), yardId }),
@@ -103,6 +107,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     body = await request.json();
   } catch {
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // The yard is chosen at sign-in and fixed for the session, so a request may
+  // not name a different one. Without this the body decides, and an operator
+  // standing in Cape Town could record a run against Durban by having a stale
+  // tab open. A session from before the choice existed has no yard and is sent
+  // to sign in again rather than being trusted.
+  if (!session.yardId) {
+    return NextResponse.json(
+      { success: false, error: 'Sign in again to choose which yard you are at.' },
+      { status: 403 },
+    );
   }
 
   const parsed = bodySchema.safeParse(body);
@@ -169,6 +185,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         feedback = command.text;
         decision = decideFeedback(snapshot);
         break;
+    }
+
+    if (command.yardId !== session.yardId) {
+      return NextResponse.json(
+        { success: false, error: 'That mission is at another yard. Sign out to change yards.' },
+        { status: 403 },
+      );
     }
 
     if (!decision.ok) {
