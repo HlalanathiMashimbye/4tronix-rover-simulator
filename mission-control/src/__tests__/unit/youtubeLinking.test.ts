@@ -4,7 +4,7 @@
 
 import {
   claimedMissions,
-  missionIdFromVideo,
+  missionFromVideo,
   runToLink,
   watchUrl,
 } from '@/core/domain/services/youtubeLinking';
@@ -16,24 +16,27 @@ function run(over: Partial<MissionRun> = {}): MissionRun {
 
 describe('reading the mission id out of a video', () => {
   it('finds the line the run station generates', () => {
-    expect(
-      missionIdFromVideo({ title: '', description: 'Lunar Mapper, driven by a real rover.\n\nMissionID: m-7f3a91' }),
-    ).toBe('m-7f3a91');
+    const claim = missionFromVideo({
+      title: '',
+      description: 'Lunar Mapper, driven by a real rover.\n\nMissionID: m-7f3a91',
+    });
+
+    expect(claim?.missionId).toBe('m-7f3a91');
   });
 
   it('tolerates the spacing a person might retype', () => {
-    expect(missionIdFromVideo({ title: '', description: 'MissionID:m1' })).toBe('m1');
-    expect(missionIdFromVideo({ title: '', description: 'MissionID:   m1' })).toBe('m1');
+    expect(missionFromVideo({ title: '', description: 'MissionID:m1' })?.missionId).toBe('m1');
+    expect(missionFromVideo({ title: '', description: 'MissionID:   m1' })?.missionId).toBe('m1');
   });
 
   it('is null when the description says nothing about a mission', () => {
-    expect(missionIdFromVideo({ title: '', description: 'Our rover doing a square!' })).toBeNull();
-    expect(missionIdFromVideo({ title: '', description: '' })).toBeNull();
+    expect(missionFromVideo({ title: '', description: 'Our rover doing a square!' })).toBeNull();
+    expect(missionFromVideo({ title: '', description: '' })).toBeNull();
   });
 
   it('needs the marker, not a mention of it', () => {
     // Prose about the field must not link a mission called "is".
-    expect(missionIdFromVideo({ title: '', description: 'the MissionID is below' })).toBeNull();
+    expect(missionFromVideo({ title: '', description: 'the MissionID is below' })).toBeNull();
   });
 });
 
@@ -45,25 +48,23 @@ describe('the filename YouTube turns into a title', () => {
    * is the version that survives the end of a long event day.
    */
   it('reads the mission id from an unrenamed recording', () => {
-    expect(missionIdFromVideo({ title: 'm-7f3a91__curiosity', description: '' })).toBe('m-7f3a91');
+    expect(missionFromVideo({ title: 'm-7f3a91__curiosity', description: '' })?.missionId).toBe('m-7f3a91');
   });
 
   it('still works when the description was pasted as well', () => {
     // Both paths present is the ordinary case, not a conflict.
-    expect(
-      missionIdFromVideo({ title: 'm1__curiosity', description: 'MissionID: m1' }),
-    ).toBe('m1');
+    expect(missionFromVideo({ title: 'm1__curiosity', description: 'MissionID: m1' })?.missionId)
+      .toBe('m1');
   });
 
   it('prefers an explicit marker over the filename', () => {
     // Somebody who took the trouble to paste the block meant it.
-    expect(
-      missionIdFromVideo({ title: 'wrong__curiosity', description: 'MissionID: right' }),
-    ).toBe('right');
+    expect(missionFromVideo({ title: 'wrong__curiosity', description: 'MissionID: right' })?.missionId)
+      .toBe('right');
   });
 
   it('ignores a title that is merely a title', () => {
-    expect(missionIdFromVideo({ title: 'Our rover doing a square!', description: '' })).toBeNull();
+    expect(missionFromVideo({ title: 'Our rover doing a square!', description: '' })).toBeNull();
   });
 
   it('needs the yard tail, so a bare word cannot claim a mission', () => {
@@ -71,7 +72,7 @@ describe('the filename YouTube turns into a title', () => {
      * The tail is what makes matching a title safe at all. Without it any
      * one-word title would claim a mission of that name.
      */
-    expect(missionIdFromVideo({ title: 'holiday', description: '' })).toBeNull();
+    expect(missionFromVideo({ title: 'holiday', description: '' })).toBeNull();
   });
 
   it('a wrong guess costs a lookup, not a mislabelled child', () => {
@@ -81,7 +82,7 @@ describe('the filename YouTube turns into a title', () => {
      * failure mode is a wasted read rather than somebody else's video landing
      * on a learner's page.
      */
-    expect(missionIdFromVideo({ title: 'holiday__beach', description: '' })).toBe('holiday');
+    expect(missionFromVideo({ title: 'holiday__beach', description: '' })?.missionId).toBe('holiday');
   });
 });
 
@@ -92,7 +93,7 @@ describe('what the recent uploads claim', () => {
       { videoId: 'v2', title: '', description: 'MissionID: m1' },
     ]);
 
-    expect(claims).toEqual([{ missionId: 'm1', videoId: 'v2' }]);
+    expect(claims).toEqual([{ missionId: 'm1', yardId: null, videoId: 'v2' }]);
   });
 
   it('lets a re-upload win, because that is why people re-upload', () => {
@@ -102,7 +103,7 @@ describe('what the recent uploads claim', () => {
       { videoId: 'old', title: '', description: 'MissionID: m1' },
     ]);
 
-    expect(claims).toEqual([{ missionId: 'm1', videoId: 'new' }]);
+    expect(claims).toEqual([{ missionId: 'm1', yardId: null, videoId: 'new' }]);
   });
 
   it('builds a watchable url', () => {
@@ -144,5 +145,53 @@ describe('choosing which run the video belongs to', () => {
 
   it('is null for a mission nothing has run', () => {
     expect(runToLink([])).toBeNull();
+  });
+});
+
+describe('which yard a video belongs to', () => {
+  /**
+   * The question the filename already answers and the linker used to throw
+   * away. With one run per yard, mission plus yard identifies a run exactly,
+   * so there is nothing left to guess.
+   */
+  it('takes the yard from the recording filename', () => {
+    expect(missionFromVideo({ title: 'm1__durban', description: '' })).toEqual({
+      missionId: 'm1',
+      yardId: 'durban',
+    });
+  });
+
+  it('reads an explicit Yard line beside the MissionID one', () => {
+    expect(
+      missionFromVideo({ title: '', description: 'MissionID: m1\nYard: curiosity' }),
+    ).toEqual({ missionId: 'm1', yardId: 'curiosity' });
+  });
+
+  it('admits it does not know, rather than inventing one', () => {
+    // Null is what keeps runToLink as the fallback instead of a wrong guess
+    // dressed up as a fact.
+    expect(missionFromVideo({ title: '', description: 'MissionID: m1' })?.yardId).toBeNull();
+  });
+
+  it('keeps both yards when two ran the same mission', () => {
+    /**
+     * Deduping on the mission alone dropped whichever video was uploaded
+     * second, which is the exact collision capturing the yard exists to stop.
+     */
+    const claims = claimedMissions([
+      { videoId: 'v-ct', title: 'm1__curiosity', description: '' },
+      { videoId: 'v-dbn', title: 'm1__durban', description: '' },
+    ]);
+
+    expect(claims.map((c) => c.yardId)).toEqual(['curiosity', 'durban']);
+  });
+
+  it('still collapses a genuine re-upload of the same run', () => {
+    const claims = claimedMissions([
+      { videoId: 'new', title: 'm1__curiosity', description: '' },
+      { videoId: 'old', title: 'm1__curiosity', description: '' },
+    ]);
+
+    expect(claims).toEqual([{ missionId: 'm1', yardId: 'curiosity', videoId: 'new' }]);
   });
 });

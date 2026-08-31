@@ -41,7 +41,10 @@ const MISSION_ID_PATTERN = /MissionID:\s*([A-Za-z0-9_-]+)/;
  * failure mode is a wasted lookup rather than a video attached to the wrong
  * child's work.
  */
-const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__[A-Za-z0-9-]+$/;
+const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__([A-Za-z0-9-]+)$/;
+
+/** The yard, when the uploader said it explicitly rather than in a filename. */
+const YARD_PATTERN = /Yard:\s*([A-Za-z0-9-]+)/;
 
 export interface ChannelVideo {
   videoId: string;
@@ -57,12 +60,37 @@ export interface ChannelVideo {
  * it means the loop closes whether the operator pasted our description block
  * or simply did not rename the file.
  */
-export function missionIdFromVideo(video: Pick<ChannelVideo, 'title' | 'description'>): string | null {
-  const marked = MISSION_ID_PATTERN.exec(`${video.description || ''}\n${video.title || ''}`);
-  if (marked) return marked[1];
+export interface VideoClaim {
+  missionId: string;
+  /**
+   * The yard, when the video says which one.
+   *
+   * WORTH CAPTURING RATHER THAN GUESSING. A mission can be run at more than
+   * one yard, and picking the most recently completed run without a video is
+   * a heuristic: it attaches Cape Town's footage to Durban's run whenever the
+   * two finish close together. The filename carries the yard already
+   * (`<missionId>__<yardId>.mp4`), so throwing it away and then guessing was
+   * losing information we were handed.
+   *
+   * Null when the uploader wrote only a mission id, which is what the
+   * heuristic is still there for.
+   */
+  yardId: string | null;
+}
+
+export function missionFromVideo(
+  video: Pick<ChannelVideo, 'title' | 'description'>,
+): VideoClaim | null {
+  const haystack = `${video.description || ''}\n${video.title || ''}`;
+
+  const marked = MISSION_ID_PATTERN.exec(haystack);
+  if (marked) {
+    const yard = YARD_PATTERN.exec(haystack);
+    return { missionId: marked[1], yardId: yard ? yard[1] : null };
+  }
 
   const named = RECORDING_FILENAME_PATTERN.exec((video.title || '').trim());
-  return named ? named[1] : null;
+  return named ? { missionId: named[1], yardId: named[2] } : null;
 }
 
 export function watchUrl(videoId: string): string {
@@ -72,18 +100,27 @@ export function watchUrl(videoId: string): string {
 /**
  * The missions the channel's recent uploads claim, newest upload first.
  *
- * De-duplicated: if somebody re-uploads a run, the newer video wins, because
- * that is almost always why they did it.
+ * De-duplicated per mission AND yard: if somebody re-uploads a run the newer
+ * video wins, because that is almost always why they did it, but two yards'
+ * videos of the same mission are two different runs and both survive.
  */
-export function claimedMissions(videos: ChannelVideo[]): Array<{ missionId: string; videoId: string }> {
+export function claimedMissions(videos: ChannelVideo[]): Array<VideoClaim & { videoId: string }> {
   const seen = new Set<string>();
-  const claims: Array<{ missionId: string; videoId: string }> = [];
+  const claims: Array<VideoClaim & { videoId: string }> = [];
 
   for (const video of videos) {
-    const missionId = missionIdFromVideo(video);
-    if (!missionId || seen.has(missionId)) continue;
-    seen.add(missionId);
-    claims.push({ missionId, videoId: video.videoId });
+    const claim = missionFromVideo(video);
+    if (!claim) continue;
+
+    // Keyed by mission AND yard, not mission alone. Two yards running the
+    // same mission produce two videos, and deduping on the mission would drop
+    // whichever was uploaded second - the same collision that made capturing
+    // the yard worth doing in the first place. A claim naming no yard keys on
+    // the mission by itself, so a genuine re-upload still collapses.
+    const key = `${claim.missionId}::${claim.yardId ?? '*'}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    claims.push({ ...claim, videoId: video.videoId });
   }
 
   return claims;

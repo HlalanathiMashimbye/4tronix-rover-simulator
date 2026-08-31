@@ -160,6 +160,56 @@ describe('POST /api/cron/youtube-link', () => {
       expect((await POST(request('right-secret'))).status).toBe(502);
     });
   });
+
+  describe('attaching to the right yard', () => {
+    it('uses the yard the video named instead of guessing', async () => {
+      /**
+       * Two yards ran this mission and both finished. Picking the most recently
+       * completed run without a video would attach Cape Town's footage to
+       * Durban's run; the filename said which one, so there is nothing to guess.
+       */
+      fetchRecentUploads.mockResolvedValue([
+        { videoId: 'ct', title: 'm1__curiosity', description: '' },
+      ]);
+      findRuns.mockResolvedValue([
+        { runId: 'r-dbn', yardId: 'durban', status: 'completed', completedAt: '2026-08-31T12:00:00Z' },
+        { runId: 'r-ct', yardId: 'curiosity', status: 'completed', completedAt: '2026-08-30T09:00:00Z' },
+      ]);
+
+      await POST(request('right-secret'));
+
+      expect(applyBookkeeping).toHaveBeenCalledWith(
+        'm1', 'r-ct', 'curiosity', expect.objectContaining({ youtubeUrl: 'https://www.youtube.com/watch?v=ct' }),
+      );
+    });
+
+    it('falls back to the heuristic when the video named no yard', async () => {
+      fetchRecentUploads.mockResolvedValue([
+        { videoId: 'abc', title: '', description: 'MissionID: m1' },
+      ]);
+      findRuns.mockResolvedValue([
+        { runId: 'r-1', yardId: 'curiosity', status: 'completed', completedAt: '2026-08-30T09:00:00Z' },
+      ]);
+
+      await POST(request('right-secret'));
+
+      expect(applyBookkeeping).toHaveBeenCalledWith('m1', 'r-1', 'curiosity', expect.anything());
+    });
+
+    it('skips a named yard whose run already has its video', async () => {
+      fetchRecentUploads.mockResolvedValue([
+        { videoId: 'ct', title: 'm1__curiosity', description: '' },
+      ]);
+      findRuns.mockResolvedValue([
+        { runId: 'r-ct', yardId: 'curiosity', status: 'completed', youtubeUrl: 'https://y/old' },
+      ]);
+
+      const body = await (await POST(request('right-secret'))).json();
+
+      expect(body.linked).toBe(0);
+      expect(applyBookkeeping).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('the admin-set interval', () => {
@@ -182,4 +232,5 @@ describe('the admin-set interval', () => {
 
     expect(isDue(twentyMinutesAgo, 15, now)).toBe(true);
   });
+
 });
