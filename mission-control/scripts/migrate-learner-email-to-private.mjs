@@ -39,7 +39,7 @@
  *   node scripts/migrate-learner-email-to-private.mjs --apply --limit 200
  */
 
-import { initializeApp, cert } from 'firebase-admin/app';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 
 const APPLY = process.argv.includes('--apply');
@@ -78,11 +78,8 @@ function requireEnv(name) {
 const projectId = requireEnv('FIREBASE_PROJECT_ID');
 
 initializeApp({
-  credential: cert({
-    projectId,
-    clientEmail: requireEnv('FIREBASE_CLIENT_EMAIL'),
-    privateKey: requireEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n'),
-  }),
+  credential: applicationDefault(),
+  projectId,
 });
 
 const db = getFirestore();

@@ -54,4 +54,3 @@ resend_from_email = "missions@marsyard.sapient.rocks"
 # placeholder, so every server-side Firestore call failed with
 # "Failed to parse private key: DECODER routines::unsupported" and no mission
 # could be submitted at all.
-firebase_credential_source = "adc"

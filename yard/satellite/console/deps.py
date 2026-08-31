@@ -47,9 +47,9 @@ def admin_configured():
 
     This used to require GOOGLE_APPLICATION_CREDENTIALS or all three
     FIREBASE_* key variables, which meant it reported "not configured" for a
-    satellite running on Application Default Credentials - the mode staging,
-    prod and now local dev all use. Sign-in was refused while the credential
-    underneath it worked perfectly.
+    satellite running on Application Default Credentials - now the only mode
+    there is. Sign-in was refused while the credential underneath it worked
+    perfectly.
 
     Asking the real question instead: try to build the Firebase app, and say
     yes if it built. init_firebase memoises, so this costs one attempt and
@@ -99,37 +99,33 @@ def init_firebase():
         if _firebase_app is not None:
             return _firebase_app
 
-        # Same three-way choice as mission-control's firebase-admin.ts, and
-        # deliberately so: the two used to disagree, and the satellite quietly
-        # talked to a different Firebase project for weeks.
+        # Application Default Credentials, and only that, matching
+        # mission-control's firebase-admin.ts. The two have to agree: they used
+        # to disagree, and the satellite quietly talked to a different Firebase
+        # project for weeks.
         #
-        #   both key variables set   -> that service account
-        #   neither set              -> Application Default Credentials
-        #   exactly one set          -> refuse, because it is a broken .env
-        client_email = clean_env('FIREBASE_CLIENT_EMAIL')
-        private_key = clean_env('FIREBASE_PRIVATE_KEY')
-
-        if client_email and private_key:
-            cred = credentials.Certificate({
-                'type': 'service_account',
-                'project_id': clean_env('FIREBASE_PROJECT_ID'),
-                'client_email': client_email,
-                # \n in the private key survives .env files as the two
-                # characters backslash-n; decode them back to newlines.
-                'private_key': private_key.replace('\\n', '\n'),
-                'token_uri': 'https://oauth2.googleapis.com/token',
-            })
-        elif client_email or private_key:
-            # Falling back to ADC here would authenticate as a DIFFERENT
-            # identity than the one intended, silently. Fail instead.
-            missing = 'FIREBASE_PRIVATE_KEY' if client_email else 'FIREBASE_CLIENT_EMAIL'
+        # The service-account branch that used to sit here is gone. Firestore
+        # lives in the same project as everything that reads it, so the branch
+        # authenticated nothing and existed only as a documented reason to keep
+        # a private key in a .env on a Pi that sits on a venue's wifi.
+        #
+        # A leftover key is refused rather than ignored: somebody with these
+        # set believes they are running as that service account, and silently
+        # using ADC instead would run as a different identity.
+        leftover = [
+            name for name in ('FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY')
+            if clean_env(name)
+        ]
+        if leftover:
             raise RuntimeError(
-                f'Incomplete Firebase service account config: {missing} is not '
-                f'set while the other half is. Set both, or unset both to use '
-                f'Application Default Credentials.'
+                f'{" and ".join(leftover)} set, but the service-account credential '
+                f'path has been removed. Authentication is Application Default '
+                f'Credentials only: run `gcloud auth application-default login`, '
+                f'clear these from .env, and delete the key in the Google Cloud '
+                f'console, since a key that still exists is still a way in.'
             )
-        else:
-            cred = credentials.ApplicationDefault()
+
+        cred = credentials.ApplicationDefault()
 
         # Pass the project EXPLICITLY, as mission-control does.
         #

@@ -16,20 +16,6 @@ resource "google_artifact_registry_repository" "mission_control" {
 
 # --- Server secrets (values set out-of-band, never in Terraform) ----------
 
-resource "google_secret_manager_secret" "firebase_client_email" {
-  secret_id = "firebase-client-email"
-  replication {
-    auto {}
-  }
-}
-
-resource "google_secret_manager_secret" "firebase_private_key" {
-  secret_id = "firebase-private-key"
-  replication {
-    auto {}
-  }
-}
-
 # Resend sends the learner mission-status emails. Without this the app throws
 # on every status change (visible as `[mission-email] FAILED` in the logs).
 resource "google_secret_manager_secret" "resend_api_key" {
@@ -46,8 +32,6 @@ resource "google_secret_manager_secret" "resend_api_key" {
 # hello image never reads them.
 resource "google_secret_manager_secret_version" "seed" {
   for_each = {
-    client_email   = google_secret_manager_secret.firebase_client_email.id
-    private_key    = google_secret_manager_secret.firebase_private_key.id
     resend_api_key = google_secret_manager_secret.resend_api_key.id
   }
   secret      = each.value
@@ -55,21 +39,21 @@ resource "google_secret_manager_secret_version" "seed" {
 }
 
 locals {
-  # With ADC, the two Firebase service-account variables must be ABSENT, not
-  # empty: firebase-admin.ts treats one-of-the-pair as a broken .env and throws
-  # rather than silently authenticating as a different identity. Leaving them
-  # mounted at the CHANGE_ME seed is worse still - the app would take the
-  # service-account path with a junk key.
-  firebase_secrets = var.firebase_credential_source == "adc" ? {} : {
-    FIREBASE_CLIENT_EMAIL = google_secret_manager_secret.firebase_client_email
-    FIREBASE_PRIVATE_KEY  = google_secret_manager_secret.firebase_private_key
-  }
-
-  # Resend is unrelated to how Firestore is authenticated: it is a third-party
-  # API key with no ADC equivalent, so it is mounted either way.
-  secrets = merge(local.firebase_secrets, {
+  # No Firebase credential is mounted at all. The service runs as its own
+  # runtime service account, which already holds roles/datastore.user in the
+  # project Firestore lives in, so there is nothing to store or rotate.
+  #
+  # firebase-admin.ts now REFUSES to start when FIREBASE_CLIENT_EMAIL or
+  # FIREBASE_PRIVATE_KEY is set, so mounting either would break the revision
+  # rather than change its identity. That is why the secrets are gone from
+  # here entirely instead of being left mounted and unused: the CHANGE_ME seed
+  # they carried would have been a junk key the app then rejected on boot.
+  #
+  # Resend is unrelated to how Firestore is authenticated: a third-party API
+  # key with no ADC equivalent, so it stays.
+  secrets = {
     RESEND_API_KEY = google_secret_manager_secret.resend_api_key
-  })
+  }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
   # set: while it has a value, every mission email is redirected to that one
@@ -114,10 +98,9 @@ resource "google_project_iam_member" "runtime_firestore" {
 # returned 404, so nothing ever exercised sign-in there until that check was
 # corrected.
 #
-# This matters here rather than only locally because impact.tfvars sets
-# firebase_credential_source = "adc". With ADC there is no mounted key, so the
-# Admin SDK authenticates as THIS service account and its roles are what
-# decide whether verifyIdToken can complete.
+# This matters here rather than only locally because there is no mounted key
+# any more: the Admin SDK authenticates as THIS service account, so its roles
+# are what decide whether verifyIdToken can complete.
 #
 # WHY THE PREDEFINED ROLE AND NOT A NARROWER CUSTOM ONE.
 #
