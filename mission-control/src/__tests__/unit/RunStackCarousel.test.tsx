@@ -27,14 +27,16 @@ jest.mock('@/components/mission/YouTubeEmbed', () => ({
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { buildRunOptions } from '@/lib/missionRuns';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { nanoid } from 'nanoid';
 
 function run(yardId: string, id: string, completedAt: string): MissionRun {
   return {
-    yardId,
+    runId: nanoid(),
+    yardId: yardId,
     status: 'completed',
     youtubeUrl: `https://youtu.be/${id}`,
-    completedAt,
-  };
+    completedAt: completedAt,
+  } as MissionRun;
 }
 
 function renderCarousel(
