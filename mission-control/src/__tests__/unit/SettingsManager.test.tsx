@@ -15,6 +15,7 @@ import type { SettingStatus } from '@/core/domain/services/runtimeSettings';
 function setting(over: Partial<SettingStatus> = {}): SettingStatus {
   return {
     name: 'youtubeChannelId',
+    group: 'youtube',
     label: 'YouTube channel',
     help: 'The channel run videos are uploaded to.',
     secret: false,

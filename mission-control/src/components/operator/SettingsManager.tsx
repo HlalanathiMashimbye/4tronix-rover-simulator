@@ -1,37 +1,70 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Loader2, ShieldAlert } from 'lucide-react';
+import { Check, Loader2, Mail, MonitorPlay } from 'lucide-react';
 
-import type { SettingStatus } from '@/core/domain/services/runtimeSettings';
+import type { SettingGroup, SettingStatus } from '@/core/domain/services/runtimeSettings';
 
 /**
- * One row per setting, each saving on its own.
+ * The settings an admin can change without a deploy.
  *
- * Deliberately not a form with a single Save. These are unrelated values with
- * different blast radii, and batching them means an admin who came to change
- * a channel id can also, without noticing, apply a half-typed sending address
- * that stops every learner email.
+ * Grouped by what is being configured rather than listed flat: five identical
+ * boxes in a column read as a dump of variables, which is the thing this page
+ * exists to stop people having to think in.
+ *
+ * Each field still saves on its own. These are unrelated values with different
+ * blast radii, and one Save means an admin who came to change a channel id can
+ * also, without noticing, apply a half-typed sending address that stops every
+ * learner email.
  */
+
+const GROUPS: Record<SettingGroup, { title: string; blurb: string; Icon: typeof Mail }> = {
+  email: {
+    title: 'Learner email',
+    blurb: 'Sends a child the link to their run. The address must be on a domain verified in Resend, or nothing goes out.',
+    Icon: Mail,
+  },
+  youtube: {
+    title: 'Run videos',
+    blurb: 'Finds uploads by the MissionID in their description and attaches them to the mission on their own.',
+    Icon: MonitorPlay,
+  },
+};
+
 export function SettingsManager({ initialSettings }: { initialSettings: SettingStatus[] }) {
   const [settings, setSettings] = useState(initialSettings);
 
+  const onSaved = (saved: SettingStatus) =>
+    setSettings((all) => all.map((s) => (s.name === saved.name ? saved : s)));
+
   return (
     <div className="flex flex-col gap-3">
-      {settings.map((setting) => (
-        <SettingRow
-          key={setting.name}
-          setting={setting}
-          onSaved={(saved) =>
-            setSettings((all) => all.map((s) => (s.name === saved.name ? saved : s)))
-          }
-        />
-      ))}
+      {(Object.keys(GROUPS) as SettingGroup[]).map((group) => {
+        const rows = settings.filter((s) => s.group === group);
+        if (rows.length === 0) return null;
+        const { title, blurb, Icon } = GROUPS[group];
+
+        return (
+          <section key={group} className="clay rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
+            <div className="flex items-center gap-2">
+              <Icon className="h-4 w-4 text-primary" />
+              <h2 className="font-display text-sm font-bold text-foreground">{title}</h2>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{blurb}</p>
+
+            <div className="mt-3.5 flex flex-col gap-3.5">
+              {rows.map((setting) => (
+                <SettingField key={setting.name} setting={setting} onSaved={onSaved} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
 
-function SettingRow({
+function SettingField({
   setting,
   onSaved,
 }: {
@@ -42,9 +75,9 @@ function SettingRow({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
 
-  // A secret's value never arrives here, so the box starts empty and an empty
-  // box means "leave it alone" rather than "clear it". Clearing a key is not
-  // something anybody wants to do by accident.
+  // A secret's value never reaches the browser, so its box starts empty and an
+  // empty box means "leave it alone" rather than "clear it". Nobody wants to
+  // wipe an API key by tabbing past it.
   const emptyMeansUnchanged = setting.secret;
 
   async function save() {
@@ -74,61 +107,53 @@ function SettingRow({
     }
   }
 
-  // The sandbox redirect silently swallows every learner email while it is
-  // set, so it says so rather than reading like any other field.
-  const dangerous = setting.name === 'resendSandboxRecipient' && setting.configured;
-
   return (
-    <section
-      className={`rounded-xl border p-4 ${
-        dangerous ? 'border-amber-500/40 bg-amber-500/5' : 'border-border/60 bg-card/50'
-      }`}
-    >
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="font-display text-sm font-bold text-foreground">{setting.label}</h2>
+    <label className="grid gap-1.5">
+      <span className="flex items-center justify-between gap-3">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          {setting.label}
+        </span>
         <span
-          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-            setting.configured
-              ? 'bg-emerald-500/10 text-emerald-400'
-              : 'bg-muted text-muted-foreground'
+          className={`inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold ${
+            setting.configured ? 'text-primary' : 'text-muted-foreground'
           }`}
         >
           {setting.configured ? <Check className="h-3 w-3" /> : null}
           {setting.configured ? 'Set' : 'Not set'}
         </span>
-      </div>
+      </span>
 
-      <p className={`mt-1 text-xs leading-relaxed ${dangerous ? 'text-amber-300' : 'text-muted-foreground'}`}>
-        {dangerous ? <ShieldAlert className="mr-1 inline h-3.5 w-3.5" /> : null}
-        {setting.help}
-      </p>
-
-      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+      <span className="flex gap-2">
         <input
+          // Explicit, because the wrapping label also carries the status chip
+          // and the help line: without this a screen reader announces the
+          // field as "YouTube channel Set The channel run videos are..."
+          aria-label={setting.label}
           type={setting.secret ? 'password' : 'text'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          placeholder={setting.secret ? (setting.configured ? 'Paste a new value to replace it' : 'Not set') : ''}
+          placeholder={setting.secret && setting.configured ? 'Paste a new value to replace it' : ''}
           spellCheck={false}
-          aria-label={setting.label}
-          className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:border-primary"
+          className="h-11 min-w-0 flex-1 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
         />
         <button
           type="button"
           onClick={save}
           disabled={saving}
-          className="clay clay-press inline-flex items-center gap-1.5 rounded-lg bg-gradient-mars px-3 py-2 font-display text-xs font-bold text-primary-foreground disabled:opacity-60"
+          className="clay-press inline-flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-gradient-mars px-5 font-display text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           Save
         </button>
-      </div>
+      </span>
 
-      {message && (
-        <p className={`mt-1.5 text-xs ${message.tone === 'ok' ? 'text-emerald-400' : 'text-destructive'}`}>
-          {message.text}
-        </p>
-      )}
-    </section>
+      <span
+        className={`text-xs leading-relaxed ${
+          message ? (message.tone === 'ok' ? 'text-primary' : 'text-destructive') : 'text-muted-foreground'
+        }`}
+      >
+        {message ? message.text : setting.help}
+      </span>
+    </label>
   );
 }

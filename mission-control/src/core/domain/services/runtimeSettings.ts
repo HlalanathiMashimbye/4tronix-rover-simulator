@@ -19,7 +19,12 @@
  * harmless ones and a vault for the rest.
  */
 
+export type SettingGroup = 'email' | 'youtube';
+
 export interface SettingSpec {
+  /** Which card it belongs to. Five identical boxes in a row read as a form
+   *  dump; two labelled groups read as the two things being configured. */
+  group: SettingGroup;
   /** Secret Manager secret id, and the Terraform resource name. */
   secretId: string;
   /** Environment variable that overrides it, for local development. */
@@ -38,6 +43,7 @@ function looksLikeEmail(value: string): string | null {
 
 export const SETTINGS: Record<string, SettingSpec> = {
   resendApiKey: {
+    group: 'email',
     secretId: 'resend-api-key',
     envVar: 'RESEND_API_KEY',
     label: 'Resend API key',
@@ -46,6 +52,7 @@ export const SETTINGS: Record<string, SettingSpec> = {
     validate: (v) => (v.startsWith('re_') ? null : 'Resend keys start with re_.'),
   },
   resendFromEmail: {
+    group: 'email',
     secretId: 'resend-from-email',
     envVar: 'RESEND_FROM_EMAIL',
     label: 'Send mail from',
@@ -54,6 +61,7 @@ export const SETTINGS: Record<string, SettingSpec> = {
     validate: looksLikeEmail,
   },
   youtubeLinkIntervalMinutes: {
+    group: 'youtube',
     secretId: 'youtube-link-interval-minutes',
     envVar: 'YOUTUBE_LINK_INTERVAL_MINUTES',
     label: 'Check for uploads every',
@@ -73,6 +81,7 @@ export const SETTINGS: Record<string, SettingSpec> = {
     },
   },
   youtubeApiKey: {
+    group: 'youtube',
     secretId: 'youtube-api-key',
     envVar: 'YOUTUBE_API_KEY',
     label: 'YouTube API key',
@@ -80,6 +89,7 @@ export const SETTINGS: Record<string, SettingSpec> = {
     secret: true,
   },
   youtubeChannelId: {
+    group: 'youtube',
     secretId: 'youtube-channel-id',
     envVar: 'YOUTUBE_CHANNEL_ID',
     label: 'YouTube channel',
@@ -101,6 +111,7 @@ export function isSettingName(name: string): name is SettingName {
  */
 export interface SettingStatus {
   name: string;
+  group: SettingGroup;
   label: string;
   help: string;
   secret: boolean;
@@ -112,6 +123,7 @@ export function describeSetting(name: SettingName, value: string | null): Settin
   const spec = SETTINGS[name];
   return {
     name,
+    group: spec.group,
     label: spec.label,
     help: spec.help,
     secret: spec.secret,

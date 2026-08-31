@@ -53,8 +53,9 @@ export default async function OperatorSettingsPage() {
           Platform <span className="text-gradient-mars">settings</span>
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Where mail comes from, which YouTube channel is watched, and how often. Changes
-          are live within a minute. No deploy, no terminal.
+          Two things this platform needs from the outside world: somewhere to send a
+          child their run, and somewhere to find the video of it. Changes are live within
+          a minute, with no deploy.
         </p>
       </header>
 
