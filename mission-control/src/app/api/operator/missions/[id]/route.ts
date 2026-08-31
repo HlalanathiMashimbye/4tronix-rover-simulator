@@ -145,7 +145,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // flushed one. The decision falls back to the mission's own status and the
     // write creates the run.
     const runs = await repository.findRuns(id);
-    const run = runs.find((r) => r.yardId === command.yardId) ?? null;
+    // The LATEST run at this yard, not the first match. Runs are keyed by
+    // runId now precisely so a yard can attempt a mission twice, and an
+    // operator pressing "mark complete" means the run in front of them, not
+    // the one from last week that happens to sort first.
+    const run =
+      runs
+        .filter((r) => r.yardId === command.yardId)
+        .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null;
 
     const snapshot: RunSnapshot = {
       runStatus: run?.status ?? null,
