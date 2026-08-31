@@ -44,8 +44,14 @@ FPS = 15.0  # matches camera_server.py's frame_producer interval (1/15s)
 _FRESH_FRAME_SECONDS = 3.0
 
 
+# Beside the satellite, and not configurable. It was an environment variable
+# that nothing outside one test ever set: a knob whose only reachable settings
+# are "correct" and "a directory the service cannot write to".
+RECORDINGS_DIR = os.path.join(SATELLITE_DIR, 'recordings')
+
+
 def _recording_dir():
-    return os.environ.get('RECORDING_DIR') or os.path.join(SATELLITE_DIR, 'recordings')
+    return RECORDINGS_DIR
 
 
 def _camera_uri():

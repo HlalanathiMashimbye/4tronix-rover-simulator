@@ -2013,3 +2013,38 @@ def test_tunables_endpoint_requires_an_operator(client, missions):
     resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 300})
 
     assert resp.status_code in (302, 401, 403)
+
+
+def test_integrations_report_mission_control_unconfigured_when_url_is_unset(
+    client, missions, monkeypatch,
+):
+    """This panel used to hardcode configured=True.
+
+    It therefore told an operator the learner emails were fine on a satellite
+    that had never been told where Mission Control is, which is the state
+    every yard Pi was actually in: nothing sets MISSION_CONTROL_URL, so the
+    status POST goes to localhost:3000 and notify swallows the failure.
+    """
+    monkeypatch.delenv('MISSION_CONTROL_URL', raising=False)
+    client.application.config.pop('MISSION_CONTROL_URL_GETTER', None)
+    sign_in(client)
+
+    data = client.get('/operator/api/integrations').get_json()
+    mc = next(i for i in data['integrations'] if i['id'] == 'mission_control')
+
+    assert mc['configured'] is False
+    assert 'not being sent' in mc['detail']
+
+
+def test_integrations_report_mission_control_configured_when_url_is_set(
+    client, missions, monkeypatch,
+):
+    monkeypatch.setenv('MISSION_CONTROL_URL', 'https://marsyard.example.com')
+    client.application.config.pop('MISSION_CONTROL_URL_GETTER', None)
+    sign_in(client)
+
+    data = client.get('/operator/api/integrations').get_json()
+    mc = next(i for i in data['integrations'] if i['id'] == 'mission_control')
+
+    assert mc['configured'] is True
+    assert mc['detail'] == 'https://marsyard.example.com'

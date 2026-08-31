@@ -162,7 +162,13 @@ def api_integrations():
                 'id': 'mission_control',
                 'name': 'Mission Control',
                 'why': 'Receives status changes so learners get their emails.',
-                **state(True, deps.mission_control_url()),
+                # Was hardcoded to configured=True, which made this panel state
+                # the emails were fine on a satellite that had never been told
+                # where Mission Control is.
+                **state(deps.mission_control_is_configured(),
+                        deps.mission_control_url() if deps.mission_control_is_configured()
+                        else 'MISSION_CONTROL_URL is not set, so status emails are not '
+                             f'being sent. Falling back to {deps.mission_control_url()}.'),
             },
         ],
     })
