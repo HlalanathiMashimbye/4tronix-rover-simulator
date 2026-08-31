@@ -17,4 +17,14 @@ export interface IYardRepository {
 
   /** Retire or restore. The only kind of removal there is. */
   setActive(yardId: string, active: boolean): Promise<void>;
+
+  /**
+   * Move a yard to a new id, recording the old one so it still resolves.
+   *
+   * Named for the operation rather than exposed as delete-and-create, because
+   * those are not the same thing: this yard is not going away, it is answering
+   * to a new name, and every mission carrying the old one must go on finding
+   * it. A general delete would let a caller do the first half and orphan them.
+   */
+  rename(fromId: string, toId: string): Promise<void>;
 }

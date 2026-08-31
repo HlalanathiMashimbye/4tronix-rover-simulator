@@ -16,7 +16,7 @@ export function YardManager({ initialYards }: { initialYards: Yard[] }) {
   const [yards, setYards] = useState(initialYards);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
-  const [draft, setDraft] = useState({ id: '', name: '', area: '', city: '' });
+  const [draft, setDraft] = useState({ id: '', name: '', area: '', city: '', formerIds: '' });
 
   const active = selectableYards(yards);
   const retired = yards.filter((y) => !y.active);
@@ -43,9 +43,16 @@ export function YardManager({ initialYards }: { initialYards: Yard[] }) {
   }
 
   async function add() {
-    const ok = await send('POST', draft, 'add');
+    // Split here rather than sent as a string: the API takes a list, and
+    // "what the operator typed" is a UI concern.
+    const formerIds = draft.formerIds
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
+    const ok = await send('POST', { ...draft, formerIds }, 'add');
     if (ok) {
-      setDraft({ id: '', name: '', area: '', city: '' });
+      setDraft({ id: '', name: '', area: '', city: '', formerIds: '' });
       setMessage({ tone: 'ok', text: 'Yard added. Operators can sign in there now.' });
     }
   }
@@ -116,6 +123,16 @@ export function YardManager({ initialYards }: { initialYards: Yard[] }) {
                  onChange={(v) => setDraft({ ...draft, name: v })} placeholder="Durban Science Centre" />
           <Field label="Suburb" value={draft.area}
                  onChange={(v) => setDraft({ ...draft, area: v })} placeholder="Umbilo" />
+          <div className="sm:col-span-2">
+            <Field
+              label="Previous ids (optional)"
+              hint="Only if this yard already has missions recorded under another id. Comma separated, and they keep resolving to it."
+              value={draft.formerIds}
+              onChange={(v) => setDraft({ ...draft, formerIds: v })}
+              placeholder="durban-1, old-name"
+              mono
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -149,14 +166,16 @@ function YardRow({
 }: {
   yard: Yard;
   busy: boolean;
-  onSave: (details: { name: string; area: string; city: string }) => Promise<boolean>;
+  onSave: (details: { newId: string; name: string; area: string; city: string }) => Promise<boolean>;
   onRetire: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState({ name: yard.name, area: yard.area, city: yard.city });
+  const [draft, setDraft] = useState({
+    newId: yard.id, name: yard.name, area: yard.area, city: yard.city,
+  });
 
   function cancel() {
-    setDraft({ name: yard.name, area: yard.area, city: yard.city });
+    setDraft({ newId: yard.id, name: yard.name, area: yard.area, city: yard.city });
     setEditing(false);
   }
 
@@ -197,15 +216,24 @@ function YardRow({
 
   return (
     <li className="rounded-lg border border-primary/40 bg-background/40 px-3 py-2.5">
-      <p className="text-[11px] text-muted-foreground">
-        Editing <span className="font-mono text-foreground">{yard.id}</span>. The id is the
-        rover&apos;s hostname and every mission here carries it, so it cannot be changed.
-      </p>
-      <div className="mt-2 grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Field label="Id" value={draft.newId} onChange={(v) => setDraft({ ...draft, newId: v })} mono />
         <Field label="Venue" value={draft.name} onChange={(v) => setDraft({ ...draft, name: v })} />
         <Field label="Suburb" value={draft.area} onChange={(v) => setDraft({ ...draft, area: v })} />
         <Field label="City" value={draft.city} onChange={(v) => setDraft({ ...draft, city: v })} />
       </div>
+
+      {draft.newId !== yard.id && (
+        <p
+          role="note"
+          className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] leading-relaxed text-amber-200"
+        >
+          Renaming <span className="font-mono">{yard.id}</span> to{' '}
+          <span className="font-mono">{draft.newId}</span>. The old id keeps resolving, so
+          nothing already recorded is lost. <b>Change YARD_ID on that satellite to match</b>, or
+          it carries on writing missions under the old name.
+        </p>
+      )}
       <div className="mt-2 flex items-center gap-1.5">
         <button
           type="button"

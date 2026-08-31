@@ -6,6 +6,7 @@ const requireAdmin = jest.fn();
 const findAll = jest.fn();
 const save = jest.fn();
 const setActive = jest.fn();
+const rename = jest.fn();
 
 class UnauthorizedError extends Error {}
 class ForbiddenError extends Error {}
@@ -17,7 +18,7 @@ jest.mock('@/infrastructure/auth/dal', () => ({
 }));
 
 jest.mock('@/infrastructure/container.server', () => ({
-  adminYardRepository: () => ({ findAll, save, setActive }),
+  adminYardRepository: () => ({ findAll, save, setActive, rename }),
 }));
 
 jest.mock('@/infrastructure/config/yardDirectory', () => ({ clearYardCache: jest.fn() }));
@@ -114,20 +115,43 @@ describe('/api/operator/yards', () => {
       expect(save).not.toHaveBeenCalled();
     });
 
-    it('cannot change the id, because every mission carries it', async () => {
-      /**
-       * A new id is simply not a field the schema accepts, so it is ignored
-       * rather than applied. Renaming a rover is a migration that has to write
-       * formerIds, not a text edit.
-       */
-      await PATCH(req('PATCH', { id: 'curiosity', newId: 'something-else', name: 'Renamed' }));
-
-      expect(save).toHaveBeenCalledWith(expect.objectContaining({ id: 'curiosity' }));
-    });
-
     it('404s for a yard that does not exist', async () => {
       expect((await PATCH(req('PATCH', { id: 'atlantis', name: 'x' }))).status).toBe(404);
     });
+  });
+
+  describe('renaming', () => {
+    it('moves the yard and keeps the old id resolving', async () => {
+      /**
+       * A rename is not a delete and a create. Every mission already recorded
+       * carries the old id, so it joins formerIds and goes on resolving.
+       */
+      const resp = await PATCH(req('PATCH', { id: 'curiosity', newId: 'curiosity-2' }));
+
+      expect(resp.status).toBe(200);
+      expect(rename).toHaveBeenCalledWith('curiosity', 'curiosity-2');
+    });
+
+    it('refuses a new id that would not work as a hostname', async () => {
+      const resp = await PATCH(req('PATCH', { id: 'curiosity', newId: 'Not A Host' }));
+
+      expect(resp.status).toBe(400);
+      expect(rename).not.toHaveBeenCalled();
+    });
+
+    it('refuses an id another yard already answers to', async () => {
+      const resp = await PATCH(req('PATCH', { id: 'curiosity', newId: 'uct-rover-1' }));
+
+      expect(resp.status).toBe(409);
+      expect(rename).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the new id is the one it already has', async () => {
+      await PATCH(req('PATCH', { id: 'curiosity', newId: 'curiosity' }));
+
+      expect(rename).not.toHaveBeenCalled();
+    });
+
   });
 
   describe('retiring', () => {

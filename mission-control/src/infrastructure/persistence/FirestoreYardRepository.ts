@@ -36,6 +36,27 @@ export class FirestoreYardRepository implements IYardRepository {
     await this.db.collection(YARDS_COLLECTION).doc(yardId).update({ active });
   }
 
+  async rename(fromId: string, toId: string): Promise<void> {
+    const collection = this.db.collection(YARDS_COLLECTION);
+    const existing = await collection.doc(fromId).get();
+    if (!existing.exists) return;
+
+    const yard = this.toYard(fromId, existing.data() ?? {});
+    const { id: _id, ...fields } = yard;
+
+    // One batch, so there is never a moment with the yard under both ids or
+    // under neither. The old id joins formerIds rather than disappearing:
+    // every mission already submitted carries it, and findYardIn resolves
+    // through that list.
+    const batch = this.db.batch();
+    batch.set(collection.doc(toId), this.withoutUndefined({
+      ...fields,
+      formerIds: [...(yard.formerIds ?? []), fromId],
+    }));
+    batch.delete(collection.doc(fromId));
+    await batch.commit();
+  }
+
   /**
    * An explicit allowlist, not a spread of the document.
    *

@@ -20,6 +20,12 @@ const addSchema = z.object({
   name: z.string().trim().min(1, 'Give the venue a name.'),
   area: z.string().trim().min(1, 'Give the suburb.'),
   city: z.string().trim().min(1, 'Give the city. This is the part a learner reads.'),
+  /**
+   * Optional, and the only optional field. Set it when a yard already has
+   * missions recorded under a different id, so those still resolve to it
+   * instead of showing a learner no location.
+   */
+  formerIds: z.array(z.string().trim().min(1)).optional(),
 });
 
 /**
@@ -33,6 +39,16 @@ const addSchema = z.object({
  */
 const patchSchema = z.object({
   id: z.string().trim().min(1),
+  /**
+   * A rename, not an edit. The old id joins formerIds and goes on resolving,
+   * because every mission already recorded carries it.
+   *
+   * THE SATELLITE HAS TO FOLLOW. Its YARD_ID must be changed to match, or it
+   * keeps writing missions under the old id. Those still resolve through
+   * formerIds, so nothing breaks visibly, which is exactly why the console
+   * says so out loud when you do this.
+   */
+  newId: z.string().trim().min(1).optional(),
   active: z.boolean().optional(),
   name: z.string().trim().min(1, 'The venue needs a name.').optional(),
   area: z.string().trim().min(1, 'The suburb cannot be blank.').optional(),
@@ -138,7 +154,7 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const { id, active, ...details } = parsed.data;
+  const { id, newId, active, ...details } = parsed.data;
 
   const repository = adminYardRepository();
   const yards = await repository.findAll();
@@ -147,16 +163,37 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'No such yard.' }, { status: 404 });
   }
 
+  if (newId && newId !== id) {
+    const complaint = yardIdComplaint(newId);
+    if (complaint) {
+      return NextResponse.json({ success: false, error: complaint }, { status: 400 });
+    }
+    // Same collision rules as adding: a live id, or one another yard used to
+    // answer to, would make one id mean two places.
+    if (yards.some((y) => y.id === newId || y.formerIds?.includes(newId))) {
+      return NextResponse.json(
+        { success: false, error: `${newId} is already taken by another yard.` },
+        { status: 409 },
+      );
+    }
+    await repository.rename(id, newId);
+  }
+
+  const targetId = newId && newId !== id ? newId : id;
+
   if (Object.keys(details).length > 0) {
     // Merged onto the existing yard, so an edit to one field cannot blank the
     // others and cannot drop createdAt, addedBy or formerIds.
-    await repository.save({ ...existing, ...details });
+    // Re-read: a rename above rewrote the document under a new id and
+    // appended to formerIds, so `existing` is stale.
+    const current = (await repository.findAll()).find((y) => y.id === targetId) ?? existing;
+    await repository.save({ ...current, ...details, id: targetId });
   }
 
   if (active !== undefined) {
     // Retiring, never deleting: the yard goes on resolving for every mission
     // ever run there, it just leaves the sign-in list.
-    await repository.setActive(id, active);
+    await repository.setActive(targetId, active);
   }
 
   clearYardCache();
