@@ -99,12 +99,12 @@ export function RunStackCarousel({
 
   return (
     <section
-      // flex-1 only from md up. That is where the page is pinned to the
-      // viewport and a bounded height is what max-h-full below resolves
-      // against. On a phone the page scrolls and nothing bounds it, so
-      // claiming the leftover space just parked the frame in the middle of a
-      // tall empty box.
-      className="flex min-h-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:flex-1"
+      // Sized to the frame, never growing. Claiming the column's leftover
+      // space is what pushed the player 115px below the code panel it sits
+      // beside: the frame was centred in a box far taller than itself. The
+      // leftover belongs to the notes panel at the bottom of the column, which
+      // is the piece that can actually use it.
+      className="flex min-h-0 shrink-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
       aria-roledescription="carousel"
       aria-label="Rover run videos"
       aria-describedby="run-carousel-status"
@@ -130,12 +130,17 @@ export function RunStackCarousel({
       {/* The frame takes the shape of the footage rather than the shape of
           whatever space is going. Letting it absorb the column's full height
           made a 16:9 video sit in a 4:3 box with 300px of black above and
-          below it, and pushed the stats under it off a page that does not
-          scroll. Capped by height as well as width, so a short viewport
-          narrows the frame instead of overflowing. */}
-      <div className="flex min-h-0 items-center justify-center md:flex-1">
+          below it.
+
+          The height cap is what keeps a short, wide viewport from overflowing
+          a page that does not scroll. It cannot come from the parent, which is
+          now sized to this frame rather than the other way round, so it is
+          measured off the viewport: the navbar, the mission header, the stats
+          row, the gaps between them and a readable minimum for the notes
+          panel, which is everything in this column that is not the frame. */}
+      <div className="flex min-h-0 items-start justify-center">
       <div
-        className="relative aspect-video max-h-full w-full touch-pan-y"
+        className="relative aspect-video max-h-[calc(100vh-19rem)] w-full touch-pan-y"
         onPointerDown={(event) => {
           if (!canNavigate) return;
           setDragStart(event.clientX);

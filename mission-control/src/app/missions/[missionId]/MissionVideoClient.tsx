@@ -210,8 +210,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 <Stat label="Duration" value={duration} mono />
                 <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
               </div>
-              {/* Under the stats, where a learner looks after watching. Renders
-                  nothing when no operator has written anything. */}
+              {/* Under the stats, where a learner looks after watching. Takes
+                  the column's leftover height so this column ends level with
+                  the code panel beside it, and so the panel does not shove the
+                  stats upward the first time an operator writes something. */}
               <OperatorFeedback runs={missionRuns} />
             </div>
           }

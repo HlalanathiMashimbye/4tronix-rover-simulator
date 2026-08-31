@@ -15,33 +15,58 @@ import { yardPlace } from '@/infrastructure/config/yards';
  *
  * The yard is named only when more than one has written something, so the
  * usual case reads as a note rather than a log entry.
+ *
+ * This holds its space when there is nothing to show yet, rather than
+ * rendering null. Two reasons, and neither is decorative: the panel used to
+ * appear out of nowhere and shove the stats up the moment an operator wrote
+ * something, and while it was absent the column ended short of the code panel
+ * beside it. Saying "no notes yet" also tells a child that a note is a thing
+ * that can arrive, which an empty space does not.
  */
 export function OperatorFeedback({ runs }: { runs: MissionRun[] }) {
   const withFeedback = runs.filter((run) => run.feedback && run.feedback.trim().length > 0);
-
-  if (withFeedback.length === 0) return null;
+  const hasNotes = withFeedback.length > 0;
 
   return (
     <section
       aria-label="Notes from the yard"
-      className="shrink-0 rounded-xl border border-primary/30 bg-primary/5 p-3"
+      // flex-1, so this takes the column's leftover height and the column ends
+      // level with the code panel beside it. A flex column stretches its
+      // children across, not down, so being inside a grown wrapper was not
+      // enough on its own.
+      className={`flex min-h-0 flex-1 flex-col rounded-xl border p-3 ${
+        hasNotes ? 'border-primary/30 bg-primary/5' : 'border-border/60 bg-card/50'
+      }`}
     >
-      <h2 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary">
+      <h2
+        className={`flex shrink-0 items-center gap-1.5 text-xs font-bold uppercase tracking-wider ${
+          hasNotes ? 'text-primary' : 'text-muted-foreground'
+        }`}
+      >
         <MessageSquare className="h-3.5 w-3.5" />
         {withFeedback.length > 1 ? 'Notes from the yard' : 'A note from the yard'}
       </h2>
 
-      <ul className="mt-2 flex flex-col gap-2.5">
-        {withFeedback.map((run) => (
-          <li key={run.yardId}>
-            <p className="text-sm leading-relaxed text-foreground">{run.feedback}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              {run.feedbackBy || 'Your operator'}
-              {withFeedback.length > 1 && ` · ${yardPlace(run.yardId) ?? run.yardId}`}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {hasNotes ? (
+        // Scrolls inside its own box rather than growing the column: the page
+        // does not scroll on desktop, so a talkative operator would otherwise
+        // push the stats off the bottom.
+        <ul className="scroll-panel mt-2 flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
+          {withFeedback.map((run) => (
+            <li key={run.yardId}>
+              <p className="text-sm leading-relaxed text-foreground">{run.feedback}</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {run.feedbackBy || 'Your operator'}
+                {withFeedback.length > 1 && ` · ${yardPlace(run.yardId) ?? run.yardId}`}
+              </p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          No notes yet. The operator who runs your code can leave one here after they watch it.
+        </p>
+      )}
     </section>
   );
 }

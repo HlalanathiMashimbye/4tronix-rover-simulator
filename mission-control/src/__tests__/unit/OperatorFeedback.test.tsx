@@ -25,16 +25,29 @@ function run(over: Partial<MissionRun> = {}): MissionRun {
 }
 
 describe('a note from the yard', () => {
-  it('renders nothing when no operator has written anything', () => {
-    const { container } = render(<OperatorFeedback runs={[run(), run({ yardId: 'other' })]} />);
+  it('holds its place when no operator has written anything', () => {
+    /**
+     * It used to render null. The panel then appeared out of nowhere and
+     * shoved the stats up the moment an operator wrote something, and while it
+     * was absent the column ended short of the code panel beside it. Saying so
+     * also tells a child that a note is a thing that can arrive.
+     */
+    render(<OperatorFeedback runs={[run(), run({ yardId: 'other' })]} />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByText(/no notes yet/i)).toBeInTheDocument();
   });
 
-  it('renders nothing for feedback that is only whitespace', () => {
-    const { container } = render(<OperatorFeedback runs={[run({ feedback: '   ' })]} />);
+  it('treats feedback that is only whitespace as nothing written', () => {
+    render(<OperatorFeedback runs={[run({ feedback: '   ' })]} />);
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByText(/no notes yet/i)).toBeInTheDocument();
+  });
+
+  it('drops the empty state once a note arrives', () => {
+    render(<OperatorFeedback runs={[run({ feedback: 'Good job!' })]} />);
+
+    expect(screen.queryByText(/no notes yet/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/good job!/i)).toBeInTheDocument();
   });
 
   it('shows the note and who wrote it', () => {
