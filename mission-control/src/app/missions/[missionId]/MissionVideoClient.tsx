@@ -205,13 +205,17 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 missionName={missionName}
                 trajectory={simTrajectory}
               />
-              <div className="grid shrink-0 grid-cols-3 gap-2">
+              {/* One row, three facts, label beside value rather than above
+                  it. As three stacked cards this was 49px of a column that had
+                  236px less player in it than the code panel beside it. These
+                  are glanced at once, so they do not need the height. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-0.5 rounded-xl border border-border/60 bg-card/50 px-3 py-1.5">
                 <Stat label="Status" value={discoveryStatus} />
                 <Stat label="Duration" value={duration} mono />
                 <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
               </div>
-              {/* Under the stats, where a learner looks after watching. Renders
-                  nothing when no operator has written anything. */}
+              {/* Under the stats, where a learner looks after watching. One
+                  line, so the leftover height goes to the player instead. */}
               <OperatorFeedback runs={missionRuns} />
             </div>
           }
@@ -302,9 +306,11 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-card/50 px-3 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-sm font-bold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className={`text-xs font-bold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </span>
   );
 }

@@ -62,6 +62,24 @@
   --block-hat: #ff6d00;                  /* uplink / hat */
   --block-foreground: oklch(0.99 0 0);   /* text on a filled block */
 
+  /* Player scrims. Deliberately theme-independent, like the mission tokens
+     above: these sit on video pixels, which are dark whichever theme the page
+     is in, so a "light mode" variant would put dark text on dark footage.
+     Weighted to the outer edge and fully transparent by 60%, so the scrim
+     carries the overlay text without dimming the middle of the frame. */
+  --gradient-player-top: linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 0.7) 0%,
+    oklch(0 0 0 / 0.34) 55%,
+    transparent 100%
+  );
+  --gradient-player-bottom: linear-gradient(
+    to top,
+    oklch(0 0 0 / 0.78) 0%,
+    oklch(0 0 0 / 0.38) 55%,
+    transparent 100%
+  );
+
   --gradient-mars: linear-gradient(135deg, var(--mars) 0%, var(--mars-glow) 100%);
   --gradient-cosmic: linear-gradient(135deg, var(--cosmic) 0%, var(--mars) 100%);
   --gradient-launch: linear-gradient(135deg, var(--primary) 0%, oklch(0.65 0.24 12) 100%);
@@ -284,6 +302,9 @@
     background-clip: text;
     color: transparent;
   }
+  .player-scrim-top { background: var(--gradient-player-top); }
+  .player-scrim-bottom { background: var(--gradient-player-bottom); }
+
   .bg-gradient-mars { background: var(--gradient-mars); }
   .bg-gradient-cosmic { background: var(--gradient-cosmic); }
   .shadow-glow-mars { box-shadow: var(--shadow-glow-mars); }

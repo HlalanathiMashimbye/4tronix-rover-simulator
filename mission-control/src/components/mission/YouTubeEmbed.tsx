@@ -28,6 +28,15 @@ interface YouTubeEmbedProps {
   showFallbackLink?: boolean;
   /** Start muted, and follow the learner's choice while playing (AB#409). */
   muted?: boolean;
+  /**
+   * Fires when the facade hands over to the real iframe.
+   *
+   * The carousel overlays its own chrome on this frame and has to move it out
+   * of the way of YouTube's controls, which it cannot know about otherwise:
+   * the iframe is cross-origin, so there is no play event to listen for from
+   * outside. This is the one moment we can see, and it is enough.
+   */
+  onPlayingChange?: (playing: boolean) => void;
 }
 
 export function YouTubeEmbed({
@@ -35,6 +44,7 @@ export function YouTubeEmbed({
   title,
   showFallbackLink = true,
   muted = false,
+  onPlayingChange,
 }: YouTubeEmbedProps) {
   const [playing, setPlaying] = useState(false);
   // The mute setting AS IT WAS when play was tapped, frozen deliberately.
@@ -84,6 +94,7 @@ export function YouTubeEmbed({
             onClick={() => {
               setStartedMuted(muted);
               setPlaying(true);
+              onPlayingChange?.(true);
             }}
             aria-label={`Play video: ${title}`}
             className="group absolute inset-0 h-full w-full cursor-pointer"

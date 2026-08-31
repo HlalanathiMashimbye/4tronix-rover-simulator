@@ -15,6 +15,28 @@ import {
   subscribeToSound,
 } from '@/hooks/soundPreference';
 
+/**
+ * The run player: one frame that carries its own chrome.
+ *
+ * Everything a player needs to say used to sit AROUND the frame - a header
+ * line, a mute button, a footer repeating the same run name, and a row of dots
+ * underneath. Four bands of furniture stacked on a fixed-height panel, each
+ * eating video height, and the run name printed twice within 400px of itself.
+ * It read as a video with widgets parked near it rather than as a player.
+ *
+ * So the chrome is overlaid on the frame instead, which is both how players
+ * look and how they use space: the media now gets the whole panel.
+ *
+ * The one thing that costs is the scrims landing exactly where both players
+ * draw their own furniture: a native <video> puts its controls under the
+ * bottom one, and both it and YouTube put a title under the top one. Hence
+ * `playing`: the scrims fade the moment something starts, so nothing of ours
+ * is ever stacked on the real controls, and they come back the moment it
+ * stops. Bringing the top half back on hover was tried and reverted - two
+ * titles in the same band is worse than none. The step arrows stay up
+ * throughout: they sit at the vertical middle, the one band neither player
+ * uses.
+ */
 export function RunStackCarousel({
   runs,
   selectedId,
@@ -32,10 +54,26 @@ export function RunStackCarousel({
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
   const [direction, setDirection] = useState<1 | -1>(1);
   const [dragStart, setDragStart] = useState<number | null>(null);
+  // WHICH run is playing, not whether one is. Storing the id rather than a
+  // boolean is what makes stepping to another run reset this for free: the new
+  // frame is a different piece of media, stopped, so its chrome is simply up.
+  // A boolean needed an effect to clear it, which is a cascading render and a
+  // way to leave the next frame bare if the reset is ever missed.
+  const [playingRunId, setPlayingRunId] = useState<string | null>(null);
   const selectedIndex = Math.max(0, runs.findIndex((run) => run.id === selectedId));
   const selectedRun = runs[selectedIndex] ?? runs[0];
   const canNavigate = runs.length > 1;
   const positionLabel = `${selectedIndex + 1} / ${runs.length}`;
+  const playing = playingRunId === selectedRun.id;
+  // Whether the media in the frame draws controls of its own right now, in
+  // which case ours get out of the way rather than sit on top of them. A
+  // playing video does; so does the simulator, always - it ships a full player
+  // UI, a header and a Pause/Reset bar, in exactly the two bands the scrims
+  // occupy. The arrows are unaffected: they sit at the vertical middle, which
+  // nothing else uses.
+  const mediaOwnsChrome = playing || selectedRun.kind === 'sim';
+
+  const setPlaying = (isPlaying: boolean) => setPlayingRunId(isPlaying ? selectedRun.id : null);
 
   const visibleStack = useMemo(
     () =>
@@ -61,7 +99,13 @@ export function RunStackCarousel({
 
   return (
     <section
-      className="flex min-h-0 flex-1 flex-col gap-2 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+      // Takes the column's leftover height from md up, which is where the
+      // page is pinned to the viewport: with the stats and the notes row
+      // compressed to a line each, the leftover is what makes the player the
+      // same height as the code panel beside it. On a phone the page scrolls
+      // and nothing bounds the column, so there is no leftover to take and the
+      // frame falls back to its own shape.
+      className="flex min-h-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:flex-1"
       aria-roledescription="carousel"
       aria-label="Rover run videos"
       aria-describedby="run-carousel-status"
@@ -77,192 +121,208 @@ export function RunStackCarousel({
         }
       }}
     >
-      <div className="flex shrink-0 items-center justify-between gap-3 px-0.5">
-        <div className="min-w-0">
-          <p className="font-display text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {describeRuns(runs)}
-          </p>
-          <h2 id="run-carousel-status" className="truncate font-display text-sm font-bold text-foreground">
-            {selectedRun.label} · {selectedRun.sublabel} · {positionLabel}
-          </h2>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {/* Sits in the header rather than on the card, because the choice is
-              about the learner's surroundings, not about one run: it holds for
-              whichever video they play next, and for their next visit. */}
-          <button
-            type="button"
-            onClick={() => setMuted(!muted)}
-            aria-pressed={muted}
-            aria-label={muted ? 'Unmute rover videos' : 'Mute rover videos'}
-            title={muted ? 'Sound off. Videos will stay muted.' : 'Sound on'}
-            className="clay clay-press inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/70 bg-card/60 text-muted-foreground transition-colors hover:border-primary/70 hover:text-foreground"
-          >
-            {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-          <span className="rounded-full border border-border/70 bg-card/60 px-2.5 py-1 font-mono text-[11px] font-bold text-muted-foreground">
-            {positionLabel}
-          </span>
-        </div>
-      </div>
+      {/* The status line the carousel is described by. Kept as text of its own
+          rather than pointing at the overlay, so it stays complete and in one
+          piece however the visible chrome is arranged or faded. */}
+      <p id="run-carousel-status" className="sr-only">
+        {describeRuns(runs)}. Showing {selectedRun.label}, {selectedRun.sublabel}, {positionLabel}.
+      </p>
 
-      {/* items-STRETCH, not center. Centring left the card at its content
-          height inside a 780px row, so two things went wrong at once: the panel
-          was two thirds empty, and RoverSimulator - which sets canvas.height
-          from a ResizeObserver on its wrapper - collapsed to a 41px sliver
-          because nothing above it had a definite height to inherit. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
-        <CarouselButton
-          direction="previous"
-          disabled={!canNavigate}
-          onClick={() => move(-1)}
-          className="order-2 hidden justify-self-start self-center sm:order-none sm:inline-flex"
-        />
+      {/* Fills the column from md up so the player matches the code panel,
+          and falls back to the footage's own 16:9 on a phone, where there is
+          no column height to fill.
 
-        <div
-          className="relative min-h-[280px] w-full touch-pan-y px-1 pb-4 pt-1 sm:order-none sm:min-h-[360px] sm:px-3"
-          onPointerDown={(event) => {
-            if (!canNavigate) return;
-            setDragStart(event.clientX);
-          }}
-          onPointerUp={(event) => {
-            if (dragStart === null) return;
-            const delta = event.clientX - dragStart;
-            setDragStart(null);
-            if (Math.abs(delta) < 48) return;
-            move(delta < 0 ? 1 : -1);
-          }}
-          onPointerCancel={() => setDragStart(null)}
-        >
-          <div className="absolute inset-x-4 bottom-0 top-7 sm:inset-x-8">
-            {visibleStack.map(({ run, depth }) => (
-              <div
-                key={`${run.id}-${depth}`}
-                aria-hidden="true"
-                className="absolute inset-0 rounded-2xl border border-border/50 bg-card/70 shadow-card"
-                style={{
-                  transform: `translate(${depth * 9}px, ${depth * 11}px) scale(${1 - depth * 0.045}) rotate(${depth % 2 === 0 ? -1 : 1}deg)`,
-                  opacity: 0.58 - depth * 0.12,
-                  zIndex: 4 - depth,
-                }}
-              >
-                <div className="h-full overflow-hidden rounded-2xl bg-muted/50">
-                  {run.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- generated YouTube poster URL for decorative stacked depth only.
-                    <img src={run.thumbnailUrl} alt="" className="h-1/2 w-full object-cover opacity-35" />
-                  ) : (
-                    <div className="flex h-1/2 items-center justify-center bg-gradient-to-br from-primary/20 to-transparent">
-                      <Film className="h-7 w-7 text-primary/70" />
-                    </div>
-                  )}
-                </div>
+          Filling means the frame is taller than 16:9, so the video is centred
+          in it with black above and below. That is the trade for matching
+          heights, and it is not wasted: the scrims sit in those bands rather
+          than over the footage, so the chrome now covers no picture at all. */}
+      <div className="flex min-h-0 items-start justify-center md:min-h-0 md:flex-1 md:items-stretch">
+      <div
+        className="relative aspect-video w-full touch-pan-y md:aspect-auto md:h-full"
+        onPointerDown={(event) => {
+          if (!canNavigate) return;
+          setDragStart(event.clientX);
+        }}
+        onPointerUp={(event) => {
+          if (dragStart === null) return;
+          const delta = event.clientX - dragStart;
+          setDragStart(null);
+          if (Math.abs(delta) < 48) return;
+          move(delta < 0 ? 1 : -1);
+        }}
+        onPointerCancel={() => setDragStart(null)}
+      >
+        {/* The rest of the stack, showing through behind the top card. Inset so
+            the peeled corners read as depth rather than as a misaligned edge. */}
+        <div className="pointer-events-none absolute inset-x-3 bottom-1 top-2" aria-hidden="true">
+          {visibleStack.map(({ run, depth }) => (
+            <div
+              key={`${run.id}-${depth}`}
+              className="absolute inset-0 rounded-2xl border border-border/50 bg-card/70 shadow-card"
+              style={{
+                transform: `translate(${depth * 9}px, ${depth * 11}px) scale(${1 - depth * 0.045}) rotate(${depth % 2 === 0 ? -1 : 1}deg)`,
+                opacity: 0.58 - depth * 0.12,
+                zIndex: 4 - depth,
+              }}
+            >
+              <div className="h-full overflow-hidden rounded-2xl bg-muted/50">
+                {run.thumbnailUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- generated YouTube poster URL for decorative stacked depth only.
+                  <img src={run.thumbnailUrl} alt="" className="h-1/2 w-full object-cover opacity-35" />
+                ) : (
+                  <div className="flex h-1/2 items-center justify-center bg-gradient-to-br from-primary/20 to-transparent">
+                    <Film className="h-7 w-7 text-primary/70" />
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-
-          <motion.article
-            key={selectedRun.id}
-            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction * 38, rotate: direction * 1.5 }}
-            animate={{ opacity: 1, x: 0, rotate: 0 }}
-            transition={reduceMotion ? { duration: 0.08 } : { duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
-            className="clay relative z-10 flex h-full min-h-[270px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-card"
-          >
-            <div className="min-h-0 flex-1 bg-black">
-              {selectedRun.kind === 'real' && selectedRun.videoUrl ? (
-                <video
-                  key={selectedRun.videoUrl}
-                  controls
-                  muted={muted}
-                  preload="metadata"
-                  poster={selectedRun.thumbnailUrl}
-                  className="h-full min-h-[210px] w-full bg-black object-contain"
-                  aria-label={`${selectedRun.label} rover run video`}
-                >
-                  <source src={selectedRun.videoUrl} />
-                </video>
-              ) : selectedRun.kind === 'real' && selectedRun.youtubeId ? (
-                <div className="flex h-full min-h-[210px] items-center">
-                  <YouTubeEmbed
-                    youtubeId={selectedRun.youtubeId}
-                    title={`${missionName}: ${selectedRun.label}`}
-                    showFallbackLink={false}
-                    muted={muted}
-                  />
-                </div>
-              ) : (
-                <div className="h-full min-h-[260px] p-2">
-                  <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" />
-                </div>
-              )}
             </div>
-
-            <footer className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border/60 bg-background/65 px-3 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate font-display text-sm font-bold text-foreground">{selectedRun.label}</p>
-                <p className="truncate text-xs text-muted-foreground">{selectedRun.sublabel}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {selectedRun.kind === 'real' && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">
-                    <Play className="h-3 w-3 fill-current" />
-                    Platform player
-                  </span>
-                )}
-                {selectedRun.youtubeId && (
-                  <a
-                    href={`https://www.youtube.com/watch?v=${selectedRun.youtubeId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-full border border-border/70 px-2 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    YouTube fallback
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-            </footer>
-          </motion.article>
-        </div>
-
-        <CarouselButton
-          direction="next"
-          disabled={!canNavigate}
-          onClick={() => move(1)}
-          className="order-3 hidden justify-self-end self-center sm:order-none sm:inline-flex"
-        />
-      </div>
-
-      {canNavigate && (
-        <div className="flex shrink-0 justify-center gap-1.5" role="tablist" aria-label="Choose a rover run">
-          {runs.map((run, index) => (
-            <button
-              key={run.id}
-              type="button"
-              role="tab"
-              aria-selected={index === selectedIndex}
-              aria-label={`Show ${run.label}, ${index + 1} of ${runs.length}`}
-              onClick={() => selectRun(index)}
-              className={`h-2.5 rounded-full transition-all ${
-                index === selectedIndex ? 'w-7 bg-primary' : 'w-2.5 bg-muted-foreground/35 hover:bg-muted-foreground/60'
-              }`}
-            />
           ))}
         </div>
-      )}
+
+        <motion.article
+          key={selectedRun.id}
+          initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: direction * 38, rotate: direction * 1.5 }}
+          animate={{ opacity: 1, x: 0, rotate: 0 }}
+          transition={reduceMotion ? { duration: 0.08 } : { duration: 0.26, ease: [0.23, 1, 0.32, 1] }}
+          className="clay group/player absolute inset-0 z-10 overflow-hidden rounded-2xl border border-border/70 bg-black"
+        >
+          {/* The media owns the whole frame now; the chrome floats over it. */}
+          <div className="absolute inset-0">
+            {selectedRun.kind === 'real' && selectedRun.videoUrl ? (
+              <video
+                key={selectedRun.videoUrl}
+                controls
+                muted={muted}
+                preload="metadata"
+                poster={selectedRun.thumbnailUrl}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+                onEnded={() => setPlaying(false)}
+                className="h-full w-full bg-black object-contain"
+                aria-label={`${selectedRun.label} rover run video`}
+              >
+                <source src={selectedRun.videoUrl} />
+              </video>
+            ) : selectedRun.kind === 'real' && selectedRun.youtubeId ? (
+              <div className="flex h-full items-center justify-center">
+                <YouTubeEmbed
+                  youtubeId={selectedRun.youtubeId}
+                  title={`${missionName}: ${selectedRun.label}`}
+                  showFallbackLink={false}
+                  muted={muted}
+                  onPlayingChange={setPlaying}
+                />
+              </div>
+            ) : (
+              <div className="h-full p-2">
+                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" />
+              </div>
+            )}
+          </div>
+
+          {/* Top scrim: what this collection is, and which of it you are on.
+              Goes down while something plays, like the bottom one. */}
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 px-3 py-2.5 player-scrim-top transition-opacity duration-300 ${
+              mediaOwnsChrome ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            <p className="shrink-0 font-display text-[11px] font-semibold uppercase tracking-wider text-white/75">
+              {describeRuns(runs)}
+            </p>
+            <p className="truncate font-display text-[11px] font-bold text-white">
+              {selectedRun.label} · {selectedRun.sublabel} · {positionLabel}
+            </p>
+          </div>
+
+          {/* Bottom scrim: the controls. Stays down while something plays,
+              because this is exactly where the player's own controls live. */}
+          <div
+            className={`pointer-events-none absolute inset-x-0 bottom-0 z-20 flex items-center gap-3 px-3 py-2.5 player-scrim-bottom transition-opacity duration-300 ${
+              mediaOwnsChrome ? 'pointer-events-none opacity-0' : 'opacity-100'
+            }`}
+          >
+            {/* The sound choice is about the learner's surroundings, not about
+                one run: it holds for whichever video they play next, and for
+                their next visit. */}
+            <button
+              type="button"
+              onClick={() => setMuted(!muted)}
+              aria-pressed={muted}
+              aria-label={muted ? 'Unmute rover videos' : 'Mute rover videos'}
+              title={muted ? 'Sound off. Videos will stay muted.' : 'Sound on'}
+              className="clay-press pointer-events-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-black/45 text-white/85 backdrop-blur-sm transition-colors hover:bg-black/65 hover:text-white"
+            >
+              {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            </button>
+
+            {canNavigate && (
+              <div
+                className="pointer-events-auto flex flex-1 justify-center gap-1.5"
+                role="tablist"
+                aria-label="Choose a rover run"
+              >
+                {runs.map((run, index) => (
+                  <button
+                    key={run.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={index === selectedIndex}
+                    aria-label={`Show ${run.label}, ${index + 1} of ${runs.length}`}
+                    onClick={() => selectRun(index)}
+                    className={`h-2 rounded-full transition-all ${
+                      index === selectedIndex ? 'w-6 bg-white' : 'w-2 bg-white/45 hover:bg-white/75'
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            <div className={`flex shrink-0 items-center gap-2 ${canNavigate ? '' : 'ml-auto'}`}>
+              {selectedRun.kind === 'real' && (
+                <span className="hidden items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-bold text-white/90 backdrop-blur-sm sm:inline-flex">
+                  <Play className="h-3 w-3 fill-current" />
+                  Platform player
+                </span>
+              )}
+              {selectedRun.youtubeId && (
+                <a
+                  href={`https://www.youtube.com/watch?v=${selectedRun.youtubeId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-black/45 px-2 py-1 text-[11px] font-semibold text-white/85 backdrop-blur-sm transition-colors hover:bg-black/65 hover:text-white"
+                >
+                  YouTube fallback
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+            </div>
+          </div>
+
+          <NavButton direction="previous" disabled={!canNavigate} onClick={() => move(-1)} />
+          <NavButton direction="next" disabled={!canNavigate} onClick={() => move(1)} />
+        </motion.article>
+      </div>
+      </div>
     </section>
   );
 }
 
-function CarouselButton({
+/**
+ * An edge-hugging step control.
+ *
+ * Small and quiet on purpose: at 44px on the outside of the frame these were
+ * the heaviest thing in the panel, competing with the video for attention
+ * while doing far less.
+ */
+function NavButton({
   direction,
   disabled,
   onClick,
-  className = '',
 }: {
   direction: 'previous' | 'next';
   disabled: boolean;
   onClick: () => void;
-  className?: string;
 }) {
   const Icon = direction === 'previous' ? ChevronLeft : ChevronRight;
   return (
@@ -271,13 +331,11 @@ function CarouselButton({
       aria-label={direction === 'previous' ? 'Show previous rover run' : 'Show next rover run'}
       disabled={disabled}
       onClick={onClick}
-      // No display utility here on purpose. It used to hardcode inline-flex,
-      // which collided with the `hidden` its callers pass on mobile - two
-      // display utilities where the winner depends on Tailwind's stylesheet
-      // order, not on the class string. The caller decides.
-      className={`clay clay-press h-11 w-11 items-center justify-center rounded-full border border-border/70 bg-card/90 text-foreground backdrop-blur transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-35 ${className}`}
+      className={`clay-press absolute top-1/2 z-30 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/80 backdrop-blur-sm transition-colors hover:bg-black/70 hover:text-white disabled:cursor-not-allowed disabled:opacity-0 ${
+        direction === 'previous' ? 'left-2' : 'right-2'
+      }`}
     >
-      <Icon className="h-5 w-5" />
+      <Icon className="h-4 w-4" />
     </button>
   );
 }
