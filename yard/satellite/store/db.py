@@ -38,23 +38,108 @@ _db_lock = threading.Lock()
 # sync worker imports this package, so importing it back would be circular.
 _FORCE_KEY = '__operatorDecision'
 
-_ADDED_COLUMNS = {
-    'mission_mirror': {
-        'deleted': 'INTEGER DEFAULT 0',
-        'deleted_at': 'TEXT',
-        # Mirrored copy of the run's recording_status, for the frontend
-        # contract only (BACKLOG 335/336/338) - see set_run_recording_state.
-        'recording_status': "TEXT NOT NULL DEFAULT 'none'",
-    },
-    'runs_mirror': {
-        # Recording lifecycle, satellite-local only - never queued to
-        # run_outbox, see set_run_recording_state.
-        'recording_status': "TEXT NOT NULL DEFAULT 'none'",  # none | recording | kept | discarded
-        'recording_path': 'TEXT',
-        'recording_started_at': 'TEXT',
-        'recording_stopped_at': 'TEXT',
-    },
-}
+# The single source of truth for the mirror's shape. _migrate reads the column
+# list back out of this script (see _expected_columns), so adding a column here
+# is the whole job: existing databases widen themselves on the next boot and
+# there is no second hand-maintained list to forget to update.
+_SCHEMA = """
+    CREATE TABLE IF NOT EXISTS mission_mirror (
+        id                TEXT PRIMARY KEY,
+        name              TEXT,
+        yard_id           TEXT,
+        code              TEXT,
+        blockly_state     TEXT,
+        status            TEXT NOT NULL,
+        submitted_at      TEXT,
+        started_at        TEXT,
+        completed_at      TEXT,
+        youtube_url       TEXT,
+        needs_review      INTEGER DEFAULT 0,
+        review_reason     TEXT,
+        status_updated_at TEXT,
+        deleted           INTEGER DEFAULT 0,
+        deleted_at        TEXT,
+        synced_at         TEXT,
+        local_dirty       INTEGER DEFAULT 0,
+        -- Mirrored copy of the run's recording_status, for the frontend
+        -- contract only (BACKLOG 335/336/338) - see set_run_recording_state.
+        recording_status  TEXT NOT NULL DEFAULT 'none'
+    );
+
+    -- Write queue: local changes not yet accepted by Firestore.
+    CREATE TABLE IF NOT EXISTS outbox (
+        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid       TEXT UNIQUE NOT NULL,
+        mission_id TEXT NOT NULL,
+        op         TEXT NOT NULL,
+        payload    TEXT NOT NULL,
+        event_at   TEXT NOT NULL,
+        attempts   INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        -- Set when an entry can never be delivered, so the queue behind it can
+        -- still drain. See store.outbox.mark_attempt.
+        parked     INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_meta (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS conflict_log (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        mission_id   TEXT NOT NULL,
+        local_state  TEXT NOT NULL,
+        remote_state TEXT NOT NULL,
+        resolution   TEXT NOT NULL,
+        logged_at    TEXT NOT NULL
+    );
+
+    -- Run mirror: execution state for each (mission, yard) pair.
+    -- A mission is a program; a run is one yard's attempt to execute it.
+    -- Keyed by (mission_id, yard_id) so multiple yards can attempt the same
+    -- mission concurrently without contention or overwrites.
+    CREATE TABLE IF NOT EXISTS runs_mirror (
+        mission_id        TEXT NOT NULL,
+        yard_id           TEXT NOT NULL,
+        status            TEXT NOT NULL,
+        started_at        TEXT,
+        completed_at      TEXT,
+        youtube_url       TEXT,
+        needs_review      INTEGER DEFAULT 0,
+        review_reason     TEXT,
+        status_updated_at TEXT,
+        deleted           INTEGER DEFAULT 0,
+        deleted_at        TEXT,
+        synced_at         TEXT,
+        local_dirty       INTEGER DEFAULT 0,
+        -- Recording lifecycle, satellite-local only - never queued to
+        -- run_outbox, see set_run_recording_state.
+        recording_status     TEXT NOT NULL DEFAULT 'none',  -- none|recording|kept|discarded
+        recording_path       TEXT,
+        recording_started_at TEXT,
+        recording_stopped_at TEXT,
+        PRIMARY KEY (mission_id, yard_id)
+    );
+
+    -- Run outbox: execution state changes queued for Firestore.
+    -- Separate from mission outbox so run updates flush independently.
+    CREATE TABLE IF NOT EXISTS run_outbox (
+        seq        INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid       TEXT UNIQUE NOT NULL,
+        mission_id TEXT NOT NULL,
+        yard_id    TEXT NOT NULL,
+        op         TEXT NOT NULL,
+        payload    TEXT NOT NULL,
+        event_at   TEXT NOT NULL,
+        attempts   INTEGER DEFAULT 0,
+        last_error TEXT,
+        created_at TEXT NOT NULL,
+        parked     INTEGER NOT NULL DEFAULT 0
+    );
+"""
+
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -68,103 +153,86 @@ def _connect():
 
 
 def init_db():
-    """Create the tables if they don't exist."""
+    """Create the tables if they don't exist, and widen them if they are old."""
     with _db_lock:
         conn = _connect()
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS mission_mirror (
-                id                TEXT PRIMARY KEY,
-                name              TEXT,
-                yard_id           TEXT,
-                code              TEXT,
-                blockly_state     TEXT,
-                status            TEXT NOT NULL,
-                submitted_at      TEXT,
-                started_at        TEXT,
-                completed_at      TEXT,
-                youtube_url       TEXT,
-                needs_review      INTEGER DEFAULT 0,
-                review_reason     TEXT,
-                status_updated_at TEXT,
-                deleted           INTEGER DEFAULT 0,
-                deleted_at        TEXT,
-                synced_at         TEXT,
-                local_dirty       INTEGER DEFAULT 0
-            );
-
-            -- Write queue: local changes not yet accepted by Firestore. Unused
-            -- until PR 3 (outbox + push-before-pull sync), but the schema
-            -- lands now so the mirror doesn't need a second migration.
-            CREATE TABLE IF NOT EXISTS outbox (
-                seq        INTEGER PRIMARY KEY AUTOINCREMENT,
-                uuid       TEXT UNIQUE NOT NULL,
-                mission_id TEXT NOT NULL,
-                op         TEXT NOT NULL,
-                payload    TEXT NOT NULL,
-                event_at   TEXT NOT NULL,
-                attempts   INTEGER DEFAULT 0,
-                last_error TEXT,
-                created_at TEXT NOT NULL
-            );
-
-            CREATE TABLE IF NOT EXISTS sync_meta (
-                key   TEXT PRIMARY KEY,
-                value TEXT
-            );
-
-            CREATE TABLE IF NOT EXISTS conflict_log (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                mission_id   TEXT NOT NULL,
-                local_state  TEXT NOT NULL,
-                remote_state TEXT NOT NULL,
-                resolution   TEXT NOT NULL,
-                logged_at    TEXT NOT NULL
-            );
-
-            -- Run mirror: execution state for each (mission, yard) pair.
-            -- A mission is a program; a run is one yard's attempt to execute it.
-            -- Keyed by (mission_id, yard_id) so multiple yards can attempt the same
-            -- mission concurrently without contention or overwrites.
-            CREATE TABLE IF NOT EXISTS runs_mirror (
-                mission_id        TEXT NOT NULL,
-                yard_id           TEXT NOT NULL,
-                status            TEXT NOT NULL,
-                started_at        TEXT,
-                completed_at      TEXT,
-                youtube_url       TEXT,
-                needs_review      INTEGER DEFAULT 0,
-                review_reason     TEXT,
-                status_updated_at TEXT,
-                deleted           INTEGER DEFAULT 0,
-                deleted_at        TEXT,
-                synced_at         TEXT,
-                local_dirty       INTEGER DEFAULT 0,
-                PRIMARY KEY (mission_id, yard_id)
-            );
-
-            -- Run outbox: execution state changes queued for Firestore.
-            -- Separate from mission outbox so run updates flush independently.
-            CREATE TABLE IF NOT EXISTS run_outbox (
-                seq        INTEGER PRIMARY KEY AUTOINCREMENT,
-                uuid       TEXT UNIQUE NOT NULL,
-                mission_id TEXT NOT NULL,
-                yard_id    TEXT NOT NULL,
-                op         TEXT NOT NULL,
-                payload    TEXT NOT NULL,
-                event_at   TEXT NOT NULL,
-                attempts   INTEGER DEFAULT 0,
-                last_error TEXT,
-                created_at TEXT NOT NULL
-            );
-        """)
+        conn.executescript(_SCHEMA)
         _migrate(conn)
         conn.commit()
         conn.close()
 
 
+def _expected_columns():
+    """The columns _SCHEMA declares, per table, read back out of _SCHEMA itself.
+
+    Building this by running the script against an empty in-memory database
+    means the declaration cannot drift from what _migrate reconciles against:
+    there is one schema, written once.
+    """
+    probe = sqlite3.connect(':memory:')
+    probe.row_factory = sqlite3.Row
+    try:
+        probe.executescript(_SCHEMA)
+        # sqlite_sequence is created implicitly by AUTOINCREMENT and is not ours.
+        tables = [
+            r['name'] for r in probe.execute(
+                "SELECT name FROM sqlite_master"
+                " WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+            )
+        ]
+        return {
+            table: {r['name']: dict(r) for r in probe.execute(f'PRAGMA table_info({table})')}
+            for table in tables
+        }
+    finally:
+        probe.close()
+
+
+def _add_column_sql(table, info):
+    """ALTER statement that adds one column back onto an existing table.
+
+    SQLite cannot add a NOT NULL column without a default to a populated table,
+    so a column declared that way is added nullable rather than not at all: a
+    slightly loose column beats a mirror that stays broken forever.
+    """
+    decl = f"{info['name']} {info['type']}"
+    if info['dflt_value'] is not None:
+        if info['notnull']:
+            decl += ' NOT NULL'
+        decl += f" DEFAULT {info['dflt_value']}"
+    return f'ALTER TABLE {table} ADD COLUMN {decl}'
+
+
 def _migrate(conn):
-    for table, columns in _ADDED_COLUMNS.items():
+    """Widen any table that predates a column _SCHEMA now declares.
+
+    CREATE TABLE IF NOT EXISTS does nothing to a table that already exists, so
+    a mirror written by an older build keeps its old, narrower shape forever.
+    Every query naming a newer column then fails with a bare "no such column",
+    once per poll, with nothing to say which build it came from or what to do:
+    that is exactly how a satellite sat for hours logging
+    "no such column: youtube_url" while the mirror quietly stayed unusable.
+
+    Reconciling against the whole schema rather than a hand-kept list of recent
+    additions means a database that has drifted by any amount repairs itself,
+    including one that drifted before this function knew how to notice.
+    """
+    for table, expected in _expected_columns().items():
         existing = {r['name'] for r in conn.execute(f'PRAGMA table_info({table})')}
-        for name, coltype in columns.items():
-            if name not in existing:
-                conn.execute(f'ALTER TABLE {table} ADD COLUMN {name} {coltype}')
+        if not existing:
+            continue  # Table absent entirely; the CREATE above already made it.
+        for name, info in expected.items():
+            if name in existing:
+                continue
+            try:
+                conn.execute(_add_column_sql(table, info))
+            except sqlite3.OperationalError as e:
+                # A PRIMARY KEY column cannot be added back. The mirror is a
+                # cache of Firestore, so say plainly that deleting it is the
+                # fix, rather than failing again on every later query.
+                raise RuntimeError(
+                    f"Mirror at {DB_PATH} is too old to repair automatically: "
+                    f"table '{table}' is missing column '{name}' and SQLite "
+                    f"refused to add it ({e}). Flush the outbox, then delete "
+                    f"the file and let it rebuild from Firestore."
+                ) from e

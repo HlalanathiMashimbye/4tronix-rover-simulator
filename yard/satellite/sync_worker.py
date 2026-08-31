@@ -244,6 +244,25 @@ def _maybe_log_conflict(mission_id, local_payload, remote_data, local_won):
         )
 
 
+# Statuses that mean a retry cannot help: the document was deleted in Mission
+# Control, this satellite is not allowed to write it, or the payload itself is
+# rejected. Everything else (network, timeout, unavailable) is worth retrying.
+_PERMANENT_STATUSES = frozenset({400, 403, 404})
+
+
+def _is_permanent(exc):
+    """True when Firestore rejected the write in a way retrying cannot fix.
+
+    Read from the status code, not the message: google's api_core exceptions
+    carry `code` as the HTTP status, and matching on codes keeps working when
+    the wording changes. Anything without an integer code is treated as
+    transient, which is the safe direction to be wrong in - a retried write
+    eventually lands, a wrongly parked one never does.
+    """
+    code = getattr(exc, 'code', None)
+    return isinstance(code, int) and code in _PERMANENT_STATUSES
+
+
 def flush_one(firestore_client: FirestoreClient, entry, collection_name='missions'):
     """Apply one outbox entry to Firestore. Returns True only on confirmation.
 
@@ -292,7 +311,13 @@ def flush_one(firestore_client: FirestoreClient, entry, collection_name='mission
         return True
 
     except Exception as e:
-        mark_attempt(entry['seq'], str(e))
+        permanent = _is_permanent(e)
+        if permanent:
+            print(
+                f"[sync] {entry['mission_id']} rejected permanently ({e}); "
+                'parking the entry so the rest of the queue can drain'
+            )
+        mark_attempt(entry['seq'], str(e), permanent=permanent)
         return False
 
 
@@ -357,7 +382,13 @@ def flush_run_one(firestore_client: FirestoreClient, entry):
         return True
 
     except Exception as e:
-        mark_run_attempt(entry['seq'], str(e))
+        permanent = _is_permanent(e)
+        if permanent:
+            print(
+                f"[sync] run {entry['mission_id']}/{entry['yard_id']} rejected "
+                f'permanently ({e}); parking the entry'
+            )
+        mark_run_attempt(entry['seq'], str(e), permanent=permanent)
         return False
 
 
