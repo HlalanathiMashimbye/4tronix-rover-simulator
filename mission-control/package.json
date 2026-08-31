@@ -16,6 +16,7 @@
     "check:vendor": "node scripts/vendor-blockly.mjs --check"
   },
   "dependencies": {
+    "@google-cloud/secret-manager": "^7.0.0",
     "@monaco-editor/react": "^4.7.0",
     "blockly": "^12.5.1",
     "firebase": "^12.12.0",

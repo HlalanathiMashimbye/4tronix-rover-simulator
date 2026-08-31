@@ -28,6 +28,8 @@ import {
   YouTubeNotConfiguredError,
 } from '@/infrastructure/youtube/channelUploads';
 import { decideAttachVideo } from '@/core/domain/services/missionBookkeeping';
+import { readSetting } from '@/infrastructure/config/runtimeSettingsStore';
+import { isDue, lastCheckedAt, recordChecked } from '@/infrastructure/persistence/pollState';
 
 /**
  * Cloud Scheduler proves itself with a shared secret rather than a session.
@@ -54,6 +56,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Scheduler fires every 5 minutes; the admin decides how often that does
+  // anything. Checked before YouTube is touched so a throttled call costs
+  // nothing at all.
+  const interval = Number(await readSetting('youtubeLinkIntervalMinutes')) || 15;
+  if (!isDue(await lastCheckedAt(), interval)) {
+    return NextResponse.json({ success: true, skipped: 'not-due', intervalMinutes: interval });
+  }
+
   let videos;
   try {
     videos = await fetchRecentUploads();
@@ -66,6 +76,10 @@ export async function POST(request: NextRequest) {
     console.error('[youtube-link] Could not read the channel:', error);
     return NextResponse.json({ success: false, error: 'Could not reach YouTube' }, { status: 502 });
   }
+
+  // Recorded once the channel has actually been read, so a YouTube outage
+  // does not consume the interval and leave the next real check waiting.
+  await recordChecked();
 
   const claims = claimedMissions(videos);
   if (claims.length === 0) {

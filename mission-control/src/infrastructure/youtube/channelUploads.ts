@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { ChannelVideo } from '@/core/domain/services/youtubeLinking';
+import { readSetting } from '@/infrastructure/config/runtimeSettingsStore';
 
 /**
  * The channel's most recent uploads.
@@ -16,8 +17,10 @@ const UPLOADS_ENDPOINT = 'https://www.googleapis.com/youtube/v3/playlistItems';
 export class YouTubeNotConfiguredError extends Error {}
 
 export async function fetchRecentUploads(maxResults = 50): Promise<ChannelVideo[]> {
-  const key = process.env.YOUTUBE_API_KEY?.trim();
-  const channel = process.env.YOUTUBE_CHANNEL_ID?.trim();
+  const [key, channel] = await Promise.all([
+    readSetting('youtubeApiKey'),
+    readSetting('youtubeChannelId'),
+  ]);
 
   if (!key || !channel) {
     throw new YouTubeNotConfiguredError(

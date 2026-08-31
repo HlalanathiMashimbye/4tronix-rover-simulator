@@ -32,6 +32,27 @@ resource "google_secret_manager_secret" "resend_api_key" {
 # hello image never reads them.
 # The YouTube channel the auto-linker reads. Real values are added
 # out-of-band like Resend's; a poll with either unset simply does not link.
+resource "google_secret_manager_secret" "resend_from_email" {
+  secret_id = "resend-from-email"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "resend_sandbox_recipient" {
+  secret_id = "resend-sandbox-recipient"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_link_interval" {
+  secret_id = "youtube-link-interval-minutes"
+  replication {
+    auto {}
+  }
+}
+
 resource "google_secret_manager_secret" "youtube_api_key" {
   secret_id = "youtube-api-key"
   replication {
@@ -71,13 +92,25 @@ resource "google_secret_manager_secret_version" "cron_secret" {
 }
 
 resource "google_secret_manager_secret_version" "seed" {
+  # Empty, not CHANGE_ME. readSetting treats an empty version as unset, which
+  # is what the settings page then shows as "Not set" and what the code's own
+  # not-configured paths already handle. A CHANGE_ME string would instead be a
+  # live, wrong value: an API key that fails every call and a from-address
+  # that bounces every email.
   for_each = {
-    resend_api_key     = google_secret_manager_secret.resend_api_key.id
-    youtube_api_key    = google_secret_manager_secret.youtube_api_key.id
-    youtube_channel_id = google_secret_manager_secret.youtube_channel_id.id
+    resend_api_key           = { id = google_secret_manager_secret.resend_api_key.id, data = "" }
+    resend_sandbox_recipient = { id = google_secret_manager_secret.resend_sandbox_recipient.id, data = var.resend_sandbox_recipient }
+    youtube_api_key          = { id = google_secret_manager_secret.youtube_api_key.id, data = "" }
+    youtube_channel_id       = { id = google_secret_manager_secret.youtube_channel_id.id, data = "" }
+    youtube_link_interval    = { id = google_secret_manager_secret.youtube_link_interval.id, data = "15" }
+    # Carries the address that is live today, so moving Resend's config to the
+    # settings page does not silently stop email on the next apply. After this
+    # first version the page owns it: Terraform only writes another if the
+    # tfvar itself changes.
+    resend_from_email = { id = google_secret_manager_secret.resend_from_email.id, data = var.resend_from_email }
   }
-  secret      = each.value
-  secret_data = "CHANGE_ME-set-real-value-via-gcloud-secrets-versions-add"
+  secret      = each.value.id
+  secret_data = each.value.data
 }
 
 locals {
@@ -93,26 +126,40 @@ locals {
   #
   # Resend is unrelated to how Firestore is authenticated: a third-party API
   # key with no ADC equivalent, so it stays.
+  # ONLY CRON_SECRET IS MOUNTED. The rest are read from Secret Manager at
+  # request time so the admin settings page can change them without a deploy.
+  #
+  # Mounting them would defeat that twice over: Cloud Run resolves a secret env
+  # var when an INSTANCE STARTS, so a new version reaches new instances and not
+  # running ones, and runtimeSettingsStore prefers the environment when it is
+  # set, so a mounted value would win over the live read forever.
+  #
+  # CRON_SECRET stays because Terraform generates it and no human edits it.
   secrets = {
-    RESEND_API_KEY     = google_secret_manager_secret.resend_api_key
-    YOUTUBE_API_KEY    = google_secret_manager_secret.youtube_api_key
-    YOUTUBE_CHANNEL_ID = google_secret_manager_secret.youtube_channel_id
-    CRON_SECRET        = google_secret_manager_secret.cron_secret
+    CRON_SECRET = google_secret_manager_secret.cron_secret
+  }
+
+  # Read at request time, written by the settings page. Listed separately so
+  # the runtime account still gets accessor and adder on each of them.
+  editable_secrets = {
+    resend_api_key           = google_secret_manager_secret.resend_api_key
+    resend_from_email        = google_secret_manager_secret.resend_from_email
+    resend_sandbox_recipient = google_secret_manager_secret.resend_sandbox_recipient
+    youtube_api_key          = google_secret_manager_secret.youtube_api_key
+    youtube_channel_id       = google_secret_manager_secret.youtube_channel_id
+    youtube_link_interval    = google_secret_manager_secret.youtube_link_interval
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
   # set: while it has a value, every mission email is redirected to that one
   # inbox and no learner receives mail, so it must stay unset in prod once a
   # sending domain is verified.
-  plain_env = merge(
-    {
-      FIREBASE_PROJECT_ID = var.project_id
-      RESEND_FROM_EMAIL   = var.resend_from_email
-    },
-    var.resend_sandbox_recipient == "" ? {} : {
-      RESEND_SANDBOX_RECIPIENT = var.resend_sandbox_recipient
-    },
-  )
+  # RESEND_FROM_EMAIL and RESEND_SANDBOX_RECIPIENT moved out of here: they are
+  # settings-page values now, so a tfvar setting them would silently win over
+  # anything an admin changed.
+  plain_env = {
+    FIREBASE_PROJECT_ID = var.project_id
+  }
 }
 
 # --- Per-environment runtime identity + service ---------------------------
@@ -183,6 +230,33 @@ resource "google_secret_manager_secret_iam_member" "runtime_secret_access" {
   }
   secret_id = local.secrets[each.value.secret].id
   role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime[each.value.env].email}"
+}
+
+# The settings-page values: read on every request, so accessor...
+resource "google_secret_manager_secret_iam_member" "runtime_editable_access" {
+  for_each = {
+    for pair in setproduct(keys(var.environments), keys(local.editable_secrets)) :
+    "${pair[0]}-${pair[1]}" => { env = pair[0], secret = pair[1] }
+  }
+  secret_id = local.editable_secrets[each.value.secret].id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime[each.value.env].email}"
+}
+
+# ...and adder, so an admin saving one creates a new version.
+#
+# secretVersionAdder, NOT secretmanager.admin. The service may supersede a
+# value and may not destroy a secret, disable a version, or change who can
+# read it. Rolling back a bad change stays a deliberate act with a real
+# identity behind it, and an app compromise cannot delete the credentials.
+resource "google_secret_manager_secret_iam_member" "runtime_editable_write" {
+  for_each = {
+    for pair in setproduct(keys(var.environments), keys(local.editable_secrets)) :
+    "${pair[0]}-${pair[1]}" => { env = pair[0], secret = pair[1] }
+  }
+  secret_id = local.editable_secrets[each.value.secret].id
+  role      = "roles/secretmanager.secretVersionAdder"
   member    = "serviceAccount:${google_service_account.runtime[each.value.env].email}"
 }
 

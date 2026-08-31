@@ -10,6 +10,20 @@ jest.mock('@/infrastructure/container.server', () => ({
   adminMissionRepository: () => ({ findRuns, applyBookkeeping }),
 }));
 
+jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
+  readSetting: async () => '15',
+}));
+
+// The throttle's state. Defaulted to "never checked", so every test below is
+// about linking rather than about being due.
+const lastCheckedAt = jest.fn(async () => null);
+const recordChecked = jest.fn(async () => {});
+jest.mock('@/infrastructure/persistence/pollState', () => ({
+  lastCheckedAt: () => lastCheckedAt(),
+  recordChecked: () => recordChecked(),
+  isDue: jest.requireActual('@/infrastructure/persistence/pollState').isDue,
+}));
+
 jest.mock('@/infrastructure/youtube/channelUploads', () => ({
   fetchRecentUploads: (...args: unknown[]) => fetchRecentUploads(...args),
   YouTubeNotConfiguredError: class extends Error {},
@@ -143,5 +157,27 @@ describe('POST /api/cron/youtube-link', () => {
 
       expect((await POST(request('right-secret'))).status).toBe(502);
     });
+  });
+});
+
+describe('the admin-set interval', () => {
+  const { isDue } = jest.requireActual('@/infrastructure/persistence/pollState');
+
+  it('is due when nothing has ever run', () => {
+    expect(isDue(null, 15)).toBe(true);
+  });
+
+  it('is not due before the interval has passed', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const tenMinutesAgo = new Date('2026-08-31T11:50:00Z');
+
+    expect(isDue(tenMinutesAgo, 15, now)).toBe(false);
+  });
+
+  it('is due once it has', () => {
+    const now = new Date('2026-08-31T12:00:00Z');
+    const twentyMinutesAgo = new Date('2026-08-31T11:40:00Z');
+
+    expect(isDue(twentyMinutesAgo, 15, now)).toBe(true);
   });
 });
