@@ -3,9 +3,12 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
 /**
  * Matching an uploaded video back to the mission it shows.
  *
- * An operator uploads a run's video to YouTube with `MissionID: <id>` in the
- * description; the yard's run station generates that line so it cannot be
- * mistyped. This is the half that reads it.
+ * There are two ways a video says which mission it shows, and this reads
+ * both. The run station generates a `MissionID: <id>` line to paste into the
+ * description, and the satellite already names the file `<missionId>__<yardId>.mp4`,
+ * which YouTube turns into the title when it is uploaded unrenamed. The second
+ * costs the operator nothing at all, which makes it the one that will actually
+ * happen at the end of a long event day.
  *
  * DIRECTION MATTERS. The satellite's poller asked "which of my missions have
  * no video?" and then fetched YouTube, because a yard only knows its own
@@ -21,17 +24,45 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  * and a mission is read only when a video actually claims it.
  */
 
-/** The exact shape the yard's run station writes, matched literally. */
+/** The explicit marker, matched literally wherever it appears. */
 const MISSION_ID_PATTERN = /MissionID:\s*([A-Za-z0-9_-]+)/;
+
+/**
+ * The satellite's own filename, which YouTube turns into the title for free.
+ *
+ * Recordings are written as `<missionId>__<yardId>.mp4`, and YouTube Studio
+ * prefills a video's title from the filename it was uploaded with. So an
+ * operator who uploads the file exactly as they downloaded it has already
+ * labelled it, without typing anything or knowing that they did.
+ *
+ * The `__<yardId>` tail is what makes this safe to match on. A bare id in a
+ * title would claim half the channel; this shape does not occur by accident.
+ * And a false positive costs one Firestore read that finds no mission, so the
+ * failure mode is a wasted lookup rather than a video attached to the wrong
+ * child's work.
+ */
+const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__[A-Za-z0-9-]+$/;
 
 export interface ChannelVideo {
   videoId: string;
+  title: string;
   description: string;
 }
 
-export function missionIdFromDescription(description: string): string | null {
-  const match = MISSION_ID_PATTERN.exec(description || '');
-  return match ? match[1] : null;
+/**
+ * The mission a video claims, from anything it carries.
+ *
+ * Checked in both places because they cost the same. `part=snippet` returns
+ * the title and the description in one response, so reading both is free, and
+ * it means the loop closes whether the operator pasted our description block
+ * or simply did not rename the file.
+ */
+export function missionIdFromVideo(video: Pick<ChannelVideo, 'title' | 'description'>): string | null {
+  const marked = MISSION_ID_PATTERN.exec(`${video.description || ''}\n${video.title || ''}`);
+  if (marked) return marked[1];
+
+  const named = RECORDING_FILENAME_PATTERN.exec((video.title || '').trim());
+  return named ? named[1] : null;
 }
 
 export function watchUrl(videoId: string): string {
@@ -49,7 +80,7 @@ export function claimedMissions(videos: ChannelVideo[]): Array<{ missionId: stri
   const claims: Array<{ missionId: string; videoId: string }> = [];
 
   for (const video of videos) {
-    const missionId = missionIdFromDescription(video.description);
+    const missionId = missionIdFromVideo(video);
     if (!missionId || seen.has(missionId)) continue;
     seen.add(missionId);
     claims.push({ missionId, videoId: video.videoId });

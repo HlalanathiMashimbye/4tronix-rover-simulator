@@ -51,12 +51,19 @@ export async function fetchRecentUploads(maxResults = 50): Promise<ChannelVideo[
   }
 
   const body = (await response.json()) as {
-    items?: Array<{ snippet?: { description?: string; resourceId?: { videoId?: string } } }>;
+    items?: Array<{
+      snippet?: { title?: string; description?: string; resourceId?: { videoId?: string } };
+    }>;
   };
 
+  // The title comes back in the same `part=snippet` response as the
+  // description, so reading it costs nothing extra. It was being thrown away,
+  // and it is the field YouTube fills from the uploaded filename: the one
+  // label an operator produces without doing anything.
   return (body.items ?? [])
     .map((item) => ({
       videoId: item.snippet?.resourceId?.videoId ?? '',
+      title: item.snippet?.title ?? '',
       description: item.snippet?.description ?? '',
     }))
     .filter((video) => video.videoId);
