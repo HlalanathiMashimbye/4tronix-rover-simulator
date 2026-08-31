@@ -41,7 +41,7 @@ export default async function OperatorSettingsPage() {
 
   return (
     <main className="relative flex min-h-[calc(100vh-64px)] flex-col overflow-y-auto px-4 sm:px-6">
-      <header className="mx-auto w-full max-w-3xl shrink-0 pt-4 pb-3">
+      <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
         <Link
           href="/operator"
           className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
@@ -59,7 +59,7 @@ export default async function OperatorSettingsPage() {
         </p>
       </header>
 
-      <div className="mx-auto w-full max-w-3xl pb-8">
+      <div className="mx-auto w-full max-w-page pb-8">
         <SettingsManager initialSettings={settings} />
       </div>
     </main>

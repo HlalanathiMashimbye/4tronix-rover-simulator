@@ -38,7 +38,7 @@ export function SettingsManager({ initialSettings }: { initialSettings: SettingS
     setSettings((all) => all.map((s) => (s.name === saved.name ? saved : s)));
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="grid gap-3 lg:grid-cols-2 lg:items-start">
       {(Object.keys(GROUPS) as SettingGroup[]).map((group) => {
         const rows = settings.filter((s) => s.group === group);
         if (rows.length === 0) return null;
