@@ -509,7 +509,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
       needsReview: (data.needsReview as boolean) ?? false,
       reviewReason: (data.reviewReason as string | null) ?? null,
 
-      // Conflict resolution — fall back to submittedAt for legacy docs
+      // Conflict resolution: fall back to submittedAt for legacy docs
       statusUpdatedAt: (data.statusUpdatedAt as string) ?? (data.submittedAt as string),
       };
   }
