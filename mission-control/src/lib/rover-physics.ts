@@ -181,7 +181,7 @@ export class RoverPhysics {
     const newY = (yFL + yFR + yBL + yBR) / 4;
     this.state.heading = (hFL + hFR + hBL + hBR) / 4;
 
-    // Clamp to terrain bounds — the rover cannot leave the yard.
+    // Clamp to terrain bounds: the rover cannot leave the yard.
     const clampedX = Math.max(-YARD_HALF_W, Math.min(YARD_HALF_W, newX));
     const clampedY = Math.max(-YARD_HALF_H, Math.min(YARD_HALF_H, newY));
     this.state.hitWall = clampedX !== newX || clampedY !== newY;

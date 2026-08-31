@@ -66,6 +66,34 @@ The operator queue deliberately shows **no** learner field at all, not even the
 one-way hash. The mission name is the handle an operator uses, and it identifies
 nobody.
 
+### Operator feedback IS free text, and that is a deliberate exception
+
+An operator can write a short note back to the learner on a run: "Good job!",
+or "the turn was too small, try 90 degrees for a square". That text lands on a
+run document, and run documents are world-readable by design.
+
+This is the one place free text reaches a public document, and it is worth
+being explicit that it contradicts the rule above rather than pretending it
+fits. What makes it a different risk from a learner-typed mission name:
+
+- **The author is different.** Writing it requires an authenticated Firebase
+  account carrying an `operator` or `admin` claim. It is not reachable by an
+  anonymous child, or by anyone who has not been granted a role by an admin.
+- **The path is different.** Firestore rules deny every browser write to a run
+  (`allow write: if false`). Feedback goes through
+  `POST /api/operator/missions/[id]`, which verifies the session cookie server
+  side before the Admin SDK touches anything.
+- **It is bounded.** 280 characters, enforced by the Zod schema at the
+  boundary rather than by the input's `maxLength`, which is only a hint.
+- **It is attributed.** The operator's email is stored alongside it and shown
+  to the learner, so a note is never anonymous.
+
+What this does NOT do is moderate the content. An operator who wants to write
+something inappropriate to a child can. The control is that operators are
+known adults who were granted access deliberately, the same trust already
+required to dispatch a rover at a child or delete their work. If that trust
+model changes, this is one of the things to revisit.
+
 ---
 
 ## What this does NOT cover

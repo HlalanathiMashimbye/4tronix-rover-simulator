@@ -70,6 +70,8 @@ export interface IMissionRepository {
       status?: MissionStatus | null;
       youtubeUrl?: string;
       clearsReview?: boolean;
+      /** An operator's note to the learner. Written to the run, not the mission. */
+      feedback?: string;
       decidedAt: string;
       decidedBy: string;
     },

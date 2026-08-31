@@ -56,6 +56,21 @@ export interface MissionRun {
 
   /** Used by the sync merge to break ties within a single yard's own history. */
   statusUpdatedAt?: string | null;
+
+  /**
+   * An operator's note to the learner about this run: "Good job!", or "the
+   * turn was too small, try 90 degrees for a square".
+   *
+   * Free text on a world-readable document, which mission names deliberately
+   * are not (AB#402). The difference is the author: an operator is an
+   * authenticated adult holding a role claim, not an anonymous child, and the
+   * text is length-capped and attributed at the API boundary. See
+   * docs/THREAT-MODEL.md.
+   */
+  feedback?: string;
+  /** Who wrote it, shown to the learner so the note has a person behind it. */
+  feedbackBy?: string;
+  feedbackAt?: string;
 }
 
 /** A run a learner can actually watch. */
