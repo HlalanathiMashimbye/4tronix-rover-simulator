@@ -89,7 +89,7 @@ describe('src/lib stays small', () => {
     const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns'];
 
     const actual = sourceFiles('lib')
-      .map((f) => f.replace(/^lib\//, '').replace(/\.tsx?$/, ''))
+      .map((f) => f.replace(/\\/g, '/').replace(/^lib\//, '').replace(/\.tsx?$/, ''))
       .sort();
 
     expect(actual).toEqual([...SHARED_WITH_YARD, ...UI_HELPERS].sort());

@@ -29,7 +29,9 @@
 import type { MissionStatus } from './Mission';
 
 export interface MissionRun {
-  /** Which yard ran it. Also the document id. */
+  /** Unique identifier for this execution attempt. Document id. */
+  runId: string;
+  /** Which yard ran it. */
   yardId: string;
 
   status: MissionStatus;

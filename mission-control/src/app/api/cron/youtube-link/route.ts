@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      await repository.applyBookkeeping(claim.missionId, run.yardId, {
+      await repository.applyBookkeeping(claim.missionId, run.runId, run.yardId, {
         status: decision.change.status,
         clearsReview: decision.change.clearsReview,
         youtubeUrl: watchUrl(claim.videoId),

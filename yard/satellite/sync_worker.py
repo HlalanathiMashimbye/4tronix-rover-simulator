@@ -349,6 +349,17 @@ def flush_run_one(firestore_client: FirestoreClient, entry):
             remote = (snap.to_dict() or {}) if getattr(snap, 'exists', False) else {}
             local_payload = json.loads(entry['payload'])
 
+            # The yard as a FIELD, not just the document id. Runs used to be
+            # keyed by yard, so the id carried it; Mission Control keys them by
+            # runId now (PR #139) and reads the yard from this field. Without
+            # it every satellite-written run comes back as yardId '' - the
+            # learner sees a date where "Cape Town" belongs, and the operator
+            # console cannot tell which run is theirs. Injected here rather
+            # than in every payload builder, because this is the one door to
+            # Firestore and a shape nobody remembered to update cannot slip
+            # through it.
+            local_payload.setdefault('yardId', yard_id)
+
             # Evaluated INSIDE the transaction, so a decision made in Mission
             # Control between the read and the write cannot be missed.
             writable = merge_run_payload(local_payload, remote)
