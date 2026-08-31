@@ -11,11 +11,13 @@ import json
 import logging
 import socket
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect
+from flask import (Flask, render_template, request, jsonify, Response,
+                   stream_with_context, session, redirect, send_file)
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -57,6 +59,19 @@ def _notify_within_app(app, mission_id, status):
     from console.notify import notify_mission_control
     with app.app_context():
         notify_mission_control(mission_id, status)
+
+
+def _recording_name(raw):
+    """An operator-supplied name reduced to something safe to put in a path.
+
+    Everything outside letters, digits, dash and underscore becomes a dash, so
+    a name typed at an event ("Thabo's square!") cannot walk out of the
+    recordings directory or collide with the mission__yard naming the queue
+    flow uses.
+    """
+    import re
+    name = re.sub(r'[^A-Za-z0-9_-]+', '-', (raw or '').strip()).strip('-')
+    return name[:60]
 
 
 def _local_ip():
@@ -331,6 +346,112 @@ def api_photo():
         return jsonify({'error': 'Cannot connect to rover server'}), 503
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Rover server timeout'}), 504
+
+
+@app.route('/api/recording/start', methods=['POST'])
+def api_recording_start():
+    """Start recording a copy-paste run.
+
+    Dispatching a mission from the queue starts a recording on the operator's
+    behalf. Pasting code into /code/ never did, so the manual flow produced no
+    video at all: the operator ran the rover, and there was nothing to take
+    away and upload.
+
+    The name is the operator's, not a mission id, because a pasted run has no
+    mission. Whatever they type is what the file is called and what they will
+    recognise later when matching it to a mission in Mission Control.
+    """
+    from recording_control import start_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    ok, detail = start_recording(name, yard_id())
+    if not ok:
+        return jsonify({'error': detail}), 503
+    return jsonify({'status': 'recording', 'name': name})
+
+
+@app.route('/api/recording/stop', methods=['POST'])
+def api_recording_stop():
+    """Stop a copy-paste run's recording, keeping the file unless told not to."""
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    keep = data.get('keep', True)
+    ok, detail = stop_recording(name, yard_id(), keep=bool(keep))
+    return jsonify({'status': 'stopped', 'kept': bool(keep), 'detail': detail}), (200 if ok else 200)
+
+
+@app.route('/api/recordings', methods=['GET'])
+def api_recordings():
+    """The videos sitting on this satellite, newest first.
+
+    Step five of the manual loop: the operator takes the file to their own
+    device, uploads it to YouTube and pastes the link into Mission Control.
+    Until this existed the recordings were written and then unreachable, so
+    the loop could not be closed by hand at all.
+
+    Deliberately unauthenticated, like /code/ and /monitor/. The whole point
+    is that this works when the venue wifi cannot reach Firebase, and an
+    operator who can already drive the rover from this network gains nothing
+    by being able to read a video of it.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    try:
+        names = os.listdir(RECORDINGS_DIR)
+    except OSError:
+        # No directory yet simply means nothing has been recorded.
+        return jsonify({'recordings': []})
+
+    files = []
+    for name in names:
+        if not name.endswith('.mp4'):
+            continue
+        try:
+            stat = os.stat(os.path.join(RECORDINGS_DIR, name))
+        except OSError:
+            continue
+        files.append({
+            'name': name,
+            'bytes': stat.st_size,
+            'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+                .isoformat().replace('+00:00', 'Z'),
+        })
+
+    files.sort(key=lambda f: f['modified'], reverse=True)
+    return jsonify({'recordings': files})
+
+
+@app.route('/api/recordings/<path:name>', methods=['GET'])
+def api_recording_download(name):
+    """Download one recording.
+
+    The name is resolved and then checked to be inside the recordings
+    directory, rather than trusted or merely sanitised: this is a path taken
+    straight from a URL on a network the satellite does not control, and
+    ../../ is the oldest trick there is.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    root = os.path.realpath(RECORDINGS_DIR)
+    target = os.path.realpath(os.path.join(root, name))
+    if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
+        return jsonify({'error': 'No such recording'}), 404
+    if not os.path.isfile(target):
+        return jsonify({'error': 'No such recording'}), 404
+
+    return send_file(target, mimetype='video/mp4', as_attachment=True,
+                     download_name=os.path.basename(target))
 
 
 @app.route('/api/health', methods=['GET'])
