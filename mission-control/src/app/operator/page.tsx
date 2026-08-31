@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ShieldCheck, Users } from 'lucide-react';
+import { ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
 
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
@@ -52,6 +52,16 @@ export default async function OperatorPage() {
             >
               <Users className="h-3.5 w-3.5 text-primary" />
               Manage access
+            </Link>
+          )}
+
+          {session.role === 'admin' && (
+            <Link
+              href="/operator/settings"
+              className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
+              Settings
             </Link>
           )}
         </div>
