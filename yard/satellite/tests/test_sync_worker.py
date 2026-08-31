@@ -591,3 +591,33 @@ def test_flush_leaves_a_desk_decision_standing():
     # and applying it correctly meant writing nothing.
     assert sync_worker.flush_run_one(FakeRunFirestore(store), entry) is True
     assert store['m1/curiosity']['status'] == 'completed'
+
+
+def test_every_run_write_carries_its_yard_as_a_field():
+    """Runs used to be keyed by yard, so the document id carried it. Mission
+    Control keys them by runId now (PR #139) and reads the yard from the
+    yardId field - which no satellite payload ever included, because the id
+    made it redundant. Without this line every satellite-written run resolves
+    to yardId '' over there: the learner sees a date where the city belongs,
+    and the operator console cannot tell which run is theirs.
+
+    Injected at the flush rather than in each payload builder, so a shape
+    nobody remembered to update cannot slip through the one door to Firestore.
+    """
+    store = {}
+    entry = _run_entry({'status': 'processing', 'statusUpdatedAt': '2026-08-29T10:00:00Z'})
+
+    assert sync_worker.flush_run_one(FakeRunFirestore(store), entry) is True
+
+    assert store['m1/curiosity']['yardId'] == 'curiosity'
+
+
+def test_an_explicit_yard_in_the_payload_is_not_overwritten():
+    # setdefault, deliberately: if a future payload ever names its yard, the
+    # flush must not clobber it with the outbox column.
+    store = {}
+    entry = _run_entry({'status': 'processing', 'yardId': 'explicit-yard'})
+
+    assert sync_worker.flush_run_one(FakeRunFirestore(store), entry) is True
+
+    assert store['m1/curiosity']['yardId'] == 'explicit-yard'
