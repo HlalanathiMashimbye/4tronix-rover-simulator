@@ -27,11 +27,16 @@ type ResendConfig = {
  * local development and the tests carry on with a plain .env.
  */
 async function getResendConfig(): Promise<ResendConfig> {
-  const [apiKey, fromEmail, sandboxRecipient] = await Promise.all([
+  const [apiKey, fromEmail] = await Promise.all([
     readSetting('resendApiKey'),
     readSetting('resendFromEmail'),
-    readSetting('resendSandboxRecipient'),
   ]);
+
+  // Environment only, and not on the settings page. This redirects EVERY
+  // learner email to one inbox; it existed for the months before the sending
+  // domain was verified in Resend, and now that it is, arming it would
+  // silently stop every child's mail. Local testing can still set it.
+  const sandboxRecipient = process.env.RESEND_SANDBOX_RECIPIENT?.trim() || undefined;
 
   const missingVariables: string[] = [];
 
@@ -56,7 +61,7 @@ async function getResendConfig(): Promise<ResendConfig> {
   return {
     apiKey: apiKey!,
     fromEmail: fromEmail!,
-    sandboxRecipient: sandboxRecipient ?? undefined,
+    sandboxRecipient,
   };
 }
 

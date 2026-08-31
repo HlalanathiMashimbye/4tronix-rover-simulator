@@ -66,10 +66,7 @@ export async function readSetting(name: SettingName): Promise<string | null> {
     const [version] = await secretClient().accessSecretVersion({
       name: `projects/${projectId()}/secrets/${spec.secretId}/versions/latest`,
     });
-    value = version.payload?.data?.toString() ?? null;
-    // An empty version is how "unset" is expressed, since a secret cannot
-    // have zero versions once Cloud Run has ever mounted it.
-    if (value === '') value = null;
+    value = version.payload?.data?.toString() || null;
   } catch {
     // Absent, or unreachable. Either way the caller's own "not configured"
     // path is the right one, and it should not be reached through a stack
@@ -81,9 +78,18 @@ export async function readSetting(name: SettingName): Promise<string | null> {
   return value;
 }
 
-/** Adds a new version and drops this instance's cached copy. */
+/**
+ * Adds a new version and drops this instance's cached copy.
+ *
+ * Secret Manager refuses an empty payload outright, so "unset" is the absence
+ * of any version rather than a version holding nothing. Callers reject empty
+ * before they get here.
+ */
 export async function writeSetting(name: SettingName, value: string): Promise<void> {
   const spec = SETTINGS[name];
+  if (value === '') {
+    throw new Error('Secret Manager will not store an empty value.');
+  }
 
   await secretClient().addSecretVersion({
     parent: `projects/${projectId()}/secrets/${spec.secretId}`,

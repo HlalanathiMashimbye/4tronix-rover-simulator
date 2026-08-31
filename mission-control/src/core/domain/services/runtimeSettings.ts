@@ -1,6 +1,13 @@
 /**
  * The settings an admin can change without a deploy, declared once.
  *
+ * RESEND_SANDBOX_RECIPIENT is deliberately NOT here. It redirects every
+ * learner email to one inbox, and it existed only for the months before
+ * marsyard.sapient.rocks was verified in Resend, when nothing could be sent
+ * to a real address. The domain is verified, so arming it now would silently
+ * stop every child's mail. It stays an environment variable, which a
+ * developer can set locally and nobody can switch on from a web page.
+ *
  * Same shape as the yard satellite's tunables.py, and for the same reason:
  * changing where mail comes from or which YouTube channel is watched should
  * not mean editing a tfvar, running terraform, and waiting for a rollout.
@@ -45,15 +52,6 @@ export const SETTINGS: Record<string, SettingSpec> = {
     help: 'Must be an address on a domain verified in Resend, or nothing sends.',
     secret: false,
     validate: looksLikeEmail,
-  },
-  resendSandboxRecipient: {
-    secretId: 'resend-sandbox-recipient',
-    envVar: 'RESEND_SANDBOX_RECIPIENT',
-    label: 'Redirect all mail to',
-    // The most dangerous setting here, so it says so where it is changed.
-    help: 'While this is set, EVERY learner email goes here instead and no child receives one. Leave empty in normal use.',
-    secret: false,
-    validate: (v) => (v === '' ? null : looksLikeEmail(v)),
   },
   youtubeLinkIntervalMinutes: {
     secretId: 'youtube-link-interval-minutes',

@@ -111,11 +111,18 @@ describe('/api/operator/settings', () => {
       expect(writeSetting).not.toHaveBeenCalled();
     });
 
-    it('allows the sandbox recipient to be cleared, which is how it is turned off', async () => {
-      const resp = await PUT(put({ name: 'resendSandboxRecipient', value: '' }));
+    it('refuses an empty value rather than letting Secret Manager reject it', async () => {
+      /**
+       * Secret Manager answers an empty payload with
+       * "3 INVALID_ARGUMENT: Secret Payload cannot be empty", which reached
+       * the admin as a 502 that reads like an outage. Every setting that
+       * remains needs a value.
+       */
+      const resp = await PUT(put({ name: 'youtubeChannelId', value: '   ' }));
 
-      expect(resp.status).toBe(200);
-      expect(writeSetting).toHaveBeenCalledWith('resendSandboxRecipient', '');
+      expect(resp.status).toBe(400);
+      expect((await resp.json()).error).toMatch(/cannot be empty/);
+      expect(writeSetting).not.toHaveBeenCalled();
     });
 
     it('holds the poll interval to the floor the scheduler can actually deliver', async () => {

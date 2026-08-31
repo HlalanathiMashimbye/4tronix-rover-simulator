@@ -39,13 +39,6 @@ resource "google_secret_manager_secret" "resend_from_email" {
   }
 }
 
-resource "google_secret_manager_secret" "resend_sandbox_recipient" {
-  secret_id = "resend-sandbox-recipient"
-  replication {
-    auto {}
-  }
-}
-
 resource "google_secret_manager_secret" "youtube_link_interval" {
   secret_id = "youtube-link-interval-minutes"
   replication {
@@ -97,17 +90,18 @@ resource "google_secret_manager_secret_version" "seed" {
   # not-configured paths already handle. A CHANGE_ME string would instead be a
   # live, wrong value: an API key that fails every call and a from-address
   # that bounces every email.
+  # ONLY THE ONES WITH A REAL VALUE. Secret Manager refuses an empty payload
+  # ("3 INVALID_ARGUMENT: Secret Payload cannot be empty"), so an unset
+  # setting is a secret with no versions at all, which readSetting already
+  # reads as null. Seeding these empty would have failed the apply itself.
+  #
+  # resend_from_email carries the address that is live today, so moving
+  # Resend's config to the settings page does not silently stop email. After
+  # this first version the page owns it: Terraform writes another only if the
+  # tfvar changes.
   for_each = {
-    resend_api_key           = { id = google_secret_manager_secret.resend_api_key.id, data = "" }
-    resend_sandbox_recipient = { id = google_secret_manager_secret.resend_sandbox_recipient.id, data = var.resend_sandbox_recipient }
-    youtube_api_key          = { id = google_secret_manager_secret.youtube_api_key.id, data = "" }
-    youtube_channel_id       = { id = google_secret_manager_secret.youtube_channel_id.id, data = "" }
-    youtube_link_interval    = { id = google_secret_manager_secret.youtube_link_interval.id, data = "15" }
-    # Carries the address that is live today, so moving Resend's config to the
-    # settings page does not silently stop email on the next apply. After this
-    # first version the page owns it: Terraform only writes another if the
-    # tfvar itself changes.
-    resend_from_email = { id = google_secret_manager_secret.resend_from_email.id, data = var.resend_from_email }
+    resend_from_email     = { id = google_secret_manager_secret.resend_from_email.id, data = var.resend_from_email }
+    youtube_link_interval = { id = google_secret_manager_secret.youtube_link_interval.id, data = "15" }
   }
   secret      = each.value.id
   secret_data = each.value.data
@@ -142,12 +136,11 @@ locals {
   # Read at request time, written by the settings page. Listed separately so
   # the runtime account still gets accessor and adder on each of them.
   editable_secrets = {
-    resend_api_key           = google_secret_manager_secret.resend_api_key
-    resend_from_email        = google_secret_manager_secret.resend_from_email
-    resend_sandbox_recipient = google_secret_manager_secret.resend_sandbox_recipient
-    youtube_api_key          = google_secret_manager_secret.youtube_api_key
-    youtube_channel_id       = google_secret_manager_secret.youtube_channel_id
-    youtube_link_interval    = google_secret_manager_secret.youtube_link_interval
+    resend_api_key        = google_secret_manager_secret.resend_api_key
+    resend_from_email     = google_secret_manager_secret.resend_from_email
+    youtube_api_key       = google_secret_manager_secret.youtube_api_key
+    youtube_channel_id    = google_secret_manager_secret.youtube_channel_id
+    youtube_link_interval = google_secret_manager_secret.youtube_link_interval
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when

@@ -76,6 +76,17 @@ export async function PUT(request: NextRequest) {
   const spec = SETTINGS[name];
   const trimmed = value.trim();
 
+  // Refused here rather than by Secret Manager, which rejects an empty payload
+  // with "3 INVALID_ARGUMENT" and would surface as a 502 that reads like an
+  // outage. Every setting that remains needs a value; the one that could
+  // meaningfully be empty was the sandbox redirect, and that is gone.
+  if (trimmed === '') {
+    return NextResponse.json(
+      { success: false, error: `${spec.label} cannot be empty.` },
+      { status: 400 },
+    );
+  }
+
   // Validated before it becomes a version. A Secret Manager version cannot be
   // edited, only superseded, so a typo here is permanent history and, worse,
   // live until somebody notices the email stopped.

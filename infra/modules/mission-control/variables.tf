@@ -26,14 +26,6 @@ variable "resend_from_email" {
   default     = "onboarding@resend.dev"
 }
 
-# INITIAL VALUE ONLY, as above. Normally empty: while it has a value every
-# learner email is redirected to it and no child receives one.
-variable "resend_sandbox_recipient" {
-  description = "Redirects ALL mission email to this one inbox, for demoing while no domain is verified. Empty means normal delivery. Must be empty in prod once a domain is verified, or no learner ever receives mail. Set out-of-band, never committed (it is a personal address)."
-  type        = string
-  default     = ""
-}
-
 variable "domains" {
   description = "Optional public hostname per environment. Empty string / missing key = HTTP-only on the LB IP for that env."
   type        = map(string)
