@@ -31,6 +31,7 @@ import time
 from datetime import datetime, timezone
 
 import websockets
+import tunables
 
 logger = logging.getLogger(__name__)
 
@@ -43,18 +44,24 @@ FPS = 15.0  # matches camera_server.py's frame_producer interval (1/15s)
 _FRESH_FRAME_SECONDS = 3.0
 
 
+# Beside the satellite, and not configurable. It was an environment variable
+# that nothing outside one test ever set: a knob whose only reachable settings
+# are "correct" and "a directory the service cannot write to".
+RECORDINGS_DIR = os.path.join(SATELLITE_DIR, 'recordings')
+
+
 def _recording_dir():
-    return os.environ.get('RECORDING_DIR') or os.path.join(SATELLITE_DIR, 'recordings')
+    return RECORDINGS_DIR
 
 
 def _camera_uri():
-    host = os.environ.get('CAMERA_HOST', 'localhost')
+    host = tunables.get('cameraHost')
     port = int(os.environ.get('CAMERA_PORT', 8890))
     return f'ws://{host}:{port}'
 
 
 def _ready_timeout():
-    return float(os.environ.get('CAMERA_READY_TIMEOUT', '2.0'))
+    return tunables.get('cameraReadyTimeout')
 
 
 def _now_iso():

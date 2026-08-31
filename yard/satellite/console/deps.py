@@ -174,6 +174,23 @@ def rover_url():
     return getter() if getter else os.environ.get('ROVER_URL', 'http://marspi.local:8523')
 
 
+DEFAULT_MISSION_CONTROL_URL = 'http://localhost:3000'
+
+
+def mission_control_is_configured():
+    """Whether anything actually pointed this satellite at a Mission Control.
+
+    Worth asking separately from mission_control_url(), which always returns
+    something. The default is right on a laptop and wrong on every yard Pi,
+    where it means the status-change POST goes to a port with nothing behind
+    it: the learner's email is then silently never sent, because notify
+    swallows the failure by design.
+    """
+    if current_app.config.get('MISSION_CONTROL_URL_GETTER'):
+        return True
+    return bool((os.environ.get('MISSION_CONTROL_URL') or '').strip())
+
+
 def mission_control_url():
     getter = current_app.config.get('MISSION_CONTROL_URL_GETTER')
-    return getter() if getter else os.environ.get('MISSION_CONTROL_URL', 'http://localhost:3000')
+    return getter() if getter else os.environ.get('MISSION_CONTROL_URL', DEFAULT_MISSION_CONTROL_URL)

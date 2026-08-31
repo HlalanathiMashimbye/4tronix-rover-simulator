@@ -111,15 +111,18 @@ def _check_camera():
 
 @app.route('/')
 def index():
-    """Operator home: sign in first, then pick a station.
+    """The yard opens on the code station.
 
-    /code/ and /monitor/ stay directly reachable without login - tablets and
-    the TV are pointed at those URLs once during setup and never sign in.
+    It used to open on the Firestore-backed mission queue, behind a sign-in.
+    That made the one thing a yard has to be able to do - run a mission -
+    depend on reaching Firebase, on a box whose whole point is working when
+    the venue wifi does not. Pasting code into /code/ and pressing run talks
+    to the rover over the LAN and needs nothing else, so that is the door.
+
+    /code/ and /monitor/ were already login-free: tablets and the TV are
+    pointed at those URLs once during setup and never sign in.
     """
-    operator = operator_console.current_operator()
-    if not operator:
-        return redirect('/operator/login')
-    return render_template('home.html', operator=operator)
+    return redirect('/code/')
 
 
 @app.route('/settings')

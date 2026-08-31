@@ -1,5 +1,5 @@
 {# Shared command bar. Set nav_active before including:
-   {% set nav_active = 'home' %}{% include "_nav.html" %}
+   {% set nav_active = 'code' %}{% include "_nav.html" %}
    Shows a live rover status chip and, when an operator is in context, their
    email + a logout button.
 
@@ -10,8 +10,8 @@
    passing it. One file now, so a fix lands everywhere.
 
    Also defines window.YardStatus: the single owner of the /api/status poll.
-   This bar needs that endpoint for the rover chip, and so do home.html and
-   status.html, which each used to run their own poller on top of this one -
+   This bar needs that endpoint for the rover chip, and so does status.html,
+   which used to run its own poller on top of this one -
    two identical requests every 5s on the same page, each costing the satellite
    a 2s-timeout call out to the rover. Pages subscribe instead of polling. #}
 <script src="/static/yard-cache.js"></script>
@@ -21,9 +21,10 @@
     <span class="brand-txt"><b>Mars Yard</b><small>Satellite Console</small></span>
   </a>
   <nav class="topnav">
-    {# No separate Queue item: the home page IS the queue. A second link to the
-       same missions just made an operator pick one of two screens at random. #}
-    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}>Queue</a>
+    {# No Queue item: running a mission here is copy, paste, run, which is the
+       Code station. The Firestore-backed queue needed a sign-in and an
+       internet connection to show anything, on a box that has to work without
+       either. #}
     <a href="/code/"{% if nav_active == 'code' %} class="active"{% endif %}>Code</a>
     <a href="/monitor/"{% if nav_active == 'monitor' %} class="active"{% endif %}>Monitor</a>
     <a href="/settings"{% if nav_active == 'status' %} class="active"{% endif %}>Settings</a>

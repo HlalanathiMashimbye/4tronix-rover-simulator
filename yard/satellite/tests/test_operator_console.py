@@ -286,23 +286,21 @@ def sign_in(client):
 # Auth gating
 # ---------------------------------------------------------------------------
 
-def test_root_redirects_to_login_without_session(client):
+def test_root_opens_the_code_station_without_a_session(client):
+    """The yard used to open on the Firestore queue, behind a sign-in.
+
+    That put reaching Firebase between an operator and the one thing a yard
+    has to do, on a box whose point is working when the venue wifi does not.
+    Copy, paste, run talks to the rover over the LAN and needs nothing else.
+    """
     resp = client.get('/')
+
     assert resp.status_code == 302
-    assert '/operator/login' in resp.headers['Location']
+    assert resp.headers['Location'].endswith('/code/')
 
 
-def test_root_shows_station_hub_when_signed_in(client):
-    sign_in(client)
-    resp = client.get('/')
-    assert resp.status_code == 200
-    page = resp.get_data(as_text=True)
-    # All four stations reachable from the hub
-    assert '/operator/' in page
-    assert '/code/' in page
-    assert '/monitor/' in page
-    assert '/status' in page
-    assert 'op@test.com' in page
+def test_root_does_not_send_anyone_to_a_login(client):
+    assert '/operator/login' not in client.get('/').headers.get('Location', '')
 
 
 def test_code_and_monitor_stay_public(client):
@@ -319,10 +317,6 @@ def test_operator_root_redirects_to_the_queue(client):
     assert resp.headers['Location'].endswith('/')
 
 
-def test_hub_redirects_to_login_without_session(client):
-    resp = client.get('/')
-    assert resp.status_code == 302
-    assert '/operator/login' in resp.headers['Location']
 
 
 def test_mission_page_redirects_to_login_without_session(client):
@@ -335,7 +329,7 @@ def test_mission_page_redirects_to_login_without_session(client):
 
 def test_auth_off_opens_console_and_hub_without_session(client, monkeypatch):
     monkeypatch.setenv('OPERATOR_AUTH', 'off')
-    assert client.get('/').status_code == 200
+    assert client.get('/code/').status_code == 200
     assert client.get('/operator/mission/p1').status_code == 200
     login = client.get('/operator/login')
     assert login.status_code == 302  # login page steps aside
@@ -533,7 +527,7 @@ def test_login_accepts_operator_and_sets_session(client, monkeypatch):
     )
     resp = client.post('/operator/api/login', json={'email': 'op@test.com', 'password': 'pw'})
     assert resp.status_code == 200
-    assert client.get('/').status_code == 200  # the queue, no longer behind /operator/
+    assert client.get('/code/').status_code == 200
 
 
 def test_login_reports_missing_configuration(client, monkeypatch):
@@ -1964,3 +1958,87 @@ def test_a_genuine_handshake_failure_is_still_logged():
     assert noise_filter.filter(kept)
     assert noise_filter.filter(
         logging.LogRecord('websockets.server', logging.INFO, '', 0, 'connection open', (), None))
+
+
+# --- Settings that used to be environment variables (tunables) --------------
+
+def test_tunables_endpoint_reports_values_and_limits(client, missions):
+    sign_in(client)
+
+    data = client.get('/operator/api/config/tunables').get_json()
+
+    assert data['values']['sessionMaxAge'] == 12 * 3600
+    assert data['limits']['sessionRecheck'] == [30, 3600]
+
+
+def test_tunables_endpoint_saves_and_takes_effect_without_a_restart(client, missions):
+    from console.auth import session_max_age
+    sign_in(client)
+
+    resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 1800})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['values']['sessionMaxAge'] == 1800
+    # The point of the move: no restart, the next read sees it.
+    assert session_max_age() == 1800
+
+
+def test_tunables_endpoint_clamps_rather_than_accepting_nonsense(client, missions):
+    sign_in(client)
+
+    body = client.post('/operator/api/config/tunables', json={'sessionRecheck': 1}).get_json()
+
+    assert body['values']['sessionRecheck'] == 30
+
+
+def test_tunables_endpoint_refuses_unknown_keys(client, missions):
+    """Fed straight into a config file, so a caller must not invent keys."""
+    sign_in(client)
+
+    resp = client.post('/operator/api/config/tunables', json={'sneaky': 1})
+
+    assert resp.status_code == 400
+    assert 'Unknown setting' in resp.get_json()['error']
+
+
+def test_tunables_endpoint_requires_an_operator(client, missions):
+    """Shortening the session lifetime is a control action, like repointing
+    the rover: anyone on the venue network could otherwise do it."""
+    resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 300})
+
+    assert resp.status_code in (302, 401, 403)
+
+
+def test_integrations_report_mission_control_unconfigured_when_url_is_unset(
+    client, missions, monkeypatch,
+):
+    """This panel used to hardcode configured=True.
+
+    It therefore told an operator the learner emails were fine on a satellite
+    that had never been told where Mission Control is, which is the state
+    every yard Pi was actually in: nothing sets MISSION_CONTROL_URL, so the
+    status POST goes to localhost:3000 and notify swallows the failure.
+    """
+    monkeypatch.delenv('MISSION_CONTROL_URL', raising=False)
+    client.application.config.pop('MISSION_CONTROL_URL_GETTER', None)
+    sign_in(client)
+
+    data = client.get('/operator/api/integrations').get_json()
+    mc = next(i for i in data['integrations'] if i['id'] == 'mission_control')
+
+    assert mc['configured'] is False
+    assert 'not being sent' in mc['detail']
+
+
+def test_integrations_report_mission_control_configured_when_url_is_set(
+    client, missions, monkeypatch,
+):
+    monkeypatch.setenv('MISSION_CONTROL_URL', 'https://marsyard.example.com')
+    client.application.config.pop('MISSION_CONTROL_URL_GETTER', None)
+    sign_in(client)
+
+    data = client.get('/operator/api/integrations').get_json()
+    mc = next(i for i in data['integrations'] if i['id'] == 'mission_control')
+
+    assert mc['configured'] is True
+    assert mc['detail'] == 'https://marsyard.example.com'

@@ -74,7 +74,7 @@ class FakeConnection:
 def _isolated_state(tmp_path, monkeypatch):
     monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
     mission_store.init_db()
-    monkeypatch.setenv('RECORDING_DIR', str(tmp_path / 'recordings'))
+    monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path / 'recordings'))
     monkeypatch.setattr(recording_control, '_writers', {})
     monkeypatch.setattr(recording_control, '_paths', {})
     monkeypatch.setattr(recording_control, '_consumer_thread', None)

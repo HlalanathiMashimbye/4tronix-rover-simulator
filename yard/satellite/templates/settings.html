@@ -228,6 +228,52 @@
                         <span class="camera-msg" id="syncMsg" style="margin-top:0;"></span>
                     </div>
                 </div>
+
+                <div class="card" id="tunablesSection">
+                    <div class="card-head-row">
+                        <h3 class="h-card" style="margin-bottom:0;">Console and camera</h3>
+                    </div>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Sign operators out after</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunSessionMaxAge" min="300" max="604800" step="300">
+                            <span class="sync-unit">seconds</span>
+                        </span>
+                        <span class="sync-hint">How long a signed-in operator stays signed in on this satellite.</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Re-check sign-in every</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunSessionRecheck" min="30" max="3600" step="30">
+                            <span class="sync-unit">seconds</span>
+                        </span>
+                        <span class="sync-hint">Bounds how long a revoked account keeps working here.</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Camera host</span>
+                        <span class="sync-input-row">
+                            <input type="text" id="tunCameraHost" spellcheck="false" style="width:180px;">
+                        </span>
+                        <span class="sync-hint">Where the camera stream is served from. Usually localhost.</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Wait for camera up to</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunCameraReady" min="0.5" max="30" step="0.5">
+                            <span class="sync-unit">seconds</span>
+                        </span>
+                        <span class="sync-hint">How long "Send to rover" waits for a real frame before refusing.</span>
+                    </label>
+
+                    <div class="camera-controls" style="margin-top:0;">
+                        <button class="btn primary" id="tunSave">Save</button>
+                        <span class="camera-msg" id="tunMsg" style="margin-top:0;"></span>
+                    </div>
+                </div>
             </div>
 
             <div class="settings-col scrolls">
@@ -495,6 +541,68 @@
         });
 
         loadSyncConfig();
+
+        // --- Console and camera tunables -------------------------------
+        // Same shape as the sync card above. These were environment
+        // variables until they moved here; the server keeps the old vars as
+        // defaults, so an untouched satellite behaves exactly as before.
+        const TUNABLE_FIELDS = {
+            sessionMaxAge: 'tunSessionMaxAge',
+            sessionRecheck: 'tunSessionRecheck',
+            cameraHost: 'tunCameraHost',
+            cameraReadyTimeout: 'tunCameraReady',
+        };
+        const tunMsg = document.getElementById('tunMsg');
+
+        async function loadTunables() {
+            try {
+                const resp = await fetch('/operator/api/config/tunables');
+                if (!resp.ok) return;
+                const d = await resp.json();
+                for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (el && d.values[name] !== undefined) el.value = d.values[name];
+                }
+            } catch (e) { /* offline: leave the fields as they are */ }
+        }
+
+        document.getElementById('tunSave').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            tunMsg.dataset.tone = '';
+            tunMsg.textContent = 'Saving\u2026';
+            try {
+                const body = {};
+                for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (!el) continue;
+                    body[name] = name === 'cameraHost' ? el.value.trim() : Number(el.value);
+                }
+                const resp = await fetch('/operator/api/config/tunables', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const d = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
+                // Repaint from the response: the server clamps out-of-range
+                // values, so what you typed is not always what is in force.
+                for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (el && d.values[name] !== undefined) el.value = d.values[name];
+                }
+                tunMsg.dataset.tone = 'ok';
+                tunMsg.textContent = 'Saved. Applies on next use, no restart.';
+            } catch (e) {
+                tunMsg.dataset.tone = 'bad';
+                tunMsg.textContent = e.message || 'Could not save';
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { tunMsg.textContent = ''; tunMsg.dataset.tone = ''; }, 5000);
+            }
+        });
+
+        loadTunables();
 
         const BADGE_ICONS = {
             green: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
