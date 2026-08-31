@@ -1,14 +1,15 @@
 """
 Sync configuration, and what the satellite is wired up to.
 
-Two read-mostly endpoints: the sync worker's interval and toggles, and a
-report of which integrations are actually configured. Both are settings-page
-concerns rather than queue concerns, and were interleaved with mission
-dispatch in the old console.
+Settings-page concerns rather than queue concerns, and interleaved with
+mission dispatch in the old console: the sync worker's interval, the operator
+tunables that used to be environment variables, and a report of which
+integrations are actually configured.
 """
 
 import os
 
+import tunables
 import youtube_poll
 from flask import jsonify, request
 
@@ -87,6 +88,32 @@ def api_sync_config():
         'reconcileEvery': reconcile,
         'estimatedDailyReads': estimated_daily_reads(interval, reconcile, active),
     })
+
+
+@operator_bp.route('/api/config/tunables', methods=['GET', 'POST'])
+@require_operator
+def api_tunables():
+    """Settings that used to mean editing a .env on a Pi and restarting it.
+
+    Gated like the rover URL is: shortening the session lifetime or repointing
+    the camera host are control actions, and anyone on the venue network could
+    otherwise do them. Costs nothing on event days, when OPERATOR_AUTH=off
+    makes require_operator a pass-through.
+    """
+    if request.method == 'GET':
+        return jsonify({'values': tunables.all_values(), 'limits': tunables.limits()})
+
+    data = request.get_json(silent=True) or {}
+    unknown = [k for k in data if k not in tunables.TUNABLES]
+    if unknown:
+        return jsonify({'error': f'Unknown setting: {", ".join(sorted(unknown))}'}), 400
+
+    try:
+        values = tunables.save(data)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Every value must be a number, except the camera host'}), 400
+
+    return jsonify({'status': 'ok', 'values': values, 'limits': tunables.limits()})
 
 
 @operator_bp.route('/api/integrations', methods=['GET'])

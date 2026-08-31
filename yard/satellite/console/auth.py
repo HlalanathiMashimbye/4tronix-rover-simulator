@@ -17,6 +17,7 @@ from flask import jsonify, redirect, render_template, request, session
 
 from console import deps
 from console.blueprint import operator_bp
+import tunables
 
 IDENTITY_TOOLKIT_SIGN_IN = (
     'https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword'
@@ -51,13 +52,20 @@ def auth_disabled():
 # internet, so a check that fails closed would lock an operator out of a rover
 # mid-event because venue wifi dropped. The compromise is deliberate and has
 # two halves.
-SESSION_MAX_AGE = int(os.environ.get('OPERATOR_SESSION_MAX_AGE', 12 * 3600))
-SESSION_RECHECK_EVERY = int(os.environ.get('OPERATOR_SESSION_RECHECK', 300))
+# Functions, not constants: these are Settings-page tunables now, and a value
+# captured at import would need a restart of a box nobody restarts on purpose.
+# tunables keeps the old env vars as the defaults.
+def session_max_age():
+    return tunables.get('sessionMaxAge')
+
+
+def session_recheck_every():
+    return tunables.get('sessionRecheck')
 
 
 def session_expired(operator, now):
     started = operator.get('signed_in_at')
-    return started is None or (now - started) > SESSION_MAX_AGE
+    return started is None or (now - started) > session_max_age()
 
 
 def still_authorised(operator, now):
@@ -65,7 +73,7 @@ def still_authorised(operator, now):
 
     FAILS OPEN when Firebase cannot be reached. That is the offline-first
     trade: an operator standing at a rover with no internet keeps working, and
-    the bound on how long a revoked session can survive is SESSION_MAX_AGE
+    the bound on how long a revoked session can survive is session_max_age()
     rather than forever.
 
     FAILS CLOSED when Firebase answers and says no - the account is gone,
@@ -75,7 +83,7 @@ def still_authorised(operator, now):
     if operator.get('uid') == OFFLINE_OPERATOR['uid']:
         return True
 
-    if now - operator.get('checked_at', 0) < SESSION_RECHECK_EVERY:
+    if now - operator.get('checked_at', 0) < session_recheck_every():
         return True
 
     try:

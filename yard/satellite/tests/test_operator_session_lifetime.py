@@ -22,7 +22,7 @@ import operator_console
 from console import deps  # noqa: E402
 from console import auth  # noqa: E402
 from console.auth import (  # noqa: E402
-    SESSION_MAX_AGE,
+    session_max_age,
     OFFLINE_OPERATOR,
     session_expired,
     still_authorised,
@@ -79,7 +79,7 @@ class TestTheSessionIsBounded:
         assert session_expired(_op(), time.time()) is False
 
     def test_a_session_older_than_the_maximum_has(self):
-        old = _op(signed_in_at=time.time() - SESSION_MAX_AGE - 1)
+        old = _op(signed_in_at=time.time() - session_max_age() - 1)
         assert session_expired(old, time.time()) is True
 
     def test_a_session_with_no_timestamp_is_treated_as_expired(self):
@@ -117,7 +117,7 @@ class TestOfflineKeepsWorking:
         """The whole reason this console exists.
 
         A check that failed closed would lock an operator out of a rover
-        because venue wifi dropped. SESSION_MAX_AGE is what bounds a revoked
+        because venue wifi dropped. session_max_age() is what bounds a revoked
         session instead.
         """
         _firebase_returns(monkeypatch, error=ConnectionError('no internet'))

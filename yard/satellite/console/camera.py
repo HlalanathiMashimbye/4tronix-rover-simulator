@@ -14,6 +14,7 @@ from flask import jsonify, request
 import camera_control
 from console.auth import require_operator
 from console.blueprint import operator_bp
+import tunables
 
 @operator_bp.route('/api/camera/start', methods=['POST'])
 @require_operator
@@ -93,7 +94,7 @@ def api_camera_status():
     'no detection' beats someone concluding detection is broken.
     """
     port = int(os.environ.get('CAMERA_PORT', 8890))
-    host = os.environ.get('CAMERA_HOST', 'localhost')
+    host = tunables.get('cameraHost')
 
     import socket
     reachable = False

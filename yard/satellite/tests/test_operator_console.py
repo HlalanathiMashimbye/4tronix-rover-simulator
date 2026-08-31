@@ -1964,3 +1964,52 @@ def test_a_genuine_handshake_failure_is_still_logged():
     assert noise_filter.filter(kept)
     assert noise_filter.filter(
         logging.LogRecord('websockets.server', logging.INFO, '', 0, 'connection open', (), None))
+
+
+# --- Settings that used to be environment variables (tunables) --------------
+
+def test_tunables_endpoint_reports_values_and_limits(client, missions):
+    sign_in(client)
+
+    data = client.get('/operator/api/config/tunables').get_json()
+
+    assert data['values']['sessionMaxAge'] == 12 * 3600
+    assert data['limits']['sessionRecheck'] == [30, 3600]
+
+
+def test_tunables_endpoint_saves_and_takes_effect_without_a_restart(client, missions):
+    from console.auth import session_max_age
+    sign_in(client)
+
+    resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 1800})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['values']['sessionMaxAge'] == 1800
+    # The point of the move: no restart, the next read sees it.
+    assert session_max_age() == 1800
+
+
+def test_tunables_endpoint_clamps_rather_than_accepting_nonsense(client, missions):
+    sign_in(client)
+
+    body = client.post('/operator/api/config/tunables', json={'sessionRecheck': 1}).get_json()
+
+    assert body['values']['sessionRecheck'] == 30
+
+
+def test_tunables_endpoint_refuses_unknown_keys(client, missions):
+    """Fed straight into a config file, so a caller must not invent keys."""
+    sign_in(client)
+
+    resp = client.post('/operator/api/config/tunables', json={'sneaky': 1})
+
+    assert resp.status_code == 400
+    assert 'Unknown setting' in resp.get_json()['error']
+
+
+def test_tunables_endpoint_requires_an_operator(client, missions):
+    """Shortening the session lifetime is a control action, like repointing
+    the rover: anyone on the venue network could otherwise do it."""
+    resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 300})
+
+    assert resp.status_code in (302, 401, 403)

@@ -31,6 +31,7 @@ import time
 from datetime import datetime, timezone
 
 import websockets
+import tunables
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +49,13 @@ def _recording_dir():
 
 
 def _camera_uri():
-    host = os.environ.get('CAMERA_HOST', 'localhost')
+    host = tunables.get('cameraHost')
     port = int(os.environ.get('CAMERA_PORT', 8890))
     return f'ws://{host}:{port}'
 
 
 def _ready_timeout():
-    return float(os.environ.get('CAMERA_READY_TIMEOUT', '2.0'))
+    return tunables.get('cameraReadyTimeout')
 
 
 def _now_iso():
