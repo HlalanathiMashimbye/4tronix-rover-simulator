@@ -7,10 +7,12 @@
  * a separate env-validation approach.
  */
 
+import { readSetting } from '@/infrastructure/config/runtimeSettingsStore';
 import { Resend } from 'resend';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 
 let client: Resend | undefined;
+let cachedKey: string | undefined;
 
 type ResendConfig = {
   apiKey: string;
@@ -18,27 +20,23 @@ type ResendConfig = {
   sandboxRecipient?: string;
 };
 
-function normalizeEnvValue(value?: string): string | undefined {
-  if (!value) {
-    return undefined;
-  }
 
-  const trimmedValue = value.trim();
+/**
+ * Async now, because these are admin-editable at runtime rather than baked
+ * into the instance's environment. readSetting still prefers the env var, so
+ * local development and the tests carry on with a plain .env.
+ */
+async function getResendConfig(): Promise<ResendConfig> {
+  const [apiKey, fromEmail] = await Promise.all([
+    readSetting('resendApiKey'),
+    readSetting('resendFromEmail'),
+  ]);
 
-  if (
-    (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
-    (trimmedValue.startsWith("'") && trimmedValue.endsWith("'"))
-  ) {
-    return trimmedValue.slice(1, -1);
-  }
-
-  return trimmedValue;
-}
-
-function getResendConfig(): ResendConfig {
-  const apiKey = normalizeEnvValue(process.env.RESEND_API_KEY);
-  const fromEmail = normalizeEnvValue(process.env.RESEND_FROM_EMAIL);
-  const sandboxRecipient = normalizeEnvValue(process.env.RESEND_SANDBOX_RECIPIENT);
+  // Environment only, and not on the settings page. This redirects EVERY
+  // learner email to one inbox; it existed for the months before the sending
+  // domain was verified in Resend, and now that it is, arming it would
+  // silently stop every child's mail. Local testing can still set it.
+  const sandboxRecipient = process.env.RESEND_SANDBOX_RECIPIENT?.trim() || undefined;
 
   const missingVariables: string[] = [];
 
@@ -71,21 +69,25 @@ function getResendConfig(): ResendConfig {
  * Get the Resend client singleton.
  * Safe to call multiple times - only constructs once.
  */
-export function getResendClient(): Resend {
-  if (client) {
+export async function getResendClient(): Promise<Resend> {
+  // Rebuilt when the key changes rather than cached forever: an admin who
+  // rotates the Resend key from the settings page would otherwise keep
+  // sending with the old one until the instance recycled, which is the exact
+  // staleness this whole change exists to remove.
+  const { apiKey } = await getResendConfig();
+  if (client && cachedKey === apiKey) {
     return client;
   }
 
-  const { apiKey } = getResendConfig();
+  cachedKey = apiKey;
   client = new Resend(apiKey);
-
   return client;
 }
 
 export class ResendEmailSender implements IEmailSender {
   async send(to: string, subject: string, html: string): Promise<void> {
-    const { fromEmail, sandboxRecipient } = getResendConfig();
-    const resend = getResendClient();
+    const { fromEmail, sandboxRecipient } = await getResendConfig();
+    const resend = await getResendClient();
 
     // Sandbox mode. While RESEND_FROM_EMAIL is still onboarding@resend.dev,
     // Resend rejects every recipient except the address that owns the API key,

@@ -17,7 +17,7 @@ import threading
 import requests
 from flask import current_app, jsonify, request
 
-import youtube_poll
+import youtube_links
 from console import deps, mirror, notify
 from console.auth import require_operator
 from console.blueprint import operator_bp
@@ -31,7 +31,7 @@ MAX_FINISHED_PAGE = 200
 
 # Accepted shapes for a manually attached link, from the module that owns
 # what a YouTube URL means.
-YOUTUBE_URL_PATTERNS = youtube_poll.YOUTUBE_URL_PATTERNS
+YOUTUBE_URL_PATTERNS = youtube_links.YOUTUBE_URL_PATTERNS
 
 
 

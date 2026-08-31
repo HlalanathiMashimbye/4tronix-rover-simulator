@@ -579,7 +579,7 @@ def start_sync_worker(client_factory, interval=None):
     it never syncs even once the network returns. The factory is retried every
     cycle instead.
 
-    Mirrors start_polling's shape - the body can never kill the loop, so one
+    The body can never kill the loop, so one
     bad cycle does not stop syncing forever.
     """
     def _loop():
