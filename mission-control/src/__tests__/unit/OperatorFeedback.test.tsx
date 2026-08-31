@@ -78,21 +78,42 @@ describe('a note from the yard', () => {
     expect(screen.getByText(/the turn was too small/i)).toBeInTheDocument();
   });
 
-  it('names the yard only when more than one has written', () => {
-    const { rerender } = render(<OperatorFeedback runs={[run({ feedback: 'Good job!' })]} />);
-    // One note reads as a note, not a log entry.
-    expect(screen.queryByText(/curiosity/i)).not.toBeInTheDocument();
-
-    rerender(
+  it('shows the newest note when several yards have written', () => {
+    /**
+     * One line, one note: the height this used to take as a growing list was
+     * height the player did not get. The newest wins because the older ones
+     * are earlier advice about the same code.
+     */
+    render(
       <OperatorFeedback
         runs={[
-          run({ feedback: 'Good job!' }),
-          run({ yardId: 'second-yard', feedback: 'Ours drifted left.' }),
+          run({ feedback: 'Older advice.', feedbackAt: '2026-08-01T10:00:00Z' }),
+          run({ yardId: 'second-yard', feedback: 'Try 90 degrees.', feedbackAt: '2026-08-30T10:00:00Z' }),
         ]}
       />,
     );
 
-    expect(screen.getByText(/ours drifted left/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/curiosity|second-yard/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/try 90 degrees/i)).toBeInTheDocument();
+    expect(screen.queryByText(/older advice/i)).not.toBeInTheDocument();
+  });
+
+  it('counts the notes it is not showing rather than hiding them silently', () => {
+    render(
+      <OperatorFeedback
+        runs={[
+          run({ feedback: 'Older advice.', feedbackAt: '2026-08-01T10:00:00Z' }),
+          run({ yardId: 'b', feedback: 'Try 90 degrees.', feedbackAt: '2026-08-30T10:00:00Z' }),
+          run({ yardId: 'c', feedback: 'Nice one.', feedbackAt: '2026-08-20T10:00:00Z' }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText(/\+2/)).toBeInTheDocument();
+  });
+
+  it('says nothing about other notes when there is only one', () => {
+    render(<OperatorFeedback runs={[run({ feedback: 'Good job!', feedbackBy: 'kamo@uct.ac.za' })]} />);
+
+    expect(screen.getByText('kamo@uct.ac.za')).toBeInTheDocument();
   });
 });

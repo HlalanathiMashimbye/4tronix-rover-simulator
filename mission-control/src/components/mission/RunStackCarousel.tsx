@@ -99,12 +99,13 @@ export function RunStackCarousel({
 
   return (
     <section
-      // Sized to the frame, never growing. Claiming the column's leftover
-      // space is what pushed the player 115px below the code panel it sits
-      // beside: the frame was centred in a box far taller than itself. The
-      // leftover belongs to the notes panel at the bottom of the column, which
-      // is the piece that can actually use it.
-      className="flex min-h-0 shrink-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+      // Takes the column's leftover height from md up, which is where the
+      // page is pinned to the viewport: with the stats and the notes row
+      // compressed to a line each, the leftover is what makes the player the
+      // same height as the code panel beside it. On a phone the page scrolls
+      // and nothing bounds the column, so there is no leftover to take and the
+      // frame falls back to its own shape.
+      className="flex min-h-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:flex-1"
       aria-roledescription="carousel"
       aria-label="Rover run videos"
       aria-describedby="run-carousel-status"
@@ -127,20 +128,17 @@ export function RunStackCarousel({
         {describeRuns(runs)}. Showing {selectedRun.label}, {selectedRun.sublabel}, {positionLabel}.
       </p>
 
-      {/* The frame takes the shape of the footage rather than the shape of
-          whatever space is going. Letting it absorb the column's full height
-          made a 16:9 video sit in a 4:3 box with 300px of black above and
-          below it.
+      {/* Fills the column from md up so the player matches the code panel,
+          and falls back to the footage's own 16:9 on a phone, where there is
+          no column height to fill.
 
-          The height cap is what keeps a short, wide viewport from overflowing
-          a page that does not scroll. It cannot come from the parent, which is
-          now sized to this frame rather than the other way round, so it is
-          measured off the viewport: the navbar, the mission header, the stats
-          row, the gaps between them and a readable minimum for the notes
-          panel, which is everything in this column that is not the frame. */}
-      <div className="flex min-h-0 items-start justify-center">
+          Filling means the frame is taller than 16:9, so the video is centred
+          in it with black above and below. That is the trade for matching
+          heights, and it is not wasted: the scrims sit in those bands rather
+          than over the footage, so the chrome now covers no picture at all. */}
+      <div className="flex min-h-0 items-start justify-center md:min-h-0 md:flex-1 md:items-stretch">
       <div
-        className="relative aspect-video max-h-[calc(100vh-19rem)] w-full touch-pan-y"
+        className="relative aspect-video w-full touch-pan-y md:aspect-auto md:h-full"
         onPointerDown={(event) => {
           if (!canNavigate) return;
           setDragStart(event.clientX);
