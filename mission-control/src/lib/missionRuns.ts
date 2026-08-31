@@ -85,7 +85,7 @@ export function buildRunOptions(
     if (!youtubeId) continue;
 
     options.push({
-      id: `run-${run.yardId}`,
+      id: `run-${run.runId}`,
       // The city, because "which yard" only means something to a child as a
       // place they could point to on a map. A yard with no place name falls
       // back to the date rather than repeating the sublabel - two cards both

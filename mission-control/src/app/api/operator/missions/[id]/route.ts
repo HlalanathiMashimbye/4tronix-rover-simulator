@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { adminMissionRepository } from '@/infrastructure/container.server';
@@ -180,8 +181,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const decidedAt = new Date().toISOString();
+    // For offline yards, the run may not exist yet. Generate a runId if needed.
+    const runId = run?.runId ?? nanoid();
 
-    await repository.applyBookkeeping(id, command.yardId, {
+    await repository.applyBookkeeping(id, runId, command.yardId, {
       status: decision.change.status,
       clearsReview: decision.change.clearsReview,
       youtubeUrl,
