@@ -67,3 +67,20 @@ export function selectableYards(yards: Yard[]): Yard[] {
     .filter((y) => y.active)
     .sort((a, b) => a.city.localeCompare(b.city) || a.name.localeCompare(b.name));
 }
+
+/**
+ * Whether a proposed id is usable, and why not if it is not.
+ *
+ * The id is a hostname: the rover answers to `<id>.local` on the yard LAN and
+ * the satellite's YARD_ID must match it exactly. So the rules here are DNS
+ * label rules, not preferences, and the error says what it is for rather than
+ * quoting a regex at somebody adding a venue.
+ */
+export function yardIdComplaint(id: string): string | null {
+  if (!id) return 'Give the yard an id.';
+  if (id.length > 40) return 'That is too long for a hostname. Keep it under 40 characters.';
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(id)) {
+    return 'Use lowercase letters, numbers and dashes. It has to work as the rover\'s hostname.';
+  }
+  return null;
+}
