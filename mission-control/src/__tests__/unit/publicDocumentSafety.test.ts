@@ -43,6 +43,39 @@ describe('the mission name is a closed vocabulary', () => {
     }
   });
 
+  it('generates three words, so the pool is 8,000 rather than 400 (AB#330)', () => {
+    /**
+     * Story 330 asks for a unique name. These are not unique and cannot be
+     * from a closed vocabulary - see the generator's docstring. What the third
+     * word buys is scarcity: 400 names across 121 missions made a repeat a
+     * mathematical certainty, and 8,000 makes it unlikely enough that the
+     * re-roll button covers it.
+     */
+    expect(allGeneratedMissionNames()).toHaveLength(8000);
+
+    for (let i = 0; i < 50; i++) {
+      expect(generateRandomMissionName().split(' ')).toHaveLength(3);
+    }
+  });
+
+  it('still accepts the two-word names already on live missions', () => {
+    /**
+     * 121 missions carry names generated before the adjective was added. A
+     * learner re-opening an old mission, or a stale browser tab submitting
+     * one, must not be told their own name is invalid. Both shapes are closed
+     * vocabularies, so accepting the older one costs no safety.
+     */
+    for (const legacy of ['Red Explorer', 'Terra Mapper', 'Orbital Nomad']) {
+      expect(isGeneratedMissionName(legacy)).toBe(true);
+    }
+  });
+
+  it('rejects an unknown adjective in front of a valid pair', () => {
+    // The obvious way to smuggle a word in once names grew a third slot.
+    expect(isGeneratedMissionName('Stupid Red Explorer')).toBe(false);
+    expect(isGeneratedMissionName('Swift Red Explorer')).toBe(true);
+  });
+
   it('rejects the free text that reached production', () => {
     // Real names read back off live mission documents.
     const actual = [
