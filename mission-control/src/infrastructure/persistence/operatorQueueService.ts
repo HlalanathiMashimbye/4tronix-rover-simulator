@@ -8,7 +8,7 @@
  * SCOPED BY THE YARD THE OPERATOR CHOSE, not by anything on their account. The
  * card for this task says "scoped by the operator's yardIds", which is out of
  * date: David rejected per-account yards on 2026-08-27, so the yard is a
- * runtime selection from YardPicker and this re-subscribes when it changes.
+ * yard the operator signed in at, fixed for the session.
  */
 
 import {

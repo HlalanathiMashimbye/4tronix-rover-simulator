@@ -39,7 +39,7 @@ function renderQueue(missions = QUEUE) {
   });
   return render(
     <SearchProvider>
-      <MissionQueue role="operator" />
+      <MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" />
     </SearchProvider>,
   );
 }

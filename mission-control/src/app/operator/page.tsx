@@ -3,8 +3,10 @@ import { ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
 
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
+import { YardChip } from '@/components/operator/YardChip';
+import { yardDirectory } from '@/infrastructure/config/yardDirectory';
+import { findYardIn, yardLabelOf } from '@/core/domain/entities/Yard';
 import { SignOutButton } from '@/components/operator/SignOutButton';
-import { YardPicker } from '@/components/operator/YardPicker';
 import { MissionQueue } from '@/components/operator/MissionQueue';
 
 /**
@@ -19,8 +21,10 @@ export default async function OperatorPage() {
   const session = await getOperatorSession();
 
   if (!session) {
-    return <OperatorSignIn />;
+    return <OperatorSignIn yards={await yardDirectory()} />;
   }
+
+  const yard = findYardIn(await yardDirectory(), session.yardId ?? undefined) ?? null;
 
   return (
     <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
@@ -39,9 +43,9 @@ export default async function OperatorPage() {
             <ShieldCheck className="h-3.5 w-3.5 text-primary" />
             {session.role}
           </span>
-          {/* A choice, not a permission. An operator is an operator anywhere;
-              the yard decides which queue they are looking at. */}
-          <YardPicker />
+          {/* Chosen at sign-in and fixed for the session, so this states where
+              they are rather than offering to change it. Clicking says how. */}
+          <YardChip yard={yard} />
 
           {/* Admins only. An operator has no use for it and the page redirects
               them anyway, so showing it would be an invitation to a dead end. */}
@@ -66,7 +70,17 @@ export default async function OperatorPage() {
           )}
         </div>
 
-        <MissionQueue role={session.role} />
+        {yard ? (
+          <MissionQueue role={session.role} yardId={yard.id} yardName={yardLabelOf(yard)} />
+        ) : (
+          // No yard on the session: one minted before the choice existed, or a
+          // yard retired since. Sending them to sign in again is the only
+          // honest option, because every write needs a yard to attribute to.
+          <p className="rounded-2xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
+            Sign out and back in to choose which yard you are at. Missions are recorded
+            against a yard, so the queue cannot be shown without one.
+          </p>
+        )}
 
         <div className="flex justify-end">
           <SignOutButton />

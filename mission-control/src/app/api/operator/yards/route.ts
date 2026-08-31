@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { adminYardRepository } from '@/infrastructure/container.server';
 import { yardIdComplaint } from '@/core/domain/entities/Yard';
+import { clearYardCache } from '@/infrastructure/config/yardDirectory';
 
 const addSchema = z.object({
   id: z.string().trim().min(1),
@@ -103,6 +104,10 @@ export async function POST(request: NextRequest) {
     addedBy: session.email ?? session.uid,
   });
 
+  // Otherwise the admin adds a yard and does not see it for up to a minute,
+  // which reads as the save having failed.
+  clearYardCache();
+
   return NextResponse.json({ success: true, yards: await repository.findAll() });
 }
 
@@ -127,6 +132,7 @@ export async function PATCH(request: NextRequest) {
   // Retiring, never deleting: the yard goes on resolving for every mission
   // ever run there, it just leaves the sign-in list.
   await repository.setActive(parsed.data.id, parsed.data.active);
+  clearYardCache();
 
   return NextResponse.json({ success: true, yards: await repository.findAll() });
 }
