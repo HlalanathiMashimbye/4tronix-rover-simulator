@@ -890,7 +890,11 @@
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    urlError.textContent = data.error || 'Save failed';
+                    if (resp.status === 401) {
+                        urlError.innerHTML = 'Operator sign-in required. <a href="/operator/login">Sign in</a> to change the rover path.';
+                    } else {
+                        urlError.textContent = data.error || 'Save failed';
+                    }
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
