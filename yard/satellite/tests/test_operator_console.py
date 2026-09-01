@@ -24,6 +24,7 @@ from console import camera, deps, mirror, notify  # noqa: E402
 import mission_store
 import store.db as store_db  # noqa: E402
 import recording_control  # noqa: E402
+import camera_control  # noqa: E402
 
 # The yard the seeded missions belong to, and the one the satellite defaults
 # to. Runs are keyed by it, so tests that assert on a run need it by name.
@@ -1474,7 +1475,6 @@ def test_camera_status_reports_unreachable_with_a_hint(client, missions, monkeyp
 def test_new_surfaces_require_an_operator(client, missions):
     assert client.post('/operator/api/missions/q1/cancel').status_code == 401
     assert client.get('/operator/api/integrations').status_code == 401
-    assert client.get('/operator/api/camera').status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -1559,11 +1559,34 @@ def test_a_deleted_mission_is_not_reconciled_or_dispatchable(client, missions, m
 # Camera control
 # ---------------------------------------------------------------------------
 
-def test_camera_start_requires_an_operator(client, missions):
-    """Spawning a process is the most powerful thing this console does, on a
-    network anyone at the venue can join."""
-    assert client.post('/operator/api/camera/start').status_code == 401
-    assert client.post('/operator/api/camera/stop').status_code == 401
+def test_camera_control_does_not_require_a_login(client, missions, monkeypatch):
+    """This used to be 401, on the grounds that spawning a process is the most
+    powerful thing the console does on an open venue network.
+
+    It is open now, deliberately. require_operator means a Firebase sign-in,
+    which means internet; /run/ refuses to record until the camera is primed;
+    so on a night with no wifi the camera could not be started and nothing
+    could be recorded. The offline path is the whole point of this box, and an
+    auth gate that only bites when the wifi is down protects nothing.
+
+    What actually guards this is unchanged: the command is hardcoded in
+    camera_control, so nothing from the request reaches a shell.
+    """
+    monkeypatch.setattr(camera_control, 'start', lambda camera_index=None: (True, 'started'))
+    monkeypatch.setattr(camera_control, 'stop', lambda: (True, 'stopped'))
+
+    assert client.post('/operator/api/camera/start').status_code == 200
+    assert client.post('/operator/api/camera/stop').status_code == 200
+    assert client.get('/operator/api/camera').status_code == 200
+
+
+def test_sending_a_mission_still_requires_an_operator(client, missions):
+    """Opening the camera did not open the console. Anything that moves the
+    rover or touches the queue still needs a signed-in operator."""
+    assert client.post('/operator/api/missions/q1/send').status_code == 401
+    assert client.post('/operator/api/missions/q1/stop').status_code == 401
+    assert client.post('/operator/api/missions/q1/complete').status_code == 401
+    assert client.get('/operator/api/missions').status_code == 401
 
 
 def test_camera_start_rejects_a_non_numeric_index(client, missions, monkeypatch):

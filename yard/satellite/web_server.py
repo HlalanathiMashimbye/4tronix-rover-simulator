@@ -369,6 +369,21 @@ def api_photo():
         return jsonify({'error': 'Rover server timeout'}), 504
 
 
+@app.route('/api/camera/ready', methods=['GET'])
+def api_camera_ready():
+    """Whether frames are actually arriving, not just whether the port is open.
+
+    /api/status answers the cheap question because it is polled every five
+    seconds by every open page. This is the expensive one, asked on demand by
+    the run station, because "primed" on an operator's screen has to mean the
+    thing that decides whether a recording contains anything.
+    """
+    from recording_control import is_ready
+
+    ready, detail = is_ready()
+    return jsonify({'ready': ready, 'detail': detail})
+
+
 @app.route('/api/recording/start', methods=['POST'])
 def api_recording_start():
     """Start recording a copy-paste run.

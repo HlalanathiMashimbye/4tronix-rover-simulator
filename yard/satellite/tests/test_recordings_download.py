@@ -165,6 +165,33 @@ class TestRunStation:
 
         assert 'MissionID: ${id}' in page
 
+    def test_it_offers_a_picker_and_a_download_not_a_wall_of_links(self, client):
+        """The operator has just recorded one thing and wants that one thing on
+        their device, so this is a choice plus an action, not a file listing."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert 'id="videoPick"' in page
+        assert 'id="videoGet"' in page
+        assert '/api/recordings/' in page
+
+    def test_every_identifier_can_be_copied(self, client):
+        """These buttons shipped with no handler at all: three controls that
+        looked live and did nothing."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        for field in ('missionName', 'missionId', 'runId'):
+            assert f'data-copy="{field}"' in page, field
+        assert 'querySelectorAll(\'[data-copy]\')' in page, 'the buttons need a handler'
+
+    def test_the_station_can_start_the_camera_itself(self, client):
+        """The station refuses to record until the camera is primed, so it has
+        to offer a way to prime it. Priming used to need a Firebase login,
+        which needs internet, on the page that exists for when there is none."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert 'id="camStart"' in page
+        assert '/operator/api/camera/start' in page
+
     def test_the_description_names_the_yard_that_ran_it(self, client, monkeypatch):
         """Given only a mission id the linker falls back to guessing which
         run the video belongs to - the most recent completed one without a
@@ -178,3 +205,36 @@ class TestRunStation:
 
         assert '"curiosity"' in page
         assert 'Yard: ${YARD_ID}' in page
+
+
+class TestCameraReadiness:
+    """"Primed" on an operator's screen has to mean frames are arriving.
+
+    /api/status answers only that the port is open, because it is polled every
+    five seconds by every open page. This is the expensive question, asked on
+    demand, and it is the one that decides whether a recording will contain
+    anything.
+    """
+
+    def test_it_reports_frames_arriving(self, client, monkeypatch):
+        monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+
+        body = client.get('/api/camera/ready').get_json()
+
+        assert body['ready'] is True
+
+    def test_it_reports_why_when_they_are_not(self, client, monkeypatch):
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (False, 'no frame received'))
+
+        body = client.get('/api/camera/ready').get_json()
+
+        assert body['ready'] is False
+        assert body['detail'] == 'no frame received'
+
+    def test_it_needs_no_login(self, client, monkeypatch):
+        """Same reason as everything else on this page: a check that only works
+        when the wifi is up is useless on the box built for when it is not."""
+        monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+
+        assert client.get('/api/camera/ready').status_code == 200

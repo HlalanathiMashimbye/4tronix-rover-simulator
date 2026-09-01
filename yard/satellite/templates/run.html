@@ -17,95 +17,129 @@
         @keyframes recpulse { 50% { opacity: 0.35; } }
         @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
         .step { color: var(--text-faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+        .run-desk { height: calc(100dvh - 62px); max-width: none !important; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.8rem; overflow: hidden; }
+        .run-desk .page-title { margin-top: 0.2rem; font-size: 1.6rem; }
+        .run-desk .page-sub { margin-top: 0.1rem; font-size: 0.78rem; }
+        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); gap: 0.8rem; }
+        .desk-card { min-height: 0; display: flex; flex-direction: column; padding: 1rem; background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 75%, var(--surface)), var(--surface)); }
+        .desk-card.left { gap: 0.7rem; overflow: hidden; }
+        .desk-card.right { gap: 0.7rem; }
+        .desk-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+        .desk-head .step { display: block; }
+        .desk-head strong { display: block; color: var(--text); font-size: 0.82rem; margin-top: 0.2rem; }
+        .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        .meta-field { min-width: 0; }
+        .meta-field.full { grid-column: 1 / -1; }
+        .meta-label { display: block; color: var(--text-faint); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem; }
+        .meta-row { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+        .meta-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-size: 0.76rem; }
+        .meta-value.name { font-family: var(--font-sans); }
+        /* Real inputs, not contenteditable spans: paste carries formatting into
+           a contenteditable, there is no placeholder, and "empty" ends up being
+           a string comparison against whatever prompt text was left in the DOM. */
+        input.meta-value { border: 0; background: none; padding: 0; min-height: 0; border-radius: 0; }
+        input.meta-value:focus { outline: none; }
+        input.meta-value::placeholder { color: var(--text-faint); }
+        .meta-row:focus-within { border-color: color-mix(in oklab, var(--primary) 55%, var(--border)); }
+        .status-box { flex-wrap: wrap; }
+        .status-box .btn { min-height: 26px !important; padding: 0.2rem 0.5rem !important; font-size: 0.65rem !important; margin-left: auto; }
+        .copy-compact { min-height: 28px !important; padding: 0.25rem 0.55rem !important; font-size: 0.68rem !important; }
+        .code-head { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; }
+        .code-hint { color: var(--text-faint); font-size: 0.68rem; text-align: right; }
+        .run-desk .run-code { flex: 1; min-height: 0; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 0.8rem; }
+        .run-desk .run-code::placeholder { color: var(--text-faint); }
+        .status-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        .status-box { display: flex; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+        .status-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--warn); }
+        .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14); }
+        .status-dot.bad { background: var(--bad); }
+        .status-name { color: var(--text); font-size: 0.78rem; font-weight: 700; }
+        .status-sub { color: var(--text-faint); display: block; font-size: 0.65rem; margin-top: 0.1rem; }
+        .warning-box { display: none; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in oklab, var(--warn) 9%, transparent); color: var(--warn); font-size: 0.7rem; font-weight: 600; }
+        .warning-box.show { display: block; }
+        .action-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.6rem; }
+        .action-row .btn { min-height: 52px; font-size: 0.95rem; font-weight: 700; }
+        .action-row .run-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+        .action-row .stop-action { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); }
+        /* Stretches to the bottom of the column so the station does not end in
+           a block of dead space, and the video picker gets the wider half:
+           a recording filename is long and it is the thing being chosen. */
+        .handoff-grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.7rem; min-height: 0; }
+        .handoff-card { min-width: 0; display: flex; flex-direction: column; }
+        .handoff-card .yt-box { flex: 1; }
+        .video-controls { display: flex; gap: 0.45rem; align-items: center; margin-top: 0.55rem; }
+        .video-controls select { min-width: 0; flex: 1; min-height: 36px; }
+        .run-desk .yt-box { min-height: 70px; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
+        .run-desk .sync-field { margin-bottom: 0.45rem; }
+        .run-desk .hub-note { display: none; }
+        @media (max-width: 900px) { .run-desk { height: auto; min-height: calc(100dvh - 62px); overflow: visible; } .desk-grid { grid-template-columns: 1fr; } .desk-card.left { min-height: 520px; } .handoff-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 520px) { .mission-meta, .status-row, .action-row { grid-template-columns: 1fr; } .meta-field.full { grid-column: auto; } .code-hint { display: none; } }
     </style>
 </head>
 <body class="console">
     {% set nav_active = 'run' %}{% include "_nav.html" %}
 
-    <main class="page" style="max-width: 1080px;">
-        <div class="eyebrow">Station</div>
-        <h1 class="page-title">Run a mission</h1>
-        <p class="page-sub">Everything for one mission, from the code you copied to the video you hand back. Closing the mission itself happens in Mission Control.</p>
+    <main class="page run-desk">
+        <div>
+            <div class="eyebrow">Station</div>
+            <h1 class="page-title">Run a mission</h1>
+            <p class="page-sub">Everything for one mission, right here. Closing the mission happens in Mission Control.</p>
+        </div>
 
-        <div class="run-grid">
-            <div style="display:flex; flex-direction:column; gap:1rem;">
-                <div class="card">
-                    <span class="step">Step 1</span>
-                    <h3 class="h-card" style="margin-top:0.3rem;">The mission</h3>
+        <div class="desk-grid">
+            <section class="card desk-card left">
+                <div class="desk-head">
+                    <div><span class="step">Step 1 / The mission</span><strong>Import, review, send</strong></div>
+                    <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
+                </div>
+                <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
+                <div class="mission-meta">
+                    <div class="meta-field"><span class="meta-label">Mission name</span><div class="meta-row"><input class="meta-value name" id="missionName" type="text" aria-label="Mission name" placeholder="Lunar Mapper" autocomplete="off"><button class="btn copy-compact" type="button" data-copy="missionName">Copy</button></div></div>
+                    <div class="meta-field"><span class="meta-label">Mission ID</span><div class="meta-row"><input class="meta-value" id="missionId" type="text" aria-label="Mission ID" placeholder="from Mission Control" autocomplete="off" spellcheck="false"><button class="btn copy-compact" type="button" data-copy="missionId">Copy</button></div></div>
+                    <div class="meta-field full"><span class="meta-label">Run ID, which is also what the recording is called</span><div class="meta-row"><span class="meta-value" id="runId">Waiting for the mission ID</span><button class="btn copy-compact" type="button" data-copy="runId">Copy</button></div></div>
+                </div>
+                <div class="code-head"><span class="meta-label" style="margin:0;">Python</span><span class="code-hint">Review before sending. This is exactly what the rover runs.</span></div>
+                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
+            </section>
 
-                    <div class="row" style="margin-bottom:0.7rem;">
-                        <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
-                        <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
+            <div class="desk-card right">
+                <section class="card">
+                    <div class="desk-head"><div><span class="step">Step 2 / Run</span><strong>Record first, then send</strong></div><span class="tag" id="runState">Ready</span></div>
+                    <div class="status-row">
+                        <div class="status-box" id="cameraReady"><span class="status-dot"></span><div><span class="status-name">Camera</span><span class="status-sub">Checking...</span></div><button class="btn" id="camStart" type="button" hidden>Start camera</button></div>
+                        <div class="status-box" id="roverReady"><span class="status-dot"></span><div><span class="status-name">Rover</span><span class="status-sub">Checking...</span></div></div>
                     </div>
+                    <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
+                    <div class="action-row"><button class="btn run-primary" id="runBtn" type="button">Send to rover</button><button class="btn stop-action" id="stopBtn" type="button">Stop rover</button></div>
+                    <div class="row" style="margin-top:0.55rem;"><button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button><span class="camera-msg" id="runMsg" style="margin-top:0;"></span></div>
+                </section>
 
-                    <label class="sync-field">
-                        <span class="sync-label">Mission ID</span>
-                        <input type="text" id="missionId" spellcheck="false" placeholder="from Mission Control">
-                        <span class="sync-hint">This is what links the YouTube upload back to the mission. Copy it from the mission in Mission Control.</span>
-                    </label>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Mission name</span>
-                        <input type="text" id="missionName" spellcheck="false" placeholder="Lunar Mapper">
-                    </label>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Python</span>
-                        <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
-                    </label>
-                </div>
-
-                <div class="card">
-                    <span class="step">Step 2</span>
-                    <h3 class="h-card" style="margin-top:0.3rem;">Record, then run</h3>
-                    <p class="sync-hint" style="margin:0 0 0.7rem;">Start recording before you send it, so the rover's first move is in the video.</p>
-                    <div class="row">
-                        <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
-                        <button class="btn primary" id="runBtn" type="button">Send to rover</button>
-                        <button class="btn" id="stopBtn" type="button">Stop rover</button>
-                    </div>
-                    <div class="camera-msg" id="runMsg" style="margin-top:0.6rem;"></div>
-                </div>
-            </div>
-
-            <div style="display:flex; flex-direction:column; gap:1rem;">
-                <div class="card">
-                    <span class="step">Step 3</span>
-                    <h3 class="h-card" style="margin-top:0.3rem;">Take the video</h3>
-                    <p class="sync-hint" style="margin:0 0 0.7rem;">Saves to this device over the local network. No internet needed.</p>
-                    <div id="recordings"><span class="skel"></span></div>
-                </div>
-
-                <div class="card">
-                    <span class="step">Step 4</span>
-                    <h3 class="h-card" style="margin-top:0.3rem;">Upload to YouTube</h3>
-                    <p class="sync-hint" style="margin:0 0 0.7rem;">Paste this as the video's description in YouTube Studio. The MissionID and Yard lines are what make the platform find the upload and attach it to this yard's run on its own, so nobody has to paste a link back.</p>
-                    <label class="sync-field">
-                        <span class="sync-label">Title</span>
-                        <input type="text" id="ytTitle" readonly>
-                    </label>
-                    <label class="sync-field">
-                        <span class="sync-label">Description</span>
+                <div class="handoff-grid">
+                    <section class="card handoff-card">
+                        <div class="desk-head"><div><span class="step">Step 3 / Take the video</span><strong>Saved recording</strong></div></div>
+                        <p class="sync-hint" style="margin-top:0.45rem;">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</p>
+                        <div class="video-controls">
+                            <select id="videoPick" aria-label="Saved recording"><option value="">Loading...</option></select>
+                            <button class="btn primary" id="videoGet" type="button" disabled>Download</button>
+                        </div>
+                        <span class="camera-msg" id="videoMsg" style="margin-top:0.4rem;"></span>
+                    </section>
+                    <section class="card handoff-card">
+                        <div class="desk-head"><div><span class="step">Step 4 / Upload</span><strong>YouTube description</strong></div></div>
                         <textarea class="yt-box" id="ytDesc" readonly></textarea>
-                    </label>
-                    <div class="row">
-                        <button class="btn primary" id="ytCopy" type="button">Copy description</button>
-                        <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
-                    </div>
+                        <div class="row" style="margin-top:0.45rem;"><button class="btn primary" id="ytCopy" type="button">Copy description</button><span class="camera-msg" id="ytMsg" style="margin-top:0;"></span></div>
+                        <input type="text" id="ytTitle" readonly hidden>
+                    </section>
                 </div>
             </div>
         </div>
-
-        <p class="hub-note">
-            Mark the mission complete in Mission Control, not here. Two places to close a mission is
-            how one ends up completed in one and still running in the other.
-        </p>
+        <p class="hub-note">Mark the mission complete in Mission Control, not here.</p>
     </main>
 
 <script>
 (function () {
     const $ = (id) => document.getElementById(id);
-    const missionId = $('missionId'), missionName = $('missionName'), code = $('code');
+    const missionId = $('missionId'), missionName = $('missionName'), runId = $('runId'), code = $('code');
     let recordingName = null;
 
     function flash(el, text, tone) {
@@ -164,15 +198,134 @@
     const YARD_ID = {{ yard_id | tojson }};
 
     function paintYouTube() {
-        const id = missionId.value.trim();
-        const name = missionName.value.trim() || 'Rover mission';
+        const id = metaValue(missionId);
+        const name = metaValue(missionName) || 'Rover mission';
         $('ytTitle').value = `${name} · Mars Yard rover run`;
         $('ytDesc').value = id
             ? `${name}, driven by a real rover at the Mars Yard.\n\nMissionID: ${id}\nYard: ${YARD_ID}`
             : 'Fill in the Mission ID above and this becomes the description to paste.';
     }
-    missionId.addEventListener('input', paintYouTube);
+    function metaValue(element) {
+        return ('value' in element ? element.value : element.textContent).trim();
+    }
+
+    // One run per yard, so the mission and the yard together identify the run
+    // exactly - and that pair is already what recording_control names the file
+    // <mission>__<yard>.mp4. Showing it here is not a second identifier, it is
+    // the one the operator will see again on the video they download.
+    function updateRunIdentity() {
+        const id = metaValue(missionId);
+        runId.textContent = id ? `${id}__${YARD_ID}` : 'Waiting for the mission ID';
+        paintYouTube();
+    }
+    missionId.addEventListener('input', updateRunIdentity);
     missionName.addEventListener('input', paintYouTube);
+
+    // The Copy buttons had no handler at all: three buttons that looked live
+    // and did nothing.
+    document.querySelectorAll('[data-copy]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const text = metaValue($(btn.dataset.copy));
+            if (!text) return;
+            const original = btn.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                btn.textContent = 'Copied';
+            } catch (e) {
+                // Plain HTTP on a LAN address is not a secure context, so the
+                // clipboard API is unavailable on the machine this runs on.
+                const field = $(btn.dataset.copy);
+                if (field.select) { field.select(); } else {
+                    const range = document.createRange();
+                    range.selectNodeContents(field);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges(); sel.addRange(range);
+                }
+                btn.textContent = 'Ctrl-C';
+            }
+            setTimeout(() => { btn.textContent = original; }, 1600);
+        });
+    });
+
+    function paintStatus(id, ok, label) {
+        const box = $(id);
+        box.querySelector('.status-dot').className = `status-dot ${ok ? 'ok' : 'bad'}`;
+        box.querySelector('.status-sub').textContent = label;
+    }
+    // Two different questions about the camera, and the difference is the
+    // whole point of this indicator. /api/status says only that the port is
+    // open, which is cheap enough to poll every five seconds. Whether frames
+    // are actually arriving costs a websocket probe, so it is asked here on
+    // demand - and it is the one that decides whether a recording will
+    // contain anything, so it is what "Primed" is allowed to mean.
+    // null, not false: the first snapshot has to count as a change, or a
+    // station that opens with the camera already down sits on "Checking..."
+    // for ever and never tells the operator anything.
+    let cameraListening = null, cameraPrimed = false, roverOk = false;
+
+    function paintCamera(sub) {
+        paintStatus('cameraReady', cameraPrimed, sub);
+        $('camStart').hidden = cameraPrimed;
+        $('runWarning').classList.toggle('show', !cameraPrimed || !roverOk);
+    }
+
+    async function checkPrimed() {
+        if (!cameraListening) {
+            cameraPrimed = false;
+            return paintCamera('Warning: camera is not running');
+        }
+        paintCamera('Checking the feed...');
+        try {
+            const d = await (await fetch('/api/camera/ready')).json();
+            cameraPrimed = !!d.ready;
+            paintCamera(cameraPrimed ? 'Primed, frames arriving' : 'Warning: no frames from the camera');
+        } catch (e) {
+            cameraPrimed = false;
+            paintCamera('Warning: could not check the camera');
+        }
+    }
+
+    $('camStart').addEventListener('click', async () => {
+        const btn = $('camStart');
+        btn.disabled = true;
+        paintCamera('Starting the camera...');
+        try {
+            const resp = await fetch('/operator/api/camera/start', { method: 'POST' });
+            if (!resp.ok) throw new Error(((await resp.json()) || {}).error || 'Could not start the camera');
+            // It needs a moment to bind before frames flow, so the readiness
+            // question is asked after a pause rather than immediately.
+            setTimeout(checkPrimed, 2500);
+        } catch (e) {
+            cameraPrimed = false;
+            paintCamera(e.message);
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    if (window.YardStatus) {
+        YardStatus.subscribe((snapshot) => {
+            const listening = !!(snapshot.camera && snapshot.camera.reachable);
+            roverOk = !!(snapshot.rover && snapshot.rover.reachable && (snapshot.rover.status == null || snapshot.rover.status === 'ok'));
+            paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Warning: rover unavailable');
+            $('runBtn').disabled = !roverOk;
+            // Only re-probe when the cheap answer actually changed, so an idle
+            // station is not opening a camera connection every five seconds.
+            if (listening !== cameraListening) {
+                cameraListening = listening;
+                checkPrimed();
+            } else {
+                $('runWarning').classList.toggle('show', !cameraPrimed || !roverOk);
+            }
+        });
+        YardStatus.onError(() => {
+            roverOk = false;
+            cameraListening = false; cameraPrimed = false;
+            paintStatus('roverReady', false, 'Warning: status unavailable');
+            paintCamera('Warning: status unavailable');
+            $('runBtn').disabled = true;
+        });
+    }
 
     $('ytCopy').addEventListener('click', async () => {
         const text = $('ytDesc').value;
@@ -188,7 +341,7 @@
 
     // ---- Step 2: record and run ---------------------------------------
     function runName() {
-        return (missionId.value.trim() || missionName.value.trim() || 'run');
+        return (metaValue(missionId) || metaValue(missionName) || 'run');
     }
 
     $('recBtn').addEventListener('click', async () => {
@@ -257,23 +410,50 @@
         return (n / 1024 / 1024).toFixed(1) + ' MB';
     }
 
+    // A list of download links became a picker because the operator is not
+    // browsing: they have just recorded one thing and want that one thing on
+    // their device. The newest is preselected for the same reason.
+    //
+    // Kamo is working out a curl the operator runs from their own machine to
+    // pull straight into Downloads. Until that lands this is the real path,
+    // not a stand-in: /api/recordings/<name> serves the file over the LAN and
+    // the browser saves it. The curl replaces the transport, not the picker.
     async function loadRecordings() {
-        const box = $('recordings');
+        const pick = $('videoPick'), get = $('videoGet');
         try {
             const resp = await fetch('/api/recordings');
             const list = (await resp.json()).recordings || [];
             if (!list.length) {
-                box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
+                pick.innerHTML = '<option value="">Nothing recorded yet</option>';
+                pick.disabled = true; get.disabled = true;
                 return;
             }
-            box.innerHTML = list.slice(0, 8).map((r) =>
-                '<div class="kv"><a class="k" style="text-decoration:none" download href="/api/recordings/'
-                + encodeURIComponent(r.name) + '">' + r.name + '</a>'
-                + '<span class="v">' + humanBytes(r.bytes) + '</span></div>').join('');
+            pick.disabled = false; get.disabled = false;
+            pick.innerHTML = list.map((r) => {
+                const opt = document.createElement('option');
+                opt.value = r.name;
+                opt.textContent = `${r.name}  (${humanBytes(r.bytes)})`;
+                return opt.outerHTML;
+            }).join('');
         } catch (e) {
-            box.innerHTML = '<div class="kv"><span class="k">Could not read recordings</span></div>';
+            pick.innerHTML = '<option value="">Could not read recordings</option>';
+            pick.disabled = true; get.disabled = true;
         }
     }
+
+    $('videoGet').addEventListener('click', () => {
+        const name = $('videoPick').value;
+        if (!name) return;
+        // A link click rather than fetch: this hands the file to the browser's
+        // own download machinery, which is what puts it in Downloads.
+        const a = document.createElement('a');
+        a.href = '/api/recordings/' + encodeURIComponent(name);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        flash($('videoMsg'), 'Saving ' + name, 'ok');
+    });
 
     paintYouTube();
     loadRecordings();
