@@ -107,6 +107,33 @@ class TestRecordingACopyPasteRun:
     def test_stop_refuses_without_a_name(self, client):
         assert client.post('/api/recording/stop', json={}).status_code == 400
 
+    def test_start_refuses_when_the_camera_is_not_producing_frames(
+            self, client, monkeypatch):
+        """The gate console/missions.py puts in front of a queued dispatch.
+        Without it the manual loop is the one path that reports 'recording'
+        with nothing arriving, and the operator finds out at the end of the
+        night when there is no file to hand over."""
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (False, 'no frame received'))
+        started = []
+        monkeypatch.setattr(recording_control, 'start_recording',
+                            lambda *a: started.append(a) or (True, 'x'))
+
+        resp = client.post('/api/recording/start', json={'name': 'm1'})
+
+        assert resp.status_code == 503
+        assert 'no frame received' in resp.get_json()['error']
+        assert started == [], 'refused, so nothing should have been started'
+
+    def test_start_records_once_frames_are_flowing(self, client, monkeypatch):
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (True, None))
+
+        resp = client.post('/api/recording/start', json={'name': 'm1'})
+
+        assert resp.status_code == 200
+        assert resp.get_json()['name'] == 'm1'
+
 
 class TestRunStation:
     """The operator's station for one mission: import, record, download, and
@@ -137,3 +164,17 @@ class TestRunStation:
         page = client.get('/run/').get_data(as_text=True)
 
         assert 'MissionID: ${id}' in page
+
+    def test_the_description_names_the_yard_that_ran_it(self, client, monkeypatch):
+        """Given only a mission id the linker falls back to guessing which
+        run the video belongs to - the most recent completed one without a
+        video. That is right until two yards run the same mission on one
+        evening, and then it swaps their footage. Naming the yard is what
+        removes the guess, so the page has to actually emit the line."""
+        import satellite_identity
+        monkeypatch.setattr(satellite_identity, 'yard_id', lambda: 'curiosity')
+
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert '"curiosity"' in page
+        assert 'Yard: ${YARD_ID}' in page

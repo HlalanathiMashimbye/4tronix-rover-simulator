@@ -24,12 +24,21 @@
         <p class="page-sub">This satellite talks to the rover over the local network. Everything here works without internet.</p>
 
         <div class="stations">
-            <a class="station hero" href="/code/">
+            <a class="station hero" href="/run/">
+                <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></span>
+                <span class="station-body">
+                    <span class="station-title">Run</span>
+                    <span class="station-desc">One mission end to end: paste the code, record it, and take the video away to upload.</span>
+                    <span class="station-meta"><span class="tag accent">Start here</span><span class="arrow" aria-hidden="true">&rarr;</span></span>
+                </span>
+            </a>
+
+            <a class="station" href="/code/">
                 <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
                 <span class="station-body">
                     <span class="station-title">Code</span>
-                    <span class="station-desc">Paste a mission from Mission Control and run it on the rover. Blocks or Python.</span>
-                    <span class="station-meta"><span class="tag accent">Run a mission</span><span class="arrow" aria-hidden="true">&rarr;</span></span>
+                    <span class="station-desc">The editor on the tablet. Build a mission in blocks, or write the Python.</span>
+                    <span class="station-meta"><span class="tag">For the tablet</span><span class="arrow" aria-hidden="true">&rarr;</span></span>
                 </span>
             </a>
 
@@ -54,7 +63,7 @@
 
         <p class="hub-note">
             Missions are created and closed in Mission Control. Here you paste the code, run it,
-            and take the recording away afterwards from Settings. This satellite is reachable on
+            and take the recording away afterwards. This satellite is reachable on
             the local network at <span class="mono">{{ server_ip }}:{{ server_port }}</span>.
         </p>
     </main>

@@ -114,16 +114,6 @@ app.register_blueprint(operator_console.operator_bp)
 ROVER_TIMEOUT = 5.0
 
 
-def _check_camera():
-    """Try TCP connect to localhost:CAMERA_PORT. Returns True if up."""
-    try:
-        s = socket.create_connection(('127.0.0.1', CAMERA_PORT), timeout=1.0)
-        s.close()
-        return True
-    except Exception:
-        return False
-
-
 @app.route('/')
 def index():
     """The station hub.
@@ -161,7 +151,9 @@ def run_station():
     Login-free like the rest of the console, for the same reason: none of this
     can depend on reaching Firebase.
     """
-    return render_template('run.html', server_ip=_local_ip(), server_port=SERVER_PORT)
+    from satellite_identity import yard_id
+    return render_template('run.html', server_ip=_local_ip(),
+                           server_port=SERVER_PORT, yard_id=yard_id())
 
 
 @app.route('/settings')
@@ -201,8 +193,13 @@ def api_status():
     except Exception:
         pass
 
+    # Only that the camera process is accepting connections. Whether frames
+    # are actually flowing costs a websocket probe, which is too much to spend
+    # every 5 seconds on every open page - the recording start pays for that
+    # answer at the one moment it changes the outcome.
+    from camera_control import is_listening
     camera = {
-        'reachable': _check_camera(),
+        'reachable': is_listening(port=CAMERA_PORT),
         'port': CAMERA_PORT,
     }
 
@@ -385,13 +382,25 @@ def api_recording_start():
     mission. Whatever they type is what the file is called and what they will
     recognise later when matching it to a mission in Mission Control.
     """
-    from recording_control import start_recording
+    from recording_control import is_ready, start_recording
     from satellite_identity import yard_id
 
     data = request.get_json(silent=True) or {}
     name = _recording_name(data.get('name'))
     if not name:
         return jsonify({'error': 'Give the recording a name'}), 400
+
+    # The same gate console/missions.py puts in front of a queued dispatch.
+    # Without it the manual loop was the one path that would happily report
+    # 'recording' with no frames arriving, and the operator found out at the
+    # end of the night when there was no file to upload. A camera that is
+    # merely listening is not a camera that is recording.
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'you run - a run with no video cannot be handed over later.',
+        }), 503
 
     ok, detail = start_recording(name, yard_id())
     if not ok:

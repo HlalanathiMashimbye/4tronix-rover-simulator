@@ -79,7 +79,7 @@
                 <div class="card">
                     <span class="step">Step 4</span>
                     <h3 class="h-card" style="margin-top:0.3rem;">Upload to YouTube</h3>
-                    <p class="sync-hint" style="margin:0 0 0.7rem;">Paste this as the video's description in YouTube Studio. The MissionID line is what makes the platform find the upload and attach it to the mission on its own, so nobody has to paste a link back.</p>
+                    <p class="sync-hint" style="margin:0 0 0.7rem;">Paste this as the video's description in YouTube Studio. The MissionID and Yard lines are what make the platform find the upload and attach it to this yard's run on its own, so nobody has to paste a link back.</p>
                     <label class="sync-field">
                         <span class="sync-label">Title</span>
                         <input type="text" id="ytTitle" readonly>
@@ -151,14 +151,24 @@
     $('importBtn').addEventListener('click', async () => applyImport(await readClipboard()));
 
     // ---- Step 4: the description that links the upload ----------------
-    // "MissionID: <id>" is matched literally by the auto-linker, so it is
-    // built here rather than typed by hand at the end of a long day.
+    // "MissionID: <id>" and "Yard: <id>" are both matched literally by the
+    // auto-linker, so they are built here rather than typed by hand at the
+    // end of a long day.
+    //
+    // The yard line is not decoration. A mission can be run at more than one
+    // yard, and the linker has to attach this video to the run that produced
+    // it. Given only a mission id it falls back to guessing - the most recent
+    // completed run without a video - which is right until two yards run the
+    // same mission on the same evening, and then it silently swaps their
+    // footage. Naming the yard is what removes the guess.
+    const YARD_ID = {{ yard_id | tojson }};
+
     function paintYouTube() {
         const id = missionId.value.trim();
         const name = missionName.value.trim() || 'Rover mission';
         $('ytTitle').value = `${name} · Mars Yard rover run`;
         $('ytDesc').value = id
-            ? `${name}, driven by a real rover at the Mars Yard.\n\nMissionID: ${id}`
+            ? `${name}, driven by a real rover at the Mars Yard.\n\nMissionID: ${id}\nYard: ${YARD_ID}`
             : 'Fill in the Mission ID above and this becomes the description to paste.';
     }
     missionId.addEventListener('input', paintYouTube);

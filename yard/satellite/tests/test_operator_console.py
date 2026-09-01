@@ -296,8 +296,14 @@ def test_root_opens_the_station_hub_without_a_session(client):
     page = resp.get_data(as_text=True)
 
     assert resp.status_code == 200
-    for station in ('/code/', '/monitor/', '/settings'):
-        assert station in page
+    # Scoped to the cards, not the whole page: the nav bar links all of these
+    # too, so an unscoped search passes even with the hub emptied out. /run/
+    # is in this list because it was missing - the hub was written before the
+    # run station existed and never learned about it, leaving the operator's
+    # own station reachable only from the nav.
+    cards = page.split('class="stations"', 1)[1].split('</div>', 1)[0]
+    for station in ('/run/', '/code/', '/monitor/', '/settings'):
+        assert station in cards, station
 
 
 def test_root_does_not_send_anyone_to_a_login(client):
