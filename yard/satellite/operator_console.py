@@ -21,12 +21,6 @@ Configuration (environment):
   OPERATOR_SESSION_SECRET
       Optional. Stable Flask session secret; unset means sessions reset
       when the server restarts (operators just log in again).
-  YOUTUBE_API_KEY / YOUTUBE_CHANNEL_ID
-      Optional. Powers the background poll (start_polling/check_for_new_videos)
-      that auto-links a completed mission to its YouTube upload by matching
-      "MissionID: <id>" in the video description. Either unset disables the
-      poll (it logs and no-ops) - manual "attach YouTube URL" still works
-      without these.
   MISSION_CONTROL_URL
       Optional. Base URL of the mission-control web app, used to fire a
       best-effort POST /api/missions/<id>/notify after a status change so the
@@ -46,7 +40,6 @@ The package is named `console` and this file `operator_console` for the same
 reason: neither may shadow Python's stdlib `operator` module.
 """
 
-import youtube_poll
 from console import (  # noqa: F401
     auth, camera, config, deps, health, mirror, missions, notify, review,
 )
@@ -62,15 +55,3 @@ from console.blueprint import operator_bp
 MISSIONS_COLLECTION = 'missions'
 
 
-# YouTube auto-linking lives in youtube_poll.py. These two wrappers stay so
-# the console remains the one place that knows how to reach Firebase, and so
-# the names web_server.py and the tests already use keep working.
-
-def check_for_new_videos():
-    """Run one YouTube poll, using this module's Firestore accessor."""
-    return youtube_poll.check_for_new_videos(deps.firestore_client, MISSIONS_COLLECTION)
-
-
-def start_polling():
-    """Start the five-minute YouTube poll loop."""
-    youtube_poll.poll_forever(check_for_new_videos)

@@ -510,8 +510,6 @@ if __name__ == '__main__':
     # Run the YouTube-poll loop in the background so a slow/unreachable
     # YouTube API call can't delay the tablet/monitor/rover proxy from
     # coming up - those are local and time-critical, this isn't.
-    from operator_console import start_polling
-    threading.Thread(target=start_polling, daemon=True).start()
     from mission_store import init_db
     from sync_worker import start_sync_worker
 
@@ -544,7 +542,7 @@ if __name__ == '__main__':
     # starts syncing at all, so missions run offline would sit in the outbox
     # until someone restarted the process.
     #
-    # Same reasoning as start_polling above: the first pull is a synchronous
+    # The first pull is a synchronous
     # Firestore call, so it must not block server startup.
     threading.Thread(
         target=start_sync_worker, args=(deps.firestore_client,),

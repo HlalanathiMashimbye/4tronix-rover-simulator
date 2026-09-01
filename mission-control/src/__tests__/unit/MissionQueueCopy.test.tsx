@@ -20,6 +20,9 @@ const subscribeToYardQueue = jest.fn();
 
 jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToYardQueue: (...args: unknown[]) => subscribeToYardQueue(...args),
+  // Selecting a mission subscribes to its runs across yards. Not what these
+  // tests are about, so it is a no-op unsubscribe.
+  subscribeToMissionRuns: () => () => {},
 }));
 
 jest.mock('@/components/mission/BlocklyViewer', () => ({
@@ -54,7 +57,7 @@ describe('copying a mission to paste into the yard', () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    render(<SearchProvider><MissionQueue role="operator" /></SearchProvider>);
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     // waitFor, not a bare assertion: the copy is async and sets state after it
@@ -69,7 +72,7 @@ describe('copying a mission to paste into the yard', () => {
   it('confirms, so the operator knows to switch tabs', async () => {
     Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
 
-    render(<SearchProvider><MissionQueue role="operator" /></SearchProvider>);
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument());
@@ -83,7 +86,7 @@ describe('copying a mission to paste into the yard', () => {
     });
     const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
 
-    render(<SearchProvider><MissionQueue role="operator" /></SearchProvider>);
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() =>
@@ -95,7 +98,7 @@ describe('copying a mission to paste into the yard', () => {
   it('cannot copy a mission with no code', async () => {
     emitQueue([{ ...MISSION, code: '' }]);
 
-    render(<SearchProvider><MissionQueue role="operator" /></SearchProvider>);
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
     expect(await screen.findByRole('button', { name: /copy/i })).toBeDisabled();
   });

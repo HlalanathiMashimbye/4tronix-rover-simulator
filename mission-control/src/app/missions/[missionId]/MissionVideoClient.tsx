@@ -12,7 +12,7 @@ import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { yardLabel } from '@/infrastructure/config/yards';
+import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
@@ -20,7 +20,13 @@ import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
 
 
-export default function MissionVideoClient({ missionId }: { missionId: string }) {
+export default function MissionVideoClient({
+  missionId,
+  yards,
+}: {
+  missionId: string;
+  yards: Yard[];
+}) {
   const router = useRouter();
   const [mission, setMission] = useState<Mission | null>(null);
   // Every yard's attempt, so the carousel can show more than the one video the
@@ -46,8 +52,8 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   // Real runs come FIRST, which is the point: a child needs to see that an
   // actual rover drove their code. See lib/missionRuns for the reasoning.
   const runs = useMemo<RunOption[]>(
-    () => buildRunOptions(mission, missionRuns),
-    [mission, missionRuns],
+    () => buildRunOptions(mission, missionRuns, yards),
+    [mission, missionRuns, yards],
   );
 
   useEffect(() => {
@@ -162,7 +168,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 internal key and means nothing to them. An unrecognised yard
                 shows nothing rather than falling back to the id. */}
             <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {yardLabel(mission.yardId) ? `${yardLabel(mission.yardId)} · ` : ''}
+              {(() => {
+                const yard = findYardIn(yards, mission.yardId);
+                return yard ? `${yardLabelOf(yard)} · ` : '';
+              })()}
               {dateLabel}
             </span>
           </div>

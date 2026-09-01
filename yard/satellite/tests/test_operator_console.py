@@ -46,7 +46,6 @@ FakeQueryCollection = FakeCollection
 FakeQueryFirestore = FakeFirestore
 
 
-
 class FakeResponse:
     def __init__(self, status_code=200, payload=None):
         self.status_code = status_code
@@ -317,8 +316,6 @@ def test_operator_root_redirects_to_the_queue(client):
     resp = client.get('/operator/')
     assert resp.status_code == 302
     assert resp.headers['Location'].endswith('/')
-
-
 
 
 def test_mission_page_redirects_to_login_without_session(client):
@@ -899,156 +896,6 @@ def youtube_env(monkeypatch):
     monkeypatch.setenv('YOUTUBE_CHANNEL_ID', 'UCabc123')
 
 
-def test_poll_links_mission_with_no_youtube_field_at_all(missions, firestore_missions, monkeypatch, youtube_env):
-    # c1 is completed and has never had a youtubeUrl key written at all -
-    # this is what a real first-run completion looks like (mission-control
-    # never writes the field, and api_mark_complete doesn't touch it).
-    assert 'youtubeUrl' not in firestore_missions['c1']
-    monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: fake_playlist_response('c1'),
-    )
-
-    operator_console.check_for_new_videos()
-
-    assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=vid123'
-
-
-def test_poll_skips_missions_that_already_have_a_link(missions, monkeypatch, youtube_env):
-    """Candidates come from the mirror now, so that is where 'already linked'
-    has to be true - and with nothing outstanding the poll must not spend a
-    Firestore read or a YouTube call."""
-    missions['c1'].update({'youtubeUrl': 'https://www.youtube.com/watch?v=already-linked'})
-    monkeypatch.setattr(
-        deps, 'firestore_client',
-        lambda: pytest.fail('Firestore must not be read to build the candidate list'),
-    )
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: pytest.fail('YouTube API must not be called when nothing is unlinked'),
-    )
-
-    operator_console.check_for_new_videos()
-
-    assert missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=already-linked'
-
-
-def test_poll_never_reads_firestore_to_find_candidates(missions, firestore_missions, monkeypatch, youtube_env):
-    """The whole point of the change: the candidate list is free. Firestore is
-    touched only to write a link that was actually found."""
-    reads = []
-
-    class CountingFirestore(FakeQueryFirestore):
-        def collection(self, name):
-            reads.append(name)
-            return super().collection(name)
-
-    monkeypatch.setattr(deps, 'firestore_client', lambda: CountingFirestore(firestore_missions))
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: FakeResponse(200, {'items': [{
-            'snippet': {'description': 'nothing matching here', 'resourceId': {'videoId': 'vid999'}},
-        }]}),
-    )
-
-    operator_console.check_for_new_videos()
-
-    # c1 is unlinked, so the YouTube call happens - but no video matched, so
-    # Firestore was never reached at all.
-    assert reads == []
-
-
-def test_poll_skips_entirely_when_credentials_missing(missions, monkeypatch):
-    monkeypatch.delenv('YOUTUBE_API_KEY', raising=False)
-    monkeypatch.delenv('YOUTUBE_CHANNEL_ID', raising=False)
-    monkeypatch.setattr(
-        deps, 'firestore_client',
-        lambda: pytest.fail('must not touch Firestore without credentials'),
-    )
-
-    operator_console.check_for_new_videos()
-
-
-def test_poll_survives_youtube_api_error_response(missions, firestore_missions, monkeypatch, youtube_env):
-    monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-    monkeypatch.setattr(requests, 'get', lambda *a, **k: FakeResponse(500))
-
-    operator_console.check_for_new_videos()
-
-    assert 'youtubeUrl' not in firestore_missions['c1']
-
-
-def test_poll_survives_youtube_network_error(missions, firestore_missions, monkeypatch, youtube_env):
-    monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-
-    def fake_get(*a, **k):
-        raise requests.exceptions.ConnectionError()
-
-    monkeypatch.setattr(requests, 'get', fake_get)
-
-    operator_console.check_for_new_videos()
-
-    assert 'youtubeUrl' not in firestore_missions['c1']
-
-
-def test_poll_survives_firestore_error(missions, monkeypatch, youtube_env):
-    """A Firestore failure must not propagate out of the poll.
-
-    Rewritten for where Firestore is now actually touched. This used to fail
-    the very first call, because the poll opened by streaming every completed
-    mission out of Firestore to find its candidates. It reads those from the
-    local mirror now, so the only Firestore call left is the write that
-    records a link - and that is the call this has to prove is survivable.
-    """
-    monkeypatch.setattr(
-        deps, 'firestore_client',
-        lambda: (_ for _ in ()).throw(RuntimeError('firestore unavailable')),
-    )
-    # c1 is completed with no video, so it IS a candidate: the poll gets as far
-    # as matching a video and attempting the write, rather than returning early
-    # with nothing to do and passing for the wrong reason.
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: FakeResponse(200, {'items': [{
-            'snippet': {
-                'description': f'MissionID: c1',
-                'resourceId': {'videoId': 'vid123'},
-            },
-        }]}),
-    )
-
-    operator_console.check_for_new_videos()  # must not raise
-
-    # The link was not recorded, so c1 stays a candidate and the next poll
-    # retries it - losing the video silently would be worse than not linking it.
-    from mission_store import completed_without_video
-    assert 'c1' in completed_without_video()
-
-
-def test_start_polling_reschedules_even_when_check_raises(monkeypatch):
-    monkeypatch.setattr(
-        operator_console, 'check_for_new_videos',
-        lambda: (_ for _ in ()).throw(RuntimeError('boom')),
-    )
-
-    scheduled = []
-
-    class FakeTimer:
-        def __init__(self, interval, fn):
-            scheduled.append(interval)
-            self.daemon = None
-
-        def start(self):
-            pass
-
-    monkeypatch.setattr(threading, 'Timer', FakeTimer)
-
-    operator_console.start_polling()
-
-    assert scheduled == [300]
-
-
 # ---------------------------------------------------------------------------
 # mission-control notification
 # ---------------------------------------------------------------------------
@@ -1358,45 +1205,6 @@ def test_yard_id_prefers_env_then_config_then_default(monkeypatch, tmp_path):
     satellite_identity.reset_cache()
 
 
-def test_youtube_poll_skips_a_mission_with_pending_local_writes(
-    missions, firestore_missions, monkeypatch, youtube_env
-):
-    """Plan 7.5: the poll writes to Firestore directly, so it must not land
-    between a flush's read and write and clobber an operator's completion."""
-    import mission_store
-    mission_store.release_mission('c1', 'completed', '2026-07-14T10:00:00Z')
-    assert mission_store.mission_has_pending('c1')
-
-    monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: fake_playlist_response('c1'),
-    )
-
-    operator_console.check_for_new_videos()
-
-    assert 'youtubeUrl' not in firestore_missions['c1'], 'must not write over a pending change'
-
-
-def test_youtube_poll_writes_when_nothing_is_pending(
-    missions, firestore_missions, monkeypatch, youtube_env
-):
-    import mission_store
-    assert not mission_store.mission_has_pending('c1')
-
-    monkeypatch.setattr(deps, 'firestore_client', lambda: FakeQueryFirestore(firestore_missions))
-    monkeypatch.setattr(
-        requests, 'get',
-        lambda *a, **k: fake_playlist_response('c1'),
-    )
-
-    operator_console.check_for_new_videos()
-
-    assert firestore_missions['c1']['youtubeUrl'] == 'https://www.youtube.com/watch?v=vid123'
-    # The mirror is updated too, so the console shows it without a pull.
-    assert mission_store.get_mission('c1')['youtube_url'] == 'https://www.youtube.com/watch?v=vid123'
-
-
 # ---------------------------------------------------------------------------
 # Needs-review surface (plan PR 4)
 # ---------------------------------------------------------------------------
@@ -1644,18 +1452,6 @@ def test_integrations_never_expose_secret_values(client, missions, monkeypatch):
     assert 'AIzaSyTOTALLY-SECRET' not in body
     assert 'UCsecretchannel' not in body
     assert 'BEGIN PRIVATE KEY' not in body
-
-
-def test_integrations_report_youtube_as_unconfigured_when_keys_are_missing(client, missions, monkeypatch):
-    sign_in(client)
-    monkeypatch.delenv('YOUTUBE_API_KEY', raising=False)
-    monkeypatch.delenv('YOUTUBE_CHANNEL_ID', raising=False)
-
-    data = client.get('/operator/api/integrations').get_json()
-    yt = next(i for i in data['integrations'] if i['id'] == 'youtube')
-
-    assert yt['configured'] is False
-    assert 'manual linking still works' in yt['detail']
 
 
 def test_camera_status_reports_unreachable_with_a_hint(client, missions, monkeypatch):

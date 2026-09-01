@@ -1,13 +1,29 @@
 /**
  * ResendEmailSender - sandbox recipient redirect.
  *
- * While RESEND_FROM_EMAIL is onboarding@resend.dev, Resend only accepts the
- * address that owns the API key, so the redirect is what makes an end-to-end
- * send demonstrable at all. These tests pin that behaviour, and pin that it
- * disappears cleanly once RESEND_SANDBOX_RECIPIENT is unset for a real domain.
+ * The redirect made an end-to-end send demonstrable while the sending domain
+ * was unverified and Resend accepted only the address owning the API key. The
+ * domain is verified now, so it is an environment variable for local testing
+ * and deliberately not a settings field: arming it against a live yard sends
+ * every child's mail to one inbox. These tests pin both the redirect and that
+ * it disappears cleanly when unset.
  */
 
 const sendMock = jest.fn();
+
+// The store, not Google. Without this the sender's config lookup falls
+// through to a real Secret Manager call the moment a test unsets an env var,
+// which hangs the suite rather than failing it. Reading the environment is
+// exactly what the store does in local development, so this mirrors it.
+jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
+  readSetting: async (name: string) => {
+    const envVars: Record<string, string> = {
+      resendApiKey: 'RESEND_API_KEY',
+      resendFromEmail: 'RESEND_FROM_EMAIL',
+    };
+    return process.env[envVars[name]]?.trim() || null;
+  },
+}));
 
 jest.mock('resend', () => ({
   Resend: jest.fn().mockImplementation(() => ({

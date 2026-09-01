@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { nanoid } from 'nanoid';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { adminMissionRepository } from '@/infrastructure/container.server';
@@ -33,7 +34,6 @@ import { MissionNotificationService } from '@/core/application/services/MissionN
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
-import { isKnownYard } from '@/infrastructure/config/yards';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {
   decideAttachVideo,
@@ -45,10 +45,15 @@ import {
   type RunSnapshot,
 } from '@/core/domain/services/missionBookkeeping';
 
-const yardId = z
-  .string()
-  .min(1)
-  .refine(isKnownYard, 'That yard is not one this platform knows about.');
+/**
+ * Not checked against a list here. It is checked against the SESSION's yard
+ * below, and that one was validated against the live yards at sign-in.
+ *
+ * It used to refine against the hardcoded KNOWN_YARDS, which stopped being
+ * true the moment yards became data an admin can add: a venue added this
+ * morning would have been refused here while appearing everywhere else.
+ */
+const yardId = z.string().min(1);
 
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), yardId }),
@@ -105,6 +110,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
   }
 
+  // The yard is chosen at sign-in and fixed for the session, so a request may
+  // not name a different one. Without this the body decides, and an operator
+  // standing in Cape Town could record a run against Durban by having a stale
+  // tab open. A session from before the choice existed has no yard and is sent
+  // to sign in again rather than being trusted.
+  if (!session.yardId) {
+    return NextResponse.json(
+      { success: false, error: 'Sign in again to choose which yard you are at.' },
+      { status: 403 },
+    );
+  }
+
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
@@ -128,7 +145,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // flushed one. The decision falls back to the mission's own status and the
     // write creates the run.
     const runs = await repository.findRuns(id);
-    const run = runs.find((r) => r.yardId === command.yardId) ?? null;
+    // The LATEST run at this yard, not the first match. Runs are keyed by
+    // runId now precisely so a yard can attempt a mission twice, and an
+    // operator pressing "mark complete" means the run in front of them, not
+    // the one from last week that happens to sort first.
+    const run =
+      runs
+        .filter((r) => r.yardId === command.yardId)
+        .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null;
 
     const snapshot: RunSnapshot = {
       runStatus: run?.status ?? null,
@@ -171,6 +195,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break;
     }
 
+    if (command.yardId !== session.yardId) {
+      return NextResponse.json(
+        { success: false, error: 'That mission is at another yard. Sign out to change yards.' },
+        { status: 403 },
+      );
+    }
+
     if (!decision.ok) {
       // 409, not 400. The request was well formed; the mission simply is not in
       // a state where this makes sense, usually because somebody else got there
@@ -180,8 +211,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const decidedAt = new Date().toISOString();
+    // For offline yards, the run may not exist yet. Generate a runId if needed.
+    const runId = run?.runId ?? nanoid();
 
-    await repository.applyBookkeeping(id, command.yardId, {
+    await repository.applyBookkeeping(id, runId, command.yardId, {
       status: decision.change.status,
       clearsReview: decision.change.clearsReview,
       youtubeUrl,
