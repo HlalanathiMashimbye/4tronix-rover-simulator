@@ -16,13 +16,16 @@ import {
 } from 'lucide-react';
 
 import {
+  subscribeToMissionRuns,
   subscribeToYardCompleted,
   subscribeToYardQueue,
   type QueueMission,
 } from '@/infrastructure/persistence/operatorQueueService';
 
-import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
-import { MissionActions } from '@/components/operator/MissionActions';
+import { MissionDetail } from '@/components/operator/MissionDetail';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import type { ConsoleMode } from '@/core/domain/services/consoleMode';
+import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
 
@@ -53,29 +56,53 @@ export function MissionQueue({
   role,
   yardId,
   yardName,
+  yards,
 }: {
   role: 'operator' | 'admin';
   yardId: string;
   yardName: string;
+  yards: Yard[];
 }) {
   // Still keyed by yard. It cannot change without a sign-out now, but the key
   // costs nothing and keeps the guarantee: no window where one yard's queue is
   // on screen under another's heading.
-  return <YardQueue key={yardId} yardId={yardId} yardName={yardName} role={role} />;
+  return (
+    <YardQueue key={yardId} yardId={yardId} yardName={yardName} role={role} yards={yards} />
+  );
 }
 
 function YardQueue({
   yardId,
   yardName,
   role,
+  yards,
 }: {
   yardId: string;
   yardName: string;
   role: 'operator' | 'admin';
+  yards: Yard[];
 }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  // Which mission the detail pane is showing. Replaces the accordion: the
+  // code used to push every other mission off the screen to be read.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * WHICH mission the runs belong to, not just the runs.
+   *
+   * Deriving from that is what lets the effect subscribe and nothing else:
+   * clearing the previous mission's runs synchronously inside it is a
+   * cascading render, and leaving them uncleared shows one mission's runs
+   * under another's name, which reads as it having run somewhere it has not.
+   */
+  const [runsFor, setRunsFor] = useState<{ id: string; runs: MissionRun[] } | null>(null);
+  /**
+   * Manual until something is actually doing this work. It will be derived
+   * from whether the yard's satellite is online and syncing, because that is
+   * what decides whether the automatic path can run at all; the switch is a
+   * stand-in for that signal, not a setting anybody should want to keep.
+   */
+  const [mode, setMode] = useState<ConsoleMode>('manual');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [done, setDone] = useState<QueueMission[] | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -128,6 +155,19 @@ function YardQueue({
     () => (activeFilter === 'done' ? (done ?? []) : (missions ?? [])),
     [activeFilter, done, missions],
   );
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const id = selectedId;
+    return subscribeToMissionRuns(
+      id,
+      (next) => setRunsFor({ id, runs: next }),
+      // A mission with no runs subcollection is ordinary, not an error worth
+      // showing: the operator is looking at the code, not the runs.
+      () => setRunsFor({ id, runs: [] }),
+    );
+  }, [selectedId]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -230,10 +270,20 @@ function YardQueue({
     );
   }
 
+  // Empty until this mission's own runs arrive, never the previous one's.
+  const runs = runsFor?.id === selectedId ? runsFor.runs : [];
+  const selected = [...(missions ?? []), ...(done ?? [])].find((m) => m.id === selectedId) ?? null;
+
   return (
     <>
     <MobileSearch />
-    <div className="clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
+    {/* Two panes from lg up. Below that they take turns: a queue stacked above
+        a detail pane means scrolling past every mission to reach the one you
+        picked, and a tablet is the device an operator actually holds. */}
+    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
+      selectedId ? 'hidden lg:block' : ''
+    }`}>
       {flash && (
         <p
           role="status"
@@ -255,6 +305,32 @@ function YardQueue({
         </h2>
       </div>
 
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Bookkeeping
+        </span>
+        {/* A switch rather than a hidden capability, so an operator can see
+            what the platform is doing for them and take it back when the yard
+            is offline and it plainly is not. */}
+        <span className="inline-flex rounded-lg border border-border/60 bg-background/60 p-px text-[11px] font-semibold">
+          {(['manual', 'auto'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setMode(option)}
+              aria-pressed={mode === option}
+              className={`rounded-md px-2.5 py-1 transition-colors ${
+                mode === option
+                  ? 'bg-gradient-mars text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {option === 'manual' ? 'I do it' : 'Automatic'}
+            </button>
+          ))}
+        </span>
+      </div>
+
       {/* A filter that matches nothing is not an empty yard, and saying so
           stops an operator concluding the queue broke. */}
       {visible.length === 0 && (
@@ -266,12 +342,17 @@ function YardQueue({
 
       <ol className="mt-3 grid gap-2">
         {visible.map((mission, index) => {
-          const isOpen = expanded === mission.id;
+          const isSelected = selectedId === mission.id;
 
           return (
             <li
               key={mission.id}
-              className="rounded-2xl border border-border/50 bg-background/40 px-3.5 py-3"
+              onClick={() => setSelectedId(mission.id)}
+              className={`cursor-pointer rounded-2xl border px-3.5 py-3 transition-colors ${
+                isSelected
+                  ? 'border-primary/60 bg-primary/5'
+                  : 'border-border/50 bg-background/40 hover:border-border'
+              }`}
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                 <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
@@ -333,7 +414,7 @@ function YardQueue({
                 </button>
 
                 <button
-                  onClick={() => setExpanded(isOpen ? null : mission.id)}
+                  onClick={() => setSelectedId(mission.id)}
                   className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
                 >
                   {mission.blocklyState ? (
@@ -341,46 +422,32 @@ function YardQueue({
                   ) : (
                     <Code2 className="h-3 w-3" />
                   )}
-                  {isOpen ? 'Hide' : mission.blocklyState ? 'Blocks' : 'Code'}
+                  Open
                 </button>
               </div>
-
-              {isOpen && (
-                <>
-                <div className="mt-3 border-t border-border/50 pt-3">
-                  {/* The blocks the learner actually built, which the Flask
-                      console structurally cannot show: the satellite's SQLite
-                      mirror has no blocklyState column. Falling back to Python
-                      for missions typed rather than built. */}
-                  {mission.blocklyState ? (
-                    <div className="h-64 overflow-hidden rounded-xl border border-border/50">
-                      <BlocklyViewer state={mission.blocklyState} />
-                    </div>
-                  ) : (
-                    <pre className="max-h-64 overflow-auto rounded-xl border border-border/50 bg-background/60 p-3 text-xs text-foreground">
-                      {mission.code || 'No code on this mission.'}
-                    </pre>
-                  )}
-                </div>
-                <MissionActions
-                  mission={mission}
-                  yardId={yardId}
-                  isAdmin={role === 'admin'}
-                  onResult={(message) => {
-                    setFlash(message);
-                    // Collapse it. For complete and cancel the row is about to
-                    // leave this view anyway, and leaving a panel open over a
-                    // mission that no longer belongs here reads as a bug.
-                    setExpanded(null);
-                    window.setTimeout(() => setFlash((f) => (f === message ? null : f)), 4000);
-                  }}
-                />
-                </>
-              )}
             </li>
           );
         })}
       </ol>
+    </div>
+
+    <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
+      selectedId ? '' : 'hidden lg:block'
+    }`}>
+      <MissionDetail
+        mission={selected}
+        runs={runs}
+        yards={yards}
+        yardId={yardId}
+        isAdmin={role === 'admin'}
+        mode={mode}
+        onBack={() => setSelectedId(null)}
+        onResult={(message) => {
+          setFlash(message);
+          window.setTimeout(() => setFlash((f) => (f === message ? null : f)), 4000);
+        }}
+      />
+    </div>
     </div>
     </>
   );

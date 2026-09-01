@@ -24,6 +24,7 @@ import {
 
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
 
 /**
  * What "the queue" means: waiting, or running right now.
@@ -176,5 +177,41 @@ function listen(
       console.error(`[operator ${label}] listener failed:`, error);
       onError(error);
     },
+  );
+}
+
+/**
+ * Every yard's attempt at one mission, live.
+ *
+ * The queue is yard-scoped; a mission is not. An operator looking at a mission
+ * needs to know Durban already ran it, or they will run it again. Only their
+ * own yard's run is actionable, which the API enforces rather than this.
+ *
+ * Readable from the browser because runs are world-readable by rule: they are
+ * already on a public mission page.
+ */
+export function subscribeToMissionRuns(
+  missionId: string,
+  onRuns: (runs: MissionRun[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const db = getFirestoreClient();
+
+  return onSnapshot(
+    collection(db, 'missions', missionId, 'runs'),
+    (snapshot) => {
+      onRuns(
+        snapshot.docs.map((doc) => ({
+          ...(doc.data() as Omit<MissionRun, 'runId'>),
+          // The document id IS the runId (PR #139) and is authoritative over
+          // any stored copy. The yard comes from the field; satellite-written
+          // documents that predate the field keyed the doc BY yard, so the id
+          // is the honest fallback rather than an empty string.
+          runId: doc.id,
+          yardId: (doc.data() as { yardId?: string }).yardId ?? doc.id,
+        })),
+      );
+    },
+    (error) => onError(error instanceof Error ? error : new Error(String(error))),
   );
 }

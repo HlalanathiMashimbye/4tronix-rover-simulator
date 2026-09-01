@@ -96,7 +96,13 @@ export async function POST(request: NextRequest) {
   for (const claim of claims) {
     try {
       const runs = await repository.findRuns(claim.missionId);
-      const run = runToLink(runs);
+      // When the video named its yard, that IS the answer. runToLink is the
+      // fallback for a video that only named a mission, and it guesses:
+      // most-recently-completed-without-a-video attaches Cape Town's footage
+      // to Durban's run whenever the two finish close together.
+      const run = claim.yardId
+        ? runs.find((r) => r.yardId === claim.yardId && !r.youtubeUrl) ?? null
+        : runToLink(runs);
       if (!run) {
         skipped.push({ missionId: claim.missionId, reason: 'nothing to link' });
         continue;

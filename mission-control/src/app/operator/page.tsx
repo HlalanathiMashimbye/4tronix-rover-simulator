@@ -71,7 +71,12 @@ export default async function OperatorPage() {
         </div>
 
         {yard ? (
-          <MissionQueue role={session.role} yardId={yard.id} yardName={yardLabelOf(yard)} />
+          <MissionQueue
+            role={session.role}
+            yardId={yard.id}
+            yardName={yardLabelOf(yard)}
+            yards={await yardDirectory()}
+          />
         ) : (
           // No yard on the session: one minted before the choice existed, or a
           // yard retired since. Sending them to sign in again is the only
