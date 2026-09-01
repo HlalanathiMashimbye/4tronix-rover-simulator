@@ -11,11 +11,13 @@ import json
 import logging
 import socket
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect
+from flask import (Flask, render_template, request, jsonify, Response,
+                   stream_with_context, session, redirect, send_file)
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -59,6 +61,19 @@ def _notify_within_app(app, mission_id, status):
         notify_mission_control(mission_id, status)
 
 
+def _recording_name(raw):
+    """An operator-supplied name reduced to something safe to put in a path.
+
+    Everything outside letters, digits, dash and underscore becomes a dash, so
+    a name typed at an event ("Thabo's square!") cannot walk out of the
+    recordings directory or collide with the mission__yard naming the queue
+    flow uses.
+    """
+    import re
+    name = re.sub(r'[^A-Za-z0-9_-]+', '-', (raw or '').strip()).strip('-')
+    return name[:60]
+
+
 def _local_ip():
     # UDP connect never sends a packet — OS just picks the right source
     # interface from the routing table. Try private ranges then fall back.
@@ -99,19 +114,13 @@ app.register_blueprint(operator_console.operator_bp)
 ROVER_TIMEOUT = 5.0
 
 
-def _check_camera():
-    """Try TCP connect to localhost:CAMERA_PORT. Returns True if up."""
-    try:
-        s = socket.create_connection(('127.0.0.1', CAMERA_PORT), timeout=1.0)
-        s.close()
-        return True
-    except Exception:
-        return False
-
-
 @app.route('/')
 def index():
-    """The yard opens on the code station.
+    """The station hub.
+
+    No sign-in and no Firestore. This used to be the mission queue behind an
+    operator login, which put a Firebase round trip in front of the one thing
+    a yard has to be able to do on a night when the venue wifi is down.
 
     It used to open on the Firestore-backed mission queue, behind a sign-in.
     That made the one thing a yard has to be able to do - run a mission -
@@ -119,10 +128,32 @@ def index():
     the venue wifi does not. Pasting code into /code/ and pressing run talks
     to the rover over the LAN and needs nothing else, so that is the door.
 
-    /code/ and /monitor/ were already login-free: tablets and the TV are
-    pointed at those URLs once during setup and never sign in.
+    /code/ and /monitor/ are login-free for the same reason: tablets and the
+    TV are pointed at those URLs once during setup and never sign in.
     """
-    return redirect('/code/')
+    return render_template('home.html', server_ip=_local_ip(), server_port=SERVER_PORT)
+
+
+@app.route('/run/')
+def run_station():
+    """The operator's station for one mission, start to handover.
+
+    Deliberately not /code/. That is an editor, used on a tablet mid-activity
+    with a child watching, and its job is to get code onto the rover. This is
+    the bookkeeping around a run: which mission it is, recording it, getting
+    the video off the box, and the YouTube description that makes the upload
+    link itself back.
+
+    No "mark complete" here on purpose: closing a mission is Mission Control's
+    job, and having two places to do it is how a mission ends up completed in
+    one and processing in the other.
+
+    Login-free like the rest of the console, for the same reason: none of this
+    can depend on reaching Firebase.
+    """
+    from satellite_identity import yard_id
+    return render_template('run.html', server_ip=_local_ip(),
+                           server_port=SERVER_PORT, yard_id=yard_id())
 
 
 @app.route('/settings')
@@ -162,8 +193,13 @@ def api_status():
     except Exception:
         pass
 
+    # Only that the camera process is accepting connections. Whether frames
+    # are actually flowing costs a websocket probe, which is too much to spend
+    # every 5 seconds on every open page - the recording start pays for that
+    # answer at the one moment it changes the outcome.
+    from camera_control import is_listening
     camera = {
-        'reachable': _check_camera(),
+        'reachable': is_listening(port=CAMERA_PORT),
         'port': CAMERA_PORT,
     }
 
@@ -331,6 +367,139 @@ def api_photo():
         return jsonify({'error': 'Cannot connect to rover server'}), 503
     except requests.exceptions.Timeout:
         return jsonify({'error': 'Rover server timeout'}), 504
+
+
+@app.route('/api/camera/ready', methods=['GET'])
+def api_camera_ready():
+    """Whether frames are actually arriving, not just whether the port is open.
+
+    /api/status answers the cheap question because it is polled every five
+    seconds by every open page. This is the expensive one, asked on demand by
+    the run station, because "primed" on an operator's screen has to mean the
+    thing that decides whether a recording contains anything.
+    """
+    from recording_control import is_ready
+
+    ready, detail = is_ready()
+    return jsonify({'ready': ready, 'detail': detail})
+
+
+@app.route('/api/recording/start', methods=['POST'])
+def api_recording_start():
+    """Start recording a copy-paste run.
+
+    Dispatching a mission from the queue starts a recording on the operator's
+    behalf. Pasting code into /code/ never did, so the manual flow produced no
+    video at all: the operator ran the rover, and there was nothing to take
+    away and upload.
+
+    The name is the operator's, not a mission id, because a pasted run has no
+    mission. Whatever they type is what the file is called and what they will
+    recognise later when matching it to a mission in Mission Control.
+    """
+    from recording_control import is_ready, start_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    # The same gate console/missions.py puts in front of a queued dispatch.
+    # Without it the manual loop was the one path that would happily report
+    # 'recording' with no frames arriving, and the operator found out at the
+    # end of the night when there was no file to upload. A camera that is
+    # merely listening is not a camera that is recording.
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'you run - a run with no video cannot be handed over later.',
+        }), 503
+
+    ok, detail = start_recording(name, yard_id())
+    if not ok:
+        return jsonify({'error': detail}), 503
+    return jsonify({'status': 'recording', 'name': name})
+
+
+@app.route('/api/recording/stop', methods=['POST'])
+def api_recording_stop():
+    """Stop a copy-paste run's recording, keeping the file unless told not to."""
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    keep = data.get('keep', True)
+    ok, detail = stop_recording(name, yard_id(), keep=bool(keep))
+    return jsonify({'status': 'stopped', 'kept': bool(keep), 'detail': detail}), (200 if ok else 200)
+
+
+@app.route('/api/recordings', methods=['GET'])
+def api_recordings():
+    """The videos sitting on this satellite, newest first.
+
+    Step five of the manual loop: the operator takes the file to their own
+    device, uploads it to YouTube and pastes the link into Mission Control.
+    Until this existed the recordings were written and then unreachable, so
+    the loop could not be closed by hand at all.
+
+    Deliberately unauthenticated, like /code/ and /monitor/. The whole point
+    is that this works when the venue wifi cannot reach Firebase, and an
+    operator who can already drive the rover from this network gains nothing
+    by being able to read a video of it.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    try:
+        names = os.listdir(RECORDINGS_DIR)
+    except OSError:
+        # No directory yet simply means nothing has been recorded.
+        return jsonify({'recordings': []})
+
+    files = []
+    for name in names:
+        if not name.endswith('.mp4'):
+            continue
+        try:
+            stat = os.stat(os.path.join(RECORDINGS_DIR, name))
+        except OSError:
+            continue
+        files.append({
+            'name': name,
+            'bytes': stat.st_size,
+            'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+                .isoformat().replace('+00:00', 'Z'),
+        })
+
+    files.sort(key=lambda f: f['modified'], reverse=True)
+    return jsonify({'recordings': files})
+
+
+@app.route('/api/recordings/<path:name>', methods=['GET'])
+def api_recording_download(name):
+    """Download one recording.
+
+    The name is resolved and then checked to be inside the recordings
+    directory, rather than trusted or merely sanitised: this is a path taken
+    straight from a URL on a network the satellite does not control, and
+    ../../ is the oldest trick there is.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    root = os.path.realpath(RECORDINGS_DIR)
+    target = os.path.realpath(os.path.join(root, name))
+    if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
+        return jsonify({'error': 'No such recording'}), 404
+    if not os.path.isfile(target):
+        return jsonify({'error': 'No such recording'}), 404
+
+    return send_file(target, mimetype='video/mp4', as_attachment=True,
+                     download_name=os.path.basename(target))
 
 
 @app.route('/api/health', methods=['GET'])

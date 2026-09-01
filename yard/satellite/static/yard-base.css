@@ -143,6 +143,18 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 .topnav a:hover { color: var(--text); background: var(--surface-2); }
 .topnav a.active { color: var(--primary); background: color-mix(in oklab, var(--primary) 12%, transparent); font-weight: 600; }
 
+/* Nav toggle: hidden on a desktop-width bar, the only nav control below 760px.
+   The bar carries four links plus the rover chip, which stop fitting beside
+   the brand on a phone. */
+.navtoggle {
+  display: none; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text-dim); cursor: pointer;
+}
+.navtoggle svg { width: 20px; height: 20px; }
+.navtoggle:hover { color: var(--text); background: var(--surface-2); }
+
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; }
 .op-email { color: var(--text-faint); font-size: 0.78rem; font-family: var(--mono); }
 
@@ -226,6 +238,17 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 
 @media (max-width: 760px) {
   .stations { grid-template-columns: 1fr; }
+  .navtoggle { display: inline-flex; }
+  /* Out of the bar and into a sheet under it, rather than squeezed: four
+     tap targets in a row on a phone are too small to hit with a thumb. */
+  .topnav {
+    display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 40;
+    flex-direction: column; align-items: stretch; gap: 0.15rem;
+    padding: 0.5rem; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .topnav.open { display: flex; }
+  .topnav a { padding: 0.7rem 0.8rem; font-size: 0.95rem; }
+  .topbar { position: relative; }
   .station.hero { flex-direction: column; align-items: flex-start; }
   .topbar { gap: 0.6rem; padding: 0 0.9rem; }
   .op-email { display: none; }
@@ -247,6 +270,15 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
    ========================================================================== */
 
 .console { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
+
+/* Labelled form field. Was defined privately inside settings.html, so the run
+   station rendered its labels, inputs and hints inline on one line: the
+   drift this layer exists to stop. One definition, both pages. */
+.console .sync-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
+.console .sync-label { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
+.console .sync-input-row { display: flex; align-items: center; gap: 0.5rem; }
+.console .sync-unit { color: var(--text-faint); font-size: var(--fs-sm); }
+.console .sync-hint { color: var(--text-dim); font-size: 0.7rem; line-height: 1.45; }
 
 /* ---- One screen, no page scroll ---------------------------------------- */
 .console.fixed-shell { height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }

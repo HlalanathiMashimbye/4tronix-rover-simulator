@@ -79,12 +79,9 @@
         .camera-msg[data-tone="bad"] { color: var(--bad); }
         .camera-msg[data-tone="ok"]  { color: var(--ok); }
 
-        .sync-field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.7rem; }
-        .sync-label { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
-        .sync-input-row { display: flex; align-items: center; gap: 0.5rem; }
+        /* Field styles now live in yard-base.css under .console. Only the
+           narrow numeric input is specific to this page's sync controls. */
         .sync-input-row input { width: 88px; min-height: 40px; }
-        .sync-unit { color: var(--text-faint); font-size: var(--fs-sm); }
-        .sync-hint { color: var(--text-dim); font-size: 0.7rem; line-height: 1.45; }
         .sync-estimate {
             padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 10px;
             background: var(--surface-2); color: var(--text-dim);
@@ -283,6 +280,12 @@
                         <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
                         <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
                     </div>
+                </div>
+
+                <div class="card" id="recordingsSection">
+                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h3>
+                    <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
+                    <div id="recordingsList"><span class="skel"></span></div>
                 </div>
 
                 <div class="card">
@@ -604,6 +607,42 @@
 
         loadTunables();
 
+        // --- Recordings ------------------------------------------------
+        // Downloads come off the satellite over the LAN, which is the whole
+        // point: the operator's phone is on the venue's wifi with no route to
+        // the internet, and this still works.
+        function humanBytes(n) {
+            if (n < 1024) return n + ' B';
+            if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
+            return (n / 1024 / 1024).toFixed(1) + ' MB';
+        }
+
+        async function loadRecordings() {
+            const box = document.getElementById('recordingsList');
+            if (!box) return;
+            try {
+                const resp = await fetch('/api/recordings');
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const list = (await resp.json()).recordings || [];
+                if (!list.length) {
+                    box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
+                    return;
+                }
+                box.innerHTML = list.map(function (r) {
+                    // download, not target=_blank: a tablet should save the
+                    // file rather than open a video in a tab the operator
+                    // then has to work out how to get a file out of.
+                    return '<div class="kv"><a class="k" style="text-decoration:none" download href="/api/recordings/'
+                        + encodeURIComponent(r.name) + '">' + r.name + '</a>'
+                        + '<span class="v">' + humanBytes(r.bytes) + '</span></div>';
+                }).join('');
+            } catch (e) {
+                box.innerHTML = '<div class="kv"><span class="k">Could not read recordings</span></div>';
+            }
+        }
+
+        loadRecordings();
+
         const BADGE_ICONS = {
             green: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
             amber: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
@@ -851,7 +890,11 @@
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    urlError.textContent = data.error || 'Save failed';
+                    if (resp.status === 401) {
+                        urlError.innerHTML = 'Operator sign-in required. <a href="/operator/login">Sign in</a> to change the rover path.';
+                    } else {
+                        urlError.textContent = data.error || 'Save failed';
+                    }
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
