@@ -13,6 +13,9 @@ import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { simulateCommands } from '@/lib/simulateCommands';
 import { resolveYardId } from '@/infrastructure/config/yard';
+import { consumeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
+import { ROVER_WORKSPACE_STORAGE_KEY } from '@/components/mission/BlocklyEditor';
+import { Sparkles } from 'lucide-react';
 
 interface TrajectoryPoint {
   x: number;
@@ -74,6 +77,12 @@ export function MissionWorkspace() {
   useEffect(() => {
     setMissionName(generateRandomMissionName());
   }, []);
+
+  /** Set when this session arrived via "Finish & Export" from a challenge. */
+  const [importedFromChallenge, setImportedFromChallenge] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
   /**
@@ -86,6 +95,35 @@ export function MissionWorkspace() {
    * something (AB#413).
    */
   const [blocklyCode, setBlocklyCode] = useState('');
+
+  /**
+   * Consume a Progressive Challenges handoff, if one is waiting.
+   *
+   * BlocklyEditor has no "initial state" prop - it loads whatever is under
+   * ROVER_WORKSPACE_STORAGE_KEY in localStorage the moment it mounts, and
+   * that is the only way to seed it. So this writes the handoff's
+   * blocklyState there BEFORE switching editorMode to 'blockly', which is
+   * what causes BlocklyEditor to mount in the first place - by construction,
+   * the seed lands before there is anything to race.
+   */
+  useEffect(() => {
+    const handoff = consumeChallengeHandoff();
+    if (!handoff) return;
+
+    try {
+      localStorage.setItem(ROVER_WORKSPACE_STORAGE_KEY, handoff.blocklyState);
+    } catch {
+      // localStorage unavailable - the editor falls back to a fresh canvas,
+      // but the code/name still make it into the submission below.
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from a sessionStorage handoff; not readable during SSR render, same pattern as the missionName effect above
+    setCurrentCode(handoff.code);
+    setBlocklyCode(handoff.code);
+    setBlocklyState(handoff.blocklyState);
+    setEditorMode('blockly');
+    setImportedFromChallenge({ id: handoff.challengeId, title: handoff.challengeTitle });
+  }, []);
 
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
@@ -203,6 +241,9 @@ export function MissionWorkspace() {
         // shows up in their cross-device history.
         ...(learnerEmail ? { learnerEmail } : {}),
         ...(editorMode === 'blockly' && blocklyState ? { blocklyState } : {}),
+        ...(importedFromChallenge
+          ? { origin: 'challenge' as const, challengeId: importedFromChallenge.id }
+          : {}),
         name: missionName,
       });
 
@@ -258,6 +299,13 @@ export function MissionWorkspace() {
 
   return (
     <div className="space-y-1.5">
+      {importedFromChallenge && (
+        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          Imported from Challenge: {importedFromChallenge.title}
+        </div>
+      )}
+
       <SplitPane
         ariaLabel="Resize build and simulator panels"
         defaultSplit={SPLIT_DEFAULT}

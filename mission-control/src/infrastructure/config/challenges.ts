@@ -7,9 +7,12 @@
  * progress THROUGH this content is separate (see ChallengeProgress and
  * FirestoreChallengeProgressRepository).
  *
- * Level 2/3 challenges below are scaffolded with real titles/summaries but
- * empty step lists - their full step-by-step content lands with the Blockly
- * workspace that can actually run them (see docs/plans, Phase D).
+ * Level 3's summary describes reading the sensor rather than acting on it:
+ * the rover's Blockly toolbox (lib/roverBlockly.ts) has no comparison or
+ * conditional blocks, and its distance reporter block has nowhere to plug
+ * in, so "read the sensor and decide" is not a program this platform can
+ * express yet. What IS real: pointing the mast and reading the distance
+ * sensor, which is what this challenge teaches.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -30,7 +33,7 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 3,
     title: 'Advanced Sensor Operations',
-    description: "Use the rover's distance sensor to make decisions.",
+    description: "Point the mast and read the rover's distance sensor.",
     challengeIds: ['sensor-operations'],
   },
 ];
@@ -72,26 +75,94 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'basic-movement',
     levelId: 2,
     title: 'Basic Rover Movement',
-    summary: 'Drive the rover forward, back, and spin it left or right using blocks.',
+    summary: 'Drive the rover forward and spin it, then run the simulator to watch it go.',
     workspaceKind: 'blockly-sim',
-    steps: [],
+    steps: [
+      {
+        id: 'drive-forward',
+        title: 'Drive forward',
+        instructions:
+          'From the Movement category, drag a "Move Forward" block onto the canvas and snap it under the uplink block. Press Run to simulate it.',
+        hints: ['The uplink block ("When mission received") is already on the canvas - blocks snap underneath it, not beside it.'],
+        checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
+      },
+      {
+        id: 'spin-right',
+        title: 'Add a turn',
+        instructions: 'Snap a "Spin Right" block on underneath, then press Run again.',
+        checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        checks: [],
+      },
+    ],
   },
 
   'loop-structures': {
     id: 'loop-structures',
     levelId: 2,
     title: 'Loop Structures & Repeat Logic',
-    summary: 'Use a repeat block to drive a pattern without stacking the same blocks by hand.',
+    summary: 'Use a Repeat block to drive a pattern without stacking the same blocks by hand.',
     workspaceKind: 'blockly-sim',
-    steps: [],
+    steps: [
+      {
+        id: 'add-repeat',
+        title: 'Use a Repeat block',
+        instructions:
+          'From the Control category, drag a "Repeat" block onto the canvas and set it to repeat 4 times.',
+        checks: [{ kind: 'code-contains', pattern: 'for _ in range(' }],
+      },
+      {
+        id: 'drive-inside-loop',
+        title: 'Drive inside the loop',
+        instructions:
+          'Place a "Move Forward" block and a "Spin Right" block INSIDE the repeat block, then press Run - the rover should trace a shape instead of a straight line.',
+        hints: ['Drop the driving blocks into the notch inside the Repeat block, not underneath it.'],
+        checks: [
+          { kind: 'trajectory-outcome', outcome: 'moved-forward' },
+          { kind: 'trajectory-outcome', outcome: 'spun-right' },
+        ],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        checks: [],
+      },
+    ],
   },
 
   'sensor-operations': {
     id: 'sensor-operations',
     levelId: 3,
     title: 'Advanced Sensor Operations',
-    summary: "Read the rover's distance sensor and act on what it sees.",
+    summary: "Point the mast and read the rover's distance sensor.",
     workspaceKind: 'blockly-sim',
-    steps: [],
+    steps: [
+      {
+        id: 'point-mast',
+        title: 'Point the mast',
+        instructions:
+          'From the Mast category, drag a "Point Mast" block onto the canvas and aim it forward (centre).',
+        checks: [{ kind: 'code-contains', pattern: 'rover.setServo(0,' }],
+      },
+      {
+        id: 'read-distance',
+        title: 'Read the distance sensor',
+        instructions:
+          'Add a "Read Distance" block after it. This measures how far away the nearest thing is and prints it to the console.',
+        hints: ["The distance sensor sits on the mast, so it reads whatever the mast is currently pointed at."],
+        checks: [{ kind: 'code-contains', pattern: 'rover.getDistance()' }],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        checks: [],
+      },
+    ],
   },
 };

@@ -31,15 +31,22 @@ export type ChallengeCheckSpec =
     }
   | { kind: 'search-filter'; filterKey: string }
   | { kind: 'load-more' }
-  | { kind: 'blockly-block-present'; blockType: string; minCount?: number }
-  | {
-      kind: 'blockly-shape';
-      /** Structural elements the workspace/generated code must contain together. */
-      requires: Array<'distance-read' | 'comparison' | 'loop' | 'conditional'>;
-    }
   | {
       kind: 'trajectory-outcome';
       outcome: 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
+    }
+  | {
+      /**
+       * The generated Python contains this substring. Structural validation
+       * for a Blockly challenge, over the code rather than the raw workspace:
+       * the toolbox has no comparison/conditional blocks and the sensor/mast
+       * blocks (unlike movement ones) produce no simulated trajectory at all,
+       * so text is the one signal common to every block this can check for -
+       * e.g. `for _ in range(` for a Repeat block, `rover.getDistance()` for
+       * Read Distance. See lib/roverBlockly.ts's workspaceToPython.
+       */
+      kind: 'code-contains';
+      pattern: string;
     };
 
 export interface ChallengeStep {

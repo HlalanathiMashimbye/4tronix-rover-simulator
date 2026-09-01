@@ -56,6 +56,8 @@ export class MissionService {
         name: dto.name,
         code: dto.code,
         blocklyState: dto.blocklyState,
+        origin: dto.origin,
+        challengeId: dto.challengeId,
         status: 'queued',
         submittedAt: new Date().toISOString(),
       });

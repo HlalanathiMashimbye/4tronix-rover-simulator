@@ -13,14 +13,23 @@ function describeCheck(spec: ChallengeCheckSpec): string {
       return `Set the filter to "${spec.filterKey}"`;
     case 'load-more':
       return 'Load another page of missions';
-    case 'blockly-block-present':
-      return `Use the "${spec.blockType}" block`;
-    case 'blockly-shape':
-      return `Combine: ${spec.requires.join(' + ')}`;
     case 'trajectory-outcome':
       return `Rover ${spec.outcome.replace('-', ' ')}`;
+    case 'code-contains':
+      return CODE_CONTAINS_LABELS[spec.pattern] ?? 'Use the right block';
   }
 }
+
+/**
+ * Friendlier labels for the specific patterns this feature's own content
+ * actually uses (see infrastructure/config/challenges.ts) - falls back to a
+ * generic label for anything else rather than showing raw Python text.
+ */
+const CODE_CONTAINS_LABELS: Record<string, string> = {
+  'for _ in range(': 'Use a Repeat block',
+  'rover.setServo(0,': 'Use the Point Mast block',
+  'rover.getDistance()': 'Use the Read Distance block',
+};
 
 interface ChallengeChecklistPanelProps {
   checks: ChallengeCheckSpec[];

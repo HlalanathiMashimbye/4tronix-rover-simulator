@@ -57,6 +57,12 @@ export interface Mission {
   code: string;                      // Python code submitted by learner
   blocklyState?: string;             // Serialized Blockly workspace JSON (block-built missions only)
 
+  // Progressive Challenges provenance. Set only when this mission arrived via
+  // the "Finish & Export" handoff from a completed challenge - drives the
+  // [CHALLENGE SOLUTION] badge in History (MissionCard).
+  origin?: 'challenge';
+  challengeId?: string;
+
   status: MissionStatus;
 
   // Soft delete. An operator removed this mission; it stays out of every

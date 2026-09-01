@@ -33,18 +33,12 @@ describe('evaluateCheck', () => {
     expect(evaluateCheck(spec, { loadMoreCalled: true })).toBe(true);
   });
 
-  it('blockly-block-present respects minCount', () => {
-    const spec: ChallengeCheckSpec = { kind: 'blockly-block-present', blockType: 'rover_forward', minCount: 2 };
-    expect(evaluateCheck(spec, { blocklyBlockCounts: { rover_forward: 1 } })).toBe(false);
-    expect(evaluateCheck(spec, { blocklyBlockCounts: { rover_forward: 2 } })).toBe(true);
-  });
-
-  it('blockly-shape requires every listed structural element', () => {
-    const spec: ChallengeCheckSpec = { kind: 'blockly-shape', requires: ['distance-read', 'comparison'] };
-    expect(evaluateCheck(spec, { blocklyShapeFlags: { 'distance-read': true } })).toBe(false);
-    expect(
-      evaluateCheck(spec, { blocklyShapeFlags: { 'distance-read': true, comparison: true } }),
-    ).toBe(true);
+  it('code-contains matches a substring of the generated Python', () => {
+    const spec: ChallengeCheckSpec = { kind: 'code-contains', pattern: 'rover.getDistance()' };
+    expect(evaluateCheck(spec, { generatedCode: 'rover.forward(60)' })).toBe(false);
+    expect(evaluateCheck(spec, { generatedCode: "print('Distance: ' + str(rover.getDistance()))" })).toBe(
+      true,
+    );
   });
 
   it('trajectory-outcome checks the last simulated run', () => {

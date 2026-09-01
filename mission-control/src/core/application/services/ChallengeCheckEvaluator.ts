@@ -14,6 +14,8 @@
 
 import { ChallengeCheckSpec } from '@/core/domain/entities/Challenge';
 
+export type TrajectoryOutcome = 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
+
 export interface ChallengeEvalContext {
   search?: {
     query: string;
@@ -21,12 +23,10 @@ export interface ChallengeEvalContext {
   };
   /** Whether "Show more missions" has been used at least once this session. */
   loadMoreCalled?: boolean;
-  /** Blockly block type -> how many instances are on the workspace. */
-  blocklyBlockCounts?: Record<string, number>;
-  /** Structural elements present in the current Blockly workspace / generated code. */
-  blocklyShapeFlags?: Partial<Record<'distance-read' | 'comparison' | 'loop' | 'conditional', boolean>>;
   /** Outcomes the last simulated run actually produced. */
-  trajectoryOutcomes?: Array<'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right'>;
+  trajectoryOutcomes?: TrajectoryOutcome[];
+  /** The current Blockly editor's generated Python, for code-contains checks. */
+  generatedCode?: string;
 }
 
 export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalContext): boolean {
@@ -43,16 +43,11 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
     case 'load-more':
       return context.loadMoreCalled === true;
 
-    case 'blockly-block-present': {
-      const count = context.blocklyBlockCounts?.[spec.blockType] ?? 0;
-      return count >= (spec.minCount ?? 1);
-    }
-
-    case 'blockly-shape':
-      return spec.requires.every((requirement) => context.blocklyShapeFlags?.[requirement] === true);
-
     case 'trajectory-outcome':
       return context.trajectoryOutcomes?.includes(spec.outcome) ?? false;
+
+    case 'code-contains':
+      return context.generatedCode?.includes(spec.pattern) ?? false;
 
     default:
       // Exhaustiveness check: a new ChallengeCheckKind added to the domain

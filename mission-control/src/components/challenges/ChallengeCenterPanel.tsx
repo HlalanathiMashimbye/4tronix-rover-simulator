@@ -1,13 +1,33 @@
 'use client';
 
-import { Blocks } from 'lucide-react';
+import { useState } from 'react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { MissionFeed } from '@/components/mission-feed/MissionFeed';
+import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
+import { SimulationPanel } from '@/components/mission/SimulationPanel';
+import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import type { SimulationCommand } from '@/lib/roverBlockly';
+import type { TrajectoryOutcome } from '@/core/application/services/ChallengeCheckEvaluator';
+
+/** What the last simulated Run produced, read off the command list itself. */
+function deriveOutcomes(commands: SimulationCommand[]): TrajectoryOutcome[] {
+  const outcomes = new Set<TrajectoryOutcome>();
+  for (const command of commands) {
+    if (command.command === 'forward') outcomes.add('moved-forward');
+    if (command.command === 'reverse') outcomes.add('moved-backward');
+    if (command.command === 'spinLeft') outcomes.add('spun-left');
+    if (command.command === 'spinRight') outcomes.add('spun-right');
+  }
+  return [...outcomes];
+}
 
 interface ChallengeCenterPanelProps {
   challenge: Challenge;
   onLoadMore: () => void;
+  onCodeChange: (code: string) => void;
+  onBlocklyStateChange: (state: string) => void;
+  onTrajectoryOutcomes: (outcomes: TrajectoryOutcome[]) => void;
 }
 
 /**
@@ -20,11 +40,22 @@ interface ChallengeCenterPanelProps {
  * SearchContext this page is inside), which is why the instructions panel
  * points the learner up at the bar rather than into this panel.
  *
- * 'blockly-sim' is a placeholder for now - Level 2/3 challenges reuse
- * BlocklyEditor + SimulationPanel exactly as /mission does, landing with
- * their step content.
+ * 'blockly-sim' reuses BlocklyEditor + SimulationPanel exactly as /mission
+ * does. Pressing Run reports which outcomes the simulated commands actually
+ * produced (for trajectory-outcome checks); every workspace edit reports the
+ * generated Python live (for code-contains checks and the Create Mission
+ * handoff) via BlocklyEditor's own change listener.
  */
-export function ChallengeCenterPanel({ challenge, onLoadMore }: ChallengeCenterPanelProps) {
+export function ChallengeCenterPanel({
+  challenge,
+  onLoadMore,
+  onCodeChange,
+  onBlocklyStateChange,
+  onTrajectoryOutcomes,
+}: ChallengeCenterPanelProps) {
+  const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+
   if (challenge.workspaceKind === 'embedded-platform') {
     return (
       <div className="flex h-full min-h-0 w-full flex-col">
@@ -36,11 +67,33 @@ export function ChallengeCenterPanel({ challenge, onLoadMore }: ChallengeCenterP
     );
   }
 
+  const handleRun = (commands: SimulationCommand[]) => {
+    setTrajectory(simulateCommands(commands));
+    setIsPlaying(true);
+    onTrajectoryOutcomes(deriveOutcomes(commands));
+  };
+
   return (
-    <div className="panel flex h-full w-full flex-col items-center justify-center gap-2 border border-border/60 bg-card/40 p-8 text-center clay">
-      <Blocks className="h-8 w-8 text-muted-foreground" />
-      <p className="font-display text-base font-bold text-foreground">Blockly workspace coming soon</p>
-      <p className="text-sm text-muted-foreground">This challenge&rsquo;s building canvas isn&rsquo;t wired up yet.</p>
+    <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
+      <div className="panel min-h-0 min-w-0 flex-1 overflow-hidden border border-border/60 bg-card/40 clay">
+        <BlocklyEditor
+          onGenerateCommands={handleRun}
+          onCodeChange={onCodeChange}
+          onBlocklyStateChange={onBlocklyStateChange}
+        />
+      </div>
+      <div className="min-h-0 min-w-0 flex-1">
+        <SimulationPanel
+          trajectory={trajectory}
+          isPlaying={isPlaying}
+          onReset={() => {
+            setTrajectory([]);
+            setIsPlaying(false);
+          }}
+          editorMode="blockly"
+          resetVersion={0}
+        />
+      </div>
     </div>
   );
 }
