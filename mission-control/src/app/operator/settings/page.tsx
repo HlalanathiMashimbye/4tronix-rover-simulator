@@ -43,7 +43,7 @@ export default async function OperatorSettingsPage() {
   const yards = await adminYardRepository().findAll();
 
   return (
-    <main className="relative flex min-h-[calc(100vh-64px)] flex-col overflow-y-auto px-4 sm:px-6">
+    <main className="relative flex min-h-[calc(100dvh-var(--app-chrome))] flex-col overflow-y-auto px-4 sm:px-6">
       <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
         <Link
           href="/operator"

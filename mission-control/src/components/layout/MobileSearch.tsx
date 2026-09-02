@@ -16,9 +16,9 @@
  * It is a separate component rather than the navbar one unhidden, for two
  * reasons. The navbar field carries min-w-[20rem] and pr-40 so the chips can
  * sit overlaid inside it, which does not fit 375px. And the navbar is a fixed
- * h-16 that eleven pages size themselves against with calc(100vh-64px); a
- * second row would make that height depend on whether the current page
- * registered filters, which is not something a CSS variable can know.
+ * h-16 that eleven pages size themselves against, via --app-chrome; a second
+ * row would make that height depend on whether the current page registered
+ * filters, which is not something the measurement can know in time.
  *
  * So the page renders this, where there is width to spare and no height
  * contract to break. Both controls stay visible - hiding search behind an icon
