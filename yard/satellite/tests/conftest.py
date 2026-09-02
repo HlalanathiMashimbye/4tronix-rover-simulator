@@ -30,11 +30,35 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     write the real one on the machine running it.
     """
     import satellite_identity
+    import camera_state
 
     monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(tmp_path / 'isolated-sat.json'))
     satellite_identity.reset_cache()
+    # camera_state caches its snapshot in a module global, so without this a
+    # test inherits whatever the previous one probed - the same leak that
+    # recording_control's _paths produced, and just as confusing to chase.
+    camera_state.invalidate()
+
+    # And no test may open a real socket to find out about a camera that is not
+    # there. Every request to /api/status builds a snapshot, so leaving this
+    # real took the suite from 0.5s to 20s - one second of connect timeout at a
+    # time. A suite that slow stops being run.
+    #
+    # Default is "nothing listening", which is true of the machine running the
+    # tests. A test that cares about camera state patches this itself.
+    monkeypatch.setattr(camera_state, '_listening', lambda host, port: False)
+
+    # Nor may a test reach for the rover. /api/status health-checks ROVER_URL,
+    # which defaults to the mDNS name marspi.local - and resolving a .local
+    # name that is not on the network takes about five seconds before it gives
+    # up. Four tests calling /api/status was twenty seconds of the suite spent
+    # waiting for DNS. Pointed at a closed local port, the same call refuses
+    # instantly and the code path is identical.
+    import web_server
+    monkeypatch.setattr(web_server, 'ROVER_URL', 'http://127.0.0.1:9')
+
     yield
-    satellite_identity.reset_cache()
+    camera_state.invalidate()
 
 
 try:  # pragma: no cover - trivial import probe

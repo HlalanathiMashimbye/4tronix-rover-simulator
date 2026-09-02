@@ -216,3 +216,39 @@ def test_stop_recording_is_a_no_op_for_a_run_with_no_active_recording():
 
     assert ok is True
     assert detail == 'not recording'
+
+
+def test_broadcast_survives_a_client_connecting_mid_frame():
+    """The frame producer iterated the live client set while awaiting a send.
+
+    That await yields, and a connect or disconnect during the yield mutates the
+    set: "RuntimeError: Set changed size during iteration", which killed the
+    producer. The websocket server kept accepting afterwards, so the camera
+    looked alive and simply never sent a frame.
+
+    Latent while only the monitor connected. The readiness probe made it
+    constant - it connects, waits and disconnects every few seconds, which is
+    exactly the window the race needs.
+    """
+    import asyncio, importlib.util, os
+
+    spec = importlib.util.spec_from_file_location(
+        'camera_server_race',
+        os.path.join(os.path.dirname(__file__), '..', 'camera_server.py'),
+    )
+    cam = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cam)
+
+    class Joiner:
+        """Sends fine, but joins another client while the send is awaited -
+        the exact interleaving that used to raise."""
+        async def send(self, _message):
+            await asyncio.sleep(0)
+            cam.clients.add(object())
+
+    cam.clients.clear()
+    cam.clients.add(Joiner())
+    try:
+        asyncio.run(cam.broadcast_frame('a-frame'))
+    finally:
+        cam.clients.clear()

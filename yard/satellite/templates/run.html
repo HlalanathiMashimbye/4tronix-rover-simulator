@@ -488,52 +488,41 @@
         $('runWarning').classList.toggle('show', !ready);
         $('runState').textContent = recordingName ? 'Recording' : (ready ? 'Ready' : 'Not ready');
     }
-    // Two different questions about the camera, and the difference is the
-    // whole point of this indicator. /api/status says only that the port is
-    // open, which is cheap enough to poll every five seconds. Whether frames
-    // are actually arriving costs a websocket probe, so it is asked here on
-    // demand - and it is the one that decides whether a recording will
-    // contain anything, so it is what "Primed" is allowed to mean.
-    // null, not false: the first snapshot has to count as a change, or a
-    // station that opens with the camera already down sits on "Checking..."
-    // for ever and never tells the operator anything.
-    let cameraListening = null, cameraPrimed = false, roverOk = false;
+    // One question about the camera, answered by /api/status like everything
+    // else on this page.
+    //
+    // This used to hold its own state machine: a cheap "is the port open" from
+    // /api/status, a separate expensive /api/camera/ready probe fired only
+    // when the cheap answer changed, and its own idea of whether either had
+    // happened yet. Settings ran a third check. So two pages could describe
+    // the same camera differently and both be telling the truth about their
+    // own poll. The server holds one snapshot now; this reads it.
+    let cameraPrimed = false, roverOk = false;
 
-    function paintCamera(sub, waiting) {
-        paintStatus('cameraReady', cameraPrimed, sub, waiting);
+    function paintCamera(state) {
+        cameraPrimed = !!state.ready;
+        const listening = !!state.listening;
+        const sub = cameraPrimed ? 'Primed, frames arriving'
+                  : listening    ? (state.detail || 'No frames arriving')
+                                 : 'Not running';
+        paintStatus('cameraReady', cameraPrimed, sub, false);
         $('camStart').hidden = cameraPrimed;
         paintGate();
-    }
-
-    async function checkPrimed() {
-        if (!cameraListening) {
-            cameraPrimed = false;
-            return paintCamera('Not running');
-        }
-        paintCamera('Checking the feed...', true);
-        try {
-            const d = await (await fetch('/api/camera/ready')).json();
-            cameraPrimed = !!d.ready;
-            paintCamera(cameraPrimed ? 'Primed, frames arriving' : 'No frames arriving');
-        } catch (e) {
-            cameraPrimed = false;
-            paintCamera('Could not check the feed');
-        }
     }
 
     $('camStart').addEventListener('click', async () => {
         const btn = $('camStart');
         btn.disabled = true;
-        paintCamera('Starting the camera...', true);
+        paintStatus('cameraReady', false, 'Starting the camera...', true);
         try {
             const resp = await fetch('/operator/api/camera/start', { method: 'POST' });
             if (!resp.ok) throw new Error(((await resp.json()) || {}).error || 'Could not start the camera');
-            // It needs a moment to bind before frames flow, so the readiness
-            // question is asked after a pause rather than immediately.
-            setTimeout(checkPrimed, 2500);
+            // The server drops its cached snapshot when the camera is started,
+            // so the next poll reports what actually happened. No local timer
+            // guessing when it might be up.
+            setTimeout(() => YardStatus.refreshNow(), 2500);
         } catch (e) {
-            cameraPrimed = false;
-            paintCamera(e.message);
+            paintStatus('cameraReady', false, e.message, false);
         } finally {
             btn.disabled = false;
         }
@@ -541,9 +530,9 @@
 
     if (window.YardStatus) {
         YardStatus.subscribe((snapshot) => {
-            const listening = !!(snapshot.camera && snapshot.camera.reachable);
             roverOk = !!(snapshot.rover && snapshot.rover.reachable && (snapshot.rover.status == null || snapshot.rover.status === 'ok'));
             paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Not reachable');
+            paintCamera(snapshot.camera || {});
 
             // The watcher ends recordings this page started, so the page has
             // to be told. Without this it went on saying "Stop recording"
@@ -558,18 +547,11 @@
                 loadRecordings();
             }
             paintGate();
-            // Only re-probe when the cheap answer actually changed, so an idle
-            // station is not opening a camera connection every five seconds.
-            if (listening !== cameraListening) {
-                cameraListening = listening;
-                checkPrimed();
-            }
         });
         YardStatus.onError(() => {
             roverOk = false;
-            cameraListening = false; cameraPrimed = false;
             paintStatus('roverReady', false, 'Status unavailable');
-            paintCamera('Status unavailable');
+            paintCamera({ listening: false, ready: false, detail: 'Status unavailable' });
         });
     }
 

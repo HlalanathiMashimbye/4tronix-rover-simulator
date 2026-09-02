@@ -189,27 +189,20 @@ def api_status():
     except Exception:
         pass
 
-    # Only that the camera process is accepting connections. Whether frames
-    # are actually flowing costs a websocket probe, which is too much to spend
-    # every 5 seconds on every open page - the recording start pays for that
-    # answer at the one moment it changes the outcome.
-    from camera_control import is_listening
-    camera = {
-        'reachable': is_listening(port=CAMERA_PORT),
-        'port': CAMERA_PORT,
-    }
-
-    # What is filming right now. The station starts a recording and the
-    # watcher ends it, so without this the page had no way to learn that the
-    # run it started had finished: it kept saying "Stop recording" over a file
-    # that was already closed, and never showed the operator the video.
-    from recording_control import active_recordings
+    # The one camera answer, shared with every other endpoint and page. It
+    # carries whether the port is open AND whether frames are arriving, which
+    # used to be two separate endpoints that pages mixed and matched until
+    # they contradicted each other.
+    from camera_state import snapshot
+    camera = snapshot()
 
     return jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
-        'recording': {'active': active_recordings()},
+        # Same list, kept at the top level because the run station reads it
+        # there. It is the camera's business, so it lives in the snapshot too.
+        'recording': {'active': camera['recording']},
     })
 
 
@@ -385,15 +378,14 @@ def api_photo():
 def api_camera_ready():
     """Whether frames are actually arriving, not just whether the port is open.
 
-    /api/status answers the cheap question because it is polled every five
-    seconds by every open page. This is the expensive one, asked on demand by
-    the run station, because "primed" on an operator's screen has to mean the
-    thing that decides whether a recording contains anything.
+    Now a thin view of the same snapshot /api/status serves, so the two cannot
+    disagree. It stays because it is the honest name for the question and the
+    run station's gate reads it, but it is no longer a second source of truth.
     """
-    from recording_control import is_ready
+    from camera_state import snapshot
 
-    ready, detail = is_ready()
-    return jsonify({'ready': ready, 'detail': detail})
+    state = snapshot()
+    return jsonify({'ready': state['ready'], 'detail': state['detail']})
 
 
 @app.route('/api/recording/start', methods=['POST'])

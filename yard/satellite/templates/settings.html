@@ -64,6 +64,23 @@
         .url-editor[hidden] { display: none; }
         .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
         .url-error { color: var(--bad); font-size: var(--fs-sm); }
+        /* A picked setting looks picked. Three named buttons rather than a
+           box you type 1280x960 into: nobody operating a yard should have to
+           know what that means, only that it is sharper and costs more. */
+        .seg { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; width: fit-content; }
+        .seg button {
+            appearance: none; border: 0; cursor: pointer;
+            background: var(--surface-2); color: var(--text-dim);
+            font: inherit; font-size: var(--fs-sm); font-weight: 600;
+            padding: 0.5rem 0.95rem; min-height: 40px;
+            display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
+            transition: background 160ms var(--ease-out), color 160ms var(--ease-out);
+        }
+        .seg button + button { border-left: 1px solid var(--border); }
+        .seg button:hover { background: var(--surface-3); color: var(--text); }
+        .seg button[aria-checked="true"] { background: var(--signal); color: var(--signal-ink); }
+        .seg button:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
+        .seg .seg-dim { font-size: var(--fs-2xs); font-weight: 500; opacity: 0.75; font-family: var(--mono); }
         /* One action colour across the console. Mars orange stays on brand
            chrome (the nav, the wordmark); the thing you press is teal, here and
            on the run station, so the two pages do not disagree about it. */
@@ -214,7 +231,7 @@
         </div>
 
         <div class="url-editor" id="url-editor" hidden>
-            <input type="text" id="url-input" spellcheck="false" placeholder="http://curiosity.local:8523">
+            <input type="text" id="url-input" spellcheck="false" aria-label="Rover address" placeholder="http://curiosity.local:8523">
             <button class="btn quiet primary" id="save-url-btn">Save</button>
             <button class="btn quiet" id="cancel-url-btn">Cancel</button>
             <span class="url-error" id="url-error"></span>
@@ -271,27 +288,12 @@
                         <h3 class="h-card" style="margin-bottom:0;">Console and camera</h3>
                     </div>
 
-                        <span class="sync-input-row">
-                            <input type="number" id="tunSessionMaxAge" min="300" max="604800" step="300">
-                            <span class="sync-unit">seconds</span>
-                        </span>
-                        <span class="sync-hint">How long a signed-in operator stays signed in on this satellite.</span>
-                    </label>
+                    <div class="sync-field">
+                        <span class="sync-label">Picture quality</span>
+                        <div class="seg" id="tunResolution" role="radiogroup" aria-label="Picture quality"></div>
+                        <span class="sync-hint" id="resHint">Sharper fills a big screen better, and costs the Pi and the wifi more. The camera is 4:3 at every setting.</span>
+                    </div>
 
-                        <span class="sync-input-row">
-                            <input type="number" id="tunSessionRecheck" min="30" max="3600" step="30">
-                            <span class="sync-unit">seconds</span>
-                        </span>
-                        <span class="sync-hint">Bounds how long a revoked account keeps working here.</span>
-                    </label>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Camera host</span>
-                        <span class="sync-input-row">
-                            <input type="text" id="tunCameraHost" spellcheck="false" style="width:180px;">
-                        </span>
-                        <span class="sync-hint">Where the camera stream is served from. Usually localhost.</span>
-                    </label>
 
                     <label class="sync-field">
                         <span class="sync-label">Wait for camera up to</span>
@@ -327,7 +329,7 @@
             </div>
         </div>
 
-        <div class="footer" id="footer">Checking&hellip;</div>
+        <div class="footer" id="footer" hidden></div>
     </main>
 
     <script>
@@ -372,7 +374,7 @@
                 for (let i = 0; i < 12; i++) {
                     await new Promise(r => setTimeout(r, 1000));
                     const st = await fetch('/operator/api/camera').then(r => r.json()).catch(() => ({}));
-                    if (st.reachable) { setCamMsg('Camera is up.', 'ok'); refresh(); return; }
+                    if (st.listening) { setCamMsg('Camera is up.', 'ok'); YardStatus.refreshNow(); return; }
                 }
                 setCamMsg('Started, but the feed has not come up yet. Check the camera is plugged in.', 'bad');
             } catch (e) {
@@ -386,25 +388,34 @@
         camStart.onclick = () => cameraAction('start', { cameraIndex: Number(camIndex.value) });
         camStop.onclick = () => cameraAction('stop');
 
-        async function loadCamera() {
-            try {
-                const resp = await fetch('/operator/api/camera');
-                if (!resp.ok) return;
-                const cam = await resp.json();
-                if (typeof cam.cameraIndex === 'number') camIndex.value = cam.cameraIndex;
-                camStart.textContent = cam.reachable ? 'Restart camera' : 'Start camera';
-                camStop.hidden = !cam.reachable;
-                // Worth showing: on the Pi systemd owns the lifecycle and will
-                // restart the camera by itself, so a stopped feed there means
-                // something else is wrong.
-                camManaged.textContent = cam.managedBy === 'systemd'
-                    ? 'managed by systemd' : 'managed by this console';
-                // Never replace a specific failure with the generic hint.
-                if (!cam.reachable && cam.hint && !camMsgIsError) setCamMsg(cam.hint);
-            } catch (e) { /* offline */ }
+        // Painted from the shared status, not from a poll of its own.
+        //
+        // This had its own fetch of /operator/api/camera on a 30s timer, while
+        // the run station polled /api/status every 5s and probed readiness
+        // separately. Two pages, two clocks, two answers about one camera -
+        // which is exactly how you get a Settings page insisting the camera is
+        // fine while the run station refuses to record.
+        function paintCamera(cam) {
+            if (!cam) return;
+            if (typeof cam.cameraIndex === 'number') camIndex.value = cam.cameraIndex;
+            camStart.textContent = cam.listening ? 'Restart camera' : 'Start camera';
+            camStop.hidden = !cam.listening;
+            // Worth showing: on the Pi systemd owns the lifecycle and will
+            // restart the camera by itself, so a stopped feed there means
+            // something else is wrong.
+            camManaged.textContent = cam.managedBy === 'systemd'
+                ? 'managed by systemd' : 'managed by this console';
+            // Never replace a specific failure with the generic hint.
+            if (!cam.listening && cam.hint && !camMsgIsError) setCamMsg(cam.hint);
+            // Listening but producing nothing is its own state, and the one
+            // that decides whether a run can be recorded. It used to be
+            // invisible here: the card said the camera was up.
+            if (cam.listening && !cam.ready && !camMsgIsError) {
+                setCamMsg('Camera is running but no frames are arriving' +
+                          (cam.detail ? ' (' + cam.detail + ')' : '') + '.', 'bad');
+            }
         }
-        loadCamera();
-        setInterval(loadCamera, 30000);
+        YardStatus.subscribe((data) => paintCamera(data.camera));
 
 
 
@@ -412,10 +423,61 @@
         // Same shape as the sync card above. These were environment
         // variables until they moved here; the server keeps the old vars as
         // defaults, so an untouched satellite behaves exactly as before.
+        // cameraHost is deliberately absent. It has exactly one correct value
+        // on a real yard - the camera and this server are the same Pi - and its
+        // only other use is running web_server on a laptop against the Pi's
+        // camera, which is a developer convenience, not something an operator
+        // should meet on a page they use under pressure. It stays as the
+        // CAMERA_HOST environment variable.
         const TUNABLE_FIELDS = {
-            cameraHost: 'tunCameraHost',
             cameraReadyTimeout: 'tunCameraReady',
         };
+
+        // Picture quality is a choice, not a number, so it renders as buttons
+        // and saves on click. It is also the one tunable that does NOT take
+        // effect on next use: the camera reads its resolution when it starts,
+        // so changing it restarts the camera. Doing that silently is the whole
+        // point - an operator picking "Sharper" means the picture, not a
+        // two-step procedure ending in a button labelled Start camera.
+        let resolutionChoice = null;
+
+        function paintResolution(options, current) {
+            const box = document.getElementById('tunResolution');
+            if (!box || !options) return;
+            resolutionChoice = current;
+            box.innerHTML = options.values.map((v, i) =>
+                `<button type="button" role="radio" data-value="${v}"` +
+                ` aria-checked="${v === current}">${options.labels[i]}` +
+                `<span class="seg-dim">${v.replace('x', ' \u00d7 ')}</span></button>`
+            ).join('');
+            box.querySelectorAll('button').forEach((b) => {
+                b.addEventListener('click', () => chooseResolution(b.dataset.value));
+            });
+        }
+
+        async function chooseResolution(value) {
+            if (value === resolutionChoice) return;
+            const hint = document.getElementById('resHint');
+            const before = resolutionChoice;
+            paintResolution(lastResolutionOptions, value);
+            hint.textContent = 'Saving and restarting the camera\u2026';
+            try {
+                const resp = await fetch('/operator/api/config/tunables', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cameraResolution: value }),
+                });
+                if (!resp.ok) throw new Error('save failed');
+                // The camera only reads this at startup, so the setting is not
+                // real until it has been through one.
+                await fetch('/operator/api/camera/start', { method: 'POST' });
+                hint.textContent = 'Camera restarting at the new quality. Give it a few seconds.';
+            } catch (e) {
+                paintResolution(lastResolutionOptions, before);
+                hint.textContent = 'Could not change the quality. The camera is unchanged.';
+            }
+        }
+
+        let lastResolutionOptions = null;
         const tunMsg = document.getElementById('tunMsg');
 
         async function loadTunables() {
@@ -427,6 +489,8 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                lastResolutionOptions = (d.options || {}).cameraResolution || null;
+                paintResolution(lastResolutionOptions, d.values.cameraResolution);
             } catch (e) { /* offline: leave the fields as they are */ }
         }
 
@@ -440,7 +504,7 @@
                 for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
                     const el = document.getElementById(id);
                     if (!el) continue;
-                    body[name] = name === 'cameraHost' ? el.value.trim() : Number(el.value);
+                    body[name] = Number(el.value);
                 }
                 const resp = await fetch('/operator/api/config/tunables', {
                     method: 'POST',
@@ -614,16 +678,27 @@
         // instantly instead of sitting on "Loading…".
         const statusPoller = { refreshNow: () => YardStatus.refreshNow() };
 
+        // The footer speaks only when something is wrong.
+        //
+        // It used to report "Last checked: 16:13:05" on a perfectly healthy
+        // page, which is a timestamp nobody reads telling them nothing is the
+        // matter - and worse, it trains the eye to skip a line that does carry
+        // the failures. Every card above already shows its own state, and the
+        // nav has a live rover chip.
+        function setFooter(text) {
+            const el = document.getElementById('footer');
+            el.textContent = text || '';
+            el.hidden = !text;
+        }
+
         YardStatus.subscribe((data, meta) => {
             renderStatus(data);
             if (meta && meta.cached) {
                 const age = Math.round((Date.now() - meta.ts) / 1000);
-                document.getElementById('footer').textContent =
-                    'Showing cached status (' + age + 's old), refreshing...';
+                setFooter('Showing cached status (' + age + 's old), refreshing...');
             } else {
                 consecutiveFailures = 0;
-                document.getElementById('footer').textContent =
-                    'Last checked: ' + new Date().toLocaleTimeString();
+                setFooter('');
             }
         });
 
@@ -632,9 +707,9 @@
             // space out on their own; surface that instead of implying
             // we're hammering the satellite every 5s regardless.
             consecutiveFailures++;
-            document.getElementById('footer').textContent = consecutiveFailures > 1
+            setFooter(consecutiveFailures > 1
                 ? 'Fetch failed (' + consecutiveFailures + ' in a row), backing off and retrying...'
-                : 'Fetch failed, retrying...';
+                : 'Fetch failed, retrying...');
         });
 
         // Rover URL editor

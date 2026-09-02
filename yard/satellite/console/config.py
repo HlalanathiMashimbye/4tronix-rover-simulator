@@ -21,10 +21,16 @@ from console.blueprint import operator_bp
 @operator_bp.route('/api/config/tunables', methods=['GET', 'POST'])
 def api_tunables():
     if request.method == 'GET':
-        return jsonify({'values': tunables.all_values(), 'limits': tunables.limits()})
+        return jsonify({'values': tunables.operator_values(),
+                        'limits': tunables.limits(),
+                        'options': tunables.options()})
 
     data = request.get_json(silent=True) or {}
-    unknown = [k for k in data if k not in tunables.TUNABLES]
+    # A hidden setting is refused here as firmly as an invented one. It is not
+    # on the page, so a request carrying it did not come from the page, and the
+    # endpoint should not be a side door onto settings the page deliberately
+    # does not offer.
+    unknown = [k for k in data if k not in tunables.TUNABLES or k in tunables.HIDDEN]
     if unknown:
         return jsonify({'error': f'Unknown setting: {", ".join(sorted(unknown))}'}), 400
 
@@ -33,4 +39,5 @@ def api_tunables():
     except (TypeError, ValueError):
         return jsonify({'error': 'Every value must be a number, except the camera host'}), 400
 
-    return jsonify({'status': 'ok', 'values': values, 'limits': tunables.limits()})
+    return jsonify({'status': 'ok', 'values': tunables.operator_values(),
+                    'limits': tunables.limits(), 'options': tunables.options()})
