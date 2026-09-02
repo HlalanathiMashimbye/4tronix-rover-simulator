@@ -36,19 +36,31 @@ can see. If a phone is in the room, the rover joins the phone.
 entry. A rover that cannot see `marsyard` should fail visibly rather than
 quietly attach itself to somebody's phone and disappear off the yard network.
 
-### The trap, and it will cost an afternoon
+### Set wifi in the Imager, for both cards
 
-How you set wifi depends on the OS, and the two Pis are not on the same one:
+Use Raspberry Pi Imager's **OS Customisation** (the gear) on both: hostname,
+user and password, wifi with country ZA, SSH on, and paste your public key.
+That is the whole of it.
 
-| | OS | How wifi is set |
-|---|---|---|
-| **Rover** (Pi Zero W) | Bullseye Legacy 32-bit, *required* - `rpi_ws281x` and 4tronix's `rover.py` are only tested there | `wpa_supplicant.conf` on the `bootfs` partition. Copied to `/etc` on first boot, **replacing** whatever was there, which is what clears the old networks |
-| **Satellite** | Bookworm | **`wpa_supplicant.conf` on bootfs is ignored.** Bookworm uses NetworkManager. Set wifi in Raspberry Pi Imager's advanced options (the gear), or `nmcli` afterwards |
+Do it in the app rather than by hand and the next paragraph stops being your
+problem.
 
-Following [rover-server.md](rover-server.md)'s `wpa_supplicant.conf` recipe on
-a Bookworm satellite produces a Pi that boots and never joins anything, with
-nothing in the logs pointing at the file you wrote. That recipe is correct for
-the rover and wrong for the satellite.
+**Why it matters.** The two Pis do not use the same wifi mechanism. The rover
+is pinned to Bullseye Legacy - `rpi_ws281x` and 4tronix's `rover.py` are only
+tested there - which takes `wpa_supplicant.conf` on the `bootfs` partition. A
+Bookworm satellite **ignores that file completely** and uses NetworkManager.
+Write the wrong one and you get a Pi that boots, joins nothing, and says
+nothing about the file you wrote. Imager knows which image it just wrote, so
+it picks correctly and the question never comes up.
+
+Two other things the app gets right that are easy to get wrong by hand: the
+password (`userconf.txt` is processed once on first boot, so a card that has
+already booted cannot be fixed by putting it back), and the SSH key, which is
+what stops the password mattering at all.
+
+A clean flash also starts the card with **only** the network you typed. That is
+the fix for a rover that keeps joining somebody's phone hotspot: it is not that
+the password is wrong, it is that the card still has the other network on it.
 
 ## Order
 
@@ -58,9 +70,9 @@ way you can see, which is the point of splitting them up.
 **1. Hotspot.** Laptop serving `marsyard`. Note the address it gives itself -
 macOS Internet Sharing usually takes `192.168.2.1`.
 
-**2. Rover.** Flash Bullseye Legacy. On `bootfs`: an empty `ssh` file,
-`userconf.txt`, and a `wpa_supplicant.conf` containing **only** the `marsyard`
-block from [rover-server.md](rover-server.md). Boot, then find it:
+**2. Rover.** Flash Bullseye Legacy via **Use custom**, and set hostname, the
+`mars` user, `marsyard` wifi, SSH and your public key in **OS Customisation**.
+Boot, then find it:
 
 ```bash
 ping -c1 marspi.local || arp -a | grep -i b8:27:eb   # Pi MAC prefix
@@ -71,8 +83,8 @@ curl -s localhost:8523/health
 Do not continue until `/health` answers. Everything after this assumes a rover
 that responds.
 
-**3. Satellite.** Flash Bookworm, setting hostname, user, SSH and the
-`marsyard` wifi **in Imager's advanced options**. Boot, find it, then:
+**3. Satellite.** Flash Bookworm, same OS Customisation screen, same details.
+Boot, find it, then:
 
 ```bash
 git clone <repo> ~/4tronix-rover-simulator
