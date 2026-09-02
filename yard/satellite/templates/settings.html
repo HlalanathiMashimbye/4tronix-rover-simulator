@@ -38,6 +38,11 @@
             display: flex; align-items: center; gap: 0.7rem;
             min-height: 46px;
             padding: 0.6rem 0.9rem; min-width: 0;
+            /* Wrap rather than squeeze. The status pill and the address both
+               hold their width, so with a long label like "fake driver (no
+               hardware)" the diagnostic was crushed into a column six
+               characters wide and wrapped on every other word. */
+            flex-wrap: wrap;
         }
         .hrow + .hrow, .hpanel + .hrow { border-top: 1px solid var(--border); }
         .hname {
@@ -47,7 +52,10 @@
             letter-spacing: 0.1em; text-transform: uppercase;
         }
         .hdetail {
-            flex: 1 1 auto; min-width: 0;
+            /* A real basis, not auto: min-width 0 let this shrink to nothing
+               whenever a sibling refused to. Below ~16rem it takes its own
+               line instead. */
+            flex: 1 1 16rem; min-width: 0;
             color: var(--text-dim); font-family: var(--mono);
             font-size: var(--fs-2xs); line-height: 1.5;
             /* Wraps rather than truncates. Ellipsis kept the rows a uniform
@@ -141,6 +149,7 @@
         .rover-addr code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text); }
         .rover-addr .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
         .url-editor { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .sim-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .found-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .url-manual { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
         .url-manual input { flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: var(--fs-xs); }
@@ -347,6 +356,15 @@
                 <!-- Full width beneath its row, so opening it grows this module and
                      nothing else. Inside a status tile it made the tile burst. -->
                 <div class="hpanel" id="url-editor" hidden>
+                    <!-- First, because it is the one answer that is always
+                         right. The simulator runs on this satellite, so its
+                         address never changes and never has to be found -
+                         unlike the rover, which moves between networks and is
+                         the thing people mistype under pressure. -->
+                    <div class="sim-row">
+                        <button class="btn primary" id="use-sim-btn" type="button">Switch to the simulator</button>
+                        <span class="hhint" id="sim-hint"></span>
+                    </div>
                     <div class="found-row">
                         <button class="btn primary" id="findRoverBtn" type="button">Find rover</button>
                         <span class="hhint">Looks for anything answering as a rover on this network.</span>
@@ -935,6 +953,7 @@
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
+                paintSimSwitch();
                 if (data.persisted) {
                     urlEditor.hidden = true;
                 } else {
@@ -945,6 +964,53 @@
                 urlError.textContent = 'Save failed: ' + e.message;
             }
         }
+
+        // ---- The simulator -------------------------------------------
+        // The one rover address that never changes: it runs on this satellite,
+        // so it is always localhost:8523. Everything else about finding a
+        // rover exists because its address moves; this one does not, which is
+        // why it gets a button instead of a search.
+        const SIM_URL = 'http://localhost:8523';
+        const LAST_ROVER_KEY = 'yard:lastRoverUrl';
+        const simBtn = document.getElementById('use-sim-btn');
+        const simHint = document.getElementById('sim-hint');
+
+        function currentRoverUrl() {
+            return document.getElementById('rover-url').textContent.trim();
+        }
+
+        function onSimulator() {
+            // Host, not substring: an address that merely mentions localhost
+            // somewhere is not the simulator.
+            try {
+                const host = new URL(currentRoverUrl()).hostname;
+                return host === 'localhost' || host === '127.0.0.1';
+            } catch (e) { return false; }
+        }
+
+        function paintSimSwitch() {
+            const sim = onSimulator();
+            simBtn.textContent = sim ? 'Switch back to the rover' : 'Switch to the simulator';
+            simHint.textContent = sim
+                ? 'Simulated: nothing moves, and the console behaves exactly the same.'
+                : 'A rover that never moves, running on this satellite. No hardware needed.';
+        }
+
+        simBtn.addEventListener('click', () => {
+            if (onSimulator()) {
+                // Back to whatever real rover was set before the switch, so
+                // returning is one press rather than typing an address again.
+                let previous = '';
+                try { previous = localStorage.getItem(LAST_ROVER_KEY) || ''; } catch (e) {}
+                urlInput.value = previous || 'curiosity.local';
+            } else {
+                try { localStorage.setItem(LAST_ROVER_KEY, currentRoverUrl()); } catch (e) {}
+                urlInput.value = SIM_URL;
+            }
+            saveUrl(false);
+        });
+
+        paintSimSwitch();
 
         document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(false));
         urlInput.addEventListener('keydown', (e) => {

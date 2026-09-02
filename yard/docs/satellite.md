@@ -187,6 +187,51 @@ button next to the URL). Edits are persisted to `satellite_config.json` and
 survives systemd restarts and reboots. Delete the file to fall back to the
 environment value.
 
+## The simulator (port 8523)
+
+The same rover server the rover runs, with the fake driver, so the console has
+something to talk to when the rover is flat, apart, or in somebody's bag. The
+queue, the run station, the monitor and the recording path all behave exactly
+as they do with hardware, because it is the same code with one object swapped
+underneath it.
+
+Its address is the point: it runs on the satellite, so it is always
+`http://localhost:8523` and never has to be found. That is why **Settings ->
+Rover -> Change** offers it as a button ("Switch to the simulator") while a
+real rover is something you go looking for. Switching back is one press too -
+the console remembers the rover address it was on.
+
+Install it on the satellite:
+
+```
+sudo cp yard/deploy/rover-sim.service /etc/systemd/system/
+sudo systemctl enable --now rover-sim
+```
+
+Leaving it installed is safe. It listens on localhost only, so nothing off the
+satellite can reach it, and the console uses it only when somebody switches.
+
+You can tell at a glance which one you are on: the Rover row reads **fake
+driver (no hardware)** in amber rather than **ok** in green, because
+`/api/status` reports the driver the server actually built.
+
+### The whole yard on one laptop
+
+The satellite and the simulator both run anywhere Python does, which is the
+fastest way to work on the console with no hardware and no network at all:
+
+```
+ROVER_DRIVER=fake python3 yard/rover/rover_server.py       # simulated rover, :8523
+ROVER_URL=http://localhost:8523 python3 yard/satellite/web_server.py   # console, :3001
+```
+
+`ROVER_DRIVER` is what makes that deterministic. Without it the driver is
+chosen by whether `/dev/i2c-1` exists, which is right on a rover and wrong
+everywhere else: a simulator on a Pi with I2C enabled would reach for motors
+that are not attached, and a rover whose library failed to import would quietly
+become a simulator and look healthy while nothing moved. `ROVER_DRIVER=real`
+refuses to fall back for that reason.
+
 ## Camera Server (port 8890)
 
 WebSocket server streaming JPEG frames from Pi AI Camera (IMX500).
