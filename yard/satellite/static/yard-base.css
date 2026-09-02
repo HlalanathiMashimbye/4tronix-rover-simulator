@@ -271,6 +271,20 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 
 .console { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
 
+/* A link with no class of its own.
+   There were none until one turned up in an error message and rendered in the
+   browser default #0000EE on this near-black ground: 1.18:1 measured, against
+   the 4.5:1 AA asks for. Anchors do not inherit colour, so the .url-error rule
+   around it never reached it. Every other link in the console carries a class
+   and styles itself, so this changes nothing today; it is the floor for the
+   next one written without one. */
+.console a:not([class]) {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.console a:not([class]):hover { color: var(--primary); }
+
 /* Labelled form field. Was defined privately inside settings.html, so the run
    station rendered its labels, inputs and hints inline on one line: the
    drift this layer exists to stop. One definition, both pages. */

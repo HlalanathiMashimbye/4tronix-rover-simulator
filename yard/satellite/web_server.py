@@ -211,15 +211,24 @@ def api_status():
 
 
 @app.route('/api/config/rover_url', methods=['POST'])
-@operator_console.require_operator
 def api_set_rover_url():
     """Set the rover URL at runtime (from the /status page) and persist it.
 
-    Gated because repointing the rover is a control action: anyone on the venue
-    network could otherwise aim this satellite at a different machine, or at
-    nothing, and the console would carry on reporting success. It costs nothing
-    on event days - OPERATOR_AUTH=off makes require_operator a pass-through -
-    so this only bites someone who should not be here.
+    Not gated, and that is a reversal. The old reasoning was that repointing
+    the rover is a control action: anyone on the venue network could aim this
+    satellite at a different machine and the console would carry on reporting
+    success. True, but it assumed the gate was free, and it is not.
+    require_operator means a Firebase sign-in, which means internet, and the
+    field edit this endpoint exists for is the one an operator makes when the
+    rover has moved to a new address - which is exactly when the yard is least
+    likely to have working wifi. A control that only unlocks when the network
+    is healthy is missing on the night it is needed.
+
+    The same call was made for camera start: on a box whose whole point is
+    working offline, an auth gate that bites only when the wifi is down
+    protects nothing worth the cost. What is left is the network boundary
+    itself - the satellite serves the yard's own LAN - plus validation below,
+    which still rejects anything that is not an http(s) URL.
     """
     global ROVER_URL
     data = request.get_json(silent=True) or {}
