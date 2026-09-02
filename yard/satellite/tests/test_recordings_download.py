@@ -217,6 +217,10 @@ class TestCameraReadiness:
     """
 
     def test_it_reports_frames_arriving(self, client, monkeypatch):
+        """Patches two seams now, and that is the point: readiness goes through
+        camera_state, which does not probe a port nothing is listening on."""
+        import camera_state
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
         monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
 
         body = client.get('/api/camera/ready').get_json()
@@ -224,6 +228,8 @@ class TestCameraReadiness:
         assert body['ready'] is True
 
     def test_it_reports_why_when_they_are_not(self, client, monkeypatch):
+        import camera_state
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
         monkeypatch.setattr(recording_control, 'is_ready',
                             lambda timeout=None: (False, 'no frame received'))
 
@@ -231,6 +237,20 @@ class TestCameraReadiness:
 
         assert body['ready'] is False
         assert body['detail'] == 'no frame received'
+
+    def test_a_dead_port_is_not_probed_for_frames(self, client, monkeypatch):
+        """The probe's timeout is the slowest thing on the page. Asking a port
+        nothing is listening on to produce a frame can only ever wait."""
+        import camera_state
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: False)
+        probed = []
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: probed.append(1) or (True, None))
+
+        body = client.get('/api/camera/ready').get_json()
+
+        assert body['ready'] is False
+        assert probed == [], 'must not probe a port that is not listening'
 
     def test_it_needs_no_login(self, client, monkeypatch):
         """Same reason as everything else on this page: a check that only works

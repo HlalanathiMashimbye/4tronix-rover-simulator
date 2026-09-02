@@ -285,6 +285,78 @@ class TestConsoleDesignSystem:
             assert '&mdash;' not in body, path
 
 
+class TestCameraHostIsNotAnOperatorSetting:
+    """It has one correct value on a yard - the camera and the web server are
+    the same Pi - and one obscure other use, pointing a laptop's web_server at
+    the Pi's camera while developing. A control whose reachable settings are
+    "correct" and "broken" does not belong on a page used under pressure.
+
+    It stays a real setting, readable by code and overridable by CAMERA_HOST.
+    """
+
+    def test_it_is_not_on_the_settings_page(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'tunCameraHost' not in page
+        assert 'Camera host' not in page
+
+    def test_the_endpoint_does_not_offer_it(self, client):
+        body = client.get('/operator/api/config/tunables').get_json()
+
+        assert 'cameraHost' not in body['values']
+        assert 'cameraReadyTimeout' in body['values']
+        assert 'cameraResolution' in body['values']
+
+    def test_writing_it_through_the_endpoint_is_refused(self, client):
+        """Not on the page means a request carrying it did not come from the
+        page. The endpoint is not a side door onto what the page withholds."""
+        resp = client.post('/operator/api/config/tunables',
+                           json={'cameraHost': 'attacker.local'})
+
+        assert resp.status_code == 400
+        import tunables
+        assert tunables.get('cameraHost') == 'localhost', 'must be unchanged'
+
+    def test_code_can_still_read_it(self, client):
+        import tunables, recording_control
+
+        assert 'cameraHost' in tunables.all_values()
+        assert 'localhost' in recording_control._camera_uri()
+
+
+class TestSettingsHasNoOrphanedControls:
+    """Removing a setting has to remove its input, not just its label.
+
+    The session tunables were cut by deleting the label lines, which left two
+    unlabelled "seconds" boxes and their stray </label> tags on the page. The
+    test written at the time asserted the label TEXT was gone - which it was -
+    so it passed against a page with two dead controls on it.
+    """
+
+    def test_the_session_inputs_are_gone_with_their_settings(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'tunSessionMaxAge' not in page
+        assert 'tunSessionRecheck' not in page
+
+    def test_every_input_on_the_page_has_a_label(self, client):
+        """The general form of the same bug: an input nobody can name."""
+        import re
+        page = client.get('/settings').get_data(as_text=True)
+        body = page[page.index('<body'):]
+        ids = set(re.findall(r'<input[^>]*\bid="([^"]+)"', body))
+        labelled = set(re.findall(r'\bfor="([^"]+)"', body))
+        # Controls inside a wrapping <label>, or given an aria-label, are named
+        # without a for= attribute.
+        for m in re.finditer(r'<label\b[^>]*>(.*?)</label>', body, re.S):
+            labelled |= set(re.findall(r'<input[^>]*\bid="([^"]+)"', m.group(1)))
+        labelled |= set(re.findall(r'<input[^>]*aria-label="[^"]*"[^>]*\bid="([^"]+)"', body))
+        labelled |= set(re.findall(r'<input[^>]*\bid="([^"]+)"[^>]*aria-label="[^"]*"', body))
+
+        orphans = sorted(ids - labelled)
+        assert not orphans, f'inputs with no label: {orphans}'
+
+
 class TestMonitorBacklog:
     """Anything the rover did before the monitor opened arrives through one
     fetch on load; the SSE stream that follows carries only changes.
@@ -366,3 +438,103 @@ class TestMonitorSimFeed:
 
         assert 'let seenAnything = false;' in js
         assert 'if (!seenAnything) {' in js
+
+
+class TestFooterSpeaksOnlyOnTrouble:
+    """It reported "Last checked: 16:13:05" on a healthy page - a timestamp
+    nobody reads, saying nothing is the matter. Worse than useless: it trains
+    the eye to skip the one line that carries the failures."""
+
+    def test_it_starts_hidden(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert '<div class="footer" id="footer" hidden></div>' in page
+
+    def test_a_healthy_poll_clears_it(self, client):
+        """Asserts the assignment, not the words.
+
+        The first version failed on the comment written to explain the change,
+        which mentions the old "Last checked" text - the same trap as asserting
+        a removed field by its label. Look at what the code does.
+        """
+        page = client.get('/settings').get_data(as_text=True)
+        script = page[page.index('<script>'):]
+
+        assert "setFooter('')" in script
+        assert "textContent =\n                    'Last checked" not in script
+        assert "setFooter('Last checked" not in script
+
+    def test_failures_and_staleness_still_show(self, client):
+        """Quieting it must not silence it. These are the states worth a line."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'Showing cached status' in page
+        assert 'Fetch failed' in page
+
+
+class TestOneCameraTruth:
+    """There were three answers to "is the camera working" and pages mixed
+    them: /api/status said the port was open, /api/camera/ready said frames
+    were arriving, /operator/api/camera said what camera_control believed. So
+    Settings could insist the camera was fine while the run station refused to
+    record, both truthfully reporting their own poll.
+    """
+
+    def test_every_endpoint_serves_the_same_snapshot(self, client, monkeypatch):
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+
+        status = client.get('/api/status').get_json()['camera']
+        ready = client.get('/api/camera/ready').get_json()
+        operator = client.get('/operator/api/camera').get_json()
+
+        assert status['ready'] == ready['ready'] == operator['ready'] is True
+        assert status['listening'] == operator['listening'] is True
+
+    def test_they_cannot_disagree_when_frames_stop(self, client, monkeypatch):
+        """The state that matters: listening, but producing nothing."""
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (False, 'no frame received'))
+
+        status = client.get('/api/status').get_json()['camera']
+        operator = client.get('/operator/api/camera').get_json()
+
+        assert status['listening'] is True and status['ready'] is False
+        assert operator['listening'] is True and operator['ready'] is False
+
+    def test_the_probe_is_shared_not_repeated_per_caller(self, client, monkeypatch):
+        """Three pages polling every five seconds must not mean three competing
+        camera clients per cycle."""
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        calls = []
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: calls.append(1) or (True, None))
+
+        client.get('/api/status')
+        client.get('/api/camera/ready')
+        client.get('/operator/api/camera')
+
+        assert len(calls) == 1, f'probed {len(calls)} times for three callers'
+
+    def test_starting_the_camera_drops_the_cached_answer(self, client, monkeypatch):
+        """Otherwise the next poll reports the state from before the button."""
+        import camera_state, camera_control
+        monkeypatch.setattr(camera_control, 'start', lambda camera_index=None: (True, 'started'))
+        client.get('/api/status')
+
+        client.post('/operator/api/camera/start')
+
+        assert camera_state._cache['snapshot'] is None
+
+    def test_no_page_polls_the_camera_on_its_own(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+        script = page[page.index('<script>'):]
+        # The only remaining mention is the comment explaining why it stopped.
+        assert "fetch('/api/camera/ready')" not in script
+
+        settings = client.get('/settings').get_data(as_text=True)
+        assert 'setInterval(loadCamera' not in settings
