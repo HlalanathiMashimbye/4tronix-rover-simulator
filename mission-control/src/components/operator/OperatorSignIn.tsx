@@ -75,7 +75,7 @@ export function OperatorSignIn({ yards }: { yards: Yard[] }) {
   }
 
   return (
-    <main className="relative flex h-[calc(100vh-64px)] items-center justify-center px-4 sm:px-6">
+    <main className="relative flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center px-4 sm:px-6">
       <form
         onSubmit={handleSubmit}
         noValidate

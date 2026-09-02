@@ -12,6 +12,13 @@
  * in the light block is inherited by omission from the dark one.
  */
 :root {
+  /* How much fixed chrome sits above the page: the navbar, plus the
+     environment banner in dev and staging. Measured and republished by
+     ChromeHeight; this default is the production case (navbar only), so a page
+     is correctly sized before the first measurement lands and stays correct if
+     JavaScript never runs at all. */
+  --app-chrome: 64px;
+
   /* 0.9rem came with the Paper & Ink palette. It lives here rather than in the
      light block because radius is not a colour-scheme concern, so this
      tightens the corners in BOTH themes by 1.6px at the base step. */

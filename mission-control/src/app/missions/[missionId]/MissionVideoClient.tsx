@@ -87,7 +87,7 @@ export default function MissionVideoClient({
 
   if (loading) {
     return (
-      <main className="flex h-[calc(100vh-64px)] items-center justify-center">
+      <main className="flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
       </main>
     );
@@ -95,7 +95,7 @@ export default function MissionVideoClient({
 
   if (error || !mission) {
     return (
-      <main className="mx-auto flex h-[calc(100vh-64px)] max-w-md flex-col items-center justify-center px-6 text-center">
+      <main className="mx-auto flex h-[calc(100dvh-var(--app-chrome))] max-w-md flex-col items-center justify-center px-6 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
           <Rocket className="h-8 w-8 text-primary" />
         </div>
@@ -139,7 +139,7 @@ export default function MissionVideoClient({
     // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
     // blocks and the code were rendered, just unreachable, with no scrollbar to
     // hint that anything was below.
-    <main className="px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
+    <main className="px-3 py-2 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
