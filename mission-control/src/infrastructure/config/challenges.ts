@@ -68,7 +68,10 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'load-more',
         title: 'Browse further',
         instructions:
-          'Clear your filters, then load an older page of missions with the "Show more missions" button at the bottom of the feed. If you don\'t see that button, there is nothing further to load - you\'re already looking at every mission, so this step is done.',
+          'Clear BOTH your search text (the X in the search box) and your status filter (click back to "All missions"), then load an older page with the "Show more missions" button at the bottom of the feed. That button only appears once nothing is narrowing the view. If it still doesn\'t appear, there is nothing further to load - you\'re already looking at every mission, so this step is done.',
+        hints: [
+          'The button is deliberately hidden while a search or filter is active, so you never see "load more" on a list that is already the whole result.',
+        ],
         checks: [{ kind: 'load-more' }],
       },
     ],
