@@ -314,3 +314,55 @@ class TestMonitorBacklog:
         page = client.get('/monitor/').get_data(as_text=True)
 
         assert 'setInterval(function () { queue.refresh(); }, 15000)' in page
+
+
+class TestMonitorSimFeed:
+    """The simulated rover view, on a page that was opened after the run.
+
+    The sim played from `status.current`, which the rover clears the moment a
+    run finishes. So the sequence "send a mission, then open the monitor" drew
+    a parked rover on an empty yard, and the TV stayed that way until somebody
+    ran the next mission. Two separate faults, both fixed here.
+    """
+
+    def test_a_late_subscriber_is_given_the_last_snapshot(self, client):
+        """The sim awaits /api/status before it subscribes, so by the time it
+        registered, the one snapshot carrying the backlog had already been
+        dispatched and it had nothing to replay."""
+        page = client.get('/monitor/').get_data(as_text=True)
+
+        assert 'onQueueEvent: (fn) => {' in page
+        assert 'if (lastStatus) {' in page
+
+    def test_a_fetched_snapshot_reaches_the_same_subscribers_as_a_pushed_one(self, client):
+        """refresh() went straight to updateUI, so the load-time snapshot was
+        seen by the queue display and by nothing else."""
+        page = client.get('/monitor/').get_data(as_text=True)
+
+        assert 'function dispatchStatus(status)' in page
+        assert 'queue.onStatus = dispatchStatus;' in page
+        assert 'if (this.onStatus) { this.onStatus(data); }' in page
+
+    def test_the_dispatcher_is_ready_before_the_backlog_is_fetched(self, client):
+        """Ordering is the whole fix: a dispatcher installed after the fetch
+        would miss exactly the snapshot that matters."""
+        page = client.get('/monitor/').get_data(as_text=True)
+
+        assert page.index('queue.onStatus = dispatchStatus;') < page.index('function loadBacklog(attempt)')
+
+    def test_the_sim_falls_back_to_the_last_finished_run(self, client):
+        """`current` is empty once a run ends, which is the normal state of a
+        yard someone has just walked up to."""
+        js = client.get('/static/sim-monitor.js').get_data(as_text=True)
+
+        assert 'function lastRunFrom(status)' in js
+        assert "entry.cmd === 'run_python'" in js
+        assert 'view.play(previous)' in js
+
+    def test_the_fallback_only_applies_to_the_first_snapshot(self, client):
+        """Otherwise every idle poll would restart the last run, and the yard
+        would loop one mission forever."""
+        js = client.get('/static/sim-monitor.js').get_data(as_text=True)
+
+        assert 'let seenAnything = false;' in js
+        assert 'if (!seenAnything) {' in js
