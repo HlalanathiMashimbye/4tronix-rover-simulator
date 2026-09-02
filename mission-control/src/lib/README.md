@@ -40,11 +40,22 @@ they disagreed, a child saw one thing on screen and the rover did another.
 ## 2. Small UI helpers
 
 ```
-easings.ts          CSS easing curves
-missionDuration.ts  a human label for how long a run took
-roverCommandHelp.ts help text per rover command, for editor hovers
-missionRuns.ts      which runs a learner can actually watch
+easings.ts            CSS easing curves
+missionDuration.ts    a human label for how long a run took
+roverCommandHelp.ts   help text per rover command, for editor hovers
+missionRuns.ts        which runs a learner can actually watch
+missionClipboard.ts   what every Copy button puts on the clipboard
 ```
+
+`missionClipboard.ts` sits here because it is a formatting helper used by two
+components, but it is worth knowing that its output is a contract, not a
+convenience: the yard's run station parses the header it writes to fill the
+mission id, and from that the run id, which is the filename the recording is
+saved under. The yard's half is in `yard/satellite/templates/run.html`, and
+`yard/satellite/tests/test_mission_import.py` checks the two halves still
+agree. There were two Copy buttons writing two different payloads before this
+existed, and copying from the mission page produced a paste the run station
+could not identify.
 
 Presentation-shaped and used only by components. `missionRuns.ts` is the least
 settled of these: it imports `yardPlace` from `infrastructure/config/yards` to

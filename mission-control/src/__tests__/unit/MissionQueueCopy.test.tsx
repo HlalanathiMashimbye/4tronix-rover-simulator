@@ -65,7 +65,7 @@ describe('copying a mission to paste into the yard', () => {
     // act() warning behind.
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith(
-        JSON.stringify({ missionName: 'Rock Lover', missionId: 'm1', code: 'rover.forward(60)\nrover.stop()' }),
+        '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
       ),
     );
     await screen.findByRole('button', { name: /copied/i });
@@ -94,7 +94,7 @@ describe('copying a mission to paste into the yard', () => {
     await waitFor(() =>
       expect(prompt).toHaveBeenCalledWith(
         expect.stringContaining('paste it into the yard'),
-        JSON.stringify({ missionName: 'Rock Lover', missionId: 'm1', code: 'rover.forward(60)\nrover.stop()' }),
+        '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
       ),
     );
     expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();

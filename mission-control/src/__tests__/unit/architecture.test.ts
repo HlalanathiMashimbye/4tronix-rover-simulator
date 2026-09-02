@@ -86,7 +86,8 @@ describe('src/lib stays small', () => {
       'rover-physics', 'simulateCommands', 'parseRoverCode',
       'roverSimRender', 'roverBlockly',
     ];
-    const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns'];
+    const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns',
+                        'missionClipboard'];
 
     const actual = sourceFiles('lib')
       .map((f) => f.replace(/\\/g, '/').replace(/^lib\//, '').replace(/\.tsx?$/, ''))
@@ -131,6 +132,39 @@ describe('the composition root', () => {
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
       .filter((f) => read(f).includes('new FirestoreMissionRepository'));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('the Copy buttons', () => {
+  it('all copy the same payload, through the one helper', () => {
+    /**
+     * There were two Copy buttons writing two different things: the operator
+     * queue wrote a JSON envelope, the mission page wrote bare `mission.code`.
+     * Copying from the mission page - the obvious place, since that is where
+     * you are when you are looking at a mission - therefore pasted into the
+     * run station as anonymous Python, leaving the mission id and the run id
+     * empty. The run id is the recording's filename, so those runs recorded to
+     * a file that could not be matched back to a mission.
+     *
+     * A static check rather than a render, because the failure was two call
+     * sites drifting apart, not either one misbehaving on its own.
+     */
+    const offenders: string[] = [];
+    for (const dir of ['app', 'components']) {
+      for (const file of sourceFiles(dir)) {
+        for (const match of read(file).matchAll(/clipboard\.writeText\(([^;]*?)\)\s*;/g)) {
+          const argument = match[1].trim();
+          // Only the ones copying a mission's code. A button copying a link or
+          // a description is not part of this contract.
+          if (!/\bcode\b/.test(argument)) continue;
+          if (!argument.includes('missionClipboardText(')) {
+            offenders.push(`${file} -> clipboard.writeText(${argument})`);
+          }
+        }
+      }
+    }
 
     expect(offenders).toEqual([]);
   });

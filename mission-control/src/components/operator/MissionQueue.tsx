@@ -28,6 +28,7 @@ import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
+import { missionClipboardText } from '@/lib/missionClipboard';
 
 /**
  * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
@@ -108,11 +109,9 @@ function YardQueue({
   const [flash, setFlash] = useState<string | null>(null);
 
   async function copyCode(mission: QueueMission) {
-    const envelope = JSON.stringify({
-      missionName: mission.name || '',
-      missionId: mission.id,
-      code: mission.code,
-    });
+    // Shared with the mission page, so both Copy buttons put the same thing on
+    // the clipboard and the run station gets the same paste either way.
+    const envelope = missionClipboardText(mission);
     try {
       await navigator.clipboard.writeText(envelope);
       setCopiedId(mission.id);
