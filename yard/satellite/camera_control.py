@@ -24,7 +24,9 @@ interpolated into a command line. subprocess is always called with a list and
 shell=False, so there is no shell to inject into.
 
 That matters more than usual here: this console is reachable by anyone on the
-venue network, and OPERATOR_AUTH=off removes the login entirely on event days.
+venue network and has no login at all - the sign-in went with the Firestore
+mirror, because it needed internet on a box built to work without it. The
+network boundary and this hardcoded command are the controls.
 """
 
 import os

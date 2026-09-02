@@ -45,6 +45,18 @@
  *   --apply         actually write
  *   --force         proceed even if the target already holds data
  *   --only <name>   migrate a single collection (missions | learners | rover-configs)
+ *
+ * THE ONE PLACE SERVICE-ACCOUNT KEYS SURVIVE, deliberately. Everything else
+ * that touches Firestore authenticates with Application Default Credentials
+ * and refuses to start if FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY is
+ * set. This script is the exception because it talks to TWO projects at once,
+ * and ADC only signs you in to one: the target can use ADC (leave the TARGET_
+ * pair unset), but the source generally cannot, which is the whole reason you
+ * are migrating away from it.
+ *
+ * So: this is not a pattern to copy. Use a key here, for one run, and delete
+ * it in the Google Cloud console afterwards rather than leaving it in a .env,
+ * since a key that still exists is still a way in.
  */
 
 import { createHash } from 'node:crypto';

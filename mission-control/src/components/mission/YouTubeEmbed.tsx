@@ -19,24 +19,70 @@
  * for an audience of minors.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Play, ExternalLink } from 'lucide-react';
 
 interface YouTubeEmbedProps {
   youtubeId: string;
   title: string;
+  showFallbackLink?: boolean;
+  /** Start muted, and follow the learner's choice while playing (AB#409). */
+  muted?: boolean;
+  /**
+   * Fires when the facade hands over to the real iframe.
+   *
+   * The carousel overlays its own chrome on this frame and has to move it out
+   * of the way of YouTube's controls, which it cannot know about otherwise:
+   * the iframe is cross-origin, so there is no play event to listen for from
+   * outside. This is the one moment we can see, and it is enough.
+   */
+  onPlayingChange?: (playing: boolean) => void;
 }
 
-export function YouTubeEmbed({ youtubeId, title }: YouTubeEmbedProps) {
+export function YouTubeEmbed({
+  youtubeId,
+  title,
+  showFallbackLink = true,
+  muted = false,
+  onPlayingChange,
+}: YouTubeEmbedProps) {
   const [playing, setPlaying] = useState(false);
+  // The mute setting AS IT WAS when play was tapped, frozen deliberately.
+  // Deriving the URL from the live value would rewrite src on every toggle,
+  // and rewriting an iframe's src reloads it: the video would jump back to the
+  // start every time someone reached for the speaker button.
+  const [startedMuted, setStartedMuted] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement>(null);
   const watchUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+
+  // Muting happens TWICE, on purpose, and neither way is redundant.
+  //
+  // `mute=1` in the URL is what makes the video start silent. It is the only
+  // thing that can, because the player reads it before any script of ours could
+  // reach it, and an autoplaying video that blares for half a second before
+  // being silenced is exactly the failure this is meant to prevent.
+  //
+  // postMessage is what makes the toggle work WHILE the video plays. Changing
+  // the URL instead would remount the iframe and restart the video from the
+  // beginning, which is a rough thing to do to someone who just wanted quiet.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame?.contentWindow) return;
+
+    frame.contentWindow.postMessage(
+      JSON.stringify({ event: 'command', func: muted ? 'mute' : 'unMute', args: [] }),
+      'https://www.youtube-nocookie.com',
+    );
+  }, [muted, playing]);
 
   return (
     <div className="flex w-full flex-col gap-1.5">
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
         {playing ? (
           <iframe
-            src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&autoplay=1`}
+            ref={frameRef}
+            // enablejsapi is what allows the postMessage above to be heard.
+            src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0&autoplay=1&enablejsapi=1${startedMuted ? '&mute=1' : ''}`}
             title={title}
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
@@ -45,7 +91,11 @@ export function YouTubeEmbed({ youtubeId, title }: YouTubeEmbedProps) {
         ) : (
           <button
             type="button"
-            onClick={() => setPlaying(true)}
+            onClick={() => {
+              setStartedMuted(muted);
+              setPlaying(true);
+              onPlayingChange?.(true);
+            }}
             aria-label={`Play video: ${title}`}
             className="group absolute inset-0 h-full w-full cursor-pointer"
           >
@@ -63,15 +113,17 @@ export function YouTubeEmbed({ youtubeId, title }: YouTubeEmbedProps) {
           </button>
         )}
       </div>
-      <a
-        href={watchUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 self-end text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-      >
-        Watch on YouTube
-        <ExternalLink className="h-3 w-3" />
-      </a>
+      {showFallbackLink && (
+        <a
+          href={watchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 self-end text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Open on YouTube
+          <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
     </div>
   );
 }

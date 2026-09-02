@@ -10,8 +10,8 @@ import { resolveEnvironment } from '@/infrastructure/config/environment';
  * a hidden element, so there is no prod markup to leak or mis-style.
  *
  * `await connection()` is load-bearing, not ceremony. Without it this sits in a
- * statically prerendered layout, so resolveEnvironment() runs at BUILD time -
- * when APP_ENV does not exist yet - and the answer is baked into the HTML. The
+ * statically prerendered layout, so resolveEnvironment() runs at BUILD time,
+ * when APP_ENV does not exist yet, and the answer is baked into the HTML. The
  * live staging site said "LOCAL DEVELOPMENT" for exactly that reason: moving
  * the value to a runtime variable achieves nothing while the RENDER is still
  * build-time. connection() opts this into dynamic rendering so the variable is
@@ -26,16 +26,35 @@ export async function EnvironmentBanner() {
     return null;
   }
 
-  const label =
+  /**
+   * A colour per environment, and they are deliberately far apart on the wheel
+   * rather than two shades of one warning colour.
+   *
+   * Both used to be the same amber, which is also close to the app's own Mars
+   * orange, so the strip read as branding and someone glancing at a tab could
+   * not tell staging from local at all. Staging is the one that matters:
+   * it looks exactly like production, and a mission submitted there is test
+   * data sitting in a real-looking feed. So staging is the loud one.
+   *
+   * Both are checked against white at well over the 4.5:1 needed for text
+   * this size: rose is 6.29:1, indigo 9.93:1.
+   */
+  const { label, background } =
     environment === 'staging'
-      ? 'STAGING — not the live site. Missions submitted here are test data.'
-      : 'LOCAL DEVELOPMENT';
+      ? {
+          label: 'STAGING. Not the live site. Missions submitted here are test data.',
+          background: '#be123c',
+        }
+      : {
+          label: 'LOCAL DEVELOPMENT',
+          background: '#3730a3',
+        };
 
   return (
     <div
       role="status"
       style={{
-        background: '#b45309',
+        background,
         color: '#fff',
         font: '600 12px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         letterSpacing: '0.04em',

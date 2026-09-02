@@ -11,11 +11,13 @@ import json
 import logging
 import socket
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, Response, stream_with_context, session, redirect
+from flask import (Flask, render_template, request, jsonify, Response,
+                   stream_with_context, session, redirect, send_file)
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -51,12 +53,17 @@ def _save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
-def _notify_within_app(app, mission_id, status):
-    """_notify_mission_control reads current_app config, and Flask's app
-    context is thread-local, so push one inside the watcher's thread."""
-    from operator_console import _notify_mission_control
-    with app.app_context():
-        _notify_mission_control(mission_id, status)
+def _recording_name(raw):
+    """An operator-supplied name reduced to something safe to put in a path.
+
+    Everything outside letters, digits, dash and underscore becomes a dash, so
+    a name typed at an event ("Thabo's square!") cannot walk out of the
+    recordings directory or collide with the mission__yard naming the queue
+    flow uses.
+    """
+    import re
+    name = re.sub(r'[^A-Za-z0-9_-]+', '-', (raw or '').strip()).strip('-')
+    return name[:60]
 
 
 def _local_ip():
@@ -81,15 +88,20 @@ app = Flask(__name__)
 
 # Operator console sessions. A stable secret keeps operators signed in across
 # restarts; without one, sessions just reset on restart (re-login).
-app.secret_key = os.environ.get('OPERATOR_SESSION_SECRET') or os.urandom(32)
+# Nothing on this server touches the Flask session any more - the operator
+# login that used it is gone - so there is nothing to keep across a restart and
+# no reason to configure a secret. A per-process random key keeps flash() and
+# anything else that reaches for `session` working without asking a deployment
+# to hold a secret it has no use for. OPERATOR_SESSION_SECRET is retired.
+app.secret_key = os.urandom(32)
 
 # Rover server URL — a value saved from the /status page wins over the
 # environment default, so field edits survive a systemd restart
 ROVER_URL = _load_config().get('rover_url') or os.environ.get('ROVER_URL', 'http://marspi.local:8523')
 
-# Operator console (/operator/) — reads the mission queue from Firestore and
-# dispatches to the rover queue. The getter indirection means runtime edits to
-# ROVER_URL from /status apply to the console too.
+# What is left of /operator/: camera control and the satellite's tunables. The
+# mission queue that used to live there went with the Firestore mirror. The
+# getter indirection means a rover path edited on Settings applies everywhere.
 app.config['ROVER_URL_GETTER'] = lambda: ROVER_URL
 import operator_console  # noqa: E402  (needs app + config above)
 app.register_blueprint(operator_console.operator_bp)
@@ -98,27 +110,46 @@ app.register_blueprint(operator_console.operator_bp)
 ROVER_TIMEOUT = 5.0
 
 
-def _check_camera():
-    """Try TCP connect to localhost:CAMERA_PORT. Returns True if up."""
-    try:
-        s = socket.create_connection(('127.0.0.1', CAMERA_PORT), timeout=1.0)
-        s.close()
-        return True
-    except Exception:
-        return False
-
-
 @app.route('/')
 def index():
-    """Operator home: sign in first, then pick a station.
+    """The station hub.
 
-    /code/ and /monitor/ stay directly reachable without login - tablets and
-    the TV are pointed at those URLs once during setup and never sign in.
+    No sign-in and no Firestore. This used to be the mission queue behind an
+    operator login, which put a Firebase round trip in front of the one thing
+    a yard has to be able to do on a night when the venue wifi is down.
+
+    It used to open on the Firestore-backed mission queue, behind a sign-in.
+    That made the one thing a yard has to be able to do - run a mission -
+    depend on reaching Firebase, on a box whose whole point is working when
+    the venue wifi does not. Pasting code into /code/ and pressing run talks
+    to the rover over the LAN and needs nothing else, so that is the door.
+
+    /code/ and /monitor/ are login-free for the same reason: tablets and the
+    TV are pointed at those URLs once during setup and never sign in.
     """
-    operator = operator_console.current_operator()
-    if not operator:
-        return redirect('/operator/login')
-    return render_template('home.html', operator=operator)
+    return render_template('home.html', server_ip=_local_ip(), server_port=SERVER_PORT)
+
+
+@app.route('/run/')
+def run_station():
+    """The operator's station for one mission, start to handover.
+
+    Deliberately not /code/. That is an editor, used on a tablet mid-activity
+    with a child watching, and its job is to get code onto the rover. This is
+    the bookkeeping around a run: which mission it is, recording it, getting
+    the video off the box, and the YouTube description that makes the upload
+    link itself back.
+
+    No "mark complete" here on purpose: closing a mission is Mission Control's
+    job, and having two places to do it is how a mission ends up completed in
+    one and processing in the other.
+
+    Login-free like the rest of the console, for the same reason: none of this
+    can depend on reaching Firebase.
+    """
+    from satellite_identity import yard_id
+    return render_template('run.html', server_ip=_local_ip(),
+                           server_port=SERVER_PORT, yard_id=yard_id())
 
 
 @app.route('/settings')
@@ -158,28 +189,49 @@ def api_status():
     except Exception:
         pass
 
+    # Only that the camera process is accepting connections. Whether frames
+    # are actually flowing costs a websocket probe, which is too much to spend
+    # every 5 seconds on every open page - the recording start pays for that
+    # answer at the one moment it changes the outcome.
+    from camera_control import is_listening
     camera = {
-        'reachable': _check_camera(),
+        'reachable': is_listening(port=CAMERA_PORT),
         'port': CAMERA_PORT,
     }
+
+    # What is filming right now. The station starts a recording and the
+    # watcher ends it, so without this the page had no way to learn that the
+    # run it started had finished: it kept saying "Stop recording" over a file
+    # that was already closed, and never showed the operator the video.
+    from recording_control import active_recordings
 
     return jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
+        'recording': {'active': active_recordings()},
     })
 
 
 @app.route('/api/config/rover_url', methods=['POST'])
-@operator_console.require_operator
 def api_set_rover_url():
     """Set the rover URL at runtime (from the /status page) and persist it.
 
-    Gated because repointing the rover is a control action: anyone on the venue
-    network could otherwise aim this satellite at a different machine, or at
-    nothing, and the console would carry on reporting success. It costs nothing
-    on event days - OPERATOR_AUTH=off makes require_operator a pass-through -
-    so this only bites someone who should not be here.
+    Not gated, and that is a reversal. The old reasoning was that repointing
+    the rover is a control action: anyone on the venue network could aim this
+    satellite at a different machine and the console would carry on reporting
+    success. True, but it assumed the gate was free, and it is not.
+    require_operator means a Firebase sign-in, which means internet, and the
+    field edit this endpoint exists for is the one an operator makes when the
+    rover has moved to a new address - which is exactly when the yard is least
+    likely to have working wifi. A control that only unlocks when the network
+    is healthy is missing on the night it is needed.
+
+    The same call was made for camera start: on a box whose whole point is
+    working offline, an auth gate that bites only when the wifi is down
+    protects nothing worth the cost. What is left is the network boundary
+    itself - the satellite serves the yard's own LAN - plus validation below,
+    which still rejects anything that is not an http(s) URL.
     """
     global ROVER_URL
     data = request.get_json(silent=True) or {}
@@ -329,6 +381,139 @@ def api_photo():
         return jsonify({'error': 'Rover server timeout'}), 504
 
 
+@app.route('/api/camera/ready', methods=['GET'])
+def api_camera_ready():
+    """Whether frames are actually arriving, not just whether the port is open.
+
+    /api/status answers the cheap question because it is polled every five
+    seconds by every open page. This is the expensive one, asked on demand by
+    the run station, because "primed" on an operator's screen has to mean the
+    thing that decides whether a recording contains anything.
+    """
+    from recording_control import is_ready
+
+    ready, detail = is_ready()
+    return jsonify({'ready': ready, 'detail': detail})
+
+
+@app.route('/api/recording/start', methods=['POST'])
+def api_recording_start():
+    """Start recording a copy-paste run.
+
+    Dispatching a mission from the queue starts a recording on the operator's
+    behalf. Pasting code into /code/ never did, so the manual flow produced no
+    video at all: the operator ran the rover, and there was nothing to take
+    away and upload.
+
+    The name is the operator's, not a mission id, because a pasted run has no
+    mission. Whatever they type is what the file is called and what they will
+    recognise later when matching it to a mission in Mission Control.
+    """
+    from recording_control import is_ready, start_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    # The same gate console/missions.py puts in front of a queued dispatch.
+    # Without it the manual loop was the one path that would happily report
+    # 'recording' with no frames arriving, and the operator found out at the
+    # end of the night when there was no file to upload. A camera that is
+    # merely listening is not a camera that is recording.
+    ready, detail = is_ready()
+    if not ready:
+        return jsonify({
+            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
+                     'you run - a run with no video cannot be handed over later.',
+        }), 503
+
+    ok, detail = start_recording(name, yard_id())
+    if not ok:
+        return jsonify({'error': detail}), 503
+    return jsonify({'status': 'recording', 'name': name})
+
+
+@app.route('/api/recording/stop', methods=['POST'])
+def api_recording_stop():
+    """Stop a copy-paste run's recording, keeping the file unless told not to."""
+    from recording_control import stop_recording
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    name = _recording_name(data.get('name'))
+    if not name:
+        return jsonify({'error': 'Give the recording a name'}), 400
+
+    keep = data.get('keep', True)
+    ok, detail = stop_recording(name, yard_id(), keep=bool(keep))
+    return jsonify({'status': 'stopped', 'kept': bool(keep), 'detail': detail}), (200 if ok else 200)
+
+
+@app.route('/api/recordings', methods=['GET'])
+def api_recordings():
+    """The videos sitting on this satellite, newest first.
+
+    Step five of the manual loop: the operator takes the file to their own
+    device, uploads it to YouTube and pastes the link into Mission Control.
+    Until this existed the recordings were written and then unreachable, so
+    the loop could not be closed by hand at all.
+
+    Deliberately unauthenticated, like /code/ and /monitor/. The whole point
+    is that this works when the venue wifi cannot reach Firebase, and an
+    operator who can already drive the rover from this network gains nothing
+    by being able to read a video of it.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    try:
+        names = os.listdir(RECORDINGS_DIR)
+    except OSError:
+        # No directory yet simply means nothing has been recorded.
+        return jsonify({'recordings': []})
+
+    files = []
+    for name in names:
+        if not name.endswith('.mp4'):
+            continue
+        try:
+            stat = os.stat(os.path.join(RECORDINGS_DIR, name))
+        except OSError:
+            continue
+        files.append({
+            'name': name,
+            'bytes': stat.st_size,
+            'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+                .isoformat().replace('+00:00', 'Z'),
+        })
+
+    files.sort(key=lambda f: f['modified'], reverse=True)
+    return jsonify({'recordings': files})
+
+
+@app.route('/api/recordings/<path:name>', methods=['GET'])
+def api_recording_download(name):
+    """Download one recording.
+
+    The name is resolved and then checked to be inside the recordings
+    directory, rather than trusted or merely sanitised: this is a path taken
+    straight from a URL on a network the satellite does not control, and
+    ../../ is the oldest trick there is.
+    """
+    from recording_control import RECORDINGS_DIR
+
+    root = os.path.realpath(RECORDINGS_DIR)
+    target = os.path.realpath(os.path.join(root, name))
+    if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
+        return jsonify({'error': 'No such recording'}), 404
+    if not os.path.isfile(target):
+        return jsonify({'error': 'No such recording'}), 404
+
+    return send_file(target, mimetype='video/mp4', as_attachment=True,
+                     download_name=os.path.basename(target))
+
+
 @app.route('/api/health', methods=['GET'])
 def api_health():
     """Health check - also checks rover connectivity"""
@@ -358,50 +543,14 @@ if __name__ == '__main__':
     print(f"[satellite] rover url {ROVER_URL}")
     import flask.cli
     flask.cli.show_server_banner = lambda *args, **kwargs: None
-    # Run the YouTube-poll loop in the background so a slow/unreachable
-    # YouTube API call can't delay the tablet/monitor/rover proxy from
-    # coming up - those are local and time-critical, this isn't.
-    from operator_console import start_polling
-    threading.Thread(target=start_polling, daemon=True).start()
-    from mission_store import init_db
-    from sync_worker import start_sync_worker
-
-    init_db()
-
-    # Recovery runs before the sync worker so an interrupted mission is flagged
-    # for review before any flush can push its stale 'processing' onward.
-    try:
-        from recovery import recover_interrupted_missions
-        from satellite_identity import satellite_id
-        recover_interrupted_missions(satellite_id(), rover_url=os.environ.get('ROVER_URL'))
-    except Exception as e:
-        print(f'[recovery] Skipped: {e}')
-
-    # Closes the loop the operator otherwise closes by hand: the rover already
-    # records that it finished, so a mission no longer sits in 'processing'
-    # (holding its lease) because someone turned to the next child.
-    from mission_watcher import start_mission_watcher
-    from operator_console import _notify_mission_control
-    threading.Thread(
-        target=start_mission_watcher,
-        args=(lambda: app.config.get('ROVER_URL_GETTER', lambda: os.environ.get(
-            'ROVER_URL', 'http://marspi.local:8523'))(),),
-        kwargs={'notify': lambda mid, st: _notify_within_app(app, mid, st)},
-        daemon=True,
-    ).start()
-
-    # Started unconditionally, with a FACTORY rather than a client. Building the
-    # client here and bailing on failure would mean a satellite powered on with
-    # no internet - the exact situation this whole feature exists for - never
-    # starts syncing at all, so missions run offline would sit in the outbox
-    # until someone restarted the process.
-    #
-    # Same reasoning as start_polling above: the first pull is a synchronous
-    # Firestore call, so it must not block server startup.
-    threading.Thread(
-        target=start_sync_worker, args=(operator_console._firestore,),
-        daemon=True,
-    ).start()
+    # Releases the camera when the rover reports a run is over, so a recording
+    # does not run until someone remembers to stop it. The only background
+    # thread left: the mirror, its sync worker and the startup recovery that
+    # went with them are gone.
+    from mission_watcher import run_watcher_thread
+    run_watcher_thread(lambda: app.config.get(
+        'ROVER_URL_GETTER',
+        lambda: os.environ.get('ROVER_URL', 'http://marspi.local:8523'))())
 
     app.run(host='0.0.0.0', port=port, threaded=True, use_reloader=False)
 

@@ -58,7 +58,7 @@
  * prints the project it is about to touch - read it before passing --apply.
  */
 
-import { initializeApp, cert } from 'firebase-admin/app';
+import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -103,11 +103,8 @@ function requireEnv(name) {
 const projectId = requireEnv('FIREBASE_PROJECT_ID');
 
 initializeApp({
-  credential: cert({
-    projectId,
-    clientEmail: requireEnv('FIREBASE_CLIENT_EMAIL'),
-    privateKey: requireEnv('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n'),
-  }),
+  credential: applicationDefault(),
+  projectId,
 });
 
 const auth = getAuth();

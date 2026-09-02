@@ -10,7 +10,7 @@ import {
   clearSession,
   isStorageAvailable,
   getShortSessionId,
-} from '@/lib/anonymous-auth';
+} from '@/infrastructure/browser/anonymous-auth';
 
 // Mock localStorage
 const localStorageMock = (() => {

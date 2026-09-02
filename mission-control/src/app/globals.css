@@ -12,6 +12,13 @@
  * in the light block is inherited by omission from the dark one.
  */
 :root {
+  /* How much fixed chrome sits above the page: the navbar, plus the
+     environment banner in dev and staging. Measured and republished by
+     ChromeHeight; this default is the production case (navbar only), so a page
+     is correctly sized before the first measurement lands and stays correct if
+     JavaScript never runs at all. */
+  --app-chrome: 64px;
+
   /* 0.9rem came with the Paper & Ink palette. It lives here rather than in the
      light block because radius is not a colour-scheme concern, so this
      tightens the corners in BOTH themes by 1.6px at the base step. */
@@ -61,6 +68,24 @@
   --block-stop: #f44336;                 /* Stop */
   --block-hat: #ff6d00;                  /* uplink / hat */
   --block-foreground: oklch(0.99 0 0);   /* text on a filled block */
+
+  /* Player scrims. Deliberately theme-independent, like the mission tokens
+     above: these sit on video pixels, which are dark whichever theme the page
+     is in, so a "light mode" variant would put dark text on dark footage.
+     Weighted to the outer edge and fully transparent by 60%, so the scrim
+     carries the overlay text without dimming the middle of the frame. */
+  --gradient-player-top: linear-gradient(
+    to bottom,
+    oklch(0 0 0 / 0.7) 0%,
+    oklch(0 0 0 / 0.34) 55%,
+    transparent 100%
+  );
+  --gradient-player-bottom: linear-gradient(
+    to top,
+    oklch(0 0 0 / 0.78) 0%,
+    oklch(0 0 0 / 0.38) 55%,
+    transparent 100%
+  );
 
   --gradient-mars: linear-gradient(135deg, var(--mars) 0%, var(--mars-glow) 100%);
   --gradient-cosmic: linear-gradient(135deg, var(--cosmic) 0%, var(--mars) 100%);
@@ -284,6 +309,9 @@
     background-clip: text;
     color: transparent;
   }
+  .player-scrim-top { background: var(--gradient-player-top); }
+  .player-scrim-bottom { background: var(--gradient-player-bottom); }
+
   .bg-gradient-mars { background: var(--gradient-mars); }
   .bg-gradient-cosmic { background: var(--gradient-cosmic); }
   .shadow-glow-mars { box-shadow: var(--shadow-glow-mars); }
@@ -356,6 +384,33 @@
     border-radius: 9999px;
     transform: rotate(-18deg);
     opacity: 0;
+  }
+
+  /* A panel and anything seated in its corner.
+     
+     Nested corners have to be concentric or the pair reads as unfinished:
+     the inner radius is the outer one minus everything between the two
+     edges, which is the border plus the padding. Eyeballed, the mission
+     page had a 22.4px card holding an 18.4px canvas across 13px of inset,
+     so the inner corner was 7px too round and the curves ran non-parallel.
+     The mode tabs in the same corner were out by 9px.
+
+     Only applies to a child sharing the parent's corner. A control floating
+     in the middle of a panel is not nested against anything and keeps its
+     own radius.
+     
+     Deriving it means it cannot drift again. Change --panel-pad and the
+     surface follows. The two panels also shared no padding value before
+     this (10px against 12px), so their contents did not line up across
+     the split. */
+  .panel {
+    --panel-pad: 0.75rem;
+    --panel-border: 1px;
+    border-radius: var(--radius-2xl);
+    padding: var(--panel-pad);
+  }
+  .panel-inner {
+    border-radius: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border));
   }
 
   /* Chunky, toy-like depth for kid-friendly cards and buttons (claymorphic):
@@ -574,8 +629,22 @@
     max-height: none;
   }
 
-  .workspaceSplitGrid > * {
+  /* The 70vh floor is for Create Mission, where both stacked panels are things
+     you work inside - Blockly and the simulator - and neither is usable at
+     half a screen. The mission VIEW is the fixed variant, and its panels are a
+     16:9 player, a stats row and one line of feedback: about 300px of content
+     that the floor stretched to 568px, putting a screenful of empty page
+     between the operator's comment and the code. A floor that guarantees a
+     minimum is wrong on a panel that already knows its own height. */
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
     min-height: 70vh;
+  }
+
+  /* The code panel still needs a floor, just a smaller one: it is flex-1
+     inside an auto-height row, so a two-line mission would otherwise collapse
+     it to two lines. */
+  .workspaceSplitGrid--fixed > * + * {
+    min-height: 45vh;
   }
 }
 
@@ -588,6 +657,15 @@
     grid-template-columns:
       minmax(0, var(--workspace-left, 60fr))
       auto
+      minmax(320px, var(--workspace-right, 40fr));
+  }
+
+  /* No divider, so no middle track. Without this the right panel falls into
+     the auto track meant for the divider and the third track sits empty - the
+     code panel ends up centred with dead space beside it. */
+  .workspaceSplitGrid--fixed {
+    grid-template-columns:
+      minmax(0, var(--workspace-left, 60fr))
       minmax(320px, var(--workspace-right, 40fr));
   }
 
@@ -612,14 +690,18 @@
 /* Blockly Light Theme Overrides */
 
 /*
- * The workspace container is clipped to a 20px corner radius, and the first
- * toolbox category sits 4px from the top - so the arc ate roughly 7px of the
- * 8px coloured border-left that identifies the category ("Uplink" lost most of
- * its orange bar). Starting the list below where the arc straightens keeps the
- * full bar visible on every category.
+ * The first toolbox category sits 4px from the top, so the workspace's corner
+ * arc ate into the 8px coloured border-left that identifies it ("Uplink" lost
+ * most of its orange bar). Starting the list where the arc straightens keeps
+ * the full bar visible on every category.
+ *
+ * Derived from the surface radius rather than the 18px this was pinned at:
+ * that number was measured against a 20px corner, and the corner is now
+ * concentric with the panel around it, so a fixed value would leave a gap the
+ * moment the panel's padding changed.
  */
 .blocklyToolbox {
-  padding-top: 18px !important;
+  padding-top: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border)) !important;
 }
 .blocklySvg {
   background-color: #ffffff !important;

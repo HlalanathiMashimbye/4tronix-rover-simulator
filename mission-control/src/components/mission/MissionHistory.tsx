@@ -4,18 +4,19 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Rocket, Plus, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
-import { getLearnerID } from '@/lib/getLearnerID';
+import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import {
   subscribeMissionsByLearnerId,
   subscribeMissionsByLearnerEmail,
-} from '@/lib/services/missionQueryService';
+} from '@/infrastructure/persistence/missionQueryService';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
+import { MobileSearch } from '@/components/layout/MobileSearch';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useLearner } from '@/contexts/LearnerContext';
 import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
-import { getDiscoveryStatus } from '@/lib/discoveryStatus';
-import { useFavorites } from '@/lib/useFavorites';
+import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
+import { useFavorites } from '@/hooks/useFavorites';
 
 export function MissionHistory() {
   const { learnerEmail, openEmailPrompt } = useLearner();
@@ -191,6 +192,10 @@ export function MissionHistory() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {emailBanner}
+
+      {/* Phone-only: the navbar's search is hidden below md, so this page had
+          no way to search or filter a learner's own history there. */}
+      <MobileSearch />
 
       {missions.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-8 text-center">

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-import { getOperatorSession } from '@/lib/auth/dal';
+import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { TeamManager } from '@/components/operator/TeamManager';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 
@@ -35,7 +35,7 @@ export default async function OperatorTeamPage() {
   const accounts = await listOperatorAccounts();
 
   return (
-    <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
+    <main className="relative flex h-[calc(100dvh-var(--app-chrome))] flex-col overflow-hidden px-4 sm:px-6">
       <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
         <Link
           href="/operator"

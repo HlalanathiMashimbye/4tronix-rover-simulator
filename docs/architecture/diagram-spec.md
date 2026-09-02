@@ -114,7 +114,7 @@ compiled TypeScript one. Draw it in the deprecated group in Band D, not here.
 **Band D.** Terraform to GitHub Actions to Artifact Registry to Cloud Run
 (staging, prod) to Secret Manager, with Workload Identity Federation tagged
 "OIDC, no JSON keys". At the right end, a small dashed greyscale group at 60%
-opacity: `roversimui.py`, `roversimulator.py`, `rover_physics.py` (deprecated),
+opacity: `legacy/simulator/roversimui.py`, `legacy/simulator/roversimulator.py`, `rover_physics.py` (deprecated),
 `dev-launcher.js`, Jest, pytest.
 
 ---

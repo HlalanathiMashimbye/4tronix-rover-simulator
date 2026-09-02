@@ -7,8 +7,12 @@ Type=simple
 # Root is required for rpi_ws281x PWM access
 User=root
 WorkingDirectory=/home/mars/4tronix-rover-simulator/yard/rover
-# rover.py and pca9685.py live in the 4tronix install dir
-Environment=PYTHONPATH=/home/mars/marsrover
+# rover.py is vendored into the repo (yard/rover/vendor); pca9685.py is not
+# and still comes from the separate 4tronix install. Vendor dir goes first so
+# `import rover` picks up the version-controlled copy; marsrover stays second
+# so `import pca9685` still resolves. See yard/rover/vendor/README.md.
+Environment=PYTHONPATH=/home/mars/4tronix-rover-simulator/yard/rover/vendor:/home/mars/marsrover
+Environment=ROVER_LIB_PATH=/home/mars/4tronix-rover-simulator/yard/rover/vendor
 ExecStart=/home/mars/rover-env/bin/python rover_server.py
 Restart=always
 RestartSec=10

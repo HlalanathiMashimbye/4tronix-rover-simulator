@@ -1,4 +1,17 @@
 flask>=2.0.0
-posthog>=3.0.0
 python-dotenv>=1.0.0
 pytest>=7.0.0
+
+# Needed by the off-Pi fallback in service._import_rover_module: when the
+# 4tronix library is absent, run_python imports legacy/simulator/roversimulator,
+# which imports rover_web_driver, which imports this. Without it a laptop
+# following the documented setup gets a working queue and a run_python that
+# raises ModuleNotFoundError - which is how this was missed for months, since
+# every test injects a rover_module and never reaches that import.
+requests>=2.28.0
+
+# Optional at runtime. The rover reaches analytics through the Telemetry
+# interface in telemetry.py, and falls back to NullTelemetry when this is
+# absent - a rover with no metrics still drives. Installed here so a full
+# checkout can send events; do not make anything import it directly.
+posthog>=3.0.0

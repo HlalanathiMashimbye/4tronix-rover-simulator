@@ -186,6 +186,27 @@
             flex-direction: column;
         }
 
+        .python-fallback-note {
+            margin: 0 0 6px;
+            font-size: 12px;
+            color: var(--text-dim, #9aa0a8);
+        }
+
+        .python-fallback {
+            width: 100%;
+            height: calc(100% - 24px);
+            resize: none;
+            border: 1px solid var(--border, #333);
+            border-radius: 8px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 14px;
+            line-height: 1.5;
+            padding: 10px;
+            tab-size: 4;
+        }
+
         #pythonEditor {
             flex: 1;
         }
@@ -265,14 +286,17 @@
             background: var(--bad);
         }
     </style>
-    <script src="https://unpkg.com/blockly@13.2.0/blockly.min.js"></script>
+    <!-- Served locally, not from a CDN: the satellite runs on mobile data at a
+         venue and /code/ has to load when that drops. See
+         mission-control/scripts/vendor-blockly.mjs. -->
+    <script src="/static/vendor/blockly/blockly.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.52.0/min/vs/loader.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="toolbar">
             <div class="toolbar-left">
-                <a class="yard-home" href="/" title="Home" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></a>
+                <a class="yard-home" href="/" title="Back to the console" aria-label="Back to the console"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></a>
                 <button class="btn btn-run" id="runBtn">Run</button>
                 <button class="btn btn-stop" id="stopBtn">Stop</button>
                 <button class="btn btn-clear" id="clearBtn">Clear</button>
@@ -449,6 +473,9 @@
 
         const workspace = Blockly.inject('blocklyDiv', {
             toolbox: toolbox,
+            // Self-hosted Blockly resolves its icons, cursors and sounds from
+            // here. Without it they 404 and the trashcan renders blank.
+            media: '/static/vendor/blockly/media/',
             // The actual cap - Blockly reads maxInstances only from here,
             // never from a toolbox content entry.
             maxInstances: ROVER_MAX_INSTANCES,
@@ -762,10 +789,60 @@
             '    rover.stop()',
         ].join('\n');
 
-        require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.52.0/min/vs' } });
-        require(['vs/editor/editor.main'], function () {
+        /**
+         * Monaco is the ONE thing on this page that still needs the internet,
+         * and it now degrades instead of dying.
+         *
+         * Blockly is served locally (see /static/vendor/blockly), but Monaco is
+         * 24MB unpacked, which does not belong in a git repository that gets
+         * pulled onto a Raspberry Pi. So the Python tab falls back to a plain
+         * textarea when the CDN is unreachable: no syntax highlighting, but a
+         * child can still read, edit and send their code with no connection at
+         * all. A blank pane would have been the alternative.
+         *
+         * Everything downstream calls getValue/setValue, so the fallback offers
+         * exactly those and nothing else has to know which one it got.
+         */
+        const savedPython = localStorage.getItem(PYTHON_STORAGE_KEY) || DEFAULT_PYTHON;
+
+        function persistPython(value) {
+            localStorage.setItem(PYTHON_STORAGE_KEY, value);
+        }
+
+        function createPlainEditor(initialValue, reason) {
+            const host = document.getElementById('pythonEditor');
+            host.innerHTML = '';
+
+            const note = document.createElement('p');
+            note.className = 'python-fallback-note';
+            note.textContent = 'Offline: plain text editor. Your code still runs.';
+            host.appendChild(note);
+
+            const area = document.createElement('textarea');
+            area.className = 'python-fallback';
+            area.spellcheck = false;
+            area.value = initialValue;
+            host.appendChild(area);
+
+            let saveTimer;
+            area.addEventListener('input', () => {
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(() => persistPython(area.value), 500);
+            });
+
+            console.warn('Monaco unavailable (' + reason + '); using the plain editor.');
+            return {
+                getValue: () => area.value,
+                setValue: (value) => {
+                    area.value = value;
+                    persistPython(value);
+                },
+            };
+        }
+
+        function createMonacoEditor() {
             pythonEditor = monaco.editor.create(document.getElementById('pythonEditor'), {
-                value: localStorage.getItem(PYTHON_STORAGE_KEY) || DEFAULT_PYTHON,
+                value: savedPython,
                 language: 'python',
                 theme: 'vs-dark',
                 fontSize: 14,
@@ -780,11 +857,41 @@
             let pySaveTimeout;
             pythonEditor.onDidChangeModelContent(() => {
                 clearTimeout(pySaveTimeout);
-                pySaveTimeout = setTimeout(() => {
-                    localStorage.setItem(PYTHON_STORAGE_KEY, pythonEditor.getValue());
-                }, 500);
+                pySaveTimeout = setTimeout(() => persistPython(pythonEditor.getValue()), 500);
             });
-        });
+        }
+
+        if (typeof require === 'undefined') {
+            // loader.js itself never arrived, so there is nothing to ask.
+            pythonEditor = createPlainEditor(savedPython, 'loader.js did not load');
+        } else {
+            // A timer as well as an error callback: a CDN that accepts the
+            // connection and then stalls leaves require's errback unfired, and
+            // a child would sit in front of an empty pane indefinitely.
+            let settled = false;
+            const giveUp = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                pythonEditor = createPlainEditor(savedPython, 'timed out');
+            }, 8000);
+
+            require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.52.0/min/vs' } });
+            require(
+                ['vs/editor/editor.main'],
+                function () {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(giveUp);
+                    createMonacoEditor();
+                },
+                function (error) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(giveUp);
+                    pythonEditor = createPlainEditor(savedPython, String(error));
+                },
+            );
+        }
     </script>
 </body>
 </html>

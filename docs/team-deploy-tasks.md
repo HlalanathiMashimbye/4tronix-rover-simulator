@@ -153,11 +153,15 @@ Hlali, do not work around it silently.
 ```bash
 docker run --rm -p 8080:8080 \
   -e FIREBASE_PROJECT_ID=... \
-  -e FIREBASE_CLIENT_EMAIL=... \
-  -e FIREBASE_PRIVATE_KEY="..." \
+  -v "$HOME/.config/gcloud:/root/.config/gcloud:ro" \
+  -e GOOGLE_CLOUD_PROJECT=... \
   mission-control:local
 ```
-(the three `-e` values from `mission-control/.env`; quotes matter on the key)
+The container authenticates with Application Default Credentials, so it needs
+your gcloud credentials mounted rather than a key passed in. Run
+`gcloud auth application-default login` on the host first. Passing
+FIREBASE_CLIENT_EMAIL or FIREBASE_PRIVATE_KEY now makes the app refuse to
+start, on purpose.
 
 Checklist:
 - `http://localhost:8080/` loads the feed (Firestore reads work)

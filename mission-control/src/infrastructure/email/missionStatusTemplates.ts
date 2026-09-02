@@ -6,6 +6,7 @@
  * bold mission name, blue CTA button) plus per-status copy.
  */
 
+import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import { MissionStatus } from '@/core/domain/entities/Mission';
 
 export interface MissionStatusEmailInput {
@@ -78,9 +79,20 @@ export function buildMissionStatusEmail(
       </p>
       <p style="margin: 24px 0 0; color: #475569;">Over and out, Commander! 👨‍🚀</p>
       <hr style="margin: 24px 0; border: none; border-top: 1px solid #e2e8f0;" />
-      <p style="margin: 0; font-size: 12px; color: #94a3b8;">Rover Simulator — 4tronix 🛰️</p>
+      <p style="margin: 0; font-size: 12px; color: #94a3b8;">Rover Simulator, 4tronix 🛰️</p>
     </div>
   `.trim();
 
   return { subject, html };
 }
+
+
+/**
+ * The composer the application service depends on, implemented over the
+ * templates above. Core states the contract (IMissionEmailComposer); this is
+ * the adapter, and it is the only thing that has to change if the emails are
+ * ever rebuilt with a template engine rather than string literals.
+ */
+export const missionEmailComposer: IMissionEmailComposer = {
+  statusUpdate: (status, input) => buildMissionStatusEmail(status, input),
+};

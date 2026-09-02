@@ -74,7 +74,7 @@ describe('POST /api/missions Integration Tests', () => {
         yardId: 'curiosity',
         sessionId: 'test-session-123',
         learnerId: 'test-learner',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.forward(100)\nrover.wait(2)',
         challengeId: 'M1-FORWARD',
       };
@@ -107,7 +107,7 @@ describe('POST /api/missions Integration Tests', () => {
         yardId: 'rover-yard-2',
         sessionId: 'session-456',
         learnerId: 'test-learner',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.turn_left(50)',  // Updated to use approved command
       };
 
@@ -129,7 +129,7 @@ describe('POST /api/missions Integration Tests', () => {
         yardId: 'yard-1',
         sessionId: 'session-789',
         learnerId: 'test-learner',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.backward(75)',
       };
 
@@ -148,7 +148,7 @@ describe('POST /api/missions Integration Tests', () => {
         yardId: 'yard-1',
         sessionId: 'session-123',
         learnerId: 'test-learner',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.forward(100)',
       };
 
@@ -176,7 +176,7 @@ describe('POST /api/missions Integration Tests', () => {
         yardId: 'yard-1',
         sessionId: 'session-123',
         learnerId: 'test-learner',
-        name: 'Test Mission',
+        name: 'Red Explorer',
         code: 'rover.forward(100)',
       };
 

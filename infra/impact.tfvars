@@ -34,13 +34,25 @@ domains = {
   staging = "marsyard.labs.ws"
 }
 
+# Which environment runs the YouTube auto-link schedule. Exactly one may:
+# both environments point at this project and therefore share one Firestore,
+# so two schedulers would race to attach the same video to the same run.
+#
+# staging, because that is the environment actually serving learners; prod is
+# deliberately not deployed. Move this the day prod comes up, do not add to it.
+cron_environment = "staging"
+
 # Email. The domain marsyard.sapient.rocks is verified in Resend (DKIM + SPF
 # MX/TXT + DMARC live in GoDaddy), so mail can now go to any learner address
 # and no longer has to come from Resend's shared onboarding@resend.dev sender.
 #
-# resend_sandbox_recipient is deliberately NOT set here. While it has a value,
-# EVERY mission email is redirected to that one inbox and no learner receives
-# mail. It defaults to "" and must stay empty now that the domain is verified.
+# The sandbox redirect is gone: it sent EVERY mission email to one inbox, and
+# only ever existed for the months before this domain was verified. It is an
+# environment variable for local testing now, and not a Terraform value or a
+# settings field, so it cannot be armed against a live yard by accident.
+#
+# Seeds the resend-from-email secret on first apply; the admin settings page
+# owns it afterwards.
 resend_from_email = "missions@marsyard.sapient.rocks"
 
 # Authenticate to Firestore as the Cloud Run runtime service account rather
@@ -54,4 +66,3 @@ resend_from_email = "missions@marsyard.sapient.rocks"
 # placeholder, so every server-side Firestore call failed with
 # "Failed to parse private key: DECODER routines::unsupported" and no mission
 # could be submitted at all.
-firebase_credential_source = "adc"

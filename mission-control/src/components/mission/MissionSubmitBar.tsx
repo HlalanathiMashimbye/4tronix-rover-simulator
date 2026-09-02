@@ -68,7 +68,7 @@ export function MissionSubmitBar({
 
         <button
           onClick={onSubmit}
-          disabled={submitting || !currentCode.trim()}
+          disabled={submitting || !currentCode.trim() || !missionName.trim()}
           className="clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-mars px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto"
         >
           {submitting ? (

@@ -29,7 +29,7 @@ import {
   type Firestore as ClientFirestore,
 } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
-import { Mission } from '@/core/domain/entities/Mission';
+import { Mission, type MissionStatus } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import {
   IMissionRepository,
@@ -225,34 +225,159 @@ export class FirestoreMissionRepository implements IMissionRepository {
    * satellite actually produces - the video is linked minutes after the run
    * finishes.
    *
-   * No transaction and no lock: only one yard ever writes this document, so
-   * there is nothing to contend with. That is the point of keying by yard.
+   * NO LONGER SINGLE-WRITER. This said "only one yard ever writes this
+   * document, so there is nothing to contend with", which stopped being true
+   * when operator bookkeeping moved to the desk: Mission Control now writes
+   * runs too. Contention is still not handled HERE, because the two writers
+   * settle it where they meet, in the satellite's outbox flush, under the rule
+   * that a human decision outranks a replayed machine event. See
+   * applyBookkeeping below and sync_worker.should_run_local_win.
    */
   async upsertRun(missionId: string, run: MissionRun): Promise<void> {
-    const { yardId, ...fields } = run;
-    const payload = this.removeUndefinedValues({ ...fields, yardId }) as Record<string, unknown>;
+    const { runId, ...fields } = run;
+    const payload = this.removeUndefinedValues({ ...fields }) as Record<string, unknown>;
 
     if (this.isAdminFirestore()) {
       await this.adminDb()
         .collection(MISSIONS_COLLECTION)
         .doc(missionId)
         .collection(RUNS_SUBCOLLECTION)
-        .doc(yardId)
+        .doc(runId)
         .set(payload, { merge: true });
       return;
     }
 
     await setDoc(
-      doc(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION, yardId),
+      doc(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION, runId),
       payload,
       { merge: true }
     );
   }
 
-  /** The document id IS the yard, so it is authoritative over any stored field. */
-  private toRun(yardId: string, data: Partial<MissionRun>): MissionRun {
-    return {
+  /**
+   * Record an operator's decision about a run, and roll it up onto the mission.
+   *
+   * ONE BATCH, TWO DOCUMENTS, AND BOTH ARE REQUIRED.
+   *
+   * The run is the truth. The mission carries a roll-up of it because the rest
+   * of the app reads missions/{id}.status: getDiscoveryStatus turns it into the
+   * learner's Completed/Pending, the feed sorts on it, and the operator queue
+   * selects on it. Writing only the run would leave the operator staring at a
+   * queue that did not change when they pressed the button, and every learner
+   * seeing Pending for a mission that finished.
+   *
+   * The batch is what stops those two disagreeing. A half-applied decision is
+   * worse than a failed one, because nothing would ever come back to fix it.
+   *
+   * CREATES THE RUN IF IT IS ABSENT, which is the offline-yard case rather than
+   * an edge case. A satellite with no network never flushes its run outbox, so
+   * a mission somebody ran by hand this afternoon may exist only in that Pi's
+   * SQLite. The desk still has to be able to settle it.
+   *
+   * `decidedAt` is not decoration. It is what the satellite's flush compares
+   * against when it finally reconnects and tries to replay stale machine events
+   * over the top of this.
+   */
+  async applyBookkeeping(
+    missionId: string,
+    runId: string,
+    yardId: string,
+    change: {
+      status?: MissionStatus | null;
+      youtubeUrl?: string;
+      clearsReview?: boolean;
+      feedback?: string;
+      decidedAt: string;
+      decidedBy: string;
+    },
+  ): Promise<void> {
+    if (!this.isAdminFirestore()) {
+      // Firestore rules deny every browser write to a run, so a client-side
+      // call could only ever fail at the server. Failing here says why.
+      throw new Error('Operator bookkeeping requires the Admin SDK.');
+    }
+
+    const runFields: Record<string, unknown> = {
       yardId,
+      decidedAt: change.decidedAt,
+      decidedBy: change.decidedBy,
+    };
+    const missionFields: Record<string, unknown> = {};
+
+    if (change.status) {
+      runFields.status = change.status;
+      runFields.statusUpdatedAt = change.decidedAt;
+      missionFields.status = change.status;
+      missionFields.statusUpdatedAt = change.decidedAt;
+
+      // Only completion carries a completedAt. A cancelled run did not finish,
+      // and stamping one would put it in the learner's watchable list ordering
+      // as though it had.
+      if (change.status === 'completed') {
+        runFields.completedAt = change.decidedAt;
+        missionFields.completedAt = change.decidedAt;
+      }
+    }
+
+    if (change.youtubeUrl) {
+      runFields.youtubeUrl = change.youtubeUrl;
+      // Mirrored onto the mission for the same reason as status: missions that
+      // predate the run model still read their video from there.
+      missionFields.youtubeUrl = change.youtubeUrl;
+    }
+
+    if (change.feedback !== undefined) {
+      // Run only, never mirrored onto the mission. Feedback is about one
+      // yard's attempt, and a second yard's run should not inherit a note
+      // written about the first.
+      runFields.feedback = change.feedback;
+      runFields.feedbackBy = change.decidedBy;
+      runFields.feedbackAt = change.decidedAt;
+    }
+
+    if (change.clearsReview) {
+      runFields.needsReview = false;
+      runFields.reviewReason = null;
+      missionFields.needsReview = false;
+      missionFields.reviewReason = null;
+    }
+
+    const db = this.adminDb();
+    const missionRef = db.collection(MISSIONS_COLLECTION).doc(missionId);
+    const batch = db.batch();
+
+    batch.set(missionRef.collection(RUNS_SUBCOLLECTION).doc(runId), runFields, { merge: true });
+    if (Object.keys(missionFields).length > 0) {
+      batch.set(missionRef, missionFields, { merge: true });
+    }
+
+    await batch.commit();
+  }
+
+  /**
+   * Soft-delete a mission.
+   *
+   * Soft on purpose, and the asymmetry is the point: the console offers the
+   * operator no undo and warns them it is permanent, while the record survives
+   * for someone who can reach the database. A mis-tap on a child's work should
+   * be recoverable by a human even though the interface promises it is not.
+   */
+  async softDeleteMission(missionId: string, deletedAt: string, deletedBy: string): Promise<void> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Deleting a mission requires the Admin SDK.');
+    }
+
+    await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .set({ deleted: true, deletedAt, deletedBy }, { merge: true });
+  }
+
+  /** The document id IS the runId, so it is authoritative over any stored field. */
+  private toRun(runId: string, data: Partial<MissionRun>): MissionRun {
+    return {
+      runId,
+      yardId: data.yardId ?? '',
       status: data.status ?? 'queued',
       startedAt: data.startedAt,
       completedAt: data.completedAt,
@@ -260,6 +385,13 @@ export class FirestoreMissionRepository implements IMissionRepository {
       needsReview: data.needsReview,
       reviewReason: data.reviewReason ?? null,
       statusUpdatedAt: data.statusUpdatedAt ?? null,
+      // An operator's note to the learner. This mapper is an explicit
+      // allowlist, so a field absent here is silently dropped between
+      // Firestore and the page - which is exactly what happened when these
+      // three were added to the entity and not to this list.
+      feedback: data.feedback,
+      feedbackBy: data.feedbackBy,
+      feedbackAt: data.feedbackAt,
     };
   }
 
@@ -379,7 +511,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
       needsReview: (data.needsReview as boolean) ?? false,
       reviewReason: (data.reviewReason as string | null) ?? null,
 
-      // Conflict resolution — fall back to submittedAt for legacy docs
+      // Conflict resolution: fall back to submittedAt for legacy docs
       statusUpdatedAt: (data.statusUpdatedAt as string) ?? (data.submittedAt as string),
       };
   }

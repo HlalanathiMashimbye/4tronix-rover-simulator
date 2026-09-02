@@ -121,8 +121,8 @@ Terraform (GCS remote state) to GitHub Actions to Artifact Registry to Cloud Run
 "OIDC, no JSON keys" at the end.
 
 At the right of the same strip, a small dashed group labelled "dev and simulation,
-same code paths, no hardware": `roversimui.py` (PyQt6 viewer),
-`roversimulator.py` (drop-in for the real rover module), `rover_physics.py`
+same code paths, no hardware": `legacy/simulator/roversimui.py` (PyQt6 viewer),
+`legacy/simulator/roversimulator.py` (drop-in for the real rover module), `rover_physics.py`
 (deprecated four-wheel steering model, kept for reference only), `dev-launcher.js`,
 Jest, pytest. Greyscale, roughly 60% opacity.
 

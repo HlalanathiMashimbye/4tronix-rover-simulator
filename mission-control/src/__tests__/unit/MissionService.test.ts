@@ -12,7 +12,7 @@ import {
   MissionPage,
 } from '@/core/domain/repositories/IMissionRepository';
 import { Mission } from '@/core/domain/entities/Mission';
-import { CreateMissionDto } from '@/infrastructure/validation/schemas';
+import { CreateMissionDto } from '@/core/application/dto/mission';
 
 class MockMissionRepository implements IMissionRepository {
   private missions: Map<string, Mission> = new Map();
@@ -64,6 +64,15 @@ class MockMissionRepository implements IMissionRepository {
       (m) => m.yardId === yardId && m.status === 'queued'
     ).length;
   }
+
+  // Widened with the port: routes needed findRuns/applyBookkeeping/
+  // softDeleteMission and could not be typed against IMissionRepository
+  // while those lived only on the Firestore class. MissionService does not
+  // use them, so here they only have to exist.
+  async findRuns() { return []; }
+  async upsertRun() { return; }
+  async applyBookkeeping() { return; }
+  async softDeleteMission() { return; }
 
   async findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage> {
     const ordered = Array.from(this.missions.values()).sort((a, b) => {

@@ -43,6 +43,7 @@ jobs:
       # Pi has no Node toolchain), so this fails the build if it no longer
       # matches the TypeScript it was built from.
       - run: npm run check:roversim
+      - run: npm run check:vendor
       - run: npx next build
       - run: npx jest --ci
 

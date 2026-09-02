@@ -148,14 +148,44 @@ export async function initSimIfFakeRover(hooks) {
   // dispatched instruction, and run_python's params hold the mission's
   // Python - the same string the learner submitted.
   let lastCode = null;
+  let seenAnything = false;
+
+  /** The newest run_python in the rover's history, or null. */
+  function lastRunFrom(status) {
+    const history = (status && status.history) || [];
+    for (let i = history.length - 1; i >= 0; i--) {
+      const entry = history[i];
+      if (entry && entry.cmd === 'run_python' && (entry.params || {}).code) {
+        return entry.params.code;
+      }
+    }
+    return null;
+  }
+
   hooks.onQueueEvent?.((status) => {
     const cur = status && status.current;
     const code = cur && cur.cmd === 'run_python' ? (cur.params || {}).code : null;
 
     if (!code) {
+      // Nothing running. On the FIRST snapshot this is the interesting case:
+      // the page has just opened and the run it should be showing already
+      // finished, so `current` is empty and this drew a parked rover on an
+      // empty yard. The TV then sat like that until somebody ran the next
+      // mission. Replay the last run instead - which is also what the branch
+      // below has always assumed, that the last run stays on screen.
+      if (!seenAnything) {
+        seenAnything = true;
+        const previous = lastRunFrom(status);
+        if (previous) {
+          lastCode = previous;
+          view.play(previous);
+          return;
+        }
+      }
       lastCode = null;
       return; // idle: leave the last run on screen rather than blanking it
     }
+    seenAnything = true;
     if (code === lastCode) return; // same run still in flight
     lastCode = code;
     view.play(code);

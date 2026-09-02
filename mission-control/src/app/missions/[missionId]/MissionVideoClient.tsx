@@ -1,35 +1,43 @@
 "use client";
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
-import { getFirestoreClient } from '@/lib/firebase';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import { RoverSimulator } from '@/components/mission/RoverSimulator';
-import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands } from '@/lib/simulateCommands';
-import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
-import { useFavorites } from '@/lib/useFavorites';
+import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
+import { useFavorites } from '@/hooks/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { yardLabel, yardPlace } from '@/infrastructure/config/yards';
+import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
+import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
+import { durationLabel } from '@/lib/missionDuration';
+import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
+import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
 
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-  const match = url.match(regExp);
-  return (match && match[2].length === 11) ? match[2] : null;
-}
 
-type RunOption = { id: string; label: string; kind: 'sim' | 'real'; youtubeId?: string };
-
-export default function MissionVideoClient({ missionId }: { missionId: string }) {
+export default function MissionVideoClient({
+  missionId,
+  yards,
+}: {
+  missionId: string;
+  yards: Yard[];
+}) {
+  const router = useRouter();
   const [mission, setMission] = useState<Mission | null>(null);
+  // Every yard's attempt, so the carousel can show more than the one video the
+  // mission document carries. Empty is ordinary - a mission nobody has run.
+  const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedRunId, setSelectedRunId] = useState('sim');
+  // Null until the mission loads, then the first run - which is the real one
+  // when there is one. A child opening their mission sees the rover, not a
+  // simulation they have already watched in the editor.
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [codeView, setCodeView] = useState<'blocks' | 'python'>('blocks');
   const [copied, setCopied] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -41,33 +49,32 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
     [mission]
   );
 
-  // Run selector entries: the simulated run is always present; real yard runs
-  // are added as they are attached. A dropdown handles any number of runs.
-  const runs = useMemo<RunOption[]>(() => {
-    const list: RunOption[] = [{ id: 'sim', label: 'Simulated run', kind: 'sim' }];
-    const realId = getYouTubeId(mission?.youtubeUrl || mission?.videoUrl);
-    if (realId) {
-      // Name the city, not "Real run". Once Durban and Limpopo have rovers this
-      // selector is how a learner tells the runs apart, and "which yard" only
-      // means something to them as a place they could point to on a map.
-      const place = yardPlace(mission?.yardId);
-      list.push({
-        id: 'real-1',
-        label: place ? `Real run · ${place}` : 'Real run',
-        kind: 'real',
-        youtubeId: realId,
-      });
-    }
-    return list;
-  }, [mission]);
+  // Real runs come FIRST, which is the point: a child needs to see that an
+  // actual rover drove their code. See lib/missionRuns for the reasoning.
+  const runs = useMemo<RunOption[]>(
+    () => buildRunOptions(mission, missionRuns, yards),
+    [mission, missionRuns, yards],
+  );
 
   useEffect(() => {
     const fetchMission = async () => {
       try {
-        const repository = new FirestoreMissionRepository(getFirestoreClient());
+        const repository = browserMissionRepository();
         const loadedMission = await repository.findById(missionId);
-        if (loadedMission) setMission(loadedMission);
-        else setError('Mission not found');
+        if (!loadedMission) {
+          setError('Mission not found');
+          return;
+        }
+        setMission(loadedMission);
+
+        // Runs are a separate read, and a failure here is not a failure to
+        // show the mission: the carousel falls back to the video on the mission
+        // document, and worst case to the simulation alone.
+        try {
+          setMissionRuns(await repository.findRuns(missionId));
+        } catch (runError) {
+          console.warn('Could not load runs for this mission:', runError);
+        }
       } catch (err) {
         console.error('Fetch mission error:', err);
         setError('Failed to load mission');
@@ -80,7 +87,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
   if (loading) {
     return (
-      <main className="flex h-[calc(100vh-64px)] items-center justify-center">
+      <main className="flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
       </main>
     );
@@ -88,7 +95,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
   if (error || !mission) {
     return (
-      <main className="mx-auto flex h-[calc(100vh-64px)] max-w-md flex-col items-center justify-center px-6 text-center">
+      <main className="mx-auto flex h-[calc(100dvh-var(--app-chrome))] max-w-md flex-col items-center justify-center px-6 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
           <Rocket className="h-8 w-8 text-primary" />
         </div>
@@ -108,8 +115,10 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
   const starred = isFavorite(mission.id);
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
-  const durationMs = mission.executionMetadata?.duration_ms;
-  const durationLabel = durationMs ? `${Math.round(durationMs / 1000)}s` : 'Not yet';
+  // Was mission.executionMetadata?.duration_ms - a key no mission document
+  // has ever carried, so this always read "Not yet", including under footage
+  // of a rover that had clearly finished. See lib/missionDuration.
+  const duration = durationLabel(simTrajectory, selectedRun);
   const dateLabel = new Date(mission.completedAt || mission.submittedAt).toLocaleDateString();
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
@@ -130,7 +139,7 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
     // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
     // blocks and the code were rendered, just unreachable, with no scrollbar to
     // hint that anything was below.
-    <main className="px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
+    <main className="px-3 py-2 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -159,58 +168,64 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                 internal key and means nothing to them. An unrecognised yard
                 shows nothing rather than falling back to the id. */}
             <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {yardLabel(mission.yardId) ? `${yardLabel(mission.yardId)} · ` : ''}
+              {(() => {
+                const yard = findYardIn(yards, mission.yardId);
+                return yard ? `${yardLabelOf(yard)} · ` : '';
+              })()}
               {dateLabel}
             </span>
           </div>
-          <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            Run
-            <select
-              value={selectedRunId}
-              onChange={(e) => setSelectedRunId(e.target.value)}
-              className="rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs font-semibold text-foreground outline-none transition-colors focus:border-primary"
-            >
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
-        {/* Body fills the remaining viewport height; nothing scrolls except the
-            code. Same draggable divider as Create Mission - a fixed 2/5 - 3/5
-            split meant a long mission's code and its footage both stayed
-            cramped with no way to trade space between them. height="100%"
-            because this sits inside an already-sized flex parent, unlike
-            Create Mission which owns the viewport. */}
+        {/* Fixed at 60/40, video to code, and the number came from the
+            simulator's geometry rather than taste.
+
+            The yard is a 400x300 world - 4:3 - letterboxed by computeLayout
+            inside whatever canvas it gets. So a WIDER panel makes it worse,
+            not better. Measured, at a 1400px viewport:
+
+              70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
+              65/35  canvas 716x469 (1.53)  64px each side
+              60/40  canvas 664x490 (1.35)  24px each side
+
+            The two media want opposite shapes and no split serves both: 16:9
+            video wants width, the 4:3 yard wants less of it. 60/40 is chosen
+            because the failures are not equivalent. A letterboxed video is
+            what every player does and nobody remarks on it; a yard floating in
+            grey with a hand's width of nothing down each side reads as a
+            rendering fault, which is exactly how it was reported.
+
+            The 320px floor on the right track keeps the code readable, so this
+            does not squeeze the editor to buy the change.
+
+            height="100%" because this sits inside an already-sized flex
+            parent, unlike Create Mission which owns the viewport. */}
         <SplitPane
-          ariaLabel="Resize footage and code panels"
-          defaultSplit={40}
+          ariaLabel="Footage and code panels"
+          defaultSplit={60}
+          resizable={false}
           height="100%"
           left={
             <div className="flex min-h-0 flex-col gap-2">
-            <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/30">
-              {selectedRun.kind === 'real' && selectedRun.youtubeId ? (
-                <div className="flex h-full w-full items-center justify-center p-2">
-                  <YouTubeEmbed
-                    key={selectedRun.id}
-                    youtubeId={selectedRun.youtubeId}
-                    title={missionName}
-                  />
-                </div>
-              ) : (
-                <div className="h-full w-full p-2">
-                  <RoverSimulator trajectory={simTrajectory} isPlaying editorMode="code" />
-                </div>
-              )}
-            </div>
-            <div className="grid shrink-0 grid-cols-3 gap-2">
-              <Stat label="Status" value={discoveryStatus} />
-              <Stat label="Duration" value={durationLabel} mono />
-              <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
-            </div>
+              <RunStackCarousel
+                runs={runs}
+                selectedId={selectedRun.id}
+                onSelect={setSelectedRunId}
+                missionName={missionName}
+                trajectory={simTrajectory}
+              />
+              {/* One row, three facts, label beside value rather than above
+                  it. As three stacked cards this was 49px of a column that had
+                  236px less player in it than the code panel beside it. These
+                  are glanced at once, so they do not need the height. */}
+              <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-0.5 rounded-xl border border-border/60 bg-card/50 px-3 py-1.5">
+                <Stat label="Status" value={discoveryStatus} />
+                <Stat label="Duration" value={duration} mono />
+                <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
+              </div>
+              {/* Under the stats, where a learner looks after watching. One
+                  line, so the leftover height goes to the player instead. */}
+              <OperatorFeedback runs={missionRuns} />
             </div>
           }
           /* Code (scrolls internally) + remix */
@@ -219,7 +234,13 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
               <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
                 {hasBlocks ? (
-                  <div className="inline-flex rounded-lg border border-border bg-card p-0.5 text-xs font-semibold">
+                  <div
+                    // p-px, not p-0.5: rounded-lg is 14.4 and the buttons are
+                    // rounded-md at 12.4, so the track between them has to be 2px
+                    // (1px border + 1px padding) for the corners to stay
+                    // concentric. At p-0.5 it was a pixel out.
+                    className="inline-flex rounded-lg border border-border bg-card p-px text-xs font-semibold"
+                  >
                     <button
                       onClick={() => setCodeView('blocks')}
                       className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'bg-gradient-mars text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
@@ -272,16 +293,16 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
                   // otherwise the Python, and open the matching editor mode.
                   if (mission.blocklyState) {
                     localStorage.setItem('roverWorkspace', mission.blocklyState);
-                    window.location.href = '/mission?mode=blockly';
+                    router.push('/mission?mode=blockly');
                   } else {
                     localStorage.setItem('rover_monaco_code', mission.code);
-                    window.location.href = '/mission?mode=code';
+                    router.push('/mission?mode=code');
                   }
                 }}
                 className="clay clay-press inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-mars px-4 py-2.5 font-display text-sm font-bold text-primary-foreground"
               >
                 <Zap className="h-4 w-4" fill="currentColor" />
-                Try it
+                Remix
               </button>
             </div>
             </div>
@@ -294,9 +315,11 @@ export default function MissionVideoClient({ missionId }: { missionId: string })
 
 function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-card/50 px-3 py-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`text-sm font-bold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</p>
-    </div>
+    <span className="flex items-baseline gap-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className={`text-xs font-bold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</span>
+    </span>
   );
 }

@@ -35,6 +35,18 @@ interface RoverSimulatorProps {
    * The simulator does not need to know what goes in it.
    */
   footer?: React.ReactNode;
+  /**
+   * Drop the card, the header and the padding, and let the arena fill whatever
+   * box it is given.
+   *
+   * For the run player, where the simulator sits in the same frame as the
+   * video of a real run. A card inside that frame meant switching between the
+   * two runs changed the size of the picture: the video went edge to edge and
+   * the simulation came back inset by its own padding, under a header the
+   * frame's own chrome already provides. The two runs are the same thing seen
+   * two ways, so they get the same shape.
+   */
+  bare?: boolean;
 }
 
 export function RoverSimulator({
@@ -44,6 +56,7 @@ export function RoverSimulator({
   editorMode,
   resetVersion = 0,
   footer,
+  bare = false,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -87,16 +100,26 @@ export function RoverSimulator({
 
   const resize = useCallback(() => {
     const canvas = canvasRef.current;
-    const wrap = wrapRef.current;
-    if (!canvas || !wrap) return;
-    const rect = wrap.getBoundingClientRect();
-    const w = Math.max(0, rect.width);
-    const h = Math.max(0, rect.height);
+    if (!canvas) return;
+    // Measure the canvas itself and leave its CSS size to CSS.
+    //
+    // This used to measure the WRAPPER's border box and write the result back
+    // as an inline width and height. That was wrong twice over. The canvas is
+    // positioned to inset-0, so it fills the wrapper's PADDING box, two pixels
+    // smaller than what was being measured. And an inline size only tracks the
+    // layout as often as the ResizeObserver fires, so a missed callback left
+    // the canvas smaller than the box it was supposed to cover - which showed
+    // as a strip of the wrapper's own colour with square corners, sitting
+    // inside a rounded panel.
+    //
+    // Sized by CSS it covers exactly, always. The only thing that can now lag
+    // a frame is the backing-store resolution, which costs sharpness rather
+    // than showing a seam.
+    const w = Math.max(0, canvas.clientWidth);
+    const h = Math.max(0, canvas.clientHeight);
     const dpr = Math.min(2.5, window.devicePixelRatio || 1);
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${h}px`;
+    canvas.width = Math.max(1, Math.round(w * dpr));
+    canvas.height = Math.max(1, Math.round(h * dpr));
     sizeRef.current = { ...computeLayout(w, h), dpr };
     drawScene();
   }, [drawScene]);
@@ -146,6 +169,22 @@ export function RoverSimulator({
     });
   }, [isManual]);
 
+  // A fresh non-manual run starts from the beginning and plays.
+  //
+  // DECLARED BEFORE THE PLAYBACK LOOP ON PURPOSE. Effects run in declaration
+  // order, so this parks the playhead at 0 before the loop below is scheduled.
+  // The other way round, the loop starts from the PREVIOUS run's final frame,
+  // immediately decides it has already finished, and stops - and then this
+  // effect rewinds to 0, leaving the rover frozen at the start.
+  useEffect(() => {
+    if (isManual) return;
+    playheadRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restart playback when a new trajectory arrives (external event)
+    setIsPaused(false);
+    drawScene();
+    syncHud();
+  }, [trajectory, isManual, drawScene, syncHud]);
+
   // Continuous rAF only while a non-manual run is actively playing.
   useEffect(() => {
     if (isManual || isPaused || !isPlaying) return;
@@ -182,17 +221,19 @@ export function RoverSimulator({
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isManual, isPaused, isPlaying, trajectory.length, drawScene, syncHud]);
-
-  // A fresh non-manual run starts from the beginning and plays.
-  useEffect(() => {
-    if (isManual) return;
-    playheadRef.current = 0;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- restart playback when a new trajectory arrives (external event)
-    setIsPaused(false);
-    drawScene();
-    syncHud();
-  }, [trajectory, isManual, drawScene, syncHud]);
+    // TRAJECTORY IDENTITY, NOT ITS LENGTH.
+    //
+    // Keyed on length, pressing Run twice on the same program changed nothing
+    // this effect could see: same length, isPlaying already true, isPaused
+    // already false. So no frame loop was scheduled, while the effect above
+    // rewound the playhead to 0. The rover sat at the start with the button
+    // reading "Pause", and only Reset - which empties the trajectory and so
+    // does change the length - brought it back.
+    //
+    // That is why it looked intermittent. Editing the code usually changes the
+    // frame count, which hid the bug; re-running the same program, or any edit
+    // that kept the same duration, exposed it.
+  }, [isManual, isPaused, isPlaying, trajectory, drawScene, syncHud]);
 
   // Manual mode is live: keep the rover on the newest point as it streams in.
   useEffect(() => {
@@ -239,28 +280,45 @@ export function RoverSimulator({
   const hasTrajectory = trajectory.length > 0;
 
   return (
-    <div className="flex h-full flex-col gap-2 rounded-2xl border border-border/60 bg-card/40 p-3 clay">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
-        </div>
-        {hasTrajectory && (
-          <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-            <Chip label="X" value={`${hud.x.toFixed(0)}`} />
-            <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
-            <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
+    <div
+      className={
+        bare
+          ? 'relative h-full w-full'
+          : 'panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay'
+      }
+    >
+      {/* The run player's own chrome already names the run and says it is a
+          simulation, so a second header inside the same frame is a repeat. */}
+      {!bare && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
           </div>
-        )}
-      </div>
+          {hasTrajectory && (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+              <Chip label="X" value={`${hud.x.toFixed(0)}`} />
+              <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
+              <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div
         ref={wrapRef}
-        className="relative min-h-0 w-full flex-1 overflow-hidden rounded-xl border border-border"
-        // Same source as the canvas base, so the letterbox around the yard can
-        // never disagree with what is painted inside it. This used to be a
-        // hardcoded near-black, which stayed dark on the light theme.
-        style={{ background: simPalette.backdrop }}
+        className={
+          bare
+            ? 'absolute inset-0 overflow-hidden'
+            : 'panel-inner relative min-h-0 w-full flex-1 overflow-hidden border border-border'
+        }
+        // The colour the canvas paints at its own edges, so the two can never
+        // disagree. This was simPalette.backdrop, which was correct while the
+        // yard was letterboxed inside the canvas. Once the terrain grew to
+        // fill the whole canvas nothing painted backdrop any more, and on the
+        // light theme it was a cream sitting behind a tan - so any sliver the
+        // canvas failed to cover read as a hard-edged band.
+        style={{ background: simPalette.groundOuter }}
       >
         <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
         {!hasTrajectory && (
@@ -283,7 +341,17 @@ export function RoverSimulator({
       </div>
 
       {hasTrajectory && (
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div
+          className={
+            bare
+              // Over the arena, not below it. Sitting below, this took 54px out
+              // of a 207px frame, so the picture shrank the moment you switched
+              // from the video of the real run to the simulation of it. A video's
+              // own controls overlay its picture; so do these.
+              ? 'absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-3 pb-2.5 pt-6'
+              : 'flex shrink-0 flex-col gap-1.5'
+          }
+        >
           <input
             type="range"
             min={0}

@@ -16,7 +16,11 @@
  */
 
 import { z } from 'zod';
+import type { CreateMissionDto } from '@/core/application/dto/mission';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
+import { calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
+import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
+import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
 
 /**
  * Schema for creating a new mission (anonymous submission)
@@ -34,10 +38,15 @@ export const createMissionSchema = z.object({
     .min(1, 'Learner ID is required')
     .max(100, 'Learner ID too long'),
 
+  /**
+   * nanoid(21), which is what anonymous-auth actually mints. Nothing renders
+   * this, so it is not a channel anyone would read, but it does land on a
+   * world-readable document and a free-form string field there is a loose end
+   * rather than a feature.
+   */
   sessionId: z
     .string()
-    .min(1, 'Session ID is required')
-    .max(100, 'Session ID too long'),
+    .regex(/^[A-Za-z0-9_-]{8,64}$/, 'Session ID has an unexpected format'),
 
   learnerEmail: z
     .string()
@@ -45,10 +54,22 @@ export const createMissionSchema = z.object({
     .max(254, 'Email too long')
     .optional(),
 
+  /**
+   * The name must be one the generator could have produced (AB#402).
+   *
+   * This is the boundary, not the input control. The browser has shown a
+   * read-only name with a re-roll button for a while, but the API accepted any
+   * string up to 100 characters, so anyone posting directly could put whatever
+   * they liked on a world-readable document. 47 of the first 400 missions
+   * carry names the generator could never have made.
+   *
+   * A closed vocabulary rather than a filter of bad words: a blocklist is an
+   * endless argument with the person trying to get past it, while a list of
+   * permitted pairings has nothing to argue with.
+   */
   name: z
     .string()
-    .min(1, 'Mission name is required')
-    .max(100, 'Mission name too long'),
+    .refine(isGeneratedMissionName, 'Mission names are generated, not typed'),
 
   code: z
     .string()
@@ -59,12 +80,14 @@ export const createMissionSchema = z.object({
     }),
 
   blocklyState: z.string().optional(),
-});
+}) satisfies z.ZodType<CreateMissionDto>;
 
 /**
- * Inferred TypeScript type from schema
+ * The DTO lives in core (application/dto/mission). Re-exported here so the
+ * many existing importers keep working, and asserted against below so the
+ * schema cannot drift from the contract without a compile error.
  */
-export type CreateMissionDto = z.infer<typeof createMissionSchema>;
+export type { CreateMissionDto, UpdateMissionDto } from '@/core/application/dto/mission';
 
 /**
  * Schema for mission status updates
@@ -86,14 +109,22 @@ export const updateMissionSchema = z.object({
   completedAt: z.string().datetime().optional(),
 }).strict();
 
-export type UpdateMissionDto = z.infer<typeof updateMissionSchema>;
 
 /**
  * Validation helper that returns formatted error messages
  *
- * Performs two-phase validation:
+ * Performs three-phase validation:
  * 1. Schema validation (Zod)
  * 2. Allowlist validation (User Story 21)
+ * 3. Mission time limit validation (AB#401)
+ *
+ * There is deliberately no speed phase here. ROVER_ARGUMENT_LIMITS already
+ * caps every motion command at 0-100 in phase 2, with a message that names the
+ * line and suggests a value, and phase 2 returns before anything after it can
+ * run. A second speed check at this layer could never fire. The rover keeps
+ * its own copy in mission_validator.py, which is a different matter: nothing
+ * on the yard enforces the allowlist, so that one is the only guard on the
+ * LAN boundary.
  *
  * @param data - Mission submission data
  * @returns Validation result with errors if any
@@ -138,6 +169,20 @@ export function validateMission(data: unknown): {
     return { success: false, errors: allowlistErrors };
   }
 
-  // Both validations passed
+  // Phase 3: mission time limit (AB#401). The allowlist caps a single sleep at
+  // 60 seconds but never adds them up, so a loop is how a mission gets long.
+  const duration = calculatePythonDuration(result.data.code);
+  if (duration > MISSION_TIME_LIMIT_SECONDS) {
+    return {
+      success: false,
+      errors: [
+        `code: This mission runs for about ${Math.round(duration)} seconds, and a mission ` +
+          `cannot be longer than ${MISSION_TIME_LIMIT_SECONDS}. Shorten a drive, or repeat ` +
+          `it fewer times.`,
+      ],
+    };
+  }
+
+  // All validations passed
   return { success: true, data: result.data };
 }

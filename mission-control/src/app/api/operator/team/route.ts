@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
-import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/lib/auth/dal';
+import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import {
   changeBlocker,
   isNoOpChange,

@@ -2,11 +2,10 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { RoverState } from '@/lib/rover-physics';
-import { getLearnerID } from '@/lib/getLearnerID';
+import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
-import { generateRandomMissionName } from '@/lib/missionNameGenerator';
+import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -58,13 +57,35 @@ export function MissionWorkspace() {
   // way. A ref, not state: nothing renders from it, and it must be readable by
   // the effect below in the same tick the prompt closes.
   const awaitingEmailChoiceRef = useRef(false);
-  // A name is generated up front so the learner never faces a blank,
-  // unnamed mission — they can only re-roll it, not type their own, so it is
-  // always present and always valid.
-  const [missionName, setMissionName] = useState(() => generateRandomMissionName());
+  /**
+   * A name is generated so the learner never faces a blank, unnamed mission:
+   * they can only re-roll it, not type their own.
+   *
+   * Generated on mount rather than in useState's initialiser. That initialiser
+   * runs during render, which happens on the server too - this is a client
+   * component but Next still server-renders the first HTML - so the server
+   * picked one name, the browser picked another, and React threw a hydration
+   * mismatch on every single load of this page. The name is random by design,
+   * so there is no way to make the two agree; the fix is not to render one
+   * until the browser is the only thing rendering.
+   */
+  const [missionName, setMissionName] = useState('');
+
+  useEffect(() => {
+    setMissionName(generateRandomMissionName());
+  }, []);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const manualTrajectoryLengthRef = useRef(0);
   const [manualResetVersion, setManualResetVersion] = useState(0);
+  /**
+   * The Python the learner's BLOCKS produce, kept apart from currentCode.
+   *
+   * currentCode is whatever the active editor last reported, and switching to
+   * the Python tab immediately overwrites it with that tab's own draft. So the
+   * blocks' version has to be held separately or it is lost the moment the
+   * learner goes to look at it - which is exactly what they do after building
+   * something (AB#413).
+   */
+  const [blocklyCode, setBlocklyCode] = useState('');
 
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
@@ -82,37 +103,57 @@ export function MissionWorkspace() {
     setTrajectory([]);
     setIsPlaying(false);
     setError(null);
-    manualTrajectoryLengthRef.current = 0;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
   }, []);
 
-  const handleManualTrajectory = useCallback((realtimeTrajectory: RoverState[]) => {
-    const converted: TrajectoryPoint[] = realtimeTrajectory.map((state) => ({
-      x: state.x,
-      y: state.y,
-      heading: state.heading,
-      speedL: state.speedL,
-      speedR: state.speedR,
-      servos: {
-        '9': state.servos[9],
-        '15': state.servos[15],
-        '11': state.servos[11],
-        '13': state.servos[13],
-      },
-      hitWall: state.hitWall,
-    }));
-    setTrajectory((previousTrajectory) => {
-      const startIndex = manualTrajectoryLengthRef.current;
-      if (converted.length <= startIndex) {
-        return previousTrajectory;
-      }
+  /**
+   * Take the blocks' Python to the Python tab and show it.
+   *
+   * Overwrites the draft on purpose. The learner has just asked to see their
+   * blocks as code, so anything already sitting there is not what they wanted
+   * to look at, and quietly showing them something else would be the bug this
+   * replaces.
+   */
+  const handleShowAsPython = useCallback(() => {
+    if (blocklyCode.trim()) {
+      localStorage.setItem('rover_monaco_code', blocklyCode);
+      setCurrentCode(blocklyCode);
+    }
+    setEditorMode('code');
+  }, [blocklyCode]);
 
-      manualTrajectoryLengthRef.current = converted.length;
-      return [...previousTrajectory, ...converted.slice(startIndex)];
-    });
+  /**
+   * The manual controller owns the whole path; take it as given.
+   *
+   * This used to treat the child's array as append-only and track a cursor
+   * into it, copying across only what was new. That assumption broke the moment
+   * the child hit its own cap: past 1000 points it slides a window, so the
+   * length stops growing, and "nothing new since the cursor" became true
+   * forever. The parent then returned the previous trajectory on every frame
+   * and the rover froze on screen while its physics carried on underneath.
+   *
+   * Driving into a wall was the usual way to notice, because reaching one took
+   * long enough to fill the buffer. Reset appeared to fix it only because it
+   * zeroed the cursor.
+   */
+  /**
+   * The manual controller owns the whole path; take it as given.
+   *
+   * Two separate bugs met here. It first tracked a cursor into the child's
+   * array, which froze the rover once the child's sliding window stopped the
+   * length growing. Replacing that with a full re-map fixed the freeze and
+   * introduced a worse problem: mapping a three-thousand-point trail into fresh
+   * objects sixty times a second is ~180,000 allocations per second, which
+   * drove React into "maximum update depth" and killed the dev server.
+   *
+   * The child now converts each point once as it happens, so this is a plain
+   * assignment of an array it already built.
+   */
+  const handleManualTrajectory = useCallback((points: TrajectoryPoint[]) => {
+    setTrajectory(points);
     setIsPlaying(true);
   }, []);
 
@@ -121,8 +162,7 @@ export function MissionWorkspace() {
       // Clear the drawn path and park the rover back at the start. The reset
       // version bump tells ManualControlRealtime to reset its physics too, so
       // the next tap drives from the centre again.
-      manualTrajectoryLengthRef.current = 0;
-      setTrajectory([]);
+        setTrajectory([]);
       setManualResetVersion((version) => version + 1);
       setIsPlaying(false);
       return;
@@ -134,7 +174,6 @@ export function MissionWorkspace() {
     }
     setTrajectory([]);
     setIsPlaying(false);
-    manualTrajectoryLengthRef.current = 0;
   }, [editorMode]);
 
   const handleSubmitToQueue = async () => {
@@ -234,6 +273,9 @@ export function MissionWorkspace() {
             manualResetVersion={manualResetVersion}
             onGenerateCommands={runSimulation}
             onCodeChange={setCurrentCode}
+            onBlocklyCode={setBlocklyCode}
+            blocklyCode={blocklyCode}
+            onShowAsPython={handleShowAsPython}
             onBlocklyStateChange={setBlocklyState}
           />
         }

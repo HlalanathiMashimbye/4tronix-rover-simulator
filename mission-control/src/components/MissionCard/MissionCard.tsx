@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { Play, Rocket } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
-import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/lib/discoveryStatus';
+import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;

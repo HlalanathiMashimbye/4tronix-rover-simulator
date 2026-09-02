@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
+    "dev": "next dev --webpack -p 3000",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -11,9 +11,12 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "build:roversim": "node scripts/build-roversim.mjs",
-    "check:roversim": "node scripts/build-roversim.mjs --check"
+    "check:roversim": "node scripts/build-roversim.mjs --check",
+    "build:vendor": "node scripts/vendor-blockly.mjs",
+    "check:vendor": "node scripts/vendor-blockly.mjs --check"
   },
   "dependencies": {
+    "@google-cloud/secret-manager": "^7.0.0",
     "@monaco-editor/react": "^4.7.0",
     "blockly": "^12.5.1",
     "firebase": "^12.12.0",
@@ -22,7 +25,7 @@
     "motion": "^12.43.0",
     "nanoid": "^5.1.9",
     "next": "16.3.3",
-    "posthog-js": "^1.421.2",
+    "posthog-js": "^1.422.5",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "resend": "^6.18.0",

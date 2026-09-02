@@ -9,9 +9,16 @@ If you're setting up a new M.A.R.S. Rover from scratch:
 - [Assembly Instructions](https://4tronix.co.uk/blog/?p=2112) - Step-by-step build guide
 - [Assembly Video](https://www.youtube.com/watch?v=Np8ZQQd85oc) - Video walkthrough
 
-## Known-Working Pi Configuration (as of March 2026)
+## Known-Working Pi Configuration (as of March 2026) - HISTORICAL, Pi since rebuilt
 
-This is the verified working setup inspected directly from the Pi on 22 March 2026.
+This is a factual record of what was inspected directly on the Pi on 22 March
+2026, kept as-is rather than edited to match current architecture. It predates
+`yard/rover/vendor/` and, at the time, this Pi was running
+`real-rover/rover_server.py` rather than the current `yard/rover/rover_server.py`
+- an older deployment this doc's rebuild guide below no longer produces. As of
+2026-08, the rover Pi is bare (Group 1 is rebuilding it from scratch): follow
+"Pi Setup (New SD Card)" below, not this section, and note the vendored
+library described in `yard/rover/vendor/README.md` before setting `PYTHONPATH`.
 
 ### OS
 - **Raspbian GNU/Linux 11 (Bullseye)**, image dated **22 October 2024**
@@ -83,15 +90,47 @@ https://downloads.raspberrypi.com/raspios_oldstable_armhf/images/raspios_oldstab
 In Raspberry Pi Imager:
 1. Click **Choose OS**
 2. Select **Use custom** and pick the downloaded `.img.xz` file
-3. Choose your SD card and write
+3. Choose your SD card
+4. **Use OS Customisation (the gear).** Set hostname, the `mars` user and its
+   password, the `marsyard` wifi with country ZA, and enable SSH - paste your
+   public key there rather than relying on a password
+5. Write
 
-> **Important:** The OS Customisation screen (gear icon) does **not** work with custom images. Skip it — configure headless setup manually after writing as described below.
+### Use the app's customisation, not the manual files
+
+This section used to say the gear icon does not work with custom images and to
+configure the card by hand afterwards. **That has not held up in practice** -
+we have flashed these cards both ways and the app is the one that works. The
+manual route is kept below as a fallback, not as the recommendation.
+
+Three reasons it is better, beyond being fewer steps:
+
+- **It picks the right wifi mechanism for you.** A Bullseye card wants
+  `wpa_supplicant.conf`; a Bookworm one ignores that file completely and uses
+  NetworkManager. Writing the wrong one gives a Pi that boots and joins
+  nothing, with nothing in the logs pointing at the file you wrote. Imager
+  knows which image it just wrote. See
+  [bring-up.md](bring-up.md) for what that trap looks like.
+- **It sets the password properly.** `userconf.txt` is processed once, on
+  first boot, so a card that has already booted cannot be fixed by putting the
+  file back - a genuinely easy way to lock yourself out of a working rover.
+- **It can install your SSH key**, which is what stops the password mattering
+  at all. Do this. A key in Imager means nobody has to remember or share a
+  password later.
+
+> **One thing the app cannot do:** give the rover a *single* wifi network when
+> the card already has others. It writes what you give it to a fresh card, so a
+> clean flash starts with only the network you typed - which is exactly what we
+> want, and why re-flashing is the fix for a rover that keeps joining somebody's
+> phone hotspot.
 
 After imaging, macOS will show "disk not readable" - click **Ignore** (not Eject or Initialize). The boot partition will mount as `/Volumes/bootfs`.
 
-### 2. Headless Setup
+### 2. Headless setup by hand (fallback)
 
-Configure the SD card for headless boot before inserting it into the Pi.
+Only needed if you did not use the app's OS Customisation above. Prefer the
+app: everything in this section is what it does for you, and the failure modes
+below are the ones it avoids.
 
 > **macOS Note:** If you get "Operation not permitted" errors, add Terminal to **System Settings → Privacy & Security → Full Disk Access**, then restart Terminal.
 
@@ -304,14 +343,28 @@ bash rover.sh
 
 ### 4. Symlink driveRover.py
 
-The 4tronix `rover.sh` installs an older `driveRover.py`. Replace it with a symlink to the repo version so it stays up to date:
+The 4tronix `rover.sh` installs an older `driveRover.py`. Replace it with a symlink to the repo version so it stays up to date. This one is not the running control library (that's `rover.py`, vendored into `yard/rover/vendor/` - see below), it's the manual joystick/keyboard driving script `rover.sh` bundles, kept here for provenance in `legacy/real-rover/`:
 
 ```bash
 rm ~/marsrover/driveRover.py
-ln -s ~/4tronix-rover-simulator/real-rover/driveRover.py ~/marsrover/driveRover.py
+ln -s ~/4tronix-rover-simulator/legacy/real-rover/driveRover.py ~/marsrover/driveRover.py
 ```
 
-### 5. Calibrate Servos
+### 5. `rover.py` and `pca9685.py` (which library actually runs)
+
+`rover.sh` also installs `rover.py` into `~/marsrover`, but the rover server
+does **not** run that copy. `yard/rover/vendor/rover.py` is a
+version-controlled copy of the same library, and `yard/deploy/rover-server.service`
+puts it ahead of `~/marsrover` on `PYTHONPATH` so `import rover` resolves
+there instead. `~/marsrover` still has to exist, though: `rover.py` imports a
+sibling module, `pca9685`, which `rover.sh` installs and which is not vendored
+(it is a low-level I2C PWM driver, and there is no verified copy to vendor
+safely without a Pi to test it against). `PYTHONPATH` therefore lists both
+directories, vendor first: `import rover` gets the vendored copy, `import
+pca9685` keeps searching and finds it in `~/marsrover`. See
+`yard/rover/vendor/README.md` for the full explanation.
+
+### 6. Calibrate Servos
 
 Before first use, calibrate the wheel servos:
 ```bash

@@ -13,7 +13,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admin';
-import { SESSION_COOKIE } from '@/lib/auth/dal';
+import { OPERATOR_YARD_COOKIE, SESSION_COOKIE } from '@/infrastructure/auth/dal';
+import { adminYardRepository } from '@/infrastructure/container.server';
+import { isSelectableYard } from '@/core/domain/entities/Yard';
 
 /** Long enough to cover an event day, so nobody is signed out mid-session. */
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
@@ -25,9 +27,9 @@ const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
  */
 const MAX_SIGN_IN_AGE_MS = 5 * 60 * 1000;
 
-function cookieOptions(maxAgeSeconds: number) {
+function cookieOptions(maxAgeSeconds: number, name: string = SESSION_COOKIE) {
   return {
-    name: SESSION_COOKIE,
+    name,
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax' as const,
@@ -47,6 +49,21 @@ export async function POST(request: NextRequest) {
   const token = (body as { token?: unknown })?.token;
   if (typeof token !== 'string' || token.length === 0) {
     return NextResponse.json({ success: false, error: 'Missing token' }, { status: 400 });
+  }
+
+  // The yard is chosen here and nowhere else. Validated against the live list
+  // rather than trusted: a retired yard must not be selectable just because a
+  // stale browser still offered it.
+  const yardId = (body as { yardId?: unknown })?.yardId;
+  if (typeof yardId !== 'string' || yardId.length === 0) {
+    return NextResponse.json({ success: false, error: 'Choose a yard to sign in at' }, { status: 400 });
+  }
+
+  if (!isSelectableYard(await adminYardRepository().findAll(), yardId)) {
+    return NextResponse.json(
+      { success: false, error: 'That yard is not one you can sign in at.' },
+      { status: 400 },
+    );
   }
 
   const auth = getFirebaseAdminAuth();
@@ -76,8 +93,15 @@ export async function POST(request: NextRequest) {
       expiresIn: SESSION_DURATION_MS,
     });
 
-    const response = NextResponse.json({ success: true, role }, { status: 200 });
+    const response = NextResponse.json({ success: true, role, yardId }, { status: 200 });
     response.cookies.set({ ...cookieOptions(SESSION_DURATION_MS / 1000), value: sessionCookie });
+    // Same lifetime, same response. httpOnly for the same reason the session
+    // is: nothing in the page needs to read it, and a yard the browser can
+    // rewrite is the localStorage preference this replaced.
+    response.cookies.set({
+      ...cookieOptions(SESSION_DURATION_MS / 1000, OPERATOR_YARD_COOKIE),
+      value: yardId,
+    });
     return response;
   } catch (error) {
     // Expired, revoked, malformed, or issued for another project. The caller
@@ -94,6 +118,8 @@ export async function DELETE(request: NextRequest) {
   // the one a user most wants gone.
   const response = NextResponse.json({ success: true }, { status: 200 });
   response.cookies.set({ ...cookieOptions(0), value: '' });
+  // Cleared with the session, so signing out is what changes yards.
+  response.cookies.set({ ...cookieOptions(0, OPERATOR_YARD_COOKIE), value: '' });
 
   if (existing) {
     try {

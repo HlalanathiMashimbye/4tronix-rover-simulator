@@ -6,14 +6,11 @@ This module implements the Ports & Adapters (Hexagonal) pattern:
 - RoverQueueService: Application service implementing the core logic
 """
 
-import io
 import os
-import sys
 import time
 import uuid
 import logging
 import threading
-import contextlib
 import queue as queue_module
 from abc import ABC, abstractmethod
 from collections import deque
@@ -21,6 +18,8 @@ from datetime import datetime, timezone
 from typing import Optional, Callable
 
 from drivers import RoverDriver
+from mission_validator import validate_mission_code
+from python_runner import StudentCodeRunner, import_rover_module
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +37,21 @@ def _default_take_photo() -> str:
     )
     return PHOTO_PATH
 
-# Filename given to compiled student code so the trace function can
-# distinguish student frames from rover module / service internals
-STUDENT_CODE_FILENAME = '<student-code>'
-
-
-class StudentCodeInterrupted(Exception):
-    """Raised inside student run_python code to stop it (stop button or timeout)."""
+# Every motion command has the same shape: start the motors, wait, stop. Only
+# the call that starts them differs, so that is all this table holds and the
+# shared shape lives in one place in _execute_instruction. Written out as six
+# near-identical elif branches, the shape was repeated six times and a change
+# to it (a settling delay, a telemetry event) meant six edits or five and a
+# bug. 'backward' and 'reverse' are the same motion under two names.
+_MOTION_COMMANDS = {
+    'forward':     lambda driver, speed, degrees: driver.forward(speed),
+    'backward':    lambda driver, speed, degrees: driver.reverse(speed),
+    'reverse':     lambda driver, speed, degrees: driver.reverse(speed),
+    'spin_left':   lambda driver, speed, degrees: driver.spin_left(speed),
+    'spin_right':  lambda driver, speed, degrees: driver.spin_right(speed),
+    'steer_left':  lambda driver, speed, degrees: driver.steer_left(degrees, speed),
+    'steer_right': lambda driver, speed, degrees: driver.steer_right(degrees, speed),
+}
 
 
 class RoverQueuePort(ABC):
@@ -185,6 +192,24 @@ class RoverQueueService(RoverQueuePort):
         if not isinstance(instructions, list):
             instructions = [instructions]
 
+        # Check the whole batch against the time and speed ceilings (AB#401)
+        # BEFORE queueing any of it. Validating inside the append loop meant a
+        # batch whose second instruction was rejected had already queued the
+        # first: the rover ran it, the reply said 'added': 0, and
+        # _notify_subscribers() never fired, so nothing watching the queue
+        # heard about the instruction that was about to move a robot.
+        for instr in instructions:
+            if instr.get('cmd') != 'run_python':
+                continue
+            code = instr.get('params', {}).get('code', '')
+            is_valid, errors = validate_mission_code(code)
+            if not is_valid:
+                return {
+                    'status': 'error',
+                    'error': '; '.join(errors) if errors else 'Mission validation failed',
+                    'added': 0,
+                }
+
         added = []
         with self._queue_lock:
             for instr in instructions:
@@ -291,33 +316,10 @@ class RoverQueueService(RoverQueuePort):
         self._notify_subscribers()
 
         try:
-            if cmd == 'forward':
-                self.driver.forward(speed)
-                self._interruptible_wait(seconds)
-                self.driver.stop()
+            start_motion = _MOTION_COMMANDS.get(cmd)
 
-            elif cmd == 'backward' or cmd == 'reverse':
-                self.driver.reverse(speed)
-                self._interruptible_wait(seconds)
-                self.driver.stop()
-
-            elif cmd == 'spin_left':
-                self.driver.spin_left(speed)
-                self._interruptible_wait(seconds)
-                self.driver.stop()
-
-            elif cmd == 'spin_right':
-                self.driver.spin_right(speed)
-                self._interruptible_wait(seconds)
-                self.driver.stop()
-
-            elif cmd == 'steer_left':
-                self.driver.steer_left(degrees, speed)
-                self._interruptible_wait(seconds)
-                self.driver.stop()
-
-            elif cmd == 'steer_right':
-                self.driver.steer_right(degrees, speed)
+            if start_motion is not None:
+                start_motion(self.driver, speed, degrees)
                 self._interruptible_wait(seconds)
                 self.driver.stop()
 
@@ -328,76 +330,20 @@ class RoverQueueService(RoverQueuePort):
                 self._interruptible_wait(seconds)
 
             elif cmd == 'run_python':
-                code = params.get('code', '')
-                import sys
-                import os
-                import time as time_module
-                if self._rover_module is not None:
-                    rover_module = self._rover_module
-                else:
-                    try:
-                        sys.path.insert(0, '/home/mars/marsrover')
-                        import rover as rover_module
-                        if not hasattr(rover_module, 'forward'):
-                            raise ImportError("rover module missing hardware API")
-                    except (ImportError, AttributeError):
-                        # Not on Pi — use roversimulator (same API, sends to visual sim or no-ops)
-                        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                        if repo_root not in sys.path:
-                            sys.path.insert(0, repo_root)
-                        import roversimulator as rover_module
-                safe_builtins = {
-                    'range': range, 'len': len, 'print': print,
-                    'int': int, 'float': float, 'str': str,
-                    'list': list, 'dict': dict, 'tuple': tuple,
-                    'True': True, 'False': False, 'None': None,
-                    'enumerate': enumerate, 'zip': zip, 'abs': abs,
-                    'min': min, 'max': max, 'round': round,
-                }
-                service_ref = self
-                class _interruptible_time:
-                    sleep = staticmethod(lambda s: service_ref._interruptible_wait(s))
-
-                def _take_photo():
-                    # Mark the attempt first so a failed capture is
-                    # distinguishable from "no photo block" on the monitor
-                    instruction['photo_attempted'] = True
-                    path = self._photo_provider()
-                    # photo=True means a photo is available to fetch at /photo
-                    instruction['photo'] = True
-                    print('Photo taken')
-                    return path
-
-                # Trace each line of student code (only — other frames return
-                # None) so the stop button and a wall-clock deadline can break
-                # out of loops like `while True: pass`. Blocking C calls are
-                # not interruptible mid-call.
-                compiled = compile(code, STUDENT_CODE_FILENAME, 'exec')
-                deadline = time.monotonic() + self._run_python_timeout
-
-                def _trace(frame, event, arg):
-                    if frame.f_code.co_filename != STUDENT_CODE_FILENAME:
-                        return None
-                    if self._stop_requested.is_set():
-                        raise StudentCodeInterrupted('Stopped')
-                    if time.monotonic() > deadline:
-                        raise StudentCodeInterrupted(
-                            f'Code ran longer than {self._run_python_timeout:.0f}s and was stopped')
-                    return _trace
-
-                # Capture print() output so distance readings etc. reach the
-                # monitor via the instruction record
-                stdout_buf = io.StringIO()
-                sys.settrace(_trace)
-                try:
-                    with contextlib.redirect_stdout(stdout_buf):
-                        exec(compiled, {'rover': rover_module, 'time': _interruptible_time,
-                                        'take_photo': _take_photo, '__builtins__': safe_builtins})
-                finally:
-                    sys.settrace(None)
-                    captured = stdout_buf.getvalue().strip()
-                    if captured:
-                        instruction['output'] = captured[:2000]
+                # `is not None`, not `or`: an injected test double may be
+                # falsy, and falling through to the real import would then
+                # quietly drive whatever hardware is attached.
+                rover_module = (
+                    self._rover_module if self._rover_module is not None
+                    else import_rover_module()
+                )
+                runner = StudentCodeRunner(
+                    interruptible_wait=self._interruptible_wait,
+                    stop_requested=self._stop_requested,
+                    photo_provider=self._photo_provider,
+                    timeout=self._run_python_timeout,
+                )
+                runner.run(params.get('code', ''), instruction, rover_module)
 
             instruction['status'] = 'completed'
 

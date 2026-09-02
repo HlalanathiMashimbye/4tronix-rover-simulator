@@ -13,7 +13,7 @@ const getUserByEmail = jest.fn();
 const listUsers = jest.fn();
 const docSet = jest.fn();
 
-jest.mock('@/lib/auth/dal', () => {
+jest.mock('@/infrastructure/auth/dal', () => {
   class UnauthorizedError extends Error {}
   class ForbiddenError extends Error {}
   return {
@@ -41,7 +41,7 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
 }));
 
 import { POST, GET } from '@/app/api/operator/team/route';
-import { ForbiddenError, UnauthorizedError } from '@/lib/auth/dal';
+import { ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { NextRequest } from 'next/server';
 
 const ADMIN = { uid: 'admin-uid', email: 'admin@rover.com', role: 'admin' as const };

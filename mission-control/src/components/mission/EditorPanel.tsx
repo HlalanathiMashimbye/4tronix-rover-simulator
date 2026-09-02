@@ -6,7 +6,7 @@ import { ManualControlRealtime } from '@/components/mission/ManualControlRealtim
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
-import type { RoverState } from '@/lib/rover-physics';
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
 
@@ -30,11 +30,14 @@ interface EditorPanelProps {
   onEditorModeChange: (mode: EditorMode) => void;
   error: string | null;
 
-  onManualTrajectory: (trajectory: RoverState[]) => void;
+  onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
   onResetSimulation: () => void;
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
+  onBlocklyCode: (code: string) => void;
+  blocklyCode: string;
+  onShowAsPython: () => void;
   onBlocklyStateChange?: (state: string) => void;
 }
 
@@ -47,12 +50,15 @@ export function EditorPanel({
   manualResetVersion,
   onGenerateCommands,
   onCodeChange,
+  onBlocklyCode,
+  blocklyCode,
+  onShowAsPython,
   onBlocklyStateChange,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="flex h-full flex-col gap-1.5 overflow-hidden rounded-2xl border border-border/60 bg-card/40 p-2.5 clay">
+    <div className="panel flex h-full flex-col gap-1.5 overflow-hidden border border-border/60 bg-card/40 clay">
       {/* Editor mode tabs */}
       <div className="flex flex-shrink-0 gap-1.5">
         {MODES.map(({ mode, label, Icon }) => {
@@ -62,14 +68,14 @@ export function EditorPanel({
               key={mode}
               onClick={() => onEditorModeChange(mode)}
               aria-pressed={active}
-              className={`relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-xl px-2 py-2 text-sm font-bold transition-colors ${
+              className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-2 text-sm font-bold transition-colors ${
                 active
                   ? 'text-primary-foreground'
                   : 'border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground'
               }`}
             >
               {active && (
-                <ActivePillBackground layoutId="editor-mode-pill" className="rounded-xl bg-gradient-mars clay" reduceMotion={reduceMotion} />
+                <ActivePillBackground layoutId="editor-mode-pill" className="panel-inner bg-gradient-mars clay" reduceMotion={reduceMotion} />
               )}
               <span className="relative z-10 flex items-center gap-1.5">
                 <Icon className="h-4 w-4" />
@@ -96,8 +102,8 @@ export function EditorPanel({
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} onBlocklyStateChange={onBlocklyStateChange} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} />}
+        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} />}
+        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} />}
       </div>
 
     </div>

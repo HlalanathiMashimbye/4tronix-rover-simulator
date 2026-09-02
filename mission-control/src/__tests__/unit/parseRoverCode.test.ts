@@ -65,16 +65,55 @@ describe('parseRoverCode', () => {
       expect(out[1]).toEqual({ command: 'forward', speed: 60, duration: 1 });
     });
 
-    it('ignores LEDs, mast and a bare wait (no movement)', () => {
+    it('ignores the mast and a bare wait (no movement)', () => {
       const code = [
-        'rover.setColor(rover.fromRGB(255, 0, 0))',
-        'rover.show()',
+        'rover.setServo(0, 30)', // mast, no effect on a 2D sim
         'time.sleep(1)', // bare wait, no active motion
         'rover.forward(60)',
         'time.sleep(1)',
         'rover.stop()',
       ].join('\n');
       expect(parseRoverCode(code)).toEqual([{ command: 'forward', speed: 60, duration: 1 }]);
+    });
+
+    it('lights the lamps, because a child who turns them on should see them', () => {
+      // This used to assert LEDs were IGNORED. They were dropped on the way to
+      // the simulator, so "set all LEDs to red" did nothing a learner could
+      // see, on a rover that has four real lamps on its corners.
+      const code = [
+        'rover.setColor(rover.fromRGB(255, 0, 0))',
+        'rover.show()',
+        'rover.forward(60)',
+        'time.sleep(1)',
+        'rover.stop()',
+      ].join('\n');
+
+      expect(parseRoverCode(code)).toEqual([
+        { command: 'leds', leds: ['255, 0, 0', '255, 0, 0', '255, 0, 0', '255, 0, 0'] },
+        { command: 'forward', speed: 60, duration: 1 },
+      ]);
+    });
+
+    it('waits for show() before lighting anything', () => {
+      // setColor stages, show commits. The editor's own help promises this
+      // ("Nothing changes until you call this"), so the simulator has to agree
+      // or it teaches a child something untrue about their rover.
+      const code = ['rover.setColor(rover.fromRGB(0, 255, 0))'].join('\n');
+
+      expect(parseRoverCode(code)).toEqual([]);
+    });
+
+    it('changes only the lamp setPixel names', () => {
+      const code = [
+        'rover.setPixel(2, rover.fromRGB(0, 0, 255))',
+        'rover.show()',
+      ].join('\n');
+
+      // null means "leave that one alone", so the other three keep whatever
+      // they already were rather than being switched off.
+      expect(parseRoverCode(code)).toEqual([
+        { command: 'leds', leds: [null, null, '0, 0, 255', null] },
+      ]);
     });
   });
 

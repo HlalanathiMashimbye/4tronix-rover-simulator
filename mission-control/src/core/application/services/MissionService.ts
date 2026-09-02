@@ -16,7 +16,7 @@ import { Mission } from '@/core/domain/entities/Mission';
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
-import { CreateMissionDto } from '@/infrastructure/validation/schemas';
+import { CreateMissionDto } from '@/core/application/dto/mission';
 
 export interface SubmitMissionResult {
   success: boolean;

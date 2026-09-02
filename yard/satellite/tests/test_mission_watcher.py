@@ -1,9 +1,11 @@
 """
-Mission watcher tests.
+The watcher, which now does exactly one thing: release the camera.
 
-The watcher completes missions the rover confirms. The dangerous failure mode
-is marking something complete that never ran, so most of these check that it
-stays quiet when it cannot be sure.
+It used to also complete missions in the Firestore mirror, flag rover errors
+for review and notify mission-control. All of that went with the mirror. The
+tests for it went too; these cover what is left, which is the half that could
+never have moved to Mission Control anyway - the camera and the file are on
+this box, and only the rover knows the run is over.
 """
 
 import os
@@ -12,247 +14,142 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store  # noqa: E402
-import mission_watcher  # noqa: E402
 
-ROVER = 'http://rover.local:8523'
+import mission_watcher
+import recording_control
 
-
-@pytest.fixture(autouse=True)
-def _mirror(tmp_path, monkeypatch):
-    monkeypatch.setattr(mission_store, 'DB_PATH', str(tmp_path / 'm.db'))
-    mission_store.init_db()
+YARD = 'curiosity'
 
 
-def _seed(mission_id, status, needs_review=0, owner='sat-1'):
-    mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': 'curiosity', 'status': status,
-          'lockOwner': owner, 'needsReview': needs_review,
-          'submittedAt': '2026-07-14T08:00:00Z'}],
-        '2026-07-14T09:00:00Z',
-    )
+class _Reply:
+    def __init__(self, history, status_code=200):
+        self._history = history
+        self.status_code = status_code
+
+    def json(self):
+        return {'history': self._history}
 
 
-def _rover(history):
-    class Resp:
-        status_code = 200
-        def json(self):
-            return {'history': history}
-    return lambda *a, **k: Resp()
-
-
-def _done(mission_id):
-    return {'cmd': 'run_python', 'status': 'completed', 'params': {'mission_id': mission_id}}
-
-
-def test_a_confirmed_mission_is_completed(monkeypatch):
-    """The whole point: an operator should not have to remember to tap
-    'Mark complete' for a run the rover already finished."""
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['m1']
-
-    row = mission_store.get_mission('m1')
-    assert row['status'] == 'completed'
-    assert row['completed_at']
-    assert row['lock_owner'] is None, 'the lease must be released too'
-
-
-def test_completion_is_queued_for_firestore(monkeypatch):
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    mission_watcher.autocomplete_finished_missions(ROVER)
-
-    entry = mission_store.peek_outbox()
-    assert entry and entry['mission_id'] == 'm1'
-
-
-def test_the_learner_notification_fires(monkeypatch):
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-    calls = []
-
-    mission_watcher.autocomplete_finished_missions(ROVER, notify=lambda i, s: calls.append((i, s)))
-
-    assert calls == [('m1', 'completed')]
-
-
-def test_a_failing_notify_does_not_lose_the_completion(monkeypatch):
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    def boom(*a):
-        raise RuntimeError('mission-control down')
-
-    mission_watcher.autocomplete_finished_missions(ROVER, notify=boom)
-
-    assert mission_store.get_mission('m1')['status'] == 'completed'
-
-
-def test_a_rover_error_does_not_mark_the_mission_failed(monkeypatch):
-    """'The code raised' is not 'the run was a failure', and a learner must
-    never be shown a failed mission. Leave it for a human."""
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        {'cmd': 'run_python', 'status': 'error', 'params': {'mission_id': 'm1'}},
-    ]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] == 'processing'
-
-
-def test_an_unreachable_rover_changes_nothing(monkeypatch):
-    _seed('m1', 'processing')
-
-    def boom(*a, **k):
-        raise mission_watcher.requests.exceptions.ConnectionError('offline')
-    monkeypatch.setattr(mission_watcher.requests, 'get', boom)
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] == 'processing'
-
-
-def test_missions_awaiting_human_review_are_left_alone(monkeypatch):
-    """A flagged mission is the operator's decision to make."""
-    _seed('m1', 'processing', needs_review=1)
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['needs_review'] == 1
-
-
-def test_a_mission_with_pending_writes_is_skipped(monkeypatch):
-    """Do not race a flush that is already carrying a change for this row."""
-    _seed('m1', 'processing')
-    mission_store.write_and_enqueue('m1', {'youtube_url': 'u'}, 'youtube', {'youtubeUrl': 'u'})
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-
-
-def test_already_terminal_missions_are_not_touched(monkeypatch):
-    _seed('c1', 'completed')
-    _seed('q1', 'queued')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('c1'), _done('q1')]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('q1')['status'] == 'queued', 'a queued mission never ran'
-
-
-def test_manual_drive_history_is_ignored(monkeypatch):
-    """Tapping a drive block produces history with no mission_id."""
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        {'cmd': 'forward', 'status': 'completed'},
-        {'cmd': 'stop', 'status': 'completed', 'params': {}},
-    ]))
-
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-
-
-def test_the_watcher_never_sends_anything_to_the_rover(monkeypatch):
-    """Plan 2.3: it may record an outcome, never cause a physical action."""
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([_done('m1')]))
-
-    def no_post(*a, **k):
-        raise AssertionError('the watcher POSTed to the rover')
-    monkeypatch.setattr(mission_watcher.requests, 'post', no_post)
-
-    mission_watcher.autocomplete_finished_missions(ROVER)
-
-
-def test_the_rover_url_is_read_each_cycle(monkeypatch):
-    """It is editable at runtime from /status, so capturing it once would leave
-    the watcher polling a stale address after an operator fixes it."""
-    urls = []
+def _rover_says(monkeypatch, history, status_code=200):
     monkeypatch.setattr(mission_watcher.requests, 'get',
-                        lambda url, **k: urls.append(url) or _rover([])(url))
-    fired = []
-    monkeypatch.setattr(mission_watcher.threading, 'Timer',
-                        lambda i, f: type('T', (), {'daemon': False,
-                                                    'start': lambda s: fired.append(f)})())
-
-    changing = iter(['http://first', 'http://second'])
-    mission_watcher.start_mission_watcher(lambda: next(changing), interval=1)
-    fired.pop()()
-
-    assert urls[0].startswith('http://first')
-    assert urls[1].startswith('http://second')
+                        lambda *a, **k: _Reply(history, status_code))
 
 
-# --- Runs the rover could not execute ---------------------------------------
-#
-# Regression: the rover records status='error' with the reason on the
-# instruction, but the watcher only ever read 'completed' entries. A mission
-# whose code could not run therefore sat in 'processing' forever, and the
-# operator was given no reason at all - it simply never happened.
+@pytest.fixture
+def recorder(monkeypatch, tmp_path):
+    """The real recording table, with the frame consumer stubbed out.
 
-def _errored(mission_id, message):
-    return {'cmd': 'run_python', 'status': 'error', 'error': message,
-            'params': {'mission_id': mission_id}}
-
-
-def test_a_run_the_rover_rejected_is_flagged_with_the_reason(monkeypatch):
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        _errored('m1', 'SyntaxError: invalid syntax (line 1)'),
-    ]))
-
-    mission_watcher.autocomplete_finished_missions(ROVER)
-
-    row = mission_store.get_mission('m1')
-    assert row['needs_review'] == 1
-    assert 'SyntaxError' in row['review_reason'], row['review_reason']
-    assert row['status'] == 'processing', 'the watcher must not invent an outcome'
+    _writers and _paths are module globals, so without clearing them a test
+    that starts a recording and does not stop it leaves the next test looking
+    at its state. That is exactly how the first run of this file produced two
+    failures that had nothing to do with the code under test.
+    """
+    monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path))
+    monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
+    monkeypatch.setattr(recording_control, '_writers', {})
+    monkeypatch.setattr(recording_control, '_paths', {})
+    return recording_control
 
 
-def test_an_errored_run_is_never_marked_failed(monkeypatch):
-    """'failed' reaches the learner as a run that went wrong. The truth here is
-    that the code never ran, which is an operator's problem, not a child's."""
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        _errored('m1', 'boom'),
-    ]))
+def test_a_finished_run_has_its_recording_released(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == []
-    assert mission_store.get_mission('m1')['status'] != 'failed'
+    stopped = mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD)
+
+    assert stopped == ['m1']
+    assert not recorder.is_recording('m1', YARD)
 
 
-def test_an_errored_run_does_not_re_flag_an_already_flagged_mission(monkeypatch):
-    _seed('m1', 'processing', needs_review=1)
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        _errored('m1', 'second complaint'),
-    ]))
+def test_a_run_the_rover_could_not_execute_still_keeps_its_film(monkeypatch, recorder):
+    """A run the rover refused may still have filmed something worth seeing,
+    and that judgement belongs to whoever watches it."""
+    _rover_says(monkeypatch, [{'status': 'error', 'error': 'SyntaxError',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    path = recorder._paths[('m1', YARD)]
+    open(path, 'wb').write(b'x')
 
-    mission_watcher.autocomplete_finished_missions(ROVER)
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD)
 
-    reason = mission_store.get_mission('m1')['review_reason']
-    assert reason != 'rover could not run it: second complaint', \
-        'a mission awaiting a human decision is theirs, not the watcher to restamp'
-
-
-def test_a_long_rover_error_is_truncated(monkeypatch):
-    _seed('m1', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        _errored('m1', 'x' * 5000),
-    ]))
-
-    mission_watcher.autocomplete_finished_missions(ROVER)
-
-    assert len(mission_store.get_mission('m1')['review_reason']) <= \
-        mission_watcher.REVIEW_REASON_MAX
+    assert not recorder.is_recording('m1', YARD)
+    assert os.path.exists(path), 'the file must survive an errored run'
 
 
-def test_completions_still_work_alongside_errors(monkeypatch):
-    _seed('ok', 'processing')
-    _seed('bad', 'processing')
-    monkeypatch.setattr(mission_watcher.requests, 'get', _rover([
-        _done('ok'), _errored('bad', 'SyntaxError'),
-    ]))
+def test_a_run_still_going_is_left_filming(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'status': 'running', 'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
 
-    assert mission_watcher.autocomplete_finished_missions(ROVER) == ['ok']
-    assert mission_store.get_mission('ok')['status'] == 'completed'
-    assert mission_store.get_mission('bad')['needs_review'] == 1
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+
+def test_an_unreachable_rover_changes_nothing(monkeypatch, recorder):
+    """"I could not tell" must never be read as "it finished"."""
+    def boom(*a, **k):
+        raise mission_watcher.requests.exceptions.ConnectionError('no route')
+    monkeypatch.setattr(mission_watcher.requests, 'get', boom)
+    recorder.start_recording('m1', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+
+def test_manual_drive_history_is_ignored(monkeypatch, recorder):
+    """Driving the rover by hand produces history entries with no mission id.
+    They must not be read as some other run finishing."""
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'code': 'forward'}}])
+    recorder.start_recording('m1', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+
+def test_another_yards_run_is_not_stopped_here(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', 'another-yard')
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', 'another-yard')
+
+
+def test_a_recording_already_stopped_is_not_stopped_again(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+
+
+def test_the_watcher_never_sends_anything_to_the_rover(monkeypatch, recorder):
+    """Plan 2.3: never move the robot without a human. Reading an outcome the
+    rover already reported moves nothing; a POST would."""
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    posted = []
+    monkeypatch.setattr(mission_watcher.requests, 'post',
+                        lambda *a, **k: posted.append(a))
+    recorder.start_recording('m1', YARD)
+
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD)
+
+    assert posted == []
+
+
+def test_a_non_200_from_the_rover_is_not_an_outcome(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}],
+                status_code=503)
+    recorder.start_recording('m1', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+
+def test_is_recording_tracks_an_open_recording(recorder):
+    assert recorder.is_recording('m1', YARD) is False
+
+    recorder.start_recording('m1', YARD)
+    try:
+        assert recorder.is_recording('m1', YARD) is True
+        assert recorder.is_recording('m1', 'other-yard') is False
+    finally:
+        recorder.stop_recording('m1', YARD, keep=False)
+
+    assert recorder.is_recording('m1', YARD) is False

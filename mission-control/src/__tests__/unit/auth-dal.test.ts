@@ -22,18 +22,19 @@ import {
   SESSION_COOKIE,
   UnauthorizedError,
   ForbiddenError,
-} from '@/lib/auth/dal';
+} from '@/infrastructure/auth/dal';
 
 // getOperatorSession is memoised with React cache, which dedupes within a
 // request. Re-import per test so each starts from a clean slate.
 async function freshDal() {
   jest.resetModules();
-  return import('@/lib/auth/dal');
+  return import('@/infrastructure/auth/dal');
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  cookieStore.get.mockReturnValue({ value: 'a-session-cookie' });
+  cookieStore.get.mockImplementation((name: string) =>
+      name === 'operator-yard' ? { value: 'curiosity' } : { value: 'a-session-cookie' });
 });
 
 describe('getOperatorSession', () => {
@@ -61,8 +62,22 @@ describe('getOperatorSession', () => {
     const dal = await freshDal();
 
     expect(await dal.getOperatorSession()).toEqual({
-      uid: 'u1', email: 'op@example.com', role: 'operator',
+      uid: 'u1', email: 'op@example.com', role: 'operator', yardId: 'curiosity',
     });
+  });
+
+  it('carries no yard when the sibling cookie is absent', async () => {
+    /**
+     * A session minted before the yard was chosen at sign-in. It stays valid
+     * rather than being torn up mid-event; the console sends them to sign in
+     * again to choose one.
+     */
+    cookieStore.get.mockImplementation((name: string) =>
+      name === 'operator-yard' ? undefined : { value: 'cookie' });
+
+    const dal = await freshDal();
+
+    expect((await dal.getOperatorSession())?.yardId).toBeNull();
   });
 
   it('rejects a verified user carrying no operator role', async () => {
@@ -136,4 +151,5 @@ it('exports the cookie name the proxy matches on', () => {
   expect(SESSION_COOKIE).toBe('session');
   expect(new UnauthorizedError().name).toBe('UnauthorizedError');
   expect(new ForbiddenError().name).toBe('ForbiddenError');
+
 });
