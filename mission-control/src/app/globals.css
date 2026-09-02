@@ -622,8 +622,22 @@
     max-height: none;
   }
 
-  .workspaceSplitGrid > * {
+  /* The 70vh floor is for Create Mission, where both stacked panels are things
+     you work inside - Blockly and the simulator - and neither is usable at
+     half a screen. The mission VIEW is the fixed variant, and its panels are a
+     16:9 player, a stats row and one line of feedback: about 300px of content
+     that the floor stretched to 568px, putting a screenful of empty page
+     between the operator's comment and the code. A floor that guarantees a
+     minimum is wrong on a panel that already knows its own height. */
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
     min-height: 70vh;
+  }
+
+  /* The code panel still needs a floor, just a smaller one: it is flex-1
+     inside an auto-height row, so a two-line mission would otherwise collapse
+     it to two lines. */
+  .workspaceSplitGrid--fixed > * + * {
+    min-height: 45vh;
   }
 }
 
