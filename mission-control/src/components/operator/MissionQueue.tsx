@@ -108,8 +108,13 @@ function YardQueue({
   const [flash, setFlash] = useState<string | null>(null);
 
   async function copyCode(mission: QueueMission) {
+    const envelope = JSON.stringify({
+      missionName: mission.name || '',
+      missionId: mission.id,
+      code: mission.code,
+    });
     try {
-      await navigator.clipboard.writeText(mission.code);
+      await navigator.clipboard.writeText(envelope);
       setCopiedId(mission.id);
       // Long enough to read, short enough that the next copy is unambiguous.
       window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
@@ -117,7 +122,7 @@ function YardQueue({
       // Clipboard access can be refused (insecure origin, denied permission).
       // Say so rather than showing "Copied" over an empty clipboard, which
       // would send an operator to paste nothing into the yard.
-      window.prompt('Copy this, then paste it into the yard code editor:', mission.code);
+      window.prompt('Copy this, then paste it into the yard code editor:', envelope);
     }
   }
 
