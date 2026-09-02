@@ -35,7 +35,7 @@ from mission_store import (
     release_run,
     run_has_pending,
 )
-from recording_control import stop_recording
+from recording_control import is_recording, stop_recording
 
 ROVER_POLL_TIMEOUT = 3.0
 DEFAULT_POLL_INTERVAL = 10  # seconds
@@ -146,8 +146,19 @@ def autocomplete_finished_missions(rover_url, notify=None, yard_id=None):
     for mission_id in set(done) | set(errored):
         run = get_run(mission_id, yard_id)
         if run is None:
-            continue
-        if run.get('recording_status') != 'recording':
+            # A run pasted into /run/ and sent from there. It has no
+            # runs_mirror row, because it never went near Firestore - that is
+            # the whole point of that page - so recording_status cannot answer
+            # for it. The recording module can: the station names its file
+            # after the mission id, so the key is the same one used here.
+            #
+            # Without this the manual loop was the one path where the camera
+            # kept filming after the rover had finished and said so, until an
+            # operator remembered to press stop.
+            recording = is_recording(mission_id, yard_id)
+        else:
+            recording = run.get('recording_status') == 'recording'
+        if not recording:
             continue
         stop_recording(mission_id, yard_id, keep=True)
 

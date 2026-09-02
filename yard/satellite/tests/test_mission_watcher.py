@@ -398,3 +398,100 @@ def test_a_recording_already_stopped_is_not_stopped_again(monkeypatch):
 
     assert calls == []
     assert mission_store.get_run('m1', 'curiosity')['recording_stopped_at'] == '2026-07-14T09:05:00Z'
+
+
+def test_the_watcher_stops_a_manual_recording_when_the_rover_finishes(monkeypatch):
+    """A run pasted into /run/ has no runs_mirror row: it never went near
+    Firestore, which is that page's whole point. recording_status therefore
+    cannot answer for it, and the watcher used to skip it entirely.
+
+    So the manual loop was the one path where the camera kept filming after
+    the rover had finished and said so, until somebody remembered to press
+    stop. The same unbounded file the comment in this module warns about.
+    """
+    import mission_watcher
+    import recording_control
+
+    monkeypatch.setattr(mission_watcher, 'rover_outcomes',
+                        lambda url: ({'m-manual'}, {}))
+    monkeypatch.setattr(mission_watcher, 'get_run', lambda mid, yid: None)
+    monkeypatch.setattr(mission_watcher, 'get_mission', lambda mid: None)
+    monkeypatch.setattr(mission_watcher, 'is_recording',
+                        lambda mid, yid: (mid, yid) == ('m-manual', 'curiosity'))
+    stopped = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording',
+                        lambda mid, yid, keep: stopped.append((mid, yid, keep)))
+
+    mission_watcher.autocomplete_finished_missions('http://rover', yard_id='curiosity')
+
+    assert stopped == [('m-manual', 'curiosity', True)], 'the camera must be released'
+
+
+def test_it_does_not_stop_a_recording_that_was_never_running(monkeypatch):
+    import mission_watcher
+
+    monkeypatch.setattr(mission_watcher, 'rover_outcomes',
+                        lambda url: ({'m-manual'}, {}))
+    monkeypatch.setattr(mission_watcher, 'get_run', lambda mid, yid: None)
+    monkeypatch.setattr(mission_watcher, 'get_mission', lambda mid: None)
+    monkeypatch.setattr(mission_watcher, 'is_recording', lambda mid, yid: False)
+    stopped = []
+    monkeypatch.setattr(mission_watcher, 'stop_recording',
+                        lambda mid, yid, keep: stopped.append(mid))
+
+    mission_watcher.autocomplete_finished_missions('http://rover', yard_id='curiosity')
+
+    assert stopped == []
+
+
+def test_is_recording_tracks_an_open_recording(monkeypatch, tmp_path):
+    """The accessor the watcher leans on, against the module's own table."""
+    import recording_control
+
+    monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path))
+    monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
+
+    assert recording_control.is_recording('m1', 'curiosity') is False
+
+    recording_control.start_recording('m1', 'curiosity')
+    try:
+        assert recording_control.is_recording('m1', 'curiosity') is True
+        assert recording_control.is_recording('m1', 'other-yard') is False
+    finally:
+        recording_control.stop_recording('m1', 'curiosity', keep=False)
+
+    assert recording_control.is_recording('m1', 'curiosity') is False
+
+
+def test_the_whole_stop_path_wired_up(monkeypatch, tmp_path):
+    """The watcher and the recording module, actually joined.
+
+    The tests above stub is_recording and stop_recording to check the branch.
+    This one stubs only the rover's HTTP reply and lets the real functions run,
+    so a rename or a changed key between the two modules fails here rather than
+    silently leaving the camera on.
+    """
+    import mission_watcher
+    import recording_control
+
+    monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path))
+    monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
+    monkeypatch.setattr(mission_watcher, 'get_run', lambda mid, yid: None)
+    monkeypatch.setattr(mission_watcher, 'get_mission', lambda mid: None)
+
+    # The rover's own words, in the shape it actually returns them.
+    class Reply:
+        status_code = 200
+        @staticmethod
+        def json():
+            return {'history': [{'status': 'completed',
+                                 'params': {'mission_id': 'm-manual'}}]}
+    monkeypatch.setattr(mission_watcher.requests, 'get', lambda *a, **k: Reply())
+
+    recording_control.start_recording('m-manual', 'curiosity')
+    assert recording_control.is_recording('m-manual', 'curiosity')
+
+    mission_watcher.autocomplete_finished_missions('http://rover', yard_id='curiosity')
+
+    assert not recording_control.is_recording('m-manual', 'curiosity'), \
+        'the rover said it finished, so the camera must have been released'

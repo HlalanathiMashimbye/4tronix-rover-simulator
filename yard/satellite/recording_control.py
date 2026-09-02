@@ -114,6 +114,18 @@ def is_ready(timeout=None):
         return False, f'readiness probe failed: {e}'
 
 
+def is_recording(mission_id, yard_id):
+    """Whether frames are being persisted for this key right now.
+
+    The run model answers this for a queued mission, via runs_mirror's
+    recording_status. A run pasted into /run/ has no row there - it never
+    touched Firestore, which is the point of that page - so the only record
+    that a recording is open is this module's own table.
+    """
+    with _lock:
+        return (mission_id, yard_id) in _paths
+
+
 def start_recording(mission_id, yard_id):
     """(bool, detail). Begin persisting frames for this run.
 

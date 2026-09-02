@@ -296,6 +296,21 @@ class TestSendRecordsFirst:
 
         assert 'stopRecording()' in handler[:600]
 
+    def test_the_dispatch_carries_the_mission_id(self, client):
+        """This is what makes the camera stop on its own.
+
+        The rover echoes params.mission_id back on the instruction in its
+        history, and mission_watcher reads that history to learn a run is over.
+        Send without it and the rover finishes, the watcher sees an entry it
+        cannot identify, and the recording runs until somebody presses stop.
+        """
+        page = client.get('/run/').get_data(as_text=True)
+        handler = page[page.index("$('runBtn').addEventListener"):]
+        before_dispatch = handler[:handler.index('/api/queue/add')]
+
+        assert 'params.mission_id = missionRef' in before_dispatch
+        assert 'JSON.stringify([{ cmd: \'run_python\', params }])' in handler
+
     def test_the_page_no_longer_asks_anyone_to_press_record(self, client):
         page = client.get('/run/').get_data(as_text=True)
 

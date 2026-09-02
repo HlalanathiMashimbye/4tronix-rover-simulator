@@ -311,7 +311,7 @@
                     <span class="node-num">1</span>
                     <div class="node-body">
                         <span class="node-title">Run it</span>
-                        <span class="node-note">Send starts the recording on its own, waits a second so the rover's first move is in the video, then runs the code. Stop ends both and keeps the file.</span>
+                        <span class="node-note">Send starts the recording, waits a second so the rover's first move is in the video, then runs the code. Filming stops on its own when the rover reports the run is over. Stop ends both early.</span>
                         <div class="row">
                             <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
                             <span class="tag" id="runState">Ready</span>
@@ -649,9 +649,19 @@
                 await new Promise((r) => setTimeout(r, LEAD_IN_MS));
             }
 
+            // mission_id travels with the dispatch, the same way a queued
+            // mission's does. The rover echoes it back on the instruction in
+            // its history, which is how the watcher knows a run is over and
+            // can stop the camera without anyone pressing anything. Sent only
+            // when the operator has actually filled it in; the rover does not
+            // care either way.
+            const params = { code: python };
+            const missionRef = metaValue(missionId);
+            if (missionRef) params.mission_id = missionRef;
+
             const resp = await fetch('/api/queue/add', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify([{ cmd: 'run_python', params: { code: python } }]),
+                body: JSON.stringify([{ cmd: 'run_python', params }]),
             });
             const d = await resp.json();
             if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
