@@ -26,11 +26,21 @@ describe('evaluateCheck', () => {
     expect(evaluateCheck(spec, { search: { query: '', activeFilter: 'all' } })).toBe(false);
   });
 
-  it('load-more only passes once the callback has actually fired', () => {
+  it('load-more passes once the callback has actually fired', () => {
     const spec: ChallengeCheckSpec = { kind: 'load-more' };
     expect(evaluateCheck(spec, {})).toBe(false);
     expect(evaluateCheck(spec, { loadMoreCalled: false })).toBe(false);
     expect(evaluateCheck(spec, { loadMoreCalled: true })).toBe(true);
+  });
+
+  it('load-more also passes when the feed has confirmed there is nothing further to load', () => {
+    const spec: ChallengeCheckSpec = { kind: 'load-more' };
+    // Not yet known (still loading, or MissionFeed hasn't reported) must NOT
+    // auto-pass - only an explicit false does, per a small database having
+    // no "Show more missions" button to click in the first place.
+    expect(evaluateCheck(spec, { feedHasMore: undefined })).toBe(false);
+    expect(evaluateCheck(spec, { feedHasMore: true })).toBe(false);
+    expect(evaluateCheck(spec, { feedHasMore: false })).toBe(true);
   });
 
   it('code-contains matches a substring of the generated Python', () => {

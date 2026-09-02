@@ -23,6 +23,16 @@ export interface ChallengeEvalContext {
   };
   /** Whether "Show more missions" has been used at least once this session. */
   loadMoreCalled?: boolean;
+  /**
+   * Whether the feed has a further page to load, once that's known. False
+   * means there is nothing more to browse - on a database with 24 or fewer
+   * missions total, the "Show more missions" button never renders at all,
+   * so 'load-more' checks treat that as already satisfied rather than an
+   * impossible step. Undefined (not yet known, e.g. still loading) does NOT
+   * count as false - the check still requires the real click once a further
+   * page turns out to exist.
+   */
+  feedHasMore?: boolean;
   /** Outcomes the last simulated run actually produced. */
   trajectoryOutcomes?: TrajectoryOutcome[];
   /** The current Blockly editor's generated Python, for code-contains checks. */
@@ -41,7 +51,7 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
       return context.search?.activeFilter === spec.filterKey;
 
     case 'load-more':
-      return context.loadMoreCalled === true;
+      return context.loadMoreCalled === true || context.feedHasMore === false;
 
     case 'trajectory-outcome':
       return context.trajectoryOutcomes?.includes(spec.outcome) ?? false;

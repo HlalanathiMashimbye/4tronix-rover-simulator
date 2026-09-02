@@ -27,6 +27,7 @@ function deriveOutcomes(commands: SimulationCommand[]): TrajectoryOutcome[] {
 interface ChallengeCenterPanelProps {
   challenge: Challenge;
   onLoadMore: () => void;
+  onFeedState: (state: { hasMore: boolean }) => void;
   onCodeChange: (code: string) => void;
   onBlocklyStateChange: (state: string) => void;
   onTrajectoryOutcomes: (outcomes: TrajectoryOutcome[]) => void;
@@ -57,6 +58,7 @@ interface ChallengeCenterPanelProps {
 export function ChallengeCenterPanel({
   challenge,
   onLoadMore,
+  onFeedState,
   onCodeChange,
   onBlocklyStateChange,
   onTrajectoryOutcomes,
@@ -72,7 +74,7 @@ export function ChallengeCenterPanel({
         <div className="mx-auto w-full max-w-page pt-1">
           <MobileSearch />
         </div>
-        <MissionFeed onLoadMore={onLoadMore} />
+        <MissionFeed onLoadMore={onLoadMore} onFeedState={onFeedState} />
       </div>
     );
   }

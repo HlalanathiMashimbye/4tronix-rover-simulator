@@ -68,7 +68,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'load-more',
         title: 'Browse further',
         instructions:
-          'Clear your filters, then load an older page of missions with the "Show more missions" button at the bottom of the feed.',
+          'Clear your filters, then load an older page of missions with the "Show more missions" button at the bottom of the feed. If you don\'t see that button, there is nothing further to load - you\'re already looking at every mission, so this step is done.',
         checks: [{ kind: 'load-more' }],
       },
     ],

@@ -50,6 +50,10 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
 
   const [stepIndex, setStepIndex] = useState(0);
   const [loadMoreCalled, setLoadMoreCalled] = useState(false);
+  // Undefined until MissionFeed reports it - see ChallengeCheckEvaluator's
+  // feedHasMore doc: undefined must NOT be treated as "nothing more to
+  // load", only an explicit false may.
+  const [feedHasMore, setFeedHasMore] = useState<boolean | undefined>(undefined);
   const [generatedCode, setGeneratedCode] = useState('');
   const [blocklyState, setBlocklyState] = useState('');
   const [trajectoryOutcomes, setTrajectoryOutcomes] = useState<TrajectoryOutcome[]>([]);
@@ -59,8 +63,8 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const step = challenge.steps[stepIndex];
 
   const evalContext: ChallengeEvalContext = useMemo(
-    () => ({ search: { query, activeFilter }, loadMoreCalled, generatedCode, trajectoryOutcomes }),
-    [query, activeFilter, loadMoreCalled, generatedCode, trajectoryOutcomes],
+    () => ({ search: { query, activeFilter }, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes }),
+    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes],
   );
 
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
@@ -123,6 +127,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         <ChallengeCenterPanel
           challenge={challenge}
           onLoadMore={() => setLoadMoreCalled(true)}
+          onFeedState={({ hasMore }) => setFeedHasMore(hasMore)}
           onCodeChange={setGeneratedCode}
           onBlocklyStateChange={setBlocklyState}
           onTrajectoryOutcomes={setTrajectoryOutcomes}
