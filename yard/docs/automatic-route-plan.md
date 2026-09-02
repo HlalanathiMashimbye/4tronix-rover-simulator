@@ -38,27 +38,49 @@ app uses. Worth following rather than inventing.
 3. An operator signed in to Mission Control opens the yard and enters the code.
 4. Mission Control binds (yard, operator, session) and hands the satellite a
    long-lived device token on its next poll.
-5. The satellite stores that token in its config and uses it for every
-   outbound call afterwards. Mission Control can revoke it.
+5. The satellite keeps that token in memory and uses it for every outbound
+   call afterwards. Mission Control can revoke it, and switching the yard off
+   ends it (see below).
 
-**Decided: a claim lasts the event, and a yard has one operator.**
+**Decided: a claim lasts the event, a yard has one operator, and the event
+ends when the satellite is switched off.**
 
 No inactivity timeout - an operator who spends an hour with one school group
-should not have to re-pair. The claim ends when they release it in Mission
-Control, when an admin revokes it, or at a backstop expiry so a yard nobody
-released does not stay claimed indefinitely.
+should not have to re-pair. The claim simply lives as long as the yard is
+powered on.
 
-It survives a satellite reboot, because the token is on disk and the session
-is held by Mission Control. Power-cycling the Pi mid-event must not mean
-finding an operator to pair again.
+That last part is the useful one, because it makes the lifetime
+self-defining. There is no "end of day" to agree on and no backstop expiry to
+pick: the yard being on is the event. A stale claim on a yard nobody released
+cannot happen, because a yard nobody is at gets switched off.
+
+It also decides the implementation. **The claim is held in memory, not written
+to disk.** No token file that has to be invalidated on shutdown, nothing to go
+stale on the card, and no cleanup to get wrong - turning the satellite off
+clears it because there was never anywhere for it to persist. On boot the
+satellite is unclaimed and shows a fresh code, always.
+
+Mission Control learns the claim ended by the satellite going quiet: it stops
+polling. A best-effort "signing off" on shutdown makes that immediate rather
+than waiting for a timeout, but the timeout is what must be correct, since a
+yard that loses power will never send anything.
+
+The cost is that an accidental reboot mid-event means pairing again. That is
+mild, and it is mild for the same reason the whole claim design works: the
+operator is standing next to the machine by definition, so re-pairing is
+reading a code off the screen in front of them. It is arguably right, too - a
+reboot means the yard's state is gone, and re-establishing who is overseeing
+it is not a bad thing to be forced to do.
 
 One operator per yard means a second claim on a claimed yard is refused rather
-than silently taking it over. That needs a way out for the obvious failure -
-the operator's laptop dies, or they go home still holding it - so an admin
-must be able to force-release a yard.
+than silently taking it over. The obvious failure - an operator whose laptop
+dies, or who goes home still holding one - now resolves itself when the yard is
+switched off, but an admin force-release is still worth having for the case
+where the yard is on and the operator is not coming back.
 
 The satellite never holds a Firebase credential, which is what we just spent a
-removal getting rid of. It holds one token, scoped to one yard, revocable.
+removal getting rid of. It holds one token, in memory, scoped to one yard,
+revocable, and gone when the power is.
 
 ## 2. Running a mission from Mission Control
 
@@ -186,5 +208,6 @@ the next never gets built.
 - Does Mission Control refuse to queue a run at an unclaimed yard, or let it
   wait until somebody claims it? Refusing is more predictable; waiting is more
   convenient for prep before a school group arrives.
-- What is the backstop expiry on a claim nobody released - end of day, or a
-  fixed number of hours?
+- How long may the satellite go quiet before Mission Control treats the claim
+  as gone? Long enough to ride out a wifi drop, short enough that a yard
+  switched off does not look claimed for the rest of the afternoon.
