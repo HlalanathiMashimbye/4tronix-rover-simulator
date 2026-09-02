@@ -318,7 +318,11 @@ class TestConsoleDesignSystem:
 
         assert 'class="health"' in page
         assert page.count('class="hrow"') == 3
-        assert page.index('class="health"') < page.index('class="settings-grid"')
+        # It is the first thing in the grid now rather than a band above it: as
+        # a full-width strip every row ran the width of the page for a line of
+        # text needing a third of it.
+        assert page.index('class="settings-grid"') < page.index('class="health"')
+        assert page.index('class="health"') < page.index('id="tunablesSection"')
 
     def test_touch_targets_are_raised_for_a_finger(self, client):
         """The yard is operated from a tablet and these were tuned by eye on a

@@ -21,8 +21,14 @@
            One module, a row per subsystem, hairlines between, colour only in
            the lamp and the state word. The same shape the run station uses for
            readiness, so the two pages teach each other. */
+        /* Two columns wide, not the whole page.
+
+           As a full-width band each row ran to about 1075px for a line of text
+           that needs a third of it, so every row had a gulf between its detail
+           and its controls. It is a card among cards now: wide enough for the
+           longest row (the rover's driver line plus its address and Change),
+           and no wider. */
         .health {
-            flex: 0 0 auto;
             display: flex; flex-direction: column;
             border: 1px solid var(--border); border-radius: 12px;
             background: var(--surface); box-shadow: var(--e1);
@@ -30,6 +36,7 @@
         }
         .hrow {
             display: flex; align-items: center; gap: 0.7rem;
+            min-height: 46px;
             padding: 0.6rem 0.9rem; min-width: 0;
         }
         .hrow + .hrow, .hpanel + .hrow { border-top: 1px solid var(--border); }
@@ -43,7 +50,11 @@
             flex: 1 1 auto; min-width: 0;
             color: var(--text-dim); font-family: var(--mono);
             font-size: var(--fs-2xs); line-height: 1.5;
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            /* Wraps rather than truncates. Ellipsis kept the rows a uniform
+               height, at the cost of "Mast cam: not detected (reseat + rebo..."
+               - and a diagnostic that stops before the instruction is worse
+               than a row that is a line taller. */
+            overflow-wrap: anywhere;
         }
         .hdetail span { color: var(--text); }
         .haction { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
@@ -69,18 +80,43 @@
         .hpanel.quiet-panel { flex-direction: row; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.9rem; }
         .hhint { color: var(--text-faint); font-size: var(--fs-2xs); }
 
+        /* Cap the width and let the cards be their own height.
+
+           The shell is full bleed, so on a 1440 screen this page was 1395px of
+           three short rows and two columns stretched to 574px tall by the grid
+           rather than by anything in them - wide and long, both for nothing.
+           There is not much on this page; it should look like there is not
+           much on this page.
+
+           align-items: start is the half that fixes the length: without it
+           every column is as tall as the tallest, and the grid is as tall as
+           the space left over. */
+        /* One column, the width of a thing you read.
+
+           Four cards in a grid on a full-height page read as a dashboard with
+           its data missing: airy boxes at the top, a void underneath, and no
+           amount of span arithmetic fixed that because the arithmetic was
+           never the problem. A settings page is a list of settings. One
+           column, sections down it, and the space either side is margin
+           instead of a hole.
+
+           720px because that is about as wide as the longest row wants - the
+           rover's driver line, its address and Change - and no wider. */
+        /* Centred, not just capped. Left-aligned at 720px on a wide screen the
+           empty space is all on one side, which reads as a hole rather than as
+           margin - the exact thing narrowing it was meant to fix. */
+        .settings-page { max-width: 720px; margin-inline: auto; }
+        /* The shell is 100dvh with no page scroll, which is right for the
+           run station and wrong here: a column of sections is meant to be
+           scrolled if it outgrows the screen, not clipped. */
+        .console.fixed-shell:has(.settings-page) { height: auto; min-height: 100dvh; overflow: visible; }
+        .settings-page { flex: 0 0 auto; }
         .settings-grid {
-            flex: 1 1 auto; min-height: 0;
-            display: grid;
-            grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+            flex: 0 0 auto;
+            display: flex; flex-direction: column;
             gap: 0.85rem;
         }
-        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; }
-        .settings-col.scrolls { overflow-y: auto; padding-right: 4px; }
-        .settings-col.scrolls { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-        .settings-col.scrolls::-webkit-scrollbar { width: 8px; }
-        .settings-col.scrolls::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
-        .settings-col.scrolls::-webkit-scrollbar-track { background: transparent; }
+        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; }
 
         .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
         /* The page title, three card headings and a field label all sat within
@@ -236,13 +272,6 @@
         .act .hint { font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); }
 
 
-        /* Below this the three columns become a keyhole; let it scroll. */
-        /* Below the two-column width the page becomes one column and scrolls.
-           body was released but .console.fixed-shell keeps its own 100dvh with
-           overflow:hidden, and .shell keeps flex:1 with min-height:0 - so the
-           stacked columns were still being squeezed into one screen's worth of
-           box and drew straight over each other. Every part of the clamp has
-           to come off together, not just the one on body. */
 
         /* Same reason as the run station: this is operated from a tablet, and
            the camera device box, the inline edit link and the info tips were
@@ -253,13 +282,6 @@
             .link-btn { min-height: 44px; padding: 0 0.5rem; }
             .info-tip { min-width: 44px; min-height: 44px; }
             .sync-input-row input { min-height: 44px; }
-        }
-        @media (max-width: 1100px) {
-            body { height: auto; overflow: auto; }
-            body.console.fixed-shell { height: auto; overflow: visible; }
-            .console .shell { flex: 0 0 auto; min-height: 0; height: auto; }
-            .settings-grid { grid-template-columns: 1fr; min-height: 0; }
-            .settings-col, .settings-col.scrolls { overflow: visible; min-height: 0; }
         }
 
         /* Three health tiles need about 240px each to hold a hostname and a
@@ -280,7 +302,7 @@
 <body class="console fixed-shell">
     {% set nav_active = 'status' %}{% include "_nav.html" %}
 
-    <main class="shell">
+    <main class="shell settings-page">
         <div class="headrow">
             <h1 class="h-page">Settings</h1>
 
@@ -288,82 +310,81 @@
 
 
 
-        <!-- One instrument, three rows.
-
-             This was three cards. They held very different amounts - the
-             satellite row is a hostname, the camera row has controls, and the
-             rover row grew an address editor - so three identical containers
-             sat at wildly different heights with one nearly empty beside one
-             bursting. Tinted green they also read as three alerts rather than
-             three readings.
-
-             Same shape the run station uses for readiness: a bordered module,
-             a row per subsystem, hairlines between, colour only in the lamp
-             and the state word. A healthy yard is quiet, and a row can expand
-             without distorting anything beside it. -->
-        <div class="health" id="health">
-            <div class="hrow" id="card-satellite">
-                <span class="stat-ic grey" id="badge-satellite"></span>
-                <span class="hname">Satellite</span>
-                <span class="status-label grey" id="label-satellite">checking</span>
-                <span class="hdetail" id="detail-satellite">Loading&hellip;</span>
-            </div>
-
-            <div class="hrow" id="card-rover">
-                <span class="stat-ic grey" id="badge-rover"></span>
-                <span class="hname">Rover</span>
-                <span class="status-label grey" id="label-rover">checking</span>
-                <span class="hdetail" id="detail-rover">Loading&hellip;</span>
-                <span class="haction">
-                    <code id="rover-url">{{ rover_url }}</code>
-                    <button class="btn" id="edit-url-btn" type="button">Change</button>
-                </span>
-            </div>
-
-            <!-- Full width beneath its row, so opening it grows this module and
-                 nothing else. Inside a status tile it made the tile burst. -->
-            <div class="hpanel" id="url-editor" hidden>
-                <div class="found-row">
-                    <button class="btn primary" id="findRoverBtn" type="button">Find rover</button>
-                    <span class="hhint">Looks for anything answering as a rover on this network.</span>
-                    <span class="camera-msg" id="findMsg" style="margin-top:0;"></span>
-                </div>
-                <div id="foundList"></div>
-                <div class="url-manual">
-                    <input type="text" id="url-input" spellcheck="false"
-                           aria-label="Rover address" placeholder="curiosity.local">
-                    <button class="btn" id="save-url-btn" type="button">Use this</button>
-                    <button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button>
-                </div>
-                <span class="url-error" id="url-error"></span>
-            </div>
-
-            <div class="hrow" id="card-camera">
-                <span class="stat-ic grey" id="badge-camera"></span>
-                <span class="hname">Camera</span>
-                <span class="status-label grey" id="label-camera">checking</span>
-                <span class="hdetail" id="detail-camera">Loading&hellip;</span>
-                <span class="haction camera-controls">
-                    <button class="btn" id="camera-start">Start</button>
-                    <button class="btn" id="camera-stop">Stop</button>
-                    <label class="camera-index-label" for="camera-index">Device</label>
-                    <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
-                    <!-- Who owns the camera's lifecycle belongs beside the
-                         buttons that change it, not adrift under the module. -->
-                    <span class="camera-managed" id="camera-managed"></span>
-                </span>
-            </div>
-            <!-- Only appears when the camera has something to say. -->
-            <div class="hpanel quiet-panel" id="camera-msg-panel" hidden>
-                <span class="camera-msg" id="camera-msg" role="status" aria-live="polite"></span>
-            </div>
-        </div>
-                </div>
-        </div>
 
         <div class="settings-grid">
+            <!-- One instrument, three rows.
 
-            <div class="settings-col scrolls">
+                 This was three cards. They held very different amounts - the
+                 satellite row is a hostname, the camera row has controls, and the
+                 rover row grew an address editor - so three identical containers
+                 sat at wildly different heights with one nearly empty beside one
+                 bursting. Tinted green they also read as three alerts rather than
+                 three readings.
+
+                 Same shape the run station uses for readiness: a bordered module,
+                 a row per subsystem, hairlines between, colour only in the lamp
+                 and the state word. A healthy yard is quiet, and a row can expand
+                 without distorting anything beside it. -->
+            <div class="health" id="health">
+                <div class="hrow" id="card-satellite">
+                    <span class="stat-ic grey" id="badge-satellite"></span>
+                    <span class="hname">Satellite</span>
+                    <span class="status-label grey" id="label-satellite">checking</span>
+                    <span class="hdetail" id="detail-satellite">Loading&hellip;</span>
+                </div>
+
+                <div class="hrow" id="card-rover">
+                    <span class="stat-ic grey" id="badge-rover"></span>
+                    <span class="hname">Rover</span>
+                    <span class="status-label grey" id="label-rover">checking</span>
+                    <span class="hdetail" id="detail-rover">Loading&hellip;</span>
+                    <span class="haction">
+                        <code id="rover-url">{{ rover_url }}</code>
+                        <button class="btn" id="edit-url-btn" type="button">Change</button>
+                    </span>
+                </div>
+
+                <!-- Full width beneath its row, so opening it grows this module and
+                     nothing else. Inside a status tile it made the tile burst. -->
+                <div class="hpanel" id="url-editor" hidden>
+                    <div class="found-row">
+                        <button class="btn primary" id="findRoverBtn" type="button">Find rover</button>
+                        <span class="hhint">Looks for anything answering as a rover on this network.</span>
+                        <span class="camera-msg" id="findMsg" style="margin-top:0;"></span>
+                    </div>
+                    <div id="foundList"></div>
+                    <div class="url-manual">
+                        <input type="text" id="url-input" spellcheck="false"
+                               aria-label="Rover address" placeholder="curiosity.local">
+                        <button class="btn" id="save-url-btn" type="button">Use this</button>
+                        <button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button>
+                    </div>
+                    <span class="url-error" id="url-error"></span>
+                </div>
+
+                <div class="hrow" id="card-camera">
+                    <span class="stat-ic grey" id="badge-camera"></span>
+                    <span class="hname">Camera</span>
+                    <span class="status-label grey" id="label-camera">checking</span>
+                    <span class="hdetail" id="detail-camera">Loading&hellip;</span>
+                    <span class="haction camera-controls">
+                        <button class="btn" id="camera-start">Start</button>
+                        <button class="btn" id="camera-stop">Stop</button>
+                        <label class="camera-index-label" for="camera-index">Device</label>
+                        <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
+                        <!-- Who owns the camera's lifecycle belongs beside the
+                             buttons that change it, not adrift under the module. -->
+                        <span class="camera-managed" id="camera-managed"></span>
+                    </span>
+                </div>
+                <!-- Only appears when the camera has something to say. -->
+                <div class="hpanel quiet-panel" id="camera-msg-panel" hidden>
+                    <span class="camera-msg" id="camera-msg" role="status" aria-live="polite"></span>
+                </div>
+            </div>
+
+
+            <div class="settings-col">
                 <div class="card" id="tunablesSection">
                     <div class="card-head-row">
                         <h3 class="h-card" style="margin-bottom:0;">Console and camera</h3>
@@ -392,7 +413,7 @@
                 </div>
             </div>
 
-            <div class="settings-col scrolls">
+            <div class="settings-col">
                 <div class="card">
                     <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h3>
                     <div class="acts">
@@ -401,6 +422,9 @@
                     </div>
                 </div>
 
+            </div>
+
+            <div class="settings-col">
                 <div class="card" id="recordingsSection">
                     <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h3>
                     <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
