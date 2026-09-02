@@ -3,7 +3,8 @@ firestore_backup.py
 
 Exports an entire Firestore database to local JSON files, mirroring the
 Firestore tree (collection -> document -> subcollection -> ...), then
-zips the result into a single archive.
+zips the result into a single archive.  Optionally uploads the zip to
+a Google Drive folder.
 
 Why JSON files in folders, and not a single SQL-style dump?
 Firestore is a document database, not relational -- documents can have
@@ -14,6 +15,9 @@ tooling to inspect it.
 
 Requires:
     pip install firebase-admin
+
+For Google Drive upload (optional):
+    pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
 Usage (with a service account key):
     python firestore_backup.py --project my-gcp-project \
@@ -26,6 +30,11 @@ account already has read access to the project):
     gcloud auth application-default login
     python firestore_backup.py --project my-gcp-project --output-dir ./backups
     (just omit --cred)
+
+Upload to Google Drive:
+    python firestore_backup.py --project my-gcp-project \
+        --drive-folder FOLDER_ID \
+        --client-secrets ./client_secret.json
 
 On success, prints ONLY the path to the created zip file on stdout
 (everything else goes to stderr), so it's easy to capture in a shell
@@ -41,6 +50,56 @@ import sys
 
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+
+
+def get_drive_service(client_secrets_path, token_path):
+    """Build an authorized Google Drive API client.
+
+    On first run, opens a browser for OAuth consent and saves a refresh
+    token to *token_path*.  Subsequent runs reuse / refresh that token
+    automatically.
+    """
+    from google.auth.transport.requests import Request
+    from google.oauth2.credentials import Credentials
+    from google_auth_oauthlib.flow import InstalledAppFlow
+    from googleapiclient.discovery import build
+
+    creds = None
+    if os.path.exists(token_path):
+        creds = Credentials.from_authorized_user_file(token_path, DRIVE_SCOPES)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(
+                client_secrets_path, DRIVE_SCOPES
+            )
+            creds = flow.run_local_server(port=0)
+        with open(token_path, "w") as f:
+            f.write(creds.to_json())
+
+    return build("drive", "v3", credentials=creds)
+
+
+def upload_to_drive(zip_path, folder_id, drive_service):
+    """Upload *zip_path* into the given Google Drive folder."""
+    from googleapiclient.http import MediaFileUpload
+
+    file_name = os.path.basename(zip_path)
+    media = MediaFileUpload(zip_path, mimetype="application/zip", resumable=True)
+    metadata = {"name": file_name, "parents": [folder_id]}
+
+    uploaded = drive_service.files().create(
+        body=metadata, media_body=media, fields="id, webViewLink"
+    ).execute()
+
+    print(
+        f"Uploaded to Drive: {uploaded.get('webViewLink', uploaded['id'])}",
+        file=sys.stderr,
+    )
 
 
 def serialize_value(value):
@@ -84,7 +143,8 @@ def export_collection(col_ref, out_dir):
         export_document(snapshot, doc_ref, out_dir)
 
 
-def run_backup(project_id, cred_path, output_root):
+def run_backup(project_id, cred_path, output_root,
+               drive_folder_id=None, client_secrets_path=None, token_path=None):
     if cred_path:
         # Log in as the service account whose key file was provided.
         cred = credentials.Certificate(cred_path)
@@ -120,6 +180,14 @@ def run_backup(project_id, cred_path, output_root):
     shutil.rmtree(backup_dir)
     print(f"Backup complete: {zip_path}", file=sys.stderr)
 
+    if drive_folder_id:
+        try:
+            service = get_drive_service(client_secrets_path, token_path)
+            upload_to_drive(zip_path, drive_folder_id, service)
+        except Exception as exc:
+            print(f"WARNING: Drive upload failed: {exc}", file=sys.stderr)
+            print("The local backup is still safe.", file=sys.stderr)
+
     # Only this line goes to stdout -- lets shell scripts capture the path cleanly.
     print(zip_path)
     return zip_path
@@ -136,6 +204,29 @@ if __name__ == "__main__":
         "via 'gcloud auth application-default login' instead.",
     )
     parser.add_argument("--output-dir", default="./backups", help="Where to write backups")
+    parser.add_argument(
+        "--drive-folder",
+        default=None,
+        help="Google Drive folder ID to upload the zip to. "
+        "Omit to skip Drive upload.",
+    )
+    parser.add_argument(
+        "--client-secrets",
+        default="./client_secret.json",
+        help="Path to OAuth client secrets JSON (default: ./client_secret.json)",
+    )
+    parser.add_argument(
+        "--token-path",
+        default="./token.json",
+        help="Path to store/read the OAuth refresh token (default: ./token.json)",
+    )
     args = parser.parse_args()
 
-    run_backup(args.project, args.cred, args.output_dir)
+    run_backup(
+        args.project,
+        args.cred,
+        args.output_dir,
+        drive_folder_id=args.drive_folder,
+        client_secrets_path=args.client_secrets,
+        token_path=args.token_path,
+    )

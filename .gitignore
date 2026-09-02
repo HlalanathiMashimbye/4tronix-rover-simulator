@@ -183,8 +183,12 @@ npm-debug.log*
 *.tfstate.*
 crash.log
 
-# Youtube API IDs
+# OAuth / API credentials
 client_secret.json
+token.json
+
+# Firestore backups
+backups/
 
 
 # Satellite mission mirror (local SQLite state, never shared)
