@@ -7,12 +7,12 @@
  * progress THROUGH this content is separate (see ChallengeProgress and
  * FirestoreChallengeProgressRepository).
  *
- * Level 3's summary describes reading the sensor rather than acting on it:
- * the rover's Blockly toolbox (lib/roverBlockly.ts) has no comparison or
- * conditional blocks, and its distance reporter block has nowhere to plug
- * in, so "read the sensor and decide" is not a program this platform can
- * express yet. What IS real: pointing the mast and reading the distance
- * sensor, which is what this challenge teaches.
+ * Level 2 is Blockly (workspaceKind: 'blockly-sim'); Level 3 is real Python in
+ * Monaco (workspaceKind: 'monaco-sim'), not Blockly - the rover's Blockly
+ * toolbox (lib/roverBlockly.ts) has no comparison or conditional blocks, and
+ * its distance reporter block has nowhere to plug in, so "read the sensor and
+ * decide" cannot be built out of blocks on this platform. Real Python has
+ * if/else, so that is what Level 3 teaches with.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -27,13 +27,13 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 2,
     title: 'Blockly Rover Commands',
-    description: 'Build a rover mission out of blocks.',
+    description: 'Build a rover mission out of blocks: Jezero Crater waypoint navigation.',
     challengeIds: ['basic-movement', 'loop-structures'],
   },
   {
     id: 3,
-    title: 'Advanced Sensor Operations',
-    description: "Point the mast and read the rover's distance sensor.",
+    title: 'Autonomous Hazard Avoidance',
+    description: 'Write real Python that reads the distance sensor and decides what to do.',
     challengeIds: ['sensor-operations'],
   },
 ];
@@ -75,8 +75,14 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'basic-movement',
     levelId: 2,
     title: 'Basic Rover Movement',
-    summary: 'Drive the rover forward and spin it, then run the simulator to watch it go.',
+    summary: 'Navigate a waypoint at Jezero Crater: drive forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
+    standards: {
+      capsPhase: 'GET',
+      capsSubject: 'Coding & Robotics: directional commands and speed variables',
+      csta: ['1B-AP-08'],
+      nasaJplContext: 'Jezero Crater Waypoint Navigation: drive the rover to a marked survey point.',
+    },
     steps: [
       {
         id: 'drive-forward',
@@ -105,8 +111,14 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'loop-structures',
     levelId: 2,
     title: 'Loop Structures & Repeat Logic',
-    summary: 'Use a Repeat block to drive a pattern without stacking the same blocks by hand.',
+    summary: 'Survey a grid at Jezero Crater using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
+    standards: {
+      capsPhase: 'GET',
+      capsSubject: 'Coding & Robotics: loop controls and repeating structures',
+      csta: ['2-AP-12'],
+      nasaJplContext: 'Jezero Crater Grid Surface Survey: repeat one movement pattern to cover an area.',
+    },
     steps: [
       {
         id: 'add-repeat',
@@ -138,24 +150,37 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
   'sensor-operations': {
     id: 'sensor-operations',
     levelId: 3,
-    title: 'Advanced Sensor Operations',
-    summary: "Point the mast and read the rover's distance sensor.",
-    workspaceKind: 'blockly-sim',
+    title: 'Autonomous Hazard Avoidance',
+    summary: "Read the rover's distance sensor and write an if/else that reacts to what it finds.",
+    workspaceKind: 'monaco-sim',
+    standards: {
+      capsPhase: 'FET',
+      capsSubject: 'Information Technology: control structures and conditional decision-making',
+      csta: ['2-AP-10', '3A-AP-16'],
+      nasaJplContext: 'AutoNav: decide the next move from live sensor telemetry instead of a fixed script.',
+    },
     steps: [
-      {
-        id: 'point-mast',
-        title: 'Point the mast',
-        instructions:
-          'From the Mast category, drag a "Point Mast" block onto the canvas and aim it forward (centre).',
-        checks: [{ kind: 'code-contains', pattern: 'rover.setServo(0,' }],
-      },
       {
         id: 'read-distance',
         title: 'Read the distance sensor',
         instructions:
-          'Add a "Read Distance" block after it. This measures how far away the nearest thing is and prints it to the console.',
-        hints: ["The distance sensor sits on the mast, so it reads whatever the mast is currently pointed at."],
+          'Call rover.getDistance() and store it in a variable, then print it so you can see what the sensor reports before you act on it.',
+        hints: ['Try: distance = rover.getDistance()  followed by  print(distance)'],
         checks: [{ kind: 'code-contains', pattern: 'rover.getDistance()' }],
+      },
+      {
+        id: 'decide',
+        title: 'Decide what to do about it',
+        instructions:
+          "Write an if/else: if the distance is small (something is close), turn away from it; otherwise, keep driving forward. This is the same shape as the rover's own AutoNav logic - read a sensor, then branch on what it says.",
+        hints: [
+          'An if needs a colon at the end of its line, and the lines under it must be indented.',
+          'Example shape: if distance < 20:\n    rover.spinRight(60)\nelse:\n    rover.forward(60)',
+        ],
+        checks: [
+          { kind: 'code-contains', pattern: 'if ' },
+          { kind: 'code-contains', pattern: 'else:' },
+        ],
       },
       {
         id: 'export',

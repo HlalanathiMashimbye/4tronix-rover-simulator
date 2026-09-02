@@ -99,29 +99,33 @@ export function MissionWorkspace() {
   /**
    * Consume a Progressive Challenges handoff, if one is waiting.
    *
-   * BlocklyEditor has no "initial state" prop - it loads whatever is under
-   * ROVER_WORKSPACE_STORAGE_KEY in localStorage the moment it mounts, and
-   * that is the only way to seed it. So this writes the handoff's
-   * blocklyState there BEFORE switching editorMode to 'blockly', which is
-   * what causes BlocklyEditor to mount in the first place - by construction,
-   * the seed lands before there is anything to race.
+   * Neither editor accepts an "initial state" prop - each loads whatever is
+   * under its own localStorage key the moment it mounts, and that is the
+   * only way to seed either of them. So this writes the handoff's code under
+   * the RIGHT key for its editorMode BEFORE switching editorMode itself,
+   * which is what causes that editor to mount in the first place - by
+   * construction, the seed lands before there is anything to race.
    */
   useEffect(() => {
     const handoff = consumeChallengeHandoff();
     if (!handoff) return;
 
     try {
-      localStorage.setItem(ROVER_WORKSPACE_STORAGE_KEY, handoff.blocklyState);
+      if (handoff.editorMode === 'blockly' && handoff.blocklyState) {
+        localStorage.setItem(ROVER_WORKSPACE_STORAGE_KEY, handoff.blocklyState);
+      } else {
+        localStorage.setItem('rover_monaco_code', handoff.code);
+      }
     } catch {
-      // localStorage unavailable - the editor falls back to a fresh canvas,
+      // localStorage unavailable - the editor falls back to its own default,
       // but the code/name still make it into the submission below.
     }
 
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from a sessionStorage handoff; not readable during SSR render, same pattern as the missionName effect above
     setCurrentCode(handoff.code);
     setBlocklyCode(handoff.code);
-    setBlocklyState(handoff.blocklyState);
-    setEditorMode('blockly');
+    if (handoff.blocklyState) setBlocklyState(handoff.blocklyState);
+    setEditorMode(handoff.editorMode);
     setImportedFromChallenge({ id: handoff.challengeId, title: handoff.challengeTitle });
   }, []);
 

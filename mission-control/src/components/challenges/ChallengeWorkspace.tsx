@@ -23,6 +23,7 @@ interface ChallengeWorkspaceProps {
 const FINISH_LABEL: Record<Challenge['workspaceKind'], string> = {
   'embedded-platform': 'Finish challenge',
   'blockly-sim': 'Finish & Export',
+  'monaco-sim': 'Finish & Export',
 };
 
 interface FinishResult {
@@ -30,14 +31,14 @@ interface FinishResult {
 }
 
 /**
- * The 3-panel challenge workspace: instructions (left), the real platform or
- * Blockly canvas (center), and a live checklist (right). Owns step
- * navigation and re-evaluates the current step's checks every render from
- * whatever's live - SearchContext for an embedded-platform challenge,
- * the Blockly workspace's generated code and last simulated run for a
- * blockly-sim one.
+ * The 3-panel challenge workspace: instructions (left), the real platform,
+ * Blockly canvas, or Monaco editor (center), and a live checklist (right).
+ * Owns step navigation and re-evaluates the current step's checks every
+ * render from whatever's live - SearchContext for an embedded-platform
+ * challenge, the editor's generated code and last simulated run for a
+ * blockly-sim or monaco-sim one.
  *
- * Finishing a blockly-sim challenge hands the solution to Create Mission
+ * Finishing a code challenge hands the solution to Create Mission
  * (sessionStorage, see infrastructure/browser/challengeHandoff.ts) instead of
  * returning to the hub - the code was just validated here, so the natural
  * next step is sending it to a real rover, not browsing challenges again.
@@ -65,24 +66,32 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
   const allStepChecksPass = results.every(Boolean);
   const isFinalStep = stepIndex === challenge.steps.length - 1;
-  const isBlocklyChallenge = challenge.workspaceKind === 'blockly-sim';
+  const isCodeChallenge = challenge.workspaceKind !== 'embedded-platform';
 
   const handleFinish = async () => {
     setFinishing(true);
     try {
       const justUnlockedLevelId = await completeChallenge(challenge.id);
 
-      if (isBlocklyChallenge) {
+      if (challenge.workspaceKind === 'blockly-sim') {
         writeChallengeHandoff({
           challengeId: challenge.id,
           challengeTitle: challenge.title,
           code: generatedCode,
+          editorMode: 'blockly',
           blocklyState,
+        });
+      } else if (challenge.workspaceKind === 'monaco-sim') {
+        writeChallengeHandoff({
+          challengeId: challenge.id,
+          challengeTitle: challenge.title,
+          code: generatedCode,
+          editorMode: 'code',
         });
       }
 
       setFinishResult({ justUnlockedLevelId });
-      const destination = isBlocklyChallenge ? '/mission' : '/challenges';
+      const destination = isCodeChallenge ? '/mission' : '/challenges';
       setTimeout(() => router.push(destination), justUnlockedLevelId ? 1800 : 900);
     } finally {
       setFinishing(false);
@@ -101,6 +110,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
       <ChallengeInstructionsPanel
         step={step}
+        standards={challenge.standards}
         stepIndex={stepIndex}
         totalSteps={challenge.steps.length}
         canGoBack={stepIndex > 0}
@@ -145,7 +155,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
                 : 'Challenge complete!'}
             </p>
             <p className="text-sm text-muted-foreground">
-              {isBlocklyChallenge ? 'Carrying your code into Create Mission…' : 'Heading back to Challenges…'}
+              {isCodeChallenge ? 'Carrying your code into Create Mission…' : 'Heading back to Challenges…'}
             </p>
           </div>
         </div>

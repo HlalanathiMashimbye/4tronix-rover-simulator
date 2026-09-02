@@ -14,7 +14,9 @@ export interface ChallengeHandoffPayload {
   challengeId: string;
   challengeTitle: string;
   code: string;
-  blocklyState: string;
+  /** Which editor tab to land on and seed. 'blockly' needs blocklyState; 'code' does not - there is no workspace to seed. */
+  editorMode: 'blockly' | 'code';
+  blocklyState?: string;
 }
 
 export function writeChallengeHandoff(payload: ChallengeHandoffPayload): void {
