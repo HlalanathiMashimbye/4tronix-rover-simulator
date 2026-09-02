@@ -90,19 +90,41 @@ def test_load_config_precedence(tmp_path, monkeypatch):
     assert web_server._load_config().get('rover_url') == 'http://saved.local:8523'
 
 
-def test_rover_url_cannot_be_changed_without_an_operator(tmp_path, monkeypatch):
-    """Anyone on the venue network could otherwise aim this satellite at a
-    different machine, or at nothing, and the console would keep reporting
-    success."""
+def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
+    """This used to assert 401.
+
+    The gate was there because repointing the rover is a control action on an
+    open venue network. The problem is that require_operator means a Firebase
+    sign-in, which means internet, and the field edit this endpoint exists for
+    is the one an operator makes when the rover has moved - exactly when the
+    wifi is least likely to work. Same call as camera start: on a box built to
+    work offline, a gate that bites only when the network is down protects
+    nothing worth the cost.
+    """
+    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(tmp_path / 'satellite_config.json'))
+    monkeypatch.delenv('OPERATOR_AUTH', raising=False)
+    web_server.app.config['TESTING'] = True
+
+    with web_server.app.test_client() as anon:
+        resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523'})
+
+    assert resp.status_code == 200
+    assert web_server.ROVER_URL == 'http://newrover.local:8523'
+
+
+def test_rover_url_is_still_validated_without_a_login(tmp_path, monkeypatch):
+    """Dropping the login did not drop the checks. Validation is the control
+    that actually stops this endpoint being pointed at nonsense, and it never
+    depended on who was asking."""
     monkeypatch.setattr(web_server, 'CONFIG_FILE', str(tmp_path / 'satellite_config.json'))
     monkeypatch.delenv('OPERATOR_AUTH', raising=False)
     original_url = web_server.ROVER_URL
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
-        resp = anon.post('/api/config/rover_url', json={'url': 'http://attacker.local:8523'})
+        resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)'})
 
-    assert resp.status_code == 401
+    assert resp.status_code == 400
     assert web_server.ROVER_URL == original_url, 'the URL must not have changed'
 
 
@@ -129,3 +151,39 @@ def test_the_monitor_uses_the_configured_camera_port(client, monkeypatch):
     page = client.get('/monitor/').get_data(as_text=True)
 
     assert 'ws://${window.location.hostname}:9999' in page
+
+
+class TestNoSignInDeadEnds:
+    """The console must not tell an operator to sign in for something that
+    needs no sign-in, and must not offer a sign-in that cannot work offline.
+
+    Both messages were real: one for the rover path, one for the camera. The
+    camera gate had already been removed, so that branch could not fire at all;
+    the rover-path one sent the operator to a Firebase login, which needs
+    internet, on the one box built to work without it. Its link also rendered
+    in the browser default blue at 1.18:1 against this background.
+    """
+
+    def test_settings_offers_no_link_to_a_login(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'href="/operator/login"' not in page
+        assert 'sign-in required' not in page.lower()
+
+    def test_settings_does_not_ask_for_a_login_to_run_the_camera(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'sign in on the operator console' not in page.lower()
+
+    def test_it_still_says_so_where_a_login_really_is_needed(self, client):
+        """The setup rows read /operator/api/integrations, which is still
+        gated. Removing two wrong messages must not remove the right one."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'Sign in to see setup status.' in page
+
+    def test_settings_still_reports_a_refused_save(self, client):
+        """Dropping the branch must not drop the error handling with it."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert "data.error || 'Save failed'" in page
