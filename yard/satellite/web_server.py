@@ -206,6 +206,28 @@ def api_status():
     })
 
 
+@app.route('/api/rover/discover', methods=['GET'])
+def api_rover_discover():
+    """Rovers answering on this network.
+
+    So the normal way to set the address is picking one that demonstrably
+    works, rather than typing three things correctly from memory.
+    """
+    from rover_discovery import discover
+
+    found = discover(current_url=ROVER_URL)
+    return jsonify({'rovers': [
+        {
+            'url': f['url'],
+            'driver': f['health'].get('driver'),
+            'hardware': f['health'].get('hardware'),
+            'queueSize': f['health'].get('queue_size'),
+            'current': f['url'].rstrip('/') == ROVER_URL.rstrip('/'),
+        }
+        for f in found
+    ]})
+
+
 @app.route('/api/config/rover_url', methods=['POST'])
 def api_set_rover_url():
     """Set the rover URL at runtime (from the /status page) and persist it.
@@ -227,10 +249,30 @@ def api_set_rover_url():
     which still rejects anything that is not an http(s) URL.
     """
     global ROVER_URL
+    from rover_discovery import normalise, probe
+
     data = request.get_json(silent=True) or {}
-    url = (data.get('url') or '').strip().rstrip('/')
-    if not url.startswith(('http://', 'https://')) or len(url.split('//', 1)[1]) == 0:
-        return jsonify({'error': 'URL must start with http:// or https://'}), 400
+    url = normalise(data.get('url'))
+    if not url:
+        return jsonify({'error': 'Give the rover an address, like curiosity.local'}), 400
+
+    # Check something is actually there before saving it.
+    #
+    # This used to accept anything beginning with http, so a mistyped address
+    # saved happily and the yard looked broken with nothing on the page saying
+    # why. That is exactly what happened at a demo. A wrong address is the
+    # likely mistake here, not a malformed one.
+    #
+    # `force` exists for setting an address before the rover is switched on,
+    # which is legitimate - it just should not be the accident.
+    if not data.get('force'):
+        ok, detail = probe(url)
+        if not ok:
+            return jsonify({
+                'error': f'{url} did not answer as a rover: {detail}.',
+                'url': url,
+                'unreachable': True,
+            }), 409
 
     ROVER_URL = url
     persisted = True
