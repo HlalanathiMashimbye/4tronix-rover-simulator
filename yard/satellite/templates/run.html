@@ -166,12 +166,21 @@
         text = (text || '').trim();
         if (!text) return flash($('importMsg'), 'Nothing on the clipboard', 'bad');
 
-        // A Blockly workspace is JSON. It needs the Blockly engine to become
-        // Python, which lives on /code/, so hand it over there rather than
-        // half-supporting it here.
         if (text.startsWith('{')) {
             try {
-                JSON.parse(text);
+                const obj = JSON.parse(text);
+                // Mission envelope from Mission Control: has id + code.
+                if (obj.code != null) {
+                    code.value = obj.code;
+                    if (obj.id) { missionId.value = obj.id; }
+                    if (obj.name) { missionName.value = obj.name; }
+                    updateRunIdentity();
+                    flash($('importMsg'), 'Mission imported', 'ok');
+                    return;
+                }
+                // A Blockly workspace is JSON. It needs the Blockly engine to
+                // become Python, which lives on /code/, so hand it over there
+                // rather than half-supporting it here.
                 localStorage.setItem('roverWorkspace', text);
                 flash($('importMsg'), 'Blocks saved. Open Code to run them.', 'ok');
                 return;

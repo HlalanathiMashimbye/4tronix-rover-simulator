@@ -64,7 +64,9 @@ describe('copying a mission to paste into the yard', () => {
     // resolves, so asserting synchronously both races the write and leaves an
     // act() warning behind.
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith('rover.forward(60)\nrover.stop()'),
+      expect(writeText).toHaveBeenCalledWith(
+        JSON.stringify({ id: 'm1', name: 'Rock Lover', code: 'rover.forward(60)\nrover.stop()' }),
+      ),
     );
     await screen.findByRole('button', { name: /copied/i });
   });
@@ -90,7 +92,10 @@ describe('copying a mission to paste into the yard', () => {
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() =>
-      expect(prompt).toHaveBeenCalledWith(expect.stringContaining('paste it into the yard'), MISSION.code),
+      expect(prompt).toHaveBeenCalledWith(
+        expect.stringContaining('paste it into the yard'),
+        JSON.stringify({ id: MISSION.id, name: MISSION.name, code: MISSION.code }),
+      ),
     );
     expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();
   });

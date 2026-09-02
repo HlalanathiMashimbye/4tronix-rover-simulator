@@ -557,7 +557,8 @@
 
         document.getElementById('copyCode').onclick = async (e) => {
             const btn = e.currentTarget;
-            const ok = await copyText((mission && mission.code) || '');
+            const envelope = JSON.stringify({ id: mission.id, name: mission.name || '', code: mission.code || '' });
+            const ok = await copyText(envelope);
             if (!ok) return showToast('error', 'Could not copy the code.');
             btn.textContent = 'Copied';
             setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
