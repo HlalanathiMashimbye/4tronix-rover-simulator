@@ -22,13 +22,16 @@ import os
 # name -> (config key, env var, default, cast, bounds or None)
 #
 # Bounds are enforced on both read and write: a hand-edited config file is as
-# likely a source of nonsense as the form is, and a zero-second session recheck
-# would hammer Firebase on every request.
+# likely a source of nonsense as the form is, and a zero-second camera timeout
+# would refuse every run.
+#
+# sessionMaxAge and sessionRecheck used to live here, tuning how long an
+# operator stayed signed in and how often Firebase was re-asked whether they
+# still should be. There is no sign-in on this box any more, so they were two
+# controls on the Settings page that changed nothing.
 TUNABLES = {
     'cameraHost': ('camera_host', 'CAMERA_HOST', 'localhost', str, None),
     'cameraReadyTimeout': ('camera_ready_timeout', 'CAMERA_READY_TIMEOUT', 2.0, float, (0.5, 30.0)),
-    'sessionMaxAge': ('session_max_age', 'OPERATOR_SESSION_MAX_AGE', 12 * 3600, int, (300, 7 * 24 * 3600)),
-    'sessionRecheck': ('session_recheck', 'OPERATOR_SESSION_RECHECK', 300, int, (30, 3600)),
 }
 
 

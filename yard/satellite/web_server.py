@@ -53,14 +53,6 @@ def _save_config(cfg):
         json.dump(cfg, f, indent=2)
 
 
-def _notify_within_app(app, mission_id, status):
-    """notify_mission_control reads current_app config, and Flask's app
-    context is thread-local, so push one inside the watcher's thread."""
-    from console.notify import notify_mission_control
-    with app.app_context():
-        notify_mission_control(mission_id, status)
-
-
 def _recording_name(raw):
     """An operator-supplied name reduced to something safe to put in a path.
 
@@ -96,18 +88,19 @@ app = Flask(__name__)
 
 # Operator console sessions. A stable secret keeps operators signed in across
 # restarts; without one, sessions just reset on restart (re-login).
+# No login remains, so nothing is kept in a session. Flask still wants a key
+# for flash() and anything else that touches the session object.
 app.secret_key = os.environ.get('OPERATOR_SESSION_SECRET') or os.urandom(32)
 
 # Rover server URL — a value saved from the /status page wins over the
 # environment default, so field edits survive a systemd restart
 ROVER_URL = _load_config().get('rover_url') or os.environ.get('ROVER_URL', 'http://marspi.local:8523')
 
-# Operator console (/operator/) — reads the mission queue from Firestore and
-# dispatches to the rover queue. The getter indirection means runtime edits to
-# ROVER_URL from /status apply to the console too.
+# What is left of /operator/: camera control and the satellite's tunables. The
+# mission queue that used to live there went with the Firestore mirror. The
+# getter indirection means a rover path edited on Settings applies everywhere.
 app.config['ROVER_URL_GETTER'] = lambda: ROVER_URL
 import operator_console  # noqa: E402  (needs app + config above)
-from console import deps  # noqa: E402
 app.register_blueprint(operator_console.operator_bp)
 
 # Request timeout for rover API calls
@@ -540,47 +533,14 @@ if __name__ == '__main__':
     print(f"[satellite] rover url {ROVER_URL}")
     import flask.cli
     flask.cli.show_server_banner = lambda *args, **kwargs: None
-    # Run the YouTube-poll loop in the background so a slow/unreachable
-    # YouTube API call can't delay the tablet/monitor/rover proxy from
-    # coming up - those are local and time-critical, this isn't.
-    from mission_store import init_db
-    from sync_worker import start_sync_worker
-
-    init_db()
-
-    # Recovery runs before the sync worker so an interrupted mission is flagged
-    # for review before any flush can push its stale 'processing' onward.
-    try:
-        from recovery import recover_interrupted_missions
-        from satellite_identity import yard_id
-        recover_interrupted_missions(yard_id(), rover_url=os.environ.get('ROVER_URL'))
-    except Exception as e:
-        print(f'[recovery] Skipped: {e}')
-
-    # Closes the loop the operator otherwise closes by hand: the rover already
-    # records that it finished, so a mission no longer sits in 'processing'
-    # (holding its lease) because someone turned to the next child.
-    from mission_watcher import start_mission_watcher
-    threading.Thread(
-        target=start_mission_watcher,
-        args=(lambda: app.config.get('ROVER_URL_GETTER', lambda: os.environ.get(
-            'ROVER_URL', 'http://marspi.local:8523'))(),),
-        kwargs={'notify': lambda mid, st: _notify_within_app(app, mid, st)},
-        daemon=True,
-    ).start()
-
-    # Started unconditionally, with a FACTORY rather than a client. Building the
-    # client here and bailing on failure would mean a satellite powered on with
-    # no internet - the exact situation this whole feature exists for - never
-    # starts syncing at all, so missions run offline would sit in the outbox
-    # until someone restarted the process.
-    #
-    # The first pull is a synchronous
-    # Firestore call, so it must not block server startup.
-    threading.Thread(
-        target=start_sync_worker, args=(deps.firestore_client,),
-        daemon=True,
-    ).start()
+    # Releases the camera when the rover reports a run is over, so a recording
+    # does not run until someone remembers to stop it. The only background
+    # thread left: the mirror, its sync worker and the startup recovery that
+    # went with them are gone.
+    from mission_watcher import run_watcher_thread
+    run_watcher_thread(lambda: app.config.get(
+        'ROVER_URL_GETTER',
+        lambda: os.environ.get('ROVER_URL', 'http://marspi.local:8523'))())
 
     app.run(host='0.0.0.0', port=port, threaded=True, use_reloader=False)
 

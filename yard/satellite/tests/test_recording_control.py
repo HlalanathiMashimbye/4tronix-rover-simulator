@@ -22,8 +22,6 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-import mission_store
-import store.db as store_db  # noqa: E402
 import recording_control  # noqa: E402
 
 YARD = 'curiosity'
@@ -72,8 +70,6 @@ class FakeConnection:
 
 @pytest.fixture(autouse=True)
 def _isolated_state(tmp_path, monkeypatch):
-    monkeypatch.setattr(store_db, 'DB_PATH', str(tmp_path / 'm.db'))
-    mission_store.init_db()
     monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path / 'recordings'))
     monkeypatch.setattr(recording_control, '_writers', {})
     monkeypatch.setattr(recording_control, '_paths', {})
@@ -84,20 +80,6 @@ def _isolated_state(tmp_path, monkeypatch):
     # _consumer_loop() manually and synchronously for determinism. Tests that
     # care about frame-writing call _consumer_loop() themselves.
     monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
-
-
-def _seed(mission_id, yard_id=YARD, recording_status='none', recording_path=None):
-    mission_store.upsert_missions(
-        [{'id': mission_id, 'yardId': yard_id, 'status': 'processing',
-          'submittedAt': '2026-07-14T08:00:00Z'}],
-        '2026-07-14T09:00:00Z',
-    )
-    mission_store.upsert_runs([{
-        'missionId': mission_id, 'yardId': yard_id, 'status': 'processing',
-        'statusUpdatedAt': '2026-07-14T09:00:00Z',
-    }], '2026-07-14T09:00:00Z')
-    if recording_status != 'none':
-        mission_store.set_run_recording_state(mission_id, yard_id, recording_status, path=recording_path)
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +184,6 @@ def test_two_concurrent_runs_get_independent_writers_off_one_shared_connection(m
 # ---------------------------------------------------------------------------
 
 def test_stop_recording_with_keep_leaves_the_file_and_marks_it_kept(monkeypatch):
-    _seed('m1')
     monkeypatch.setattr(recording_control.websockets, 'connect',
                          lambda *a, **k: FakeConnection([_frame_message()]))
     ok, path = recording_control.start_recording('m1', YARD)
@@ -213,12 +194,10 @@ def test_stop_recording_with_keep_leaves_the_file_and_marks_it_kept(monkeypatch)
 
     assert ok is True
     assert os.path.exists(path)
-    assert mission_store.get_run('m1', YARD)['recording_status'] == 'kept'
     assert ('m1', YARD) not in recording_control._writers
 
 
 def test_stop_recording_without_keep_deletes_the_file_and_marks_it_discarded(monkeypatch):
-    _seed('m1')
     monkeypatch.setattr(recording_control.websockets, 'connect',
                          lambda *a, **k: FakeConnection([_frame_message()]))
     ok, path = recording_control.start_recording('m1', YARD)
@@ -229,30 +208,11 @@ def test_stop_recording_without_keep_deletes_the_file_and_marks_it_discarded(mon
 
     assert ok is True
     assert not os.path.exists(path)
-    assert mission_store.get_run('m1', YARD)['recording_status'] == 'discarded'
-
-
-def test_stop_recording_discards_an_already_kept_file_with_no_active_writer(tmp_path):
-    """The post-hoc discard path: an operator resolving a review as
-    'cancelled', or requeuing, calls this after mission_watcher already
-    stopped-and-kept the recording - no writer is open any more."""
-    path = str(tmp_path / 'kept.mp4')
-    with open(path, 'wb') as f:
-        f.write(b'not really a video, just needs to exist')
-    _seed('m1', recording_status='kept', recording_path=path)
-
-    ok, detail = recording_control.stop_recording('m1', YARD, keep=False)
-
-    assert ok is True
-    assert not os.path.exists(path)
-    assert mission_store.get_run('m1', YARD)['recording_status'] == 'discarded'
 
 
 def test_stop_recording_is_a_no_op_for_a_run_with_no_active_recording():
-    _seed('m1')  # recording_status defaults to 'none'
 
     ok, detail = recording_control.stop_recording('m1', YARD, keep=False)
 
     assert ok is True
     assert detail == 'not recording'
-    assert mission_store.get_run('m1', YARD)['recording_status'] == 'none'

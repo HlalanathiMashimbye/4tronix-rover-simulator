@@ -189,12 +189,12 @@ class TestNoSignInDeadEnds:
         assert 'sign-in required' not in page
 
     def test_the_settings_page_reads_only_open_endpoints(self, client):
-        """The reason the page can say that: nothing it loads is gated. If one
-        of these goes back behind a login, Settings renders empty boxes again
-        and this is the test that says so."""
+        """The reason the page can say that: nothing it loads is gated.
+
+        The sync and integrations endpoints were on this list and are gone
+        entirely now, along with the Firestore mirror behind them.
+        """
         for path in ('/operator/api/config/tunables',
-                     '/operator/api/config/sync',
-                     '/operator/api/integrations',
                      '/operator/api/camera'):
             assert client.get(path).status_code == 200, path
 
