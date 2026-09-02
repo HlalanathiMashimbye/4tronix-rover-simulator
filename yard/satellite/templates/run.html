@@ -31,25 +31,53 @@
         .run-desk .page-title { margin-top: 0.15rem; font-size: var(--fs-xl); line-height: 1.1; letter-spacing: -0.015em; }
         .run-desk .page-sub { margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--text-dim); max-width: 54ch; }
 
-        /* Readiness. Two states that decide whether anything below can work,
-           so they get real estate and a fix button, not a footnote. */
-        .ready-strip { display: flex; align-items: stretch; gap: 0.5rem; flex-wrap: wrap; }
+        /* Readiness, as an instrument rather than two warning banners.
+
+           These were a pair of wide boxes flooded with a red or green tint and
+           a thick coloured edge. At the size they needed, the fill was the
+           loudest thing on a page whose actual subject is a mission, and two
+           tinted slabs side by side read as a pair of alerts even when both
+           said everything was fine. Green does not need to shout.
+
+           One bordered module, one row per subsystem, a hairline between them.
+           The colour is concentrated into a small lamp and the state word;
+           the surface stays neutral, so a healthy yard is quiet and a broken
+           one is the only thing with colour in it. */
+        .ready-strip {
+            display: flex; flex-direction: column;
+            border: 1px solid var(--border); border-radius: 11px;
+            background: var(--surface); box-shadow: var(--e1);
+            overflow: hidden; min-width: 300px;
+        }
         .ready {
             display: flex; align-items: center; gap: 0.6rem;
-            min-width: 218px; padding: 0.55rem 0.75rem;
-            border: 1px solid var(--border); border-left: 3px solid var(--text-faint);
-            border-radius: 10px; background: var(--surface-2); box-shadow: var(--e1);
+            padding: 0.5rem 0.75rem;
         }
-        .ready[data-state="ok"]   { border-left-color: var(--ok);   background: var(--ok-weak); }
-        .ready[data-state="bad"]  { border-left-color: var(--bad);  background: var(--bad-weak); }
-        .ready[data-state="wait"] { border-left-color: var(--warn); background: var(--warn-weak); }
-        .ready-txt { min-width: 0; }
-        .status-name { display: block; color: var(--text); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-        .status-sub { display: block; color: var(--text-dim); font-size: var(--fs-2xs); margin-top: 0.1rem; }
-        .status-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--warn); }
-        .status-dot.ok  { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-weak); }
-        .status-dot.bad { background: var(--bad); }
-        .ready .btn { margin-left: auto; min-height: 28px !important; padding: 0.25rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
+        .ready + .ready { border-top: 1px solid var(--border); }
+        .ready-txt { min-width: 0; display: flex; align-items: baseline; gap: 0.5rem; }
+        .status-name {
+            color: var(--text-dim); font-family: var(--mono);
+            font-size: var(--fs-2xs); font-weight: 600;
+            letter-spacing: 0.1em; text-transform: uppercase;
+            min-width: 4.6em;
+        }
+        .status-sub { color: var(--text); font-size: var(--fs-xs); }
+        .ready[data-state="ok"]   .status-sub { color: var(--ok); }
+        .ready[data-state="bad"]  .status-sub { color: var(--bad); }
+        .ready[data-state="wait"] .status-sub { color: var(--warn); }
+
+        /* A lamp, not a dot: the ring is what makes a 8px circle read as lit
+           rather than as a bullet point. */
+        .status-dot {
+            width: 8px; height: 8px; flex: none; border-radius: 50%;
+            background: var(--text-faint); box-shadow: 0 0 0 3px var(--surface-3);
+        }
+        .status-dot.ok  { background: var(--ok);  box-shadow: 0 0 0 3px var(--ok-weak),  0 0 10px -1px var(--ok); }
+        .status-dot.bad { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-weak), 0 0 10px -1px var(--bad); }
+        .ready .btn {
+            margin-left: auto; min-height: 28px !important;
+            padding: 0.25rem 0.6rem !important; font-size: var(--fs-2xs) !important;
+        }
 
         /* ---- Body -------------------------------------------------------- */
         .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr); gap: 0.9rem; }
@@ -282,8 +310,8 @@
                 <div class="node">
                     <span class="node-num">1</span>
                     <div class="node-body">
-                        <span class="node-title">Record, then run</span>
-                        <span class="node-note">Start recording first, so the rover's first move is in the video.</span>
+                        <span class="node-title">Run it</span>
+                        <span class="node-note">Send starts the recording on its own, waits a second so the rover's first move is in the video, then runs the code. Stop ends both and keeps the file.</span>
                         <div class="row">
                             <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
                             <span class="tag" id="runState">Ready</span>
@@ -549,34 +577,45 @@
         return (metaValue(missionId) || metaValue(missionName) || 'run');
     }
 
+    // Recording is a thing the station does, not a button the operator has to
+    // remember. Send starts it; the button below is the manual override.
+    async function startRecording() {
+        if (recordingName) return;
+        const resp = await fetch('/api/recording/start', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: runName() }),
+        });
+        const d = await resp.json();
+        if (!resp.ok) throw new Error(d.error || 'Could not start recording');
+        recordingName = d.name;
+        $('recDot').classList.add('on');
+        $('recBtn').lastChild.textContent = ' Stop recording';
+        paintGate();
+    }
+
+    async function stopRecording() {
+        if (!recordingName) return;
+        await fetch('/api/recording/stop', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: recordingName, keep: true }),
+        });
+        recordingName = null;
+        $('recDot').classList.remove('on');
+        $('recBtn').lastChild.textContent = ' Start recording';
+        paintGate();
+        loadRecordings();
+    }
+
     $('recBtn').addEventListener('click', async () => {
-        const btn = $('recBtn'), dot = $('recDot');
+        const btn = $('recBtn');
         btn.disabled = true;
         try {
             if (!recordingName) {
-                const resp = await fetch('/api/recording/start', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: runName() }),
-                });
-                const d = await resp.json();
-                if (!resp.ok) throw new Error(d.error || 'Could not start recording');
-                recordingName = d.name;
-                dot.classList.add('on');
-                btn.lastChild.textContent = ' Stop recording';
+                await startRecording();
                 flash($('runMsg'), 'Recording', 'ok');
-                paintGate();
             } else {
-                const resp = await fetch('/api/recording/stop', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name: recordingName, keep: true }),
-                });
-                await resp.json();
-                recordingName = null;
-                dot.classList.remove('on');
-                btn.lastChild.textContent = ' Start recording';
+                await stopRecording();
                 flash($('runMsg'), 'Saved. Pick it up in step 2.', 'ok');
-                paintGate();
-                loadRecordings();
             }
         } catch (e) {
             flash($('runMsg'), e.message, 'bad');
@@ -585,26 +624,58 @@
         }
     });
 
+    // How long to let the camera settle between starting the recording and
+    // moving the rover, so the first move is inside the video rather than on
+    // the frame before it. The writer opens lazily on the first real frame.
+    const LEAD_IN_MS = 1000;
+
     $('runBtn').addEventListener('click', async () => {
         const python = code.value.trim();
         if (!python) return flash($('runMsg'), 'No code to send', 'bad');
+
+        const btn = $('runBtn');
+        btn.disabled = true;
         try {
+            // Record first, always. Asking an operator to remember a separate
+            // button before every run meant the run that mattered was the one
+            // where they forgot, and a rover run with no video cannot be
+            // reviewed, handed over or uploaded - it is simply lost.
+            if (!recordingName) {
+                flash($('runMsg'), 'Recording...', 'ok');
+                await startRecording();
+                // If the recording could not start we do not send. Dispatching
+                // anyway would produce exactly the unrecorded run this exists
+                // to prevent, and moving the rover is not undoable.
+                await new Promise((r) => setTimeout(r, LEAD_IN_MS));
+            }
+
             const resp = await fetch('/api/queue/add', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify([{ cmd: 'run_python', params: { code: python } }]),
             });
             const d = await resp.json();
             if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
-            flash($('runMsg'), 'Sent to rover', 'ok');
+            flash($('runMsg'), 'Recording, and sent to the rover', 'ok');
         } catch (e) {
             flash($('runMsg'), e.message, 'bad');
+        } finally {
+            btn.disabled = false;
+            paintGate();
         }
     });
 
     $('stopBtn').addEventListener('click', async () => {
         try {
             await fetch('/api/queue/clear', { method: 'POST' });
-            flash($('runMsg'), 'Rover queue cleared', 'ok');
+            // Send starts the recording, so Stop ends it, keeping the file.
+            // Otherwise the same operator who would have forgotten to press
+            // record is left with a recording that never stops.
+            if (recordingName) {
+                await stopRecording();
+                flash($('runMsg'), 'Rover stopped. Recording saved, pick it up in step 2.', 'ok');
+            } else {
+                flash($('runMsg'), 'Rover queue cleared', 'ok');
+            }
         } catch (e) {
             flash($('runMsg'), 'Could not reach the rover', 'bad');
         }

@@ -238,3 +238,93 @@ class TestCameraReadiness:
         monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
 
         assert client.get('/api/camera/ready').status_code == 200
+
+
+class TestSendRecordsFirst:
+    """Recording is something the station does, not a button to remember.
+
+    The page used to say "Start recording first, so the rover's first move is
+    in the video". That works right up until the run someone is excited about,
+    which is the one they forget, and a rover run with no video cannot be
+    reviewed, handed over or uploaded. It is simply lost.
+    """
+
+    def test_send_starts_the_recording_before_it_dispatches(self, client):
+        """Pins the guard, not just the ordering.
+
+        The first version of this checked only that startRecording() appeared
+        earlier in the source than the dispatch, which stays true if the branch
+        around it is disabled - it passed against a deliberately broken build.
+        """
+        page = client.get('/run/').get_data(as_text=True)
+        handler = page[page.index("$('runBtn').addEventListener"):]
+        dispatch = handler.index('/api/queue/add')
+        before_dispatch = handler[:dispatch]
+
+        assert 'if (!recordingName) {' in before_dispatch, 'the guard has to be live'
+        assert 'await startRecording();' in before_dispatch
+        assert before_dispatch.index('if (!recordingName) {') \
+            < before_dispatch.index('await startRecording();')
+
+    def test_it_waits_before_moving_the_rover(self, client):
+        """The writer opens on the first real frame, so a dispatch in the same
+        tick puts the first move on the frame before the video starts."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert 'LEAD_IN_MS = 1000' in page
+        assert 'setTimeout(r, LEAD_IN_MS)' in page
+
+    def test_a_failed_recording_stops_the_send(self, client):
+        """Dispatching anyway would produce the unrecorded run this exists to
+        prevent, and moving the rover is not undoable."""
+        page = client.get('/run/').get_data(as_text=True)
+        handler = page[page.index("$('runBtn').addEventListener"):]
+        body = handler[:handler.index('/api/queue/add')]
+
+        # startRecording throws on a non-ok response, and the dispatch sits
+        # after it inside the same try, so the throw skips it. Both halves of
+        # that have to hold: the call is awaited (a floating promise would let
+        # the dispatch through) and it is guarded by the live condition.
+        assert 'await startRecording();' in body
+        assert 'if (!recordingName) {' in body
+
+    def test_stopping_the_rover_stops_the_recording(self, client):
+        """Send starts it, so Stop ends it. Otherwise the operator who would
+        have forgotten to press record is left recording for ever."""
+        page = client.get('/run/').get_data(as_text=True)
+        handler = page[page.index("$('stopBtn').addEventListener"):]
+
+        assert 'stopRecording()' in handler[:600]
+
+    def test_the_page_no_longer_asks_anyone_to_press_record(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert 'Start recording first' not in page
+
+
+class TestReadinessIndicators:
+    """One instrument module, not two warning banners.
+
+    They were wide boxes flooded with a red or green tint. At the size they
+    needed, the fill was the loudest thing on a page whose subject is a
+    mission, and two tinted slabs side by side read as a pair of alerts even
+    when both said everything was fine.
+    """
+
+    def test_the_surface_is_not_tinted_by_state(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert '.ready[data-state="ok"]   { border-left-color' not in page
+        assert 'background: var(--ok-weak); }' not in page
+
+    def test_colour_lives_in_the_lamp_and_the_state_word(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert '.ready[data-state="ok"]   .status-sub { color: var(--ok); }' in page
+        assert '.status-dot.ok' in page
+
+    def test_the_two_rows_are_one_module(self, client):
+        """A shared border with a hairline between, rather than two cards."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert '.ready + .ready { border-top:' in page
