@@ -145,6 +145,36 @@ and stops picking up new work. The rover is fine and the operator is standing
 next to it with the only stop that exists. Halting a physical run because a
 network blipped is its own hazard.
 
+## 2b. Queueing at an unclaimed yard
+
+**Decided: refuse.** Run is unavailable for a yard nobody has claimed, rather
+than queueing something that fires later.
+
+The important part is that refusing at queue time is not enough on its own.
+A run can be queued at a claimed yard and then sit there while the claim ends -
+the operator packs up, or the yard is switched off, which is now the same
+thing. If nothing re-checks, the run is dispatched at a yard nobody is
+watching, which is precisely what refusing was meant to prevent, just delayed
+by ten minutes.
+
+So the claim is checked twice:
+
+- **At queue time**, in Mission Control, so the operator gets told immediately
+  rather than watching a run sit in a queue that will never move.
+- **At dispatch time**, on the satellite, which will not pull work unless it
+  is claimed. This is the one that actually matters, because it is the check
+  standing between a browser and a rover.
+
+And a run already queued whose yard loses its claim goes back to the operator
+rather than waiting. A queue that quietly holds runs for a yard that has gone
+home is how someone arrives in the morning, switches a yard on, and watches it
+start driving.
+
+Mission Control's operator console already has the idiom for this: an action
+that cannot run right now is shown greyed with the reason, not hidden. See
+`consoleMode.ts`, which does exactly that for actions handled automatically.
+"Nobody has claimed this yard" is the same shape of message.
+
 ## 3. Getting the video up
 
 **Decided: keep this abstract for now.** The loop is worth automating before
@@ -200,14 +230,15 @@ tells the platform which video belongs to which run.
 4. The handover seam, with the manual step behind it. Automating the upload
    later then changes one implementation and nothing above it.
 
+Note that the claim check in step 3 is not only Mission Control refusing to
+queue. The satellite refusing to pull is the check that matters; the Mission
+Control one is a courtesy so the operator finds out immediately.
+
 Each step is useful on its own, and each one leaves the manual loop intact if
 the next never gets built.
 
 ## Still open
 
-- Does Mission Control refuse to queue a run at an unclaimed yard, or let it
-  wait until somebody claims it? Refusing is more predictable; waiting is more
-  convenient for prep before a school group arrives.
 - How long may the satellite go quiet before Mission Control treats the claim
   as gone? Long enough to ride out a wifi drop, short enough that a yard
   switched off does not look claimed for the rest of the afternoon.
