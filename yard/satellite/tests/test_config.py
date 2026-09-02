@@ -283,3 +283,34 @@ class TestConsoleDesignSystem:
             body = page.replace("(value ?? '—')", '')   # the no-value placeholder
             assert '—' not in body, path
             assert '&mdash;' not in body, path
+
+
+class TestMonitorBacklog:
+    """Anything the rover did before the monitor opened arrives through one
+    fetch on load; the SSE stream that follows carries only changes.
+
+    That single attempt was the whole safety net. If it failed - a rover blip,
+    or the satellite still coming up behind it - the page sat empty until the
+    rover next did something, which on an idle yard is a long time and looks
+    exactly like a mission going missing.
+    """
+
+    def test_the_backlog_fetch_is_retried(self, client):
+        page = client.get('/monitor/').get_data(as_text=True)
+
+        assert 'function loadBacklog(attempt)' in page
+        assert 'loadBacklog(attempt + 1)' in page
+
+    def test_refresh_reports_failure_so_the_retry_can_see_it(self, client):
+        """It used to swallow the error, which left the caller unable to tell a
+        successful load from a failed one."""
+        page = client.get('/monitor/').get_data(as_text=True)
+        body = page[page.index('async refresh()'):]
+        body = body[:body.index('updateUI(data) {')]
+
+        assert 'throw e;' in body
+
+    def test_a_slow_poll_backs_the_stream_up(self, client):
+        page = client.get('/monitor/').get_data(as_text=True)
+
+        assert 'setInterval(function () { queue.refresh(); }, 15000)' in page

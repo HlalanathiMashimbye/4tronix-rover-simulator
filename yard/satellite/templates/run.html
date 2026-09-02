@@ -544,6 +544,19 @@
             const listening = !!(snapshot.camera && snapshot.camera.reachable);
             roverOk = !!(snapshot.rover && snapshot.rover.reachable && (snapshot.rover.status == null || snapshot.rover.status === 'ok'));
             paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Not reachable');
+
+            // The watcher ends recordings this page started, so the page has
+            // to be told. Without this it went on saying "Stop recording"
+            // over a file the rover had already finished and the server had
+            // already closed, and never showed the operator the video.
+            const filming = (snapshot.recording && snapshot.recording.active) || [];
+            if (recordingName && !filming.includes(recordingName)) {
+                recordingName = null;
+                $('recDot').classList.remove('on');
+                $('recBtn').lastChild.textContent = ' Start recording';
+                flash($('runMsg'), 'Rover finished. Recording saved, pick it up in step 2.', 'ok');
+                loadRecordings();
+            }
             paintGate();
             // Only re-probe when the cheap answer actually changed, so an idle
             // station is not opening a camera connection every five seconds.

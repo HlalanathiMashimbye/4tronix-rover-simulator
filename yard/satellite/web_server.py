@@ -196,10 +196,17 @@ def api_status():
         'port': CAMERA_PORT,
     }
 
+    # What is filming right now. The station starts a recording and the
+    # watcher ends it, so without this the page had no way to learn that the
+    # run it started had finished: it kept saying "Stop recording" over a file
+    # that was already closed, and never showed the operator the video.
+    from recording_control import active_recordings
+
     return jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
+        'recording': {'active': active_recordings()},
     })
 
 

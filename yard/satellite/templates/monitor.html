@@ -885,6 +885,10 @@
                     this.updateUI(data);
                 } catch (e) {
                     this.updateStatus('disconnected', 'Disconnected');
+                    // Rethrown so the loader above can retry. It used to be
+                    // swallowed here, which left the caller unable to tell a
+                    // successful load from a failed one.
+                    throw e;
                 }
             }
 
@@ -1068,7 +1072,23 @@
         // Queue — SSE push with manual refresh fallback
         const queue = new QueuePoller();
 
-        queue.refresh();  // full fetch on load
+        // The backlog arrives here and only here: the SSE stream below carries
+        // CHANGES, so anything the rover did before this page opened is only
+        // ever seen through this fetch. One attempt was too few. If it failed -
+        // a rover blip, or the satellite still coming up behind it - the page
+        // sat empty until the rover next did something, which on an idle yard
+        // is a long time, and looked exactly like "the mission I just sent is
+        // missing".
+        (function loadBacklog(attempt) {
+            queue.refresh().catch(function () {
+                if (attempt < 5) setTimeout(function () { loadBacklog(attempt + 1); }, 1000 * attempt);
+            });
+        })(1);
+
+        // Belt and braces behind the stream. Cheap: /api/queue/status is a
+        // local call to the rover, and updateUI returns early when nothing has
+        // changed, so a quiet yard costs one request and no re-render.
+        setInterval(function () { queue.refresh(); }, 15000);
 
         const eventSource = new EventSource('/api/queue/events');
 

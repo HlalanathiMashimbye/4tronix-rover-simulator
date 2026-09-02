@@ -114,6 +114,17 @@ def is_ready(timeout=None):
         return False, f'readiness probe failed: {e}'
 
 
+def active_recordings():
+    """Mission ids currently being filmed at any yard.
+
+    For /api/status, so the run station can notice that the watcher stopped a
+    recording it started. Without it the page went on claiming to film after
+    the rover had finished and the file had been closed.
+    """
+    with _lock:
+        return sorted({mission_id for mission_id, _yard in _paths})
+
+
 def is_recording(mission_id, yard_id):
     """Whether frames are being persisted for this key right now.
 
