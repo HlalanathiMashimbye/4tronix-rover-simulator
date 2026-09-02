@@ -50,8 +50,11 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'filter-pending',
         title: 'Filter by status',
         instructions:
-          'The mission feed can be narrowed to just the missions still waiting to run. Click the "Pending" filter above the feed.',
-        hints: ['The filter chips sit just above the mission grid, next to "All missions".'],
+          'The mission feed can be narrowed to just the missions still waiting to run. On a phone, tap the labelled "Pending" chip above the feed. On a wider screen, the same filters live as small icons inside the search bar at the top of the page - hover one to see its name, and click the hourglass icon for Pending.',
+        hints: [
+          'On a phone: the filter chips sit just above the mission grid, next to "All missions".',
+          'On a wider screen: look inside the search field itself, at the top of the page - the icons overlaid on its right edge are the filters.',
+        ],
         checks: [{ kind: 'search-filter', filterKey: 'Pending' }],
       },
       {
