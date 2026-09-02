@@ -41,6 +41,22 @@ app uses. Worth following rather than inventing.
 5. The satellite stores that token in its config and uses it for every
    outbound call afterwards. Mission Control can revoke it.
 
+**Decided: a claim lasts the event, and a yard has one operator.**
+
+No inactivity timeout - an operator who spends an hour with one school group
+should not have to re-pair. The claim ends when they release it in Mission
+Control, when an admin revokes it, or at a backstop expiry so a yard nobody
+released does not stay claimed indefinitely.
+
+It survives a satellite reboot, because the token is on disk and the session
+is held by Mission Control. Power-cycling the Pi mid-event must not mean
+finding an operator to pair again.
+
+One operator per yard means a second claim on a claimed yard is refused rather
+than silently taking it over. That needs a way out for the obvious failure -
+the operator's laptop dies, or they go home still holding it - so an admin
+must be able to force-release a yard.
+
 The satellite never holds a Firebase credential, which is what we just spent a
 removal getting rid of. It holds one token, scoped to one yard, revocable.
 
@@ -76,74 +92,71 @@ being safe and being a remote-controlled robot:
 - Refusals travel back. A run Mission Control believes is running, and the
   yard refused, is worse than no automation.
 
-## 2a. Stopping, which is a different problem
+## 2a. Stopping
 
-Dispatch can tolerate a few seconds. A stop cannot, and treating them as one
-mechanism is how you end up with a rover you cannot halt. They are separated
-here deliberately.
+**Decided: there is no remote stop.** Mission Control can start a run at a
+yard. It cannot halt one.
 
-**The stop at the yard is the safety control.** It is a LAN call from the
-station to the rover, it is already immediate, it works with no internet, and
-nothing in this plan may weaken it. That is the stop that matters, pressed by
-the person who can actually see the rover.
+That is the stronger position, not the weaker one. There is exactly one stop,
+it is the button at the yard, it is a LAN call to the rover, it is immediate,
+and it works with no internet. Nobody has to reason about which stop is
+authoritative or what happens when the network takes one of them away. Plan
+2.3 is satisfied by the person standing next to the rover, which is who the
+claim in part 1 says is there.
 
-**The stop in Mission Control is a convenience, and must never be relied on as
-the safety one.** It travels over the internet to a box behind carrier NAT. If
-the venue wifi drops, it is gone - so a design that treats it as the real stop
-has, at the worst possible moment, no stop at all.
+This decision also simplifies part 2 considerably, and it is worth being
+explicit that it does, because the previous draft of this plan argued for a
+held-open outbound channel - a long poll or an SSE stream - purely to get a
+remote stop delivered in under a second. With no remote stop there is nothing
+left that is latency-critical:
 
-Making the remote one prompt is a channel question, and it decides the shape of
-part 2 as well:
+- Dispatch tolerates seconds. A mission arriving three seconds after Run was
+  pressed is indistinguishable from one arriving instantly.
+- So **a plain poll is enough.** No held connection, no stream, no reconnect
+  logic, no server holding requests open per yard.
 
-- A plain poll every few seconds gives a stop latency of up to that interval.
-  Too slow for a moving robot, and dropping the interval to a second to fix it
-  wastes a request every second of every day to carry nothing.
-- **A held-open outbound request - long poll, or SSE from Mission Control -
-  gives roughly network round-trip, typically well under a second.** It still
-  originates at the satellite, so NAT is still irrelevant, and it carries
-  dispatch and stop over the same connection. This repository already proxies
-  SSE from the rover to the monitor, so the pattern is not new here.
+A poll every few seconds, outbound, with the device token. That is the whole
+transport.
 
-So: one held-open outbound channel, carrying both. Not two mechanisms.
-
-**When the channel drops mid-run**, the satellite should keep the current run
-going and stop accepting new work. The rover is fine, the operator is standing
-next to it with the local stop, and halting a physical run because a network
-blipped is its own hazard. Reconnect, re-announce, carry on.
+**When the network drops mid-run** the satellite keeps the current run going
+and stops picking up new work. The rover is fine and the operator is standing
+next to it with the only stop that exists. Halting a physical run because a
+network blipped is its own hazard.
 
 ## 3. Getting the video up
 
-The best shape puts no credential on the Pi:
+**Decided: keep this abstract for now.** The loop is worth automating before
+the upload is, and the upload has a credential problem nobody has solved yet.
 
-- Mission Control creates a **YouTube resumable upload session** and hands the
-  satellite the session URI.
-- The satellite PUTs the file straight to that URI. No double transfer through
-  Mission Control, and no upload credential on a box in a science centre.
-- Mission Control knows the video id at creation time, so it can attach it to
-  the run itself.
+So part 3 is a seam rather than an implementation: once a recording is
+finished, the satellite hands it to a **handover step**. Today that step is
+what already exists - the operator picks the file on the run station, saves it
+and uploads it themselves, and Mission Control links it by the MissionID and
+Yard lines. Later, the same seam can upload directly without anything above it
+changing.
 
-The last point is the big one: **it retires the YouTube poll entirely.** That
-poll is roughly 79% of the current quota bill and grows with every completed
-mission, purely because nothing told the platform which video belonged to which
-run. If the platform starts the upload, it already knows.
+Designing the seam now costs nothing and keeps the decision open. Building the
+upload now means solving the credential problem first, and that problem is
+larger than it looks.
 
-Fallback if the session handoff turns out not to work as expected: the
-satellite POSTs the file to Mission Control and Mission Control uploads it.
-Costs a double transfer, keeps the credential in one place, still retires the
-poll.
-
-**Decided: prove the OAuth by hand before building any of this.**
-
-### The prerequisite nobody has yet
+### The prerequisite, when it is time
 
 Mission Control holds `YOUTUBE_API_KEY`, which is read-only and cannot upload.
 There is no OAuth client, no refresh token and no `videos.insert` plumbing
-anywhere in this repository - I checked both sides.
+anywhere in this repository - I checked both sides. **Nobody can upload
+anything today.**
 
-So **whoever uploads, somebody first has to set up a YouTube OAuth client and
-authorise the channel.** That is the single largest unknown in this plan and
-the thing most likely to be discovered late. It should be proved on its own,
-by hand, before any of part 3 is built.
+So whoever ends up uploading, somebody first has to set up a YouTube OAuth
+client and authorise the channel, and that should be proved by hand on its own
+before any code depends on it.
+
+When it is built, the shape worth aiming at is Mission Control minting a
+resumable upload session and handing the satellite the session URI, so the
+bytes go straight up without a credential ever landing on the Pi. The prize is
+not the automation itself: Mission Control would know the video id at upload
+time, which **retires the YouTube poll entirely** - currently around 79% of the
+quota bill, and growing with every completed mission, purely because nothing
+tells the platform which video belongs to which run.
 
 (Also outstanding from earlier: the `YOUTUBE_CLIENT_SECRET` and
 `OPERATOR_SESSION_SECRET` printed in a session transcript still need rotating.)
@@ -160,19 +173,18 @@ by hand, before any of part 3 is built.
 1. Claim and device token. Nothing else can be attributed to a yard without it.
 2. Outbound status reporting, with the on-disk queue for offline. Prove the
    channel with information that does not move a rover.
-3. The held-open channel, carrying stop first and dispatch second. Stop is the
-   one with the latency requirement, so build it against that requirement
-   rather than discovering it afterwards.
-4. Pull and dispatch, behind the claim and the readiness gate.
-5. Upload - only after the OAuth prerequisite has been proved by hand.
+3. Pull and dispatch, behind the claim and the readiness gate. A plain poll,
+   because with no remote stop nothing here is latency-critical.
+4. The handover seam, with the manual step behind it. Automating the upload
+   later then changes one implementation and nothing above it.
 
 Each step is useful on its own, and each one leaves the manual loop intact if
 the next never gets built.
 
-## Open questions
+## Still open
 
-- How long does a claim last, and does it survive a satellite reboot mid-event?
-- Should a remote stop also end the recording, as the local one does?
-- Does one operator claim one yard, or can a yard be claimed by a team?
-- Do we want Mission Control to be able to queue a run at an unclaimed yard and
-  have it wait, or should it refuse until somebody is there?
+- Does Mission Control refuse to queue a run at an unclaimed yard, or let it
+  wait until somebody claims it? Refusing is more predictable; waiting is more
+  convenient for prep before a school group arrives.
+- What is the backstop expiry on a claim nobody released - end of day, or a
+  fixed number of hours?
