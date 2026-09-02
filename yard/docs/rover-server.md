@@ -73,7 +73,18 @@ Follow the [4tronix Pi Setup Guide](https://4tronix.co.uk/blog/?p=2409) for full
 
 ### 1. Image the SD Card
 
-Use **Raspberry Pi OS (Legacy, 32-bit) Bullseye, dated 22 October 2024**.
+**Bookworm 32-bit is validated and is what the yard runs.** Measured on a Pi
+Zero W Rev 1.1, kernel 6.12: the 4tronix library initialises, the PCA9685
+answers at `0x40`, and `rpi_ws281x` drives the LEDs. Enable I2C and SPI after
+flashing - they are off by default, and without them the rover boots, joins
+wifi and cannot move. See [bring-up.md](bring-up.md).
+
+**Do not use "Raspberry Pi OS (32-bit)"**, the app's default. It currently
+gives Trixie, which has no PWM chips, no `/dev/i2c-1` and no SPI on this board.
+
+**Bullseye Legacy 32-bit, dated 22 October 2024**, remains the fallback. It is
+the configuration with the longest history, and worth reaching for if anything
+hardware-side misbehaves.
 
 > **Note:** Raspberry Pi Imager no longer lists Bullseye. Download the image directly and use **"Use custom"** in the imager.
 

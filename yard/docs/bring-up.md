@@ -45,13 +45,34 @@ That is the whole of it.
 Do it in the app rather than by hand and the next paragraph stops being your
 problem.
 
-**Why it matters.** The two Pis do not use the same wifi mechanism. The rover
-is pinned to Bullseye Legacy - `rpi_ws281x` and 4tronix's `rover.py` are only
-tested there - which takes `wpa_supplicant.conf` on the `bootfs` partition. A
-Bookworm satellite **ignores that file completely** and uses NetworkManager.
-Write the wrong one and you get a Pi that boots, joins nothing, and says
-nothing about the file you wrote. Imager knows which image it just wrote, so
-it picks correctly and the question never comes up.
+**Why it matters.** The two Pis do not use the same wifi mechanism. An older
+image takes `wpa_supplicant.conf` on the `bootfs` partition; a Bookworm or
+Trixie one **ignores that file completely** and uses NetworkManager. Write the
+wrong one and you get a Pi that boots, joins nothing, and says nothing about
+the file you wrote. Imager knows which image it just wrote, so it picks
+correctly and the question never comes up.
+
+### Which image for the rover
+
+**Not "Raspberry Pi OS (32-bit)".** That is the default in the app and it
+currently gives you Trixie, on which the rover cannot move: no PWM chips at
+all, no `/dev/i2c-1`, no SPI. Two flashes were lost to this - the default
+option is the wrong one, and nothing on the flashing screen says so.
+
+**Bookworm works.** Measured on a Pi Zero W Rev 1.1, kernel 6.12: the 4tronix
+library imports and initialises, the PCA9685 answers at `0x40`, and
+`rpi_ws281x` drives the LEDs. The docs previously said Bullseye was required
+because `rpi_ws281x` and 4tronix's `rover.py` were only tested there. They are
+tested on Bookworm now.
+
+One rough edge to know about rather than fear: `rover.cleanup()` raises inside
+`RPi.GPIO`'s PWM destructor, because Bookworm's `RPi.GPIO` is a shim over
+`lgpio` and its `tx_pwm` gets `None`. Python ignores exceptions in `__del__`,
+so nothing breaks, but it fills the service log with tracebacks and can bury a
+real error.
+
+Bullseye Legacy 32-bit remains the fallback if anything hardware-side
+misbehaves. It is the configuration with the longest history.
 
 Two other things the app gets right that are easy to get wrong by hand: the
 password (`userconf.txt` is processed once on first boot, so a card that has
@@ -132,6 +153,94 @@ thing:
 
 Setting `YARD_ID` to the rover's hostname because they happen to match on one
 card is how the wrong yard ends up on a video.
+
+## Three things that each cost an afternoon
+
+All three were found bringing a real yard up. Each is invisible beforehand and
+obvious once seen, and none of them says what is actually wrong.
+
+### I2C and SPI are off by default
+
+**Symptom:** the rover boots, joins wifi, answers SSH, and cannot move. No
+servos, no LEDs.
+
+**Check:**
+```bash
+ssh mars@curiosity.local 'ls /dev/i2c-* /dev/spidev*'
+```
+You want `/dev/i2c-1` and `/dev/spidev0.0`. `/dev/i2c-2` alone is not enough -
+that is a different bus and the rover board is not on it.
+
+**Fix**, then reboot:
+```bash
+sudo raspi-config nonint do_i2c 0
+sudo raspi-config nonint do_spi 0
+sudo reboot
+```
+
+**Confirm the board is really there**, which `ls` cannot tell you:
+```bash
+sudo apt install -y i2c-tools && sudo i2cdetect -y 1
+```
+`40` is the PCA9685 that drives the servos, `70` its all-call address, `50` the
+HAT EEPROM. If `40` is missing, the problem is the ribbon or the board, not the
+software.
+
+### Wi-Fi power save makes the rover unreachable one way
+
+**Symptom:** the worst of the three, because everything looks fine from the
+rover. It reaches the satellite, browses the internet, holds an SSH session -
+but the satellite cannot reach *it*. The rover chip stays red on a yard where
+both machines are plainly on the network.
+
+**Tell:** ARP never resolves in that direction.
+```bash
+ssh mars@mro.local 'ping -c2 curiosity.local; ip neigh | grep 192.168'
+```
+`INCOMPLETE` against the rover's address is the fingerprint. A Pi Zero W with
+power save on sleeps its radio and does not answer ARP, so the side that
+transmits first can always reach the other and never the reverse. Signal
+strength is irrelevant - this was measured at -28 dBm, which is as good as it
+gets.
+
+**Fix**, and make it survive a reboot:
+```bash
+sudo iw dev wlan0 set power_save off
+printf '[connection]\nwifi.powersave = 2\n' | \
+  sudo tee /etc/NetworkManager/conf.d/10-no-wifi-powersave.conf
+```
+
+### The rover service owns the GPIO
+
+**Symptom:** any 4tronix test script fails with something that reads like a
+library incompatibility:
+```
+lgpio.error: 'GPIO not allocated'
+```
+
+It is not. `rover-server` runs as root and holds those lines, and only one
+process can. The message says nothing about a conflict, which is why this
+looks like a Bookworm problem and is not.
+
+**Fix:** stop the service, and put it back afterwards even if you Ctrl-C out:
+```bash
+ssh -t mars@curiosity.local \
+  'sudo systemctl stop rover-server && cd ~/marsrover && sudo python3 motorTest.py; \
+   sudo systemctl start rover-server'
+```
+`-t` because it reads arrow keys and needs a terminal.
+
+**Better:** do not stop it at all. Driving through the platform is the thing
+worth testing anyway, and it exercises the recording and the watcher with it -
+paste the Python into `/run/` and press Send.
+
+### One more, on the satellite
+
+Do not run `pip install --upgrade pip` inside the virtualenv on these boxes. It
+left the venv with no pip at all, and the requirements install then silently
+never ran - imports kept working only because `--system-site-packages` was
+falling through to the system copies, so nothing looked wrong until something
+needed a package that was not there.
 
 ## When something does not work
 
