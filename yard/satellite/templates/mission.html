@@ -435,6 +435,20 @@
                 html += '</div></div>';
             }
 
+            // Download recording, when one was kept for this mission.
+            if (mission.recordingStatus === 'kept' && mission.yardId) {
+                const recFile = encodeURIComponent(mission.id + '__' + mission.yardId + '.mp4');
+                html += `<div class="card">
+                    <h3 class="h-card rail-h">${ICONS.video}Download recording</h3>
+                    <p style="color:var(--text-dim);font-size:var(--fs-xs);line-height:1.6;margin:0 0 0.7rem;">
+                        The recording is on this satellite. Download it to your device so you can upload it to YouTube.
+                    </p>
+                    <div class="actions">
+                        <a class="btn primary" href="/api/recordings/${recFile}" download style="text-align:center;text-decoration:none;">Download video</a>
+                    </div>
+                </div>`;
+            }
+
             // Video linking, only where it applies.
             if (mission.status === 'completed' && !mission.youtubeUrl) {
                 html += `<div class="card">

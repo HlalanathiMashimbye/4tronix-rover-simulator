@@ -75,8 +75,8 @@ INCREMENTAL_LIMIT = 100
 #   SYNC_INTERVAL=30,  SYNC_RECONCILE_EVERY=10  ->  ~10,000 reads/day
 #   SYNC_INTERVAL=60,  SYNC_RECONCILE_EVERY=10  ->  ~5,000 reads/day
 #   SYNC_INTERVAL=120, SYNC_RECONCILE_EVERY=5   ->  ~4,000 reads/day
-RECONCILE_EVERY = int(os.environ.get('SYNC_RECONCILE_EVERY', 10))
-DEFAULT_INTERVAL = int(os.environ.get('SYNC_INTERVAL', 30))
+RECONCILE_EVERY = int(os.environ.get('SYNC_RECONCILE_EVERY') or 10)
+DEFAULT_INTERVAL = int(os.environ.get('SYNC_INTERVAL') or 30)
 _CYCLE_KEY = 'sync_cycle_count'
 
 # Bounds for the operator-facing setting. The floor is not arbitrary: at 10s a

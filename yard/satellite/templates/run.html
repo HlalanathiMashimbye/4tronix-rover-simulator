@@ -17,16 +17,16 @@
         @keyframes recpulse { 50% { opacity: 0.35; } }
         @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
         .step { color: var(--text-faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-        .run-desk { height: calc(100dvh - 62px); max-width: none !important; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.8rem; overflow: hidden; }
-        .run-desk .page-title { margin-top: 0.2rem; font-size: 1.6rem; }
-        .run-desk .page-sub { margin-top: 0.1rem; font-size: 0.78rem; }
-        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); gap: 0.8rem; }
-        .desk-card { min-height: 0; display: flex; flex-direction: column; padding: 1rem; background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 75%, var(--surface)), var(--surface)); }
+        .run-desk { height: calc(100dvh - 62px); max-width: none !important; padding: 0.8rem 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; overflow: hidden; }
+        .run-desk .page-title { margin-top: 0.1rem; font-size: 1.5rem; }
+        .run-desk .page-sub { margin-top: 0.05rem; font-size: 0.78rem; }
+        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); gap: 0.7rem; }
+        .desk-card { min-height: 0; display: flex; flex-direction: column; padding: 0.8rem 1rem; background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 75%, var(--surface)), var(--surface)); }
         .desk-card.left { gap: 0.7rem; overflow: hidden; }
-        .desk-card.right { gap: 0.7rem; }
+        .desk-card.right { gap: 0.5rem; }
         .desk-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
         .desk-head .step { display: block; }
-        .desk-head strong { display: block; color: var(--text); font-size: 0.82rem; margin-top: 0.2rem; }
+        .desk-head strong { display: block; color: var(--text); font-size: 0.82rem; margin-top: 0.15rem; }
         .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
         .meta-field { min-width: 0; }
         .meta-field.full { grid-column: 1 / -1; }
@@ -48,26 +48,26 @@
         .code-hint { color: var(--text-faint); font-size: 0.68rem; text-align: right; }
         .run-desk .run-code { flex: 1; min-height: 0; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 0.8rem; }
         .run-desk .run-code::placeholder { color: var(--text-faint); }
-        .status-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
-        .status-box { display: flex; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
+        .status-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+        .status-box { display: flex; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.45rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
         .status-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--warn); }
         .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14); }
         .status-dot.bad { background: var(--bad); }
         .status-name { color: var(--text); font-size: 0.78rem; font-weight: 700; }
         .status-sub { color: var(--text-faint); display: block; font-size: 0.65rem; margin-top: 0.1rem; }
-        .warning-box { display: none; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in oklab, var(--warn) 9%, transparent); color: var(--warn); font-size: 0.7rem; font-weight: 600; }
+        .warning-box { display: none; padding: 0.4rem 0.7rem; border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in oklab, var(--warn) 9%, transparent); color: var(--warn); font-size: 0.7rem; font-weight: 600; }
         .warning-box.show { display: block; }
         .action-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.6rem; }
-        .action-row .btn { min-height: 52px; font-size: 0.95rem; font-weight: 700; }
+        .action-row .btn { min-height: 42px; font-size: 0.88rem; font-weight: 700; }
         .action-row .run-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
         .action-row .stop-action { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); }
         /* Stretches to the bottom of the column so the station does not end in
            a block of dead space, and the video picker gets the wider half:
            a recording filename is long and it is the thing being chosen. */
-        .handoff-grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.7rem; min-height: 0; }
+        .handoff-grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.5rem; min-height: 0; }
         .handoff-card { min-width: 0; display: flex; flex-direction: column; }
         .handoff-card .yt-box { flex: 1; }
-        .video-controls { display: flex; gap: 0.45rem; align-items: center; margin-top: 0.55rem; }
+        .video-controls { display: flex; gap: 0.45rem; align-items: center; margin-top: 0.4rem; }
         .video-controls select { min-width: 0; flex: 1; min-height: 36px; }
         .run-desk .yt-box { min-height: 70px; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
         .run-desk .sync-field { margin-bottom: 0.45rem; }
@@ -111,13 +111,13 @@
                     </div>
                     <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
                     <div class="action-row"><button class="btn run-primary" id="runBtn" type="button">Send to rover</button><button class="btn stop-action" id="stopBtn" type="button">Stop rover</button></div>
-                    <div class="row" style="margin-top:0.55rem;"><button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button><span class="camera-msg" id="runMsg" style="margin-top:0;"></span></div>
+                    <div class="row" style="margin-top:0.35rem;"><button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button><span class="camera-msg" id="runMsg" style="margin-top:0;"></span></div>
                 </section>
 
                 <div class="handoff-grid">
                     <section class="card handoff-card">
                         <div class="desk-head"><div><span class="step">Step 3 / Take the video</span><strong>Saved recording</strong></div></div>
-                        <p class="sync-hint" style="margin-top:0.45rem;">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</p>
+                        <p class="sync-hint" style="margin-top:0.3rem;">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</p>
                         <div class="video-controls">
                             <select id="videoPick" aria-label="Saved recording"><option value="">Loading...</option></select>
                             <button class="btn primary" id="videoGet" type="button" disabled>Download</button>

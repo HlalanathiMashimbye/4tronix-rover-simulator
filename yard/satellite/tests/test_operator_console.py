@@ -1366,6 +1366,42 @@ def test_recording_status_appears_in_the_mission_api_contract(client, missions):
     assert 'recordingPath' not in mission, 'server-internal, not operator-facing'
 
 
+def test_completed_mission_with_kept_recording_can_be_downloaded(client, missions, tmp_path, monkeypatch):
+    """The mission page builds the download URL from mission.id and
+    mission.yardId as '{id}__{yardId}.mp4'. This test proves the full chain:
+    a kept recording is reachable at that constructed path."""
+    sign_in(client)
+
+    monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path / 'recordings'))
+    os.makedirs(tmp_path / 'recordings', exist_ok=True)
+    (tmp_path / 'recordings' / f'c1__{YARD}.mp4').write_bytes(b'fake-video-data')
+
+    mission_store.set_run_recording_state('c1', YARD, 'kept',
+                                          path=str(tmp_path / 'recordings' / f'c1__{YARD}.mp4'))
+
+    api = client.get('/operator/api/missions/c1')
+    mission = api.get_json()['mission']
+    assert mission['recordingStatus'] == 'kept'
+    assert mission['yardId'] == YARD
+
+    download_name = f'{mission["id"]}__{mission["yardId"]}.mp4'
+    resp = client.get(f'/api/recordings/{download_name}')
+
+    assert resp.status_code == 200
+    assert resp.data == b'fake-video-data'
+    assert 'attachment' in resp.headers['Content-Disposition']
+
+
+def test_download_card_not_offered_when_no_recording_was_kept(client, missions):
+    """A completed mission whose recording was discarded or never started
+    should not suggest a download — the file does not exist."""
+    sign_in(client)
+
+    mission = client.get('/operator/api/missions/c1').get_json()['mission']
+
+    assert mission['recordingStatus'] == 'none'
+
+
 def test_review_endpoints_require_an_operator(client, missions):
     assert client.get('/operator/api/missions/needs-review').status_code == 401
     assert client.post('/operator/api/missions/p1/resolve',
