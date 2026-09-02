@@ -88,9 +88,12 @@ app = Flask(__name__)
 
 # Operator console sessions. A stable secret keeps operators signed in across
 # restarts; without one, sessions just reset on restart (re-login).
-# No login remains, so nothing is kept in a session. Flask still wants a key
-# for flash() and anything else that touches the session object.
-app.secret_key = os.environ.get('OPERATOR_SESSION_SECRET') or os.urandom(32)
+# Nothing on this server touches the Flask session any more - the operator
+# login that used it is gone - so there is nothing to keep across a restart and
+# no reason to configure a secret. A per-process random key keeps flash() and
+# anything else that reaches for `session` working without asking a deployment
+# to hold a secret it has no use for. OPERATOR_SESSION_SECRET is retired.
+app.secret_key = os.urandom(32)
 
 # Rover server URL — a value saved from the /status page wins over the
 # environment default, so field edits survive a systemd restart

@@ -132,54 +132,64 @@ In spy mode:
 7. Click Stop mid-execution
 8. Verify immediate stop and queue clear
 
-### Satellite: Mission Recording (camera readiness, STOP, review flow)
+### Satellite: recording a run
 
-Covers BACKLOG 334/335/336/338 - the camera readiness check before dispatch,
-recording tied to a run's lifecycle, and the guarantee that a stopped or
-rover-rejected run never looks like a successful one.
+Covers the camera readiness check before a run, and the recording tied to that
+run's lifecycle.
+
+This section used to walk through the operator console's review flow by seeding
+the Firestore mirror directly. Both are gone - see
+[what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md) - so the
+walkthrough is now the thing an operator actually does.
 
 **Automated tests** (no camera or browser needed):
 ```bash
 cd yard/satellite
 pip install -r requirements.txt -r requirements-test.txt
-pytest tests/test_recording_control.py tests/test_operator_console.py tests/test_mission_watcher.py tests/test_mission_store.py -v
+pytest tests -v
 ```
 `test_recording_control.py` fakes the camera's WebSocket frame broadcast
-entirely, so it exercises the real encode/write/delete code paths without
-any hardware. It's skipped automatically (see `conftest.py`) if
-`opencv-python` isn't installed.
+entirely, so it exercises the real encode/write/delete paths without hardware.
+It is skipped automatically (see `conftest.py`) if `opencv-python` is absent.
 
-**Manual walkthrough**, useful for seeing the operator-console UI actually
-react (badge, toasts, review card). Needs `npm run dev:yard` and
-`npm run dev:satellite` running, with the satellite's Settings page pointed
-at `http://localhost:8523` (its default `ROVER_URL` points at a real Pi
-hostname, `marspi.local`, which won't resolve locally).
+**Manual walkthrough.** Needs `npm run dev:yard` and `npm run dev:satellite`,
+with the satellite's Settings page pointed at `http://localhost:8523` - its
+default `ROVER_URL` is a real Pi hostname, `marspi.local`, which will not
+resolve locally.
 
-If this machine has no working camera, "Send to rover" will always be
-refused by the readiness check - which is itself worth seeing once, but it
-also means a mission can never reach `processing` through the UI. Seed one
-directly instead, always with a fresh mission id (reusing one leaves
-`local_dirty=1`/an existing run row behind from the previous test, which
-silently blocks the next reset):
+With no working camera, Send to rover is refused by the readiness check. That
+is worth seeing once on purpose: it is the guard that stops a run producing no
+video.
+
+With a camera running:
+
+1. Open `/run/`. Both readiness lamps should be green.
+2. Put a mission id in, paste some Python, press **Send to rover**. Recording
+   starts first, the rover moves about a second later.
+3. Watch `/api/status` - `recording.active` lists what is filming.
+4. When the rover reports the run finished, `mission_watcher` releases the
+   camera on its next pass (10s). The page notices on its next status poll:
+   the button returns to Start recording and the file appears in step 2.
+5. Check the file closed properly, which is what makes it playable:
+   ```bash
+   python3 -c "d=open('recordings/<mission>__<yard>.mp4','rb').read(); print(len(d), b'moov' in d)"
+   ```
+   A file with no `moov` atom was never closed - that is the failure the
+   watcher exists to prevent.
+
+To exercise the watcher without a rover doing anything interesting, dispatch a
+mission id straight at the rover queue and watch the recording stop:
 
 ```bash
-cd yard/satellite
-mkdir -p recordings && echo "pretend video bytes" > recordings/test-3__curiosity.mp4
-python3 - <<'EOF'
-import mission_store
-mission_store.upsert_missions([{"id": "test-3", "yardId": "curiosity", "status": "processing", "submittedAt": "2026-08-29T08:00:00Z"}], "2026-08-29T08:00:00Z")
-mission_store.backfill_missions_to_runs()
-mission_store.set_run_recording_state("test-3", "curiosity", "recording", path="recordings/test-3__curiosity.mp4", started_at="2026-08-29T09:00:00Z")
-EOF
+curl -s -X POST localhost:3001/api/recording/start \
+  -H 'Content-Type: application/json' -d '{"name":"test-3"}'
+curl -s -X POST localhost:3001/api/queue/add -H 'Content-Type: application/json' \
+  -d '[{"cmd":"run_python","params":{"code":"rover.forward(50)\ntime.sleep(0.5)\nrover.stop()","mission_id":"test-3"}}]'
 ```
 
-1. Check the starting state: `python3 -c "import mission_store; print(mission_store.get_run('test-3', 'curiosity'))"` - expect `status: processing`, `recording_status: recording`.
-2. Open `/operator/mission/test-3` - confirm the **Recording** badge shows next to the status pill.
-3. Click **STOP**.
-4. Re-run the same `get_run` check - expect `status: cancelled`, `recording_status: discarded`, `recording_stopped_at` now populated.
-5. Confirm the file itself is gone: `test -f recordings/test-3__curiosity.mp4 && echo still there || echo deleted`.
-
-The same seeding approach (`mission_store.flag_for_review('<id>', '<reason>')` on a `processing` run) exercises the "needs review" card and its three outcomes - Mark complete keeps the recording, Put back in queue and Cancel both discard it.
+`mission_id` is the part that matters: the rover echoes it back on its history
+entry, and that is how the watcher knows which recording to close. Without it
+nothing stops.
 
 ## Fake Driver
 
