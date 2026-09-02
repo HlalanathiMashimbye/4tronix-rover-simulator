@@ -59,6 +59,7 @@ from store.meta import (  # noqa: F401
 from store.missions import (  # noqa: F401
     upsert_missions,
     get_missions,
+    last_synced_at,
     status_counts,
     completed_without_video,
     get_mission,

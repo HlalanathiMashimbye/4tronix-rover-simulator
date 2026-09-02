@@ -68,9 +68,53 @@
      here to share an actual token across the two servers, so keep them in sync
      by hand if that value ever moves. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+
+  /* ---- Type scale -------------------------------------------------------
+     The console had three sizes between 0.65 and 0.9rem and nothing above,
+     so a page title, a section heading, a field label and a hint all landed
+     within 4px of each other and hierarchy had to come from colour alone.
+     Weight and size do that work now. */
+  --fs-2xs: 0.66rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.6rem;
+  --fs-2xl: 2.1rem;
+
+  /* ---- Elevation --------------------------------------------------------
+     Two steps, not a shadow per component. Cards sat inside cards inside
+     cards, every one with the same border and radius, so nesting read as
+     noise instead of structure. */
+  --e1: 0 1px 2px rgb(0 0 0 / 0.35);
+  --e2: 0 12px 32px -18px rgb(0 0 0 / 0.75);
+
+  /* ---- Action, kept away from status ------------------------------------
+     --primary is Mars orange, and it was doing three jobs: brand, every
+     primary button, and sitting immediately beside amber warnings. Orange and
+     amber are neighbours, so a warning strip and a call to action read as the
+     same thing and neither won.
+
+     Actions move to the teal that was already in the palette and barely used.
+     Orange stays where it belongs, on brand chrome. That leaves green, amber
+     and red to mean status and only status. */
+  --signal: var(--accent);
+  --signal-ink: oklch(0.16 0.04 270);
+  --signal-weak: color-mix(in oklab, var(--accent) 16%, transparent);
+  --signal-edge: color-mix(in oklab, var(--accent) 42%, transparent);
+
+  /* Status, as surfaces rather than bare text colours. */
+  --ok-weak: color-mix(in oklab, #34d399 14%, transparent);
+  --warn-weak: color-mix(in oklab, #fbbf24 14%, transparent);
+  --bad-weak: color-mix(in oklab, #f87171 14%, transparent);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* The `hidden` attribute has to actually hide.
+   Every component here sets an explicit display (.btn is inline-flex, cards
+   are flex), and any of those beats the UA stylesheet's [hidden]{display:none}
+   on specificity. So el.hidden = true set the attribute, changed nothing on
+   screen, and the Start camera button sat there on a primed camera. */
+[hidden] { display: none !important; }
 
 body {
   font-family: var(--font-sans);

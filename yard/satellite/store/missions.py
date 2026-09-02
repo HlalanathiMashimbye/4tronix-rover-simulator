@@ -126,6 +126,21 @@ def get_missions(limit=DEFAULT_FINISHED_PAGE, yard_id=None):
     return missions, last_synced, finished_total
 
 
+def last_synced_at():
+    """When the mirror last agreed with Firestore, without reading missions.
+
+    get_missions() returns this alongside a page of rows, which is fine for the
+    queue but wrong for a diagnostics panel: the Settings page only wants the
+    timestamp, and going through the mission list to get it made a status card
+    depend on an operator-only endpoint.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT value FROM sync_meta WHERE key = 'last_synced_at'"
+        ).fetchone()
+    return row[0] if row else None
+
+
 def status_counts(yard_id=None):
     """How many live missions sit in each status, for the queue's filters.
 

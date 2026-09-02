@@ -81,8 +81,14 @@ def api_resolve_review(mission_id):
 
 
 @operator_bp.route('/api/conflicts', methods=['GET'])
-@require_operator
 def api_conflicts():
     """Merges where the losing side was already terminal, so the team can see
-    that reconciliation made a real decision rather than silently picking."""
+    that reconciliation made a real decision rather than silently picking.
+
+    Ungated, which is what the sentence above needs to be true. Settings polls
+    this and the panel hides itself when the list is empty, so behind a login
+    the record was invisible on exactly the yard that cannot log in - the
+    silent picking this exists to prevent. It also meant a login-free page
+    polling a gated endpoint, which filled the browser console with 401s.
+    """
     return jsonify({'conflicts': get_conflicts()})

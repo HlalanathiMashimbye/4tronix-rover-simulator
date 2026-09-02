@@ -1367,10 +1367,23 @@ def test_recording_status_appears_in_the_mission_api_contract(client, missions):
 
 
 def test_review_endpoints_require_an_operator(client, missions):
+    """Reviewing is operator work: seeing the queue of missions awaiting a
+    decision, and making that decision. Both stay gated."""
     assert client.get('/operator/api/missions/needs-review').status_code == 401
     assert client.post('/operator/api/missions/p1/resolve',
                        json={'outcome': 'completed'}).status_code == 401
-    assert client.get('/operator/api/conflicts').status_code == 401
+
+
+def test_the_conflict_log_is_readable_without_an_operator(client, missions):
+    """This asserted 401 with the two above, and it does not belong with them.
+
+    It is a read-only record of merges where reconciliation had to pick a
+    winner, and it exists so that decision is visible to the team rather than
+    silently made. Behind a login it was invisible on the yard that cannot log
+    in, which is the silent picking it was added to prevent. Settings polls it
+    on every load, so the gate also filled the browser console with 401s.
+    """
+    assert client.get('/operator/api/conflicts').status_code == 200
 
 
 # ---------------------------------------------------------------------------
@@ -1473,8 +1486,12 @@ def test_camera_status_reports_unreachable_with_a_hint(client, missions, monkeyp
 
 
 def test_new_surfaces_require_an_operator(client, missions):
+    # /api/integrations was here and is not any more. It only ever returned
+    # booleans and a diagnostic sentence - the docstring's promise is "which
+    # integrations are configured, never their values" - and gating it left
+    # Settings showing "Sign in to see setup status" on a page where nothing
+    # else asks for one.
     assert client.post('/operator/api/missions/q1/cancel').status_code == 401
-    assert client.get('/operator/api/integrations').status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -1828,12 +1845,33 @@ def test_tunables_endpoint_refuses_unknown_keys(client, missions):
     assert 'Unknown setting' in resp.get_json()['error']
 
 
-def test_tunables_endpoint_requires_an_operator(client, missions):
-    """Shortening the session lifetime is a control action, like repointing
-    the rover: anyone on the venue network could otherwise do it."""
-    resp = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 300})
+def test_tunables_are_readable_and_writable_without_a_login(client, missions):
+    """This used to assert 401.
 
-    assert resp.status_code in (302, 401, 403)
+    The gate was doing visible harm rather than the invisible good it was for:
+    Settings reads this on load, so a signed-out console rendered every tunable
+    as an empty box with nothing saying why. Half the page looked broken.
+
+    Same call as the rover URL and camera control. These are field-tuning knobs
+    on a LAN-only box that has to work with no internet, and require_operator
+    means a Firebase sign-in.
+    """
+    read = client.get('/operator/api/config/tunables')
+
+    assert read.status_code == 200
+    assert read.get_json()['values'], 'the page needs values to render'
+
+    written = client.post('/operator/api/config/tunables', json={'sessionMaxAge': 3600})
+
+    assert written.status_code == 200
+
+
+def test_tunables_still_refuse_a_setting_they_do_not_know(client, missions):
+    """Dropping the login did not drop the validation, which is what actually
+    stops this endpoint being written with nonsense."""
+    resp = client.post('/operator/api/config/tunables', json={'notASetting': 1})
+
+    assert resp.status_code == 400
 
 
 def test_integrations_report_mission_control_unconfigured_when_url_is_unset(

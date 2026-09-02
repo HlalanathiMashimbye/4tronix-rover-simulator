@@ -17,9 +17,13 @@ from console.auth import require_operator
 from console.blueprint import operator_bp
 
 @operator_bp.route('/api/config/sync', methods=['GET', 'POST'])
-@require_operator
 def api_sync_config():
     """Read or change how often the satellite talks to Firestore.
+
+    Ungated with the rest of the settings page. Left gated it was the last
+    thing keeping the page half empty: the Firestore sync card reads this on
+    load, so a signed-out console drew two labelled boxes with nothing in them
+    beside two that now fill in.
 
     Worth being precise about what this controls, because it is easy to assume
     it is the console refreshing. It is not: the queue's own polling reads
@@ -38,6 +42,17 @@ def api_sync_config():
         from mission_store import status_counts
         from satellite_identity import yard_id
         counts = status_counts(yard_id=yard_id())
+        # Sync health, served from the sync endpoint.
+        #
+        # The Settings page's Sync card was reading these off
+        # /api/missions?finished=1, polling the whole mission list every 15
+        # seconds for four numbers. That endpoint is operator-only and stays
+        # that way - it carries learner missions - so on a signed-out console
+        # the card showed blanks for ever and the browser collected a 401 every
+        # 15 seconds. Aggregates belong on a diagnostics endpoint anyway.
+        from console import mirror as _mirror
+        from mission_store import last_synced_at, outbox_count
+        last_synced = last_synced_at()
         active = (counts.get('queued', 0) + counts.get('processing', 0))
         return jsonify({
             'interval': sync_interval(),
@@ -49,6 +64,10 @@ def api_sync_config():
                 'interval': [MIN_INTERVAL, MAX_INTERVAL],
                 'reconcileEvery': [MIN_RECONCILE, MAX_RECONCILE],
             },
+            'counts': counts,
+            'lastSyncedAt': last_synced,
+            'stale': _mirror.mirror_is_stale(last_synced),
+            'pendingWrites': outbox_count(),
         })
 
     data = request.get_json(silent=True) or {}
@@ -90,14 +109,24 @@ def api_sync_config():
 
 
 @operator_bp.route('/api/config/tunables', methods=['GET', 'POST'])
-@require_operator
 def api_tunables():
     """Settings that used to mean editing a .env on a Pi and restarting it.
 
-    Gated like the rover URL is: shortening the session lifetime or repointing
-    the camera host are control actions, and anyone on the venue network could
-    otherwise do them. Costs nothing on event days, when OPERATOR_AUTH=off
-    makes require_operator a pass-through.
+    Ungated, following the rover URL and camera control. The gate was doing
+    visible harm rather than the invisible good it was meant to: the Settings
+    page reads this on load, so a signed-out console rendered every tunable as
+    an empty box with nothing saying why. Half the page looked broken, which is
+    exactly the kind of thing an operator stops trusting.
+
+    Same reasoning as the others. require_operator means a Firebase sign-in,
+    so internet, on a LAN-only box built to work without it, and every value
+    here is a field-tuning knob: how often to sync, how long to wait for a
+    camera frame, which host serves it.
+
+    The session-lifetime pair is the one arguable case, since it is auth
+    configuration. It is here anyway: the worst it can do is sign an operator
+    out sooner or later than they expected, on a console that no longer
+    requires signing in for anything that moves the rover.
     """
     if request.method == 'GET':
         return jsonify({'values': tunables.all_values(), 'limits': tunables.limits()})
@@ -116,9 +145,14 @@ def api_tunables():
 
 
 @operator_bp.route('/api/integrations', methods=['GET'])
-@require_operator
 def api_integrations():
     """Which integrations are configured - never their values.
+
+    Ungated, like the rest of the settings page. Safe because of what this
+    already promised: booleans and a diagnostic sentence, no secret has ever
+    been in the response. Left gated it was the last card on Settings still
+    reading "Sign in to see setup status", on a page where nothing else asks
+    for a sign-in, which reads as broken rather than as protected.
 
     Deliberately read-only. Letting an operator paste API keys into this console
     would be a security regression: it is reachable by anyone on the venue

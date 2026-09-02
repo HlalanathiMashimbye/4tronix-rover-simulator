@@ -10,18 +10,51 @@
            the shared console layer in yard-base.css, so this page cannot drift
            away from the queue and mission pages the way it had. */
 
-        /* Three columns so the whole page fits one screen. It was a single
-           narrow column of tall cards that ran well past the fold. */
+        /* Health across the top, then two columns of settings.
+
+           It was three equal columns, and the leftmost held the Satellite,
+           Rover and Camera cards stacked vertically. That put the three facts
+           an operator opens this page to check into a narrow strip down one
+           side, gave them a third of the width they never needed, and left the
+           bottom half of that column empty while the middle column scrolled.
+
+           Health is status: it goes across the top where it is read in one
+           glance, the same shape the run station uses, so the two pages teach
+           each other. What is left below is genuinely two things - values you
+           tune, and operations you perform. */
+        .health-strip {
+            flex: 0 0 auto;
+            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.7rem;
+        }
         .settings-grid {
             flex: 1 1 auto; min-height: 0;
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
             gap: 0.85rem;
         }
         .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; }
-        .settings-col.scrolls { overflow-y: auto; padding-right: 2px; }
+        .settings-col.scrolls { overflow-y: auto; padding-right: 4px; }
+        /* A column that scrolls should say so quietly, not with the platform's
+           default slab of grey down the middle of the page. */
+        .settings-col.scrolls { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+        .settings-col.scrolls::-webkit-scrollbar { width: 8px; }
+        .settings-col.scrolls::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+        .settings-col.scrolls::-webkit-scrollbar-track { background: transparent; }
+
+        /* Status tiles carry their state on the tile, not only in a 30px icon,
+           matching the run station's readiness strip. */
+        .health-strip .stat-card { border-left: 3px solid var(--text-faint); box-shadow: var(--e1); }
+        .health-strip .stat-card[data-state="ok"]   { border-left-color: var(--ok);   background: var(--ok-weak); }
+        .health-strip .stat-card[data-state="warn"] { border-left-color: var(--warn); background: var(--warn-weak); }
+        .health-strip .stat-card[data-state="bad"]  { border-left-color: var(--bad);  background: var(--bad-weak); }
 
         .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+        /* The page title, three card headings and a field label all sat within
+           4px of each other, so nothing announced itself and the eye had no
+           entry point. Size and weight do that work now. */
+        .shell .h-page { font-size: var(--fs-xl); line-height: 1.1; letter-spacing: -0.015em; }
+        .rover-url code { font-family: var(--mono); font-size: var(--fs-xs); }
         .card-head-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.7rem; }
         .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
         .rover-url code { color: var(--text); }
@@ -31,6 +64,16 @@
         .url-editor[hidden] { display: none; }
         .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
         .url-error { color: var(--bad); font-size: var(--fs-sm); }
+        /* One action colour across the console. Mars orange stays on brand
+           chrome (the nav, the wordmark); the thing you press is teal, here and
+           on the run station, so the two pages do not disagree about it. */
+        .shell .btn.primary {
+            background: var(--signal); border-color: var(--signal);
+            color: var(--signal-ink); font-weight: 700;
+        }
+        .shell .btn.primary:hover { filter: brightness(1.07); }
+        .shell .btn.primary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+        .link-btn { color: var(--signal); }
 
         /* Status card: one compact row, not a 90px block */
         .stat-card { display: flex; align-items: flex-start; gap: 0.7rem; }
@@ -124,10 +167,40 @@
 
 
         /* Below this the three columns become a keyhole; let it scroll. */
+        /* Below the two-column width the page becomes one column and scrolls.
+           body was released but .console.fixed-shell keeps its own 100dvh with
+           overflow:hidden, and .shell keeps flex:1 with min-height:0 - so the
+           stacked columns were still being squeezed into one screen's worth of
+           box and drew straight over each other. Every part of the clamp has
+           to come off together, not just the one on body. */
+
+        /* Same reason as the run station: this is operated from a tablet, and
+           the camera device box, the inline edit link and the info tips were
+           all well under the 44px a finger needs. */
+        @media (pointer: coarse) {
+            .shell .btn { min-height: 44px; }
+            .camera-index { min-height: 44px; }
+            .link-btn { min-height: 44px; padding: 0 0.5rem; }
+            .info-tip { min-width: 44px; min-height: 44px; }
+            .sync-input-row input { min-height: 44px; }
+        }
         @media (max-width: 1100px) {
             body { height: auto; overflow: auto; }
-            .settings-grid { grid-template-columns: 1fr; }
-            .settings-col.scrolls { overflow: visible; }
+            body.console.fixed-shell { height: auto; overflow: visible; }
+            .console .shell { flex: 0 0 auto; min-height: 0; height: auto; }
+            .settings-grid { grid-template-columns: 1fr; min-height: 0; }
+            .settings-col, .settings-col.scrolls { overflow: visible; min-height: 0; }
+        }
+
+        /* Three health tiles need about 240px each to hold a hostname and a
+           status word without wrapping mid-sentence. Below that they wrap
+           rather than shrink. */
+        @media (max-width: 1000px) {
+            .health-strip { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .health-strip { grid-template-columns: 1fr; }
+            .shell .h-page { font-size: var(--fs-lg); }
         }
     </style>
 </head>
@@ -147,8 +220,7 @@
             <span class="url-error" id="url-error"></span>
         </div>
 
-        <div class="settings-grid">
-            <div class="settings-col scrolls">
+        <div class="health-strip">
                 <div class="card stat-card" id="card-satellite">
                     <div class="stat-ic grey" id="badge-satellite"></div>
                     <div class="stat-body">
@@ -189,7 +261,9 @@
                         <div class="camera-msg" id="camera-msg" role="status" aria-live="polite"></div>
                     </div>
                 </div>
-            </div>
+        </div>
+
+        <div class="settings-grid">
 
             <div class="settings-col scrolls">
                 <div class="card" id="syncSection">
@@ -199,7 +273,7 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.6" r="0.6" fill="currentColor" stroke="none"/></svg>
                         </button>
                     </div>
-                    <div class="info-pop" id="tip-sync" role="note">The only satellite setting that spends Firestore's daily read quota &mdash; shared with everyone loading the public site. The queue's own refreshing reads local storage and costs nothing, however often it happens.</div>
+                    <div class="info-pop" id="tip-sync" role="note">The only satellite setting that spends Firestore's daily read quota, which is shared with everyone loading the public site. The queue's own refreshing reads local storage and costs nothing, however often it happens.</div>
 
                     <label class="sync-field">
                         <span class="sync-label">Sync every</span>
@@ -361,7 +435,7 @@
             } catch (e) { /* offline */ }
 
             const el = document.getElementById('setupList');
-            if (!rows.length) { el.innerHTML = '<div class="setup-row"><div class="setup-body"><div class="setup-why">Sign in to see setup status.</div></div></div>'; return; }
+            if (!rows.length) { el.innerHTML = '<div class="setup-row"><div class="setup-body"><div class="setup-why">Nothing to report.</div></div></div>'; return; }
 
             const broken = rows.filter(r => !r.configured);
             if (broken.length === 0) {
@@ -378,7 +452,7 @@
                 <div class="setup-row">
                     <span class="dot setup-dot off" role="img" aria-label="Not configured"></span>
                     <div class="setup-body">
-                        <div class="setup-name">${r.name} &mdash; not set up</div>
+                        <div class="setup-name">${r.name}: not set up</div>
                         <div class="setup-why">${r.why}</div>
                         <div class="setup-detail">${r.detail}</div>
                     </div>
@@ -647,13 +721,26 @@
             grey: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>',
         };
 
+        // green/amber/red are the icon's own vocabulary; the tile speaks in
+        // ok/warn/bad so the stripe and tint can be shared with the run
+        // station's readiness strip without either page learning the other's
+        // colour names.
+        const TILE_STATE = { green: 'ok', amber: 'warn', red: 'bad' };
+
         function setBadge(id, state) {
             const el = document.getElementById('badge-' + id);
             const lbl = document.getElementById('label-' + id);
+            const card = document.getElementById('card-' + id);
             el.className = 'stat-ic ' + state.colour;
             el.innerHTML = BADGE_ICONS[state.colour] || '';
             lbl.className = 'status-label ' + state.colour;
             lbl.textContent = state.text;
+            // A 30px icon was the only thing carrying health on a page whose
+            // whole first row is health. The tile carries it too now.
+            if (card) {
+                const tile = TILE_STATE[state.colour];
+                if (tile) { card.dataset.state = tile; } else { delete card.dataset.state; }
+            }
         }
 
         function setDetail(id, html) {
@@ -665,7 +752,7 @@
         }
 
         // Mast camera line for the rover card (the rover's own camera, used by
-        // the Take a Picture block — distinct from the satellite stream below)
+        // the Take a Picture block, distinct from the satellite stream below)
         function roverCam(r) {
             const cam = r.camera;
             if (!cam) return '';
@@ -676,10 +763,10 @@
 
         // Pure render step, split out from the fetch so a cached snapshot
         // (read on load, see below) can paint instantly through the exact
-        // same path a live poll uses — no separate "cached" rendering to
+        // same path a live poll uses, with no separate "cached" rendering to
         // keep in sync.
         function renderStatus(data) {
-            // Satellite — always green if this page loaded
+            // Satellite: always green if this page loaded
             setBadge('satellite', { colour: 'green', text: 'OK' });
             setDetail('satellite',
                 row('Hostname', data.satellite.hostname) +
@@ -742,7 +829,7 @@
             if (meta && meta.cached) {
                 const age = Math.round((Date.now() - meta.ts) / 1000);
                 document.getElementById('footer').textContent =
-                    'Showing cached status (' + age + 's old) — refreshing…';
+                    'Showing cached status (' + age + 's old), refreshing...';
             } else {
                 consecutiveFailures = 0;
                 document.getElementById('footer').textContent =
@@ -756,8 +843,8 @@
             // we're hammering the satellite every 5s regardless.
             consecutiveFailures++;
             document.getElementById('footer').textContent = consecutiveFailures > 1
-                ? 'Fetch failed (' + consecutiveFailures + ' in a row) — backing off, retrying…'
-                : 'Fetch failed — retrying…';
+                ? 'Fetch failed (' + consecutiveFailures + ' in a row), backing off and retrying...'
+                : 'Fetch failed, retrying...';
         });
 
         // Rover URL editor
@@ -826,7 +913,12 @@
         }
 
         function refreshSync() {
-            return fetch('/operator/api/missions?finished=1')
+            // The sync endpoint, not the mission list. This card wants four
+            // aggregate numbers; it was pulling a page of learner missions
+            // every 15 seconds to get them, off an operator-only route, so on
+            // a signed-out console it showed blanks for ever and collected a
+            // 401 every 15 seconds.
+            return fetch('/operator/api/config/sync')
                 .then(function (r) {
                     if (!r.ok) throw new Error('HTTP ' + r.status);
                     return r.json();
@@ -862,7 +954,7 @@
                 Object.keys(localStorage).forEach(function (k) {
                     if (k.indexOf('yardcache:') === 0) localStorage.removeItem(k);
                 });
-            } catch (e) { /* storage disabled — nothing to clear */ }
+            } catch (e) { /* storage disabled, nothing to clear */ }
             location.reload();
         });
 
@@ -898,7 +990,7 @@
                 if (data.persisted) {
                     urlEditor.hidden = true;
                 } else {
-                    urlError.textContent = 'Applied, but could not write config file — will reset on restart';
+                    urlError.textContent = 'Applied, but could not write the config file, so it resets on restart';
                 }
                 statusPoller.refreshNow().catch(() => {}); // jump the backoff queue after a config change instead of waiting out any backoff delay; failure is already surfaced via the footer banner
             } catch (e) {

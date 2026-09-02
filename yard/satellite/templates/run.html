@@ -6,130 +6,322 @@
     <title>Run · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
-        .run-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.4rem; align-items: start; }
-        @media (max-width: 860px) { .run-grid { grid-template-columns: 1fr; } }
-        .sync-field input[type=text] { width: 100%; min-height: 40px; }
-        .run-code { width: 100%; min-height: 190px; resize: vertical; font-family: var(--mono); font-size: 0.78rem; line-height: 1.5; }
-        .yt-box { width: 100%; min-height: 120px; resize: vertical; font-family: var(--mono); font-size: 0.74rem; line-height: 1.5; }
-        .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
-        .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
-        @keyframes recpulse { 50% { opacity: 0.35; } }
-        @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
-        .step { color: var(--text-faint); font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
-        .run-desk { height: calc(100dvh - 62px); max-width: none !important; padding: 1rem 1.5rem; display: flex; flex-direction: column; gap: 0.8rem; overflow: hidden; }
-        .run-desk .page-title { margin-top: 0.2rem; font-size: 1.6rem; }
-        .run-desk .page-sub { margin-top: 0.1rem; font-size: 0.78rem; }
-        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr); gap: 0.8rem; }
-        .desk-card { min-height: 0; display: flex; flex-direction: column; padding: 1rem; background: linear-gradient(180deg, color-mix(in oklab, var(--surface-2) 75%, var(--surface)), var(--surface)); }
-        .desk-card.left { gap: 0.7rem; overflow: hidden; }
-        .desk-card.right { gap: 0.7rem; }
-        .desk-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
-        .desk-head .step { display: block; }
-        .desk-head strong { display: block; color: var(--text); font-size: 0.82rem; margin-top: 0.2rem; }
-        .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        /* ------------------------------------------------------------------
+           The station is a sequence, so it is drawn as one.
+
+           It used to be four equally weighted cards in a Z: step 1 top left,
+           step 2 top right, steps 3 and 4 bottom right, every one with the same
+           border, radius and background. Nothing said which came first except
+           the words "Step N", and an operator mid-event does not read labels.
+
+           Now: readiness lives in the header because it gates everything and
+           has to be glanceable at all times; the mission and its code take the
+           left; and the work runs down a numbered spine on the right.
+           ------------------------------------------------------------------ */
+        .run-desk {
+            height: calc(100dvh - 62px);
+            max-width: none !important;
+            padding: 0.9rem 1.4rem 1.1rem;
+            display: flex; flex-direction: column; gap: 0.85rem;
+            overflow: hidden;
+        }
+
+        /* ---- Header: identity left, readiness right ---------------------- */
+        .desk-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.2rem; flex-wrap: wrap; }
+        .run-desk .page-title { margin-top: 0.15rem; font-size: var(--fs-xl); line-height: 1.1; letter-spacing: -0.015em; }
+        .run-desk .page-sub { margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--text-dim); max-width: 54ch; }
+
+        /* Readiness. Two states that decide whether anything below can work,
+           so they get real estate and a fix button, not a footnote. */
+        .ready-strip { display: flex; align-items: stretch; gap: 0.5rem; flex-wrap: wrap; }
+        .ready {
+            display: flex; align-items: center; gap: 0.6rem;
+            min-width: 218px; padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border); border-left: 3px solid var(--text-faint);
+            border-radius: 10px; background: var(--surface-2); box-shadow: var(--e1);
+        }
+        .ready[data-state="ok"]   { border-left-color: var(--ok);   background: var(--ok-weak); }
+        .ready[data-state="bad"]  { border-left-color: var(--bad);  background: var(--bad-weak); }
+        .ready[data-state="wait"] { border-left-color: var(--warn); background: var(--warn-weak); }
+        .ready-txt { min-width: 0; }
+        .status-name { display: block; color: var(--text); font-size: var(--fs-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+        .status-sub { display: block; color: var(--text-dim); font-size: var(--fs-2xs); margin-top: 0.1rem; }
+        .status-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--warn); }
+        .status-dot.ok  { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-weak); }
+        .status-dot.bad { background: var(--bad); }
+        .ready .btn { margin-left: auto; min-height: 28px !important; padding: 0.25rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
+
+        /* ---- Body -------------------------------------------------------- */
+        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr); gap: 0.9rem; }
+        .panel-card {
+            min-height: 0; display: flex; flex-direction: column; gap: 0.7rem;
+            padding: 0.9rem 1rem; border: 1px solid var(--border); border-radius: 14px;
+            background: var(--surface); box-shadow: var(--e2);
+        }
+        .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+        .card-title { color: var(--heading); font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; }
+        .card-note { color: var(--text-faint); font-size: var(--fs-2xs); }
+
+        /* ---- Mission identity -------------------------------------------- */
+        .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
         .meta-field { min-width: 0; }
         .meta-field.full { grid-column: 1 / -1; }
-        .meta-label { display: block; color: var(--text-faint); font-size: 0.64rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.3rem; }
-        .meta-row { display: flex; align-items: center; gap: 0.5rem; min-width: 0; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
-        .meta-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-size: 0.76rem; }
-        .meta-value.name { font-family: var(--font-sans); }
+        .meta-label { display: block; color: var(--text-faint); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 0.3rem; }
+        .meta-row {
+            display: flex; align-items: center; gap: 0.5rem; min-width: 0;
+            padding: 0.5rem 0.65rem; border: 1px solid var(--border);
+            border-radius: 9px; background: var(--bg-2);
+        }
+        /* Machine values in mono, prose in sans. Half of this page is data an
+           operator has to compare character by character against another
+           screen; the other half is instructions. They should not share a face. */
+        .meta-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+        .meta-value.name { font-family: var(--font-sans); font-size: var(--fs-sm); }
         /* Real inputs, not contenteditable spans: paste carries formatting into
            a contenteditable, there is no placeholder, and "empty" ends up being
            a string comparison against whatever prompt text was left in the DOM. */
         input.meta-value { border: 0; background: none; padding: 0; min-height: 0; border-radius: 0; }
         input.meta-value:focus { outline: none; }
         input.meta-value::placeholder { color: var(--text-faint); }
-        .meta-row:focus-within { border-color: color-mix(in oklab, var(--primary) 55%, var(--border)); }
-        .status-box { flex-wrap: wrap; }
-        .status-box .btn { min-height: 26px !important; padding: 0.2rem 0.5rem !important; font-size: 0.65rem !important; margin-left: auto; }
-        .copy-compact { min-height: 28px !important; padding: 0.25rem 0.55rem !important; font-size: 0.68rem !important; }
-        .code-head { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; }
-        .code-hint { color: var(--text-faint); font-size: 0.68rem; text-align: right; }
-        .run-desk .run-code { flex: 1; min-height: 0; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); border-radius: 9px; padding: 0.8rem; }
-        .run-desk .run-code::placeholder { color: var(--text-faint); }
-        .status-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
-        .status-box { display: flex; align-items: center; gap: 0.55rem; min-width: 0; padding: 0.65rem 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); }
-        .status-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--warn); }
-        .status-dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.14); }
-        .status-dot.bad { background: var(--bad); }
-        .status-name { color: var(--text); font-size: 0.78rem; font-weight: 700; }
-        .status-sub { color: var(--text-faint); display: block; font-size: 0.65rem; margin-top: 0.1rem; }
-        .warning-box { display: none; padding: 0.55rem 0.7rem; border: 1px solid color-mix(in oklab, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in oklab, var(--warn) 9%, transparent); color: var(--warn); font-size: 0.7rem; font-weight: 600; }
+        .meta-row:focus-within { border-color: var(--signal-edge); box-shadow: 0 0 0 3px var(--signal-weak); }
+        .copy-compact { min-height: 26px !important; padding: 0.2rem 0.5rem !important; font-size: var(--fs-2xs) !important; }
+
+        /* ---- The code ---------------------------------------------------- */
+        .code-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; }
+        .code-hint { color: var(--text-faint); font-size: var(--fs-2xs); text-align: right; }
+        .run-code {
+            flex: 1; min-height: 0; width: 100%; resize: none;
+            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 10px; padding: 0.85rem 0.9rem;
+            font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.65;
+        }
+        .run-code::placeholder { color: var(--text-faint); }
+        .run-code:focus { outline: none; border-color: var(--signal-edge); box-shadow: 0 0 0 3px var(--signal-weak); }
+
+        /* ---- The spine ---------------------------------------------------
+           A numbered rail down the right column. The number is not decoration:
+           these steps genuinely happen in order, and the rail is what says so
+           without four repetitions of the word "Step". */
+        .spine { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.55rem; overflow-y: auto; padding-right: 0.15rem; }
+        .node { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0.7rem; }
+        .node::before {
+            content: ""; position: absolute; left: 12.5px; top: 26px; bottom: -0.55rem;
+            width: 1px; background: var(--border);
+        }
+        .node:last-child::before { display: none; }
+        .node-num {
+            position: relative; z-index: 1;
+            width: 26px; height: 26px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border); background: var(--surface-2);
+            color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 700;
+        }
+        .node-body { min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.35rem; }
+        .node-title { color: var(--heading); font-size: var(--fs-sm); font-weight: 700; }
+        .node-note { color: var(--text-dim); font-size: var(--fs-2xs); line-height: 1.5; }
+
+        /* ---- Actions -----------------------------------------------------
+           One primary per screen. Send is the only filled action on the page;
+           Stop is quiet until there is something to stop, and Send refuses
+           rather than firing into a yard that is not ready. */
+        .action-row { display: grid; grid-template-columns: 1.9fr 1fr; gap: 0.5rem; }
+        .btn.run-primary {
+            min-height: 50px; font-size: var(--fs-md); font-weight: 700;
+            background: var(--signal); border-color: var(--signal); color: var(--signal-ink);
+            box-shadow: 0 6px 18px -10px var(--signal);
+        }
+        .btn.run-primary:hover:not(:disabled) { filter: brightness(1.07); }
+        .btn.run-primary:disabled { background: var(--surface-3); border-color: var(--border); color: var(--text-faint); box-shadow: none; cursor: not-allowed; }
+        .btn.stop-action { min-height: 50px; font-weight: 700; color: var(--bad); border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); background: transparent; }
+        .btn.stop-action:hover { background: var(--bad-weak); }
+        .warning-box {
+            display: none; padding: 0.5rem 0.7rem; border-radius: 9px;
+            border: 1px solid color-mix(in oklab, var(--warn) 34%, transparent);
+            background: var(--warn-weak); color: var(--warn);
+            font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
+        }
         .warning-box.show { display: block; }
-        .action-row { display: grid; grid-template-columns: 2fr 1fr; gap: 0.6rem; }
-        .action-row .btn { min-height: 52px; font-size: 0.95rem; font-weight: 700; }
-        .action-row .run-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
-        .action-row .stop-action { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); }
-        /* Stretches to the bottom of the column so the station does not end in
-           a block of dead space, and the video picker gets the wider half:
-           a recording filename is long and it is the thing being chosen. */
-        .handoff-grid { flex: 1; display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.7rem; min-height: 0; }
-        .handoff-card { min-width: 0; display: flex; flex-direction: column; }
-        .handoff-card .yt-box { flex: 1; }
-        .video-controls { display: flex; gap: 0.45rem; align-items: center; margin-top: 0.55rem; }
-        .video-controls select { min-width: 0; flex: 1; min-height: 36px; }
-        .run-desk .yt-box { min-height: 70px; resize: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); }
-        .run-desk .sync-field { margin-bottom: 0.45rem; }
+        .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
+        .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
+        @keyframes recpulse { 50% { opacity: 0.35; } }
+        @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
+        .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+        /* ---- Handoff ------------------------------------------------------ */
+        .video-controls { display: flex; gap: 0.45rem; align-items: center; }
+        .video-controls select { min-width: 0; flex: 1; min-height: 36px; font-family: var(--mono); font-size: var(--fs-2xs); }
+        .yt-box {
+            width: 100%; min-height: 92px; resize: none;
+            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 9px; padding: 0.6rem 0.7rem;
+            font-family: var(--mono); font-size: var(--fs-2xs); line-height: 1.6;
+        }
+        /* One filled action on the page, and it is Send.
+           Import, Download and Copy description are each the main action of
+           their own block, but they are not the point of the screen. They were
+           all filled Mars orange, so four buttons competed and the eye had no
+           reason to land on the one that moves a physical rover. They keep the
+           signal colour, as outlines. */
+        .run-desk .btn.primary {
+            background: transparent;
+            border-color: var(--signal-edge);
+            color: var(--signal);
+            font-weight: 600;
+        }
+        .run-desk .btn.primary:hover { background: var(--signal-weak); border-color: var(--signal); }
+        .run-desk .btn.primary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
         .run-desk .hub-note { display: none; }
-        @media (max-width: 900px) { .run-desk { height: auto; min-height: calc(100dvh - 62px); overflow: visible; } .desk-grid { grid-template-columns: 1fr; } .desk-card.left { min-height: 520px; } .handoff-grid { grid-template-columns: 1fr; } }
-        @media (max-width: 520px) { .mission-meta, .status-row, .action-row { grid-template-columns: 1fr; } .meta-field.full { grid-column: auto; } .code-hint { display: none; } }
+
+
+        /* Touch targets.
+           The yard is operated from a tablet, and these had been tuned by eye
+           on a laptop: 26px Copy buttons, a 28px Start camera, a 36px select.
+           Any pointer that is not a mouse gets the 44px the platforms ask for.
+           Sized with padding rather than a bigger font so the compact look on a
+           desktop survives. */
+        @media (pointer: coarse) {
+            .copy-compact { min-height: 44px !important; padding: 0.25rem 0.8rem !important; }
+            .ready .btn { min-height: 44px !important; padding: 0.25rem 0.8rem !important; }
+            .video-controls select, .video-controls .btn { min-height: 44px; }
+            .btn { min-height: 44px; }
+        }
+        @media (max-width: 980px) {
+            .run-desk { height: auto; min-height: calc(100dvh - 62px); overflow: visible; }
+            .desk-grid { grid-template-columns: 1fr; }
+            .panel-card.mission { min-height: 460px; }
+            .spine { overflow: visible; }
+        }
+        @media (max-width: 700px) {
+            .run-desk { padding: 0.8rem 0.9rem 1rem; }
+            .mission-meta, .action-row { grid-template-columns: 1fr; }
+            .meta-field.full { grid-column: auto; }
+            .code-hint { display: none; }
+            /* The strip is a flex child of the header, so it sized to its
+               content and the two tiles stopped short of the right edge with a
+               ragged gap beside them. */
+            .desk-top { display: block; }
+            .ready-strip { margin-top: 0.8rem; display: grid; grid-template-columns: 1fr; }
+            .ready { min-width: 0; }
+        }
     </style>
 </head>
 <body class="console">
     {% set nav_active = 'run' %}{% include "_nav.html" %}
 
     <main class="page run-desk">
-        <div>
-            <div class="eyebrow">Station</div>
-            <h1 class="page-title">Run a mission</h1>
-            <p class="page-sub">Everything for one mission, right here. Closing the mission happens in Mission Control.</p>
+        <div class="desk-top">
+            <div>
+                <div class="eyebrow">Station</div>
+                <h1 class="page-title">Run a mission</h1>
+                <p class="page-sub">Everything for one mission, in order. Closing the mission happens in Mission Control.</p>
+            </div>
+
+            <!-- Readiness sits in the header, not in step two, because it
+                 decides whether any of the rest can work and an operator needs
+                 to see it without hunting. -->
+            <div class="ready-strip">
+                <div class="ready" id="cameraReady" data-state="wait">
+                    <span class="status-dot"></span>
+                    <span class="ready-txt">
+                        <span class="status-name">Camera</span>
+                        <span class="status-sub">Checking...</span>
+                    </span>
+                    <button class="btn" id="camStart" type="button" hidden>Start camera</button>
+                </div>
+                <div class="ready" id="roverReady" data-state="wait">
+                    <span class="status-dot"></span>
+                    <span class="ready-txt">
+                        <span class="status-name">Rover</span>
+                        <span class="status-sub">Checking...</span>
+                    </span>
+                </div>
+            </div>
         </div>
 
         <div class="desk-grid">
-            <section class="card desk-card left">
-                <div class="desk-head">
-                    <div><span class="step">Step 1 / The mission</span><strong>Import, review, send</strong></div>
+            <section class="panel-card mission">
+                <div class="card-head">
+                    <span class="card-title">The mission</span>
                     <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
                 </div>
                 <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
+
                 <div class="mission-meta">
-                    <div class="meta-field"><span class="meta-label">Mission name</span><div class="meta-row"><input class="meta-value name" id="missionName" type="text" aria-label="Mission name" placeholder="Lunar Mapper" autocomplete="off"><button class="btn copy-compact" type="button" data-copy="missionName">Copy</button></div></div>
-                    <div class="meta-field"><span class="meta-label">Mission ID</span><div class="meta-row"><input class="meta-value" id="missionId" type="text" aria-label="Mission ID" placeholder="from Mission Control" autocomplete="off" spellcheck="false"><button class="btn copy-compact" type="button" data-copy="missionId">Copy</button></div></div>
-                    <div class="meta-field full"><span class="meta-label">Run ID, which is also what the recording is called</span><div class="meta-row"><span class="meta-value" id="runId">Waiting for the mission ID</span><button class="btn copy-compact" type="button" data-copy="runId">Copy</button></div></div>
+                    <div class="meta-field">
+                        <span class="meta-label">Mission name</span>
+                        <div class="meta-row">
+                            <input class="meta-value name" id="missionName" type="text" aria-label="Mission name" placeholder="Lunar Mapper" autocomplete="off">
+                            <button class="btn copy-compact" type="button" data-copy="missionName">Copy</button>
+                        </div>
+                    </div>
+                    <div class="meta-field">
+                        <span class="meta-label">Mission ID</span>
+                        <div class="meta-row">
+                            <input class="meta-value" id="missionId" type="text" aria-label="Mission ID" placeholder="from Mission Control" autocomplete="off" spellcheck="false">
+                            <button class="btn copy-compact" type="button" data-copy="missionId">Copy</button>
+                        </div>
+                    </div>
+                    <div class="meta-field full">
+                        <span class="meta-label">Run ID, which is also what the recording is called</span>
+                        <div class="meta-row">
+                            <span class="meta-value" id="runId">Waiting for the mission ID</span>
+                            <button class="btn copy-compact" type="button" data-copy="runId">Copy</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="code-head"><span class="meta-label" style="margin:0;">Python</span><span class="code-hint">Review before sending. This is exactly what the rover runs.</span></div>
+
+                <div class="code-head">
+                    <span class="meta-label" style="margin:0;">Python</span>
+                    <span class="code-hint">Read it before you send. This is exactly what the rover runs.</span>
+                </div>
                 <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
             </section>
 
-            <div class="desk-card right">
-                <section class="card">
-                    <div class="desk-head"><div><span class="step">Step 2 / Run</span><strong>Record first, then send</strong></div><span class="tag" id="runState">Ready</span></div>
-                    <div class="status-row">
-                        <div class="status-box" id="cameraReady"><span class="status-dot"></span><div><span class="status-name">Camera</span><span class="status-sub">Checking...</span></div><button class="btn" id="camStart" type="button" hidden>Start camera</button></div>
-                        <div class="status-box" id="roverReady"><span class="status-dot"></span><div><span class="status-name">Rover</span><span class="status-sub">Checking...</span></div></div>
+            <div class="spine">
+                <div class="node">
+                    <span class="node-num">1</span>
+                    <div class="node-body">
+                        <span class="node-title">Record, then run</span>
+                        <span class="node-note">Start recording first, so the rover's first move is in the video.</span>
+                        <div class="row">
+                            <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
+                            <span class="tag" id="runState">Ready</span>
+                        </div>
+                        <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
+                        <div class="action-row">
+                            <button class="btn run-primary" id="runBtn" type="button">Send to rover</button>
+                            <button class="btn stop-action" id="stopBtn" type="button">Stop</button>
+                        </div>
+                        <div class="camera-msg" id="runMsg" style="margin-top:0;"></div>
                     </div>
-                    <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
-                    <div class="action-row"><button class="btn run-primary" id="runBtn" type="button">Send to rover</button><button class="btn stop-action" id="stopBtn" type="button">Stop rover</button></div>
-                    <div class="row" style="margin-top:0.55rem;"><button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button><span class="camera-msg" id="runMsg" style="margin-top:0;"></span></div>
-                </section>
+                </div>
 
-                <div class="handoff-grid">
-                    <section class="card handoff-card">
-                        <div class="desk-head"><div><span class="step">Step 3 / Take the video</span><strong>Saved recording</strong></div></div>
-                        <p class="sync-hint" style="margin-top:0.45rem;">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</p>
+                <div class="node">
+                    <span class="node-num">2</span>
+                    <div class="node-body">
+                        <span class="node-title">Take the video</span>
+                        <span class="node-note">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</span>
                         <div class="video-controls">
                             <select id="videoPick" aria-label="Saved recording"><option value="">Loading...</option></select>
                             <button class="btn primary" id="videoGet" type="button" disabled>Download</button>
                         </div>
-                        <span class="camera-msg" id="videoMsg" style="margin-top:0.4rem;"></span>
-                    </section>
-                    <section class="card handoff-card">
-                        <div class="desk-head"><div><span class="step">Step 4 / Upload</span><strong>YouTube description</strong></div></div>
+                        <span class="camera-msg" id="videoMsg" style="margin-top:0;"></span>
+                    </div>
+                </div>
+
+                <div class="node">
+                    <span class="node-num">3</span>
+                    <div class="node-body">
+                        <span class="node-title">Upload it</span>
+                        <span class="node-note">Paste this as the video's description in YouTube Studio. The MissionID and Yard lines are what make the platform find the upload and attach it to this yard's run on its own, so nobody has to paste a link back.</span>
                         <textarea class="yt-box" id="ytDesc" readonly></textarea>
-                        <div class="row" style="margin-top:0.45rem;"><button class="btn primary" id="ytCopy" type="button">Copy description</button><span class="camera-msg" id="ytMsg" style="margin-top:0;"></span></div>
+                        <div class="row">
+                            <button class="btn primary" id="ytCopy" type="button">Copy description</button>
+                            <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
+                        </div>
                         <input type="text" id="ytTitle" readonly hidden>
-                    </section>
+                    </div>
                 </div>
             </div>
         </div>
@@ -247,10 +439,26 @@
         });
     });
 
-    function paintStatus(id, ok, label) {
+    function paintStatus(id, ok, label, waiting) {
         const box = $(id);
-        box.querySelector('.status-dot').className = `status-dot ${ok ? 'ok' : 'bad'}`;
+        box.querySelector('.status-dot').className = `status-dot ${ok ? 'ok' : (waiting ? '' : 'bad')}`;
         box.querySelector('.status-sub').textContent = label;
+        // The tile itself carries the state, not just the dot. A 8px dot is
+        // not enough signal for the two things that decide whether the rest
+        // of this page can do anything.
+        box.dataset.state = ok ? 'ok' : (waiting ? 'wait' : 'bad');
+    }
+
+    // Send is the only filled action on the page, and it refuses rather than
+    // firing into a yard that is not ready. It used to stay enabled while the
+    // warning underneath said not to run, which is the console contradicting
+    // itself at the one moment an operator is going fast.
+    function paintGate() {
+        const ready = cameraPrimed && roverOk;
+        $('runBtn').disabled = !ready;
+        $('runBtn').title = ready ? '' : 'Camera and rover both have to be ready first';
+        $('runWarning').classList.toggle('show', !ready);
+        $('runState').textContent = recordingName ? 'Recording' : (ready ? 'Ready' : 'Not ready');
     }
     // Two different questions about the camera, and the difference is the
     // whole point of this indicator. /api/status says only that the port is
@@ -263,32 +471,32 @@
     // for ever and never tells the operator anything.
     let cameraListening = null, cameraPrimed = false, roverOk = false;
 
-    function paintCamera(sub) {
-        paintStatus('cameraReady', cameraPrimed, sub);
+    function paintCamera(sub, waiting) {
+        paintStatus('cameraReady', cameraPrimed, sub, waiting);
         $('camStart').hidden = cameraPrimed;
-        $('runWarning').classList.toggle('show', !cameraPrimed || !roverOk);
+        paintGate();
     }
 
     async function checkPrimed() {
         if (!cameraListening) {
             cameraPrimed = false;
-            return paintCamera('Warning: camera is not running');
+            return paintCamera('Not running');
         }
-        paintCamera('Checking the feed...');
+        paintCamera('Checking the feed...', true);
         try {
             const d = await (await fetch('/api/camera/ready')).json();
             cameraPrimed = !!d.ready;
-            paintCamera(cameraPrimed ? 'Primed, frames arriving' : 'Warning: no frames from the camera');
+            paintCamera(cameraPrimed ? 'Primed, frames arriving' : 'No frames arriving');
         } catch (e) {
             cameraPrimed = false;
-            paintCamera('Warning: could not check the camera');
+            paintCamera('Could not check the feed');
         }
     }
 
     $('camStart').addEventListener('click', async () => {
         const btn = $('camStart');
         btn.disabled = true;
-        paintCamera('Starting the camera...');
+        paintCamera('Starting the camera...', true);
         try {
             const resp = await fetch('/operator/api/camera/start', { method: 'POST' });
             if (!resp.ok) throw new Error(((await resp.json()) || {}).error || 'Could not start the camera');
@@ -307,23 +515,20 @@
         YardStatus.subscribe((snapshot) => {
             const listening = !!(snapshot.camera && snapshot.camera.reachable);
             roverOk = !!(snapshot.rover && snapshot.rover.reachable && (snapshot.rover.status == null || snapshot.rover.status === 'ok'));
-            paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Warning: rover unavailable');
-            $('runBtn').disabled = !roverOk;
+            paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Not reachable');
+            paintGate();
             // Only re-probe when the cheap answer actually changed, so an idle
             // station is not opening a camera connection every five seconds.
             if (listening !== cameraListening) {
                 cameraListening = listening;
                 checkPrimed();
-            } else {
-                $('runWarning').classList.toggle('show', !cameraPrimed || !roverOk);
             }
         });
         YardStatus.onError(() => {
             roverOk = false;
             cameraListening = false; cameraPrimed = false;
-            paintStatus('roverReady', false, 'Warning: status unavailable');
-            paintCamera('Warning: status unavailable');
-            $('runBtn').disabled = true;
+            paintStatus('roverReady', false, 'Status unavailable');
+            paintCamera('Status unavailable');
         });
     }
 
@@ -359,6 +564,7 @@
                 dot.classList.add('on');
                 btn.lastChild.textContent = ' Stop recording';
                 flash($('runMsg'), 'Recording', 'ok');
+                paintGate();
             } else {
                 const resp = await fetch('/api/recording/stop', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -368,7 +574,8 @@
                 recordingName = null;
                 dot.classList.remove('on');
                 btn.lastChild.textContent = ' Start recording';
-                flash($('runMsg'), 'Saved. It is in Step 3.', 'ok');
+                flash($('runMsg'), 'Saved. Pick it up in step 2.', 'ok');
+                paintGate();
                 loadRecordings();
             }
         } catch (e) {
