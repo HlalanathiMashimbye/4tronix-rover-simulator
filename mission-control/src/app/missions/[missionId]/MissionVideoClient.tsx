@@ -12,7 +12,7 @@ import { simulateCommands } from '@/lib/simulateCommands';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
+import { yardLabel } from '@/infrastructure/config/yards';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
@@ -20,13 +20,7 @@ import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
 
 
-export default function MissionVideoClient({
-  missionId,
-  yards,
-}: {
-  missionId: string;
-  yards: Yard[];
-}) {
+export default function MissionVideoClient({ missionId }: { missionId: string }) {
   const router = useRouter();
   const [mission, setMission] = useState<Mission | null>(null);
   // Every yard's attempt, so the carousel can show more than the one video the
@@ -52,8 +46,8 @@ export default function MissionVideoClient({
   // Real runs come FIRST, which is the point: a child needs to see that an
   // actual rover drove their code. See lib/missionRuns for the reasoning.
   const runs = useMemo<RunOption[]>(
-    () => buildRunOptions(mission, missionRuns, yards),
-    [mission, missionRuns, yards],
+    () => buildRunOptions(mission, missionRuns),
+    [mission, missionRuns],
   );
 
   useEffect(() => {
@@ -87,7 +81,7 @@ export default function MissionVideoClient({
 
   if (loading) {
     return (
-      <main className="flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center">
+      <main className="flex h-[calc(100vh-64px)] items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
       </main>
     );
@@ -95,7 +89,7 @@ export default function MissionVideoClient({
 
   if (error || !mission) {
     return (
-      <main className="mx-auto flex h-[calc(100dvh-var(--app-chrome))] max-w-md flex-col items-center justify-center px-6 text-center">
+      <main className="mx-auto flex h-[calc(100vh-64px)] max-w-md flex-col items-center justify-center px-6 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
           <Rocket className="h-8 w-8 text-primary" />
         </div>
@@ -139,7 +133,7 @@ export default function MissionVideoClient({
     // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
     // blocks and the code were rendered, just unreachable, with no scrollbar to
     // hint that anything was below.
-    <main className="px-3 py-2 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
+    <main className="px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -168,10 +162,7 @@ export default function MissionVideoClient({
                 internal key and means nothing to them. An unrecognised yard
                 shows nothing rather than falling back to the id. */}
             <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {(() => {
-                const yard = findYardIn(yards, mission.yardId);
-                return yard ? `${yardLabelOf(yard)} · ` : '';
-              })()}
+              {yardLabel(mission.yardId) ? `${yardLabel(mission.yardId)} · ` : ''}
               {dateLabel}
             </span>
           </div>

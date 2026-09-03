@@ -97,17 +97,8 @@
         }
 
         #cameraCanvas {
-            /* width/height, not max-*. A max-only rule caps a size, it never
-               grows one, so the canvas sat at its intrinsic 640x480 CSS pixels
-               however large the panel was - a small square in the middle of a
-               television. It now fills the panel.
-
-               object-fit: contain keeps the camera's 4:3 (the IMX500 is
-               4056x3040 and camera_server streams 640x480, both 4:3), so a
-               16:9 screen letterboxes at the sides rather than stretching
-               faces sideways. */
-            width: 100%;
-            height: 100%;
+            max-width: 100%;
+            max-height: 100%;
             object-fit: contain;
         }
 
@@ -891,17 +882,9 @@
                     const resp = await fetch('/api/queue/status');
                     if (!resp.ok) throw new Error('HTTP ' + resp.status);
                     const data = await resp.json();
-                    // Through the page's dispatcher when there is one, so a
-                    // fetched snapshot reaches the same subscribers an SSE
-                    // push would. Falls back to painting only, which is all
-                    // this did before.
-                    if (this.onStatus) { this.onStatus(data); } else { this.updateUI(data); }
+                    this.updateUI(data);
                 } catch (e) {
                     this.updateStatus('disconnected', 'Disconnected');
-                    // Rethrown so the loader above can retry. It used to be
-                    // swallowed here, which left the caller unable to tell a
-                    // successful load from a failed one.
-                    throw e;
                 }
             }
 
@@ -1085,53 +1068,16 @@
         // Queue — SSE push with manual refresh fallback
         const queue = new QueuePoller();
 
-        // Extra subscribers to the same stream. Kept as a list rather than a
-        // second EventSource because each one holds an open proxied connection
-        // to the rover for the life of the page.
-        const queueEventSubscribers = [];
-        let lastStatus = null;
-
-        // Every snapshot goes through here, whoever fetched it.
-        //
-        // The subscribers used to be called from the SSE handler only, and
-        // queue.refresh() went straight to updateUI. So the load-time snapshot
-        // - the only one that carries what happened before the page opened -
-        // never reached them. The simulated rover view is a subscriber, which
-        // is why opening the monitor during a run showed a parked rover until
-        // the rover next changed something.
-        function dispatchStatus(status) {
-            lastStatus = status;
-            queue.updateUI(status);
-            // A throwing subscriber must not take the queue display down with
-            // it - that is the part of this page someone is actually watching.
-            for (const fn of queueEventSubscribers) {
-                try { fn(status); } catch (e) { console.error('[monitor] subscriber failed:', e); }
-            }
-        }
-        queue.onStatus = dispatchStatus;
-
-        // The backlog arrives here and only here: the SSE stream below carries
-        // CHANGES, so anything the rover did before this page opened is only
-        // ever seen through this fetch. One attempt was too few. If it failed -
-        // a rover blip, or the satellite still coming up behind it - the page
-        // sat empty until the rover next did something, which on an idle yard
-        // is a long time, and looked exactly like "the mission I just sent is
-        // missing".
-        (function loadBacklog(attempt) {
-            queue.refresh().catch(function () {
-                if (attempt < 5) setTimeout(function () { loadBacklog(attempt + 1); }, 1000 * attempt);
-            });
-        })(1);
-
-        // Belt and braces behind the stream. Cheap: /api/queue/status is a
-        // local call to the rover, and updateUI returns early when nothing has
-        // changed, so a quiet yard costs one request and no re-render.
-        setInterval(function () { queue.refresh(); }, 15000);
+        queue.refresh();  // full fetch on load
 
         const eventSource = new EventSource('/api/queue/events');
 
         eventSource.onopen = () => queue.updateStatus('connected', 'Connected');
 
+        // Extra subscribers to the same stream. Kept as a list rather than a
+        // second EventSource because each one holds an open proxied connection
+        // to the rover for the life of the page.
+        const queueEventSubscribers = [];
 
         eventSource.onmessage = (event) => {
             let status;
@@ -1141,7 +1087,12 @@
                 console.error('SSE parse error:', e);
                 return;
             }
-            dispatchStatus(status);
+            queue.updateUI(status);
+            // A throwing subscriber must not take the queue display down with
+            // it - that is the part of this page someone is actually watching.
+            for (const fn of queueEventSubscribers) {
+                try { fn(status); } catch (e) { console.error('[monitor] subscriber failed:', e); }
+            }
         };
 
         eventSource.onerror = () => queue.updateStatus('disconnected', 'Disconnected');
@@ -1180,19 +1131,7 @@
         // rather than letting it reach into this script's internals.
         window.__yardMonitorHooks = {
             camera,
-            // Subscribers get the last snapshot immediately, then every one
-            // after it. Without that first call a late subscriber misses the
-            // only snapshot that carries the backlog: the simulated rover view
-            // is a module script that awaits /api/status before it registers,
-            // so by the time it arrived the load fetch had already dispatched
-            // and it had nothing to replay - a parked rover on a yard that had
-            // just run a mission.
-            onQueueEvent: (fn) => {
-                queueEventSubscribers.push(fn);
-                if (lastStatus) {
-                    try { fn(lastStatus); } catch (e) { console.error('[monitor] subscriber failed:', e); }
-                }
-            },
+            onQueueEvent: (fn) => queueEventSubscribers.push(fn),
             setLabel: (text) => { document.getElementById('cameraStatus').textContent = text; },
         };
     </script>

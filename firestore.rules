@@ -101,21 +101,6 @@ service cloud.firestore {
                     && request.resource.data.learnerEmailHash.matches('^[0-9a-f]{64}$');
     }
 
-    // Yards: the venues a rover lives in.
-    //
-    // World-readable for the same reason missions are: a learner's mission
-    // page prints the city a run happened in, and it must resolve without an
-    // account. There is nothing here that is not already on a public mission.
-    //
-    // Written only through the Admin SDK, which bypasses these rules, so the
-    // admin settings page is the one way in. Note there is no delete, here or
-    // in the repository: every mission ever run at a yard references its id,
-    // so removing one orphans that history. Retiring sets active: false.
-    match /yards/{yardId} {
-      allow get, list: if true;
-      allow write: if false;
-    }
-
     // Runs: one per yard that attempted this mission, written only by the
     // Admin SDK (the satellite's outbox and the operator routes).
     //

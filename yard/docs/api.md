@@ -156,43 +156,28 @@ could not be written (it will reset on restart).
 
 ### Web Routes
 
-None of these require a sign-in. The satellite has none.
-
 | Route | Description |
 |-------|-------------|
-| `GET /` | Station hub |
-| `GET /run/` | The operator's station: import a mission, run it, take the video away |
-| `GET /code/` | Tablet Blockly and Python editor |
-| `GET /monitor/` | TV display: camera feed and instruction queue |
-| `GET /settings` | Health, recordings and tunables (`/status` redirects here) |
+| `GET /` | Operator home hub (redirects to `/operator/login` when signed out) |
+| `GET /code/` | Tablet Blockly interface (no login - for learner tablets) |
+| `GET /monitor/` | TV display interface (no login - for the TV) |
+| `GET /operator/` | Operator console (Firebase login required) |
 
-### Recording
+### Operator Console API
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /api/recording/start` | `{name}` begin filming. Refused with 503 unless the camera is producing frames |
-| `POST /api/recording/stop` | `{name, keep}` stop filming, keeping or deleting the file |
-| `GET /api/recordings` | The files on this satellite, newest first |
-| `GET /api/recordings/<name>` | Download one, as an attachment |
-| `GET /api/camera/ready` | Whether frames are actually arriving, as opposed to the port being open |
-
-Recordings are named `<mission>__<yard>.mp4`. That pair is what identifies a
-run, and it is the shape Mission Control matches an upload against.
-
-### What is left of /operator/
-
-There is no login. The mission queue, the sign-in, the review flow and the
-Firestore sync were removed from the satellite - see
-[what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md). Two groups
-of endpoints kept the prefix, because the pages already call them there:
+Session-cookie authenticated (sign in at `/operator/login` with a Firebase
+account carrying an `operator` or `admin` custom claim). All endpoints return
+401 without a session. Configuration: see `satellite/.env.example`.
 
 | Endpoint | Description |
 |----------|-------------|
-| `POST /operator/api/camera/start` | Start (or restart) the camera server. Optional `{cameraIndex}` |
-| `POST /operator/api/camera/stop` | Stop it |
-| `GET /operator/api/camera` | Whether the camera is up, and which backend is serving it |
-| `GET /operator/api/config/tunables` | Current values and their bounds |
-| `POST /operator/api/config/tunables` | Change one without a restart |
+| `POST /operator/api/login` | `{email, password}` → Firebase sign-in + role check |
+| `POST /operator/api/logout` | End the session |
+| `GET /operator/api/missions` | Mission queue from Firestore (newest first) |
+| `POST /operator/api/missions/<id>/send` | Push mission code to the rover queue as `run_python`; mission → `processing` |
+| `POST /operator/api/missions/<id>/complete` | Mission → `completed` |
+| `POST /operator/api/missions/<id>/youtube` | `{url}` attach the run video link |
+| `GET /operator/api/health` | Rover reachability for the console badge |
 
 ## Camera Server (mro.local:8890)
 

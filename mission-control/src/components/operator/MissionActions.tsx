@@ -3,11 +3,6 @@
 import { useState } from 'react';
 import { Check, Loader2, MessageSquare, Trash2, Video, X } from 'lucide-react';
 
-import {
-  automatedReason,
-  isHandledAutomatically,
-  type ConsoleMode,
-} from '@/core/domain/services/consoleMode';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 
 /**
@@ -31,18 +26,11 @@ export function MissionActions({
   mission,
   yardId,
   isAdmin,
-  mode = 'manual',
   onResult,
 }: {
   mission: QueueMission;
   yardId: string;
   isAdmin: boolean;
-  /**
-   * Manual until the platform is doing this itself. In auto the bookkeeping
-   * actions grey out and say why, rather than vanishing and leaving an
-   * operator wondering where the button went.
-   */
-  mode?: ConsoleMode;
   onResult: (message: string) => void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
@@ -145,12 +133,6 @@ export function MissionActions({
               icon={<Check className="h-3 w-3" />}
               label="Mark complete"
               busy={pending === 'complete'}
-              disabled={isHandledAutomatically('complete', mode)}
-              title={
-                isHandledAutomatically('complete', mode)
-                  ? automatedReason('complete')
-                  : undefined
-              }
               onClick={() => run('complete', 'complete')}
             />
             <ActionButton
@@ -300,7 +282,6 @@ function ActionButton({
   busy,
   disabled,
   danger,
-  title,
   onClick,
 }: {
   icon?: React.ReactNode;
@@ -308,15 +289,12 @@ function ActionButton({
   busy?: boolean;
   disabled?: boolean;
   danger?: boolean;
-  /** Why it is disabled, so a greyed control is not a dead end. */
-  title?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={title}
       disabled={busy || disabled}
       className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
         danger

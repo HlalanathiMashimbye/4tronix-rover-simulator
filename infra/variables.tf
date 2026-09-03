@@ -36,6 +36,12 @@ variable "resend_from_email" {
   default     = "onboarding@resend.dev"
 }
 
+variable "resend_sandbox_recipient" {
+  description = "Redirects ALL mission email to one inbox while no sending domain is verified. Empty means normal delivery. Set via TF_VAR_resend_sandbox_recipient, never committed."
+  type        = string
+  default     = ""
+}
+
 variable "github_repository" {
   description = "GitHub repo allowed to deploy via Workload Identity Federation (owner/name)"
   type        = string
@@ -64,10 +70,4 @@ variable "domains" {
   description = "Optional public hostname per environment (e.g. staging = mission-control-staging.example.com). When set, Terraform provisions a Google-managed cert and HTTPS on the load balancer; point DNS A records at terraform output lb_ip_addresses first. When empty, that env is HTTP-only on the LB IP (fine for a short demo, not for real mail links)."
   type        = map(string)
   default     = {}
-}
-
-variable "cron_environment" {
-  description = "Which environment runs the YouTube auto-link schedule, or \"\" for none. Only one may: the environments share a Firestore."
-  type        = string
-  default     = ""
 }

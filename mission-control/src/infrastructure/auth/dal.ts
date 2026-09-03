@@ -22,32 +22,12 @@ import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admi
 /** Name of the httpOnly session cookie set by POST /api/auth/session. */
 export const SESSION_COOKIE = 'session';
 
-/**
- * The yard chosen at sign-in, beside the session cookie rather than inside it.
- *
- * A Firebase session cookie is derived from the ID token and cannot carry our
- * own fields. This is set in the same response as the session and cleared in
- * the same response as the sign-out, so the two share a lifetime and the yard
- * cannot outlive the session that chose it.
- */
-export const OPERATOR_YARD_COOKIE = 'operator-yard';
-
 export type OperatorRole = 'operator' | 'admin';
 
 export interface OperatorSession {
   uid: string;
   email?: string;
   role: OperatorRole;
-  /**
-   * The yard this operator signed in at, or null for a session that predates
-   * the choice being made at sign-in.
-   *
-   * Chosen once and immutable for the life of the session. Changing yards
-   * means signing out, which is the point: a mission attributed to the wrong
-   * place is invisible until somebody notices a child's video is in the wrong
-   * city, so it should cost a deliberate act rather than a stray click.
-   */
-  yardId: string | null;
 }
 
 function isRole(value: unknown): value is OperatorRole {
@@ -80,13 +60,10 @@ export const getOperatorSession = cache(async (): Promise<OperatorSession | null
       return null;
     }
 
-    const yardId = (await cookies()).get(OPERATOR_YARD_COOKIE)?.value ?? null;
-
     return {
       uid: claims.uid,
       email: typeof claims.email === 'string' ? claims.email : undefined,
       role: claims.role,
-      yardId: yardId || null,
     };
   } catch {
     // Expired, revoked, malformed, or signed for another project. All of them
@@ -96,7 +73,7 @@ export const getOperatorSession = cache(async (): Promise<OperatorSession | null
 });
 
 /*
- * There is still deliberately no canActOnYard().
+ * There is deliberately no canActOnYard() here.
  *
  * A yardIds claim briefly existed, granted per account, and the sponsor
  * rejected it outright on 2026-08-27: an operator logs in and CHOOSES a yard,
@@ -105,11 +82,8 @@ export const getOperatorSession = cache(async (): Promise<OperatorSession | null
  * to re-issue a claim before a facilitator can help at a different venue is
  * exactly the friction the platform is supposed to remove.
  *
- * What HAS changed is where the choice lives. It was a localStorage
- * preference, changeable at any moment from the console, which made working
- * at the wrong yard a stray click rather than a decision. It is now made at
- * sign-in and carried beside the session cookie: set together, cleared
- * together, so it cannot drift from the session it belongs to.
+ * The yard is therefore a runtime selection, held client-side. See
+ * infrastructure/config/yards.ts.
  */
 
 /**

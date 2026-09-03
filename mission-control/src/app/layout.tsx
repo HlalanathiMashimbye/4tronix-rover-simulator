@@ -4,7 +4,6 @@ import Script from "next/script";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
-import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
@@ -153,12 +152,9 @@ export default function RootLayout({
               <EnvironmentBanner />
               <Navbar />
               {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
-              <div id={PAGE_AREA_ID} className="pb-16 md:pb-0">
+              <div className="pb-16 md:pb-0">
                 <PageTransition>{children}</PageTransition>
               </div>
-              {/* Measures the id above and publishes it as --app-chrome, which
-                  is what the full-height pages subtract from the viewport. */}
-              <ChromeHeight />
               </SearchProvider>
             </LearnerProvider>
           </ThemeProvider>

@@ -1,42 +1,29 @@
 # yard/satellite/
 
-The yard-facing web tier, run on a Pi beside the rover (web UI on `:3001`,
-override with `SATELLITE_PORT`). It serves the tablet Blockly interface, the TV
-monitor and the operator's run station, proxies API calls to the rover server,
-records runs, and works with no internet at all.
-
-It holds no cloud credential. It talks to the rover and the camera over the
-local network and to nothing else. See [../docs/satellite.md](../docs/satellite.md)
-for setup and [../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
-for what the Firestore mirror used to do and why it went.
+The classroom-facing web tier, typically run on a separate Pi
+(`mro.local`, web UI on `:3001`, override with `SATELLITE_PORT`). It serves the
+tablet Blockly interface and the TV monitor, proxies API calls to the rover
+server, and keeps working when the venue network drops. See
+[../docs/satellite.md](../docs/satellite.md) and
+[../docs/offline-sync-plan.md](../docs/offline-sync-plan.md).
 
 | File | Role |
 |------|------|
-| `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
-| `operator_console.py` / `console/` | What is left of `/operator/`: camera control and the satellite's tunables. The mission queue, the login and the review flow went with the mirror. |
-| `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>.mp4`. |
-| `mission_watcher.py` | Polls the rover and releases the camera when it reports a run finished. The only background thread. |
-| `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. |
-| `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
-| `tunables.py` | Settings editable at `/settings` without a restart. |
-| `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. |
-| `tests/` | pytest. `pytest tests` from this directory. |
-
-## Pages
-
-| Path | For |
-|------|-----|
-| `/` | Station hub |
-| `/run/` | The operator's station: import a mission, run it, take the video |
-| `/code/` | The tablet's Blockly and Python editor |
-| `/monitor/` | The TV: camera feed and instruction queue |
-| `/settings` | Health, recordings, and the tunables |
+| `web_server.py` | Flask server: serves the Blockly UI and TV monitor, proxies to the rover server. |
+| `operator_console.py` | Operator actions (send, complete, requeue, etc.) with lease-based locking. |
+| `mission_store.py` | Local SQLite store — the source of truth the request handlers read/write. |
+| `sync_worker.py` | Background thread that reconciles local SQLite with Firestore (outbox-before-pull). The only component that talks to Firestore. |
+| `mission_watcher.py` | Watches for new missions to run. |
+| `camera_server.py` / `camera_control.py` | Pi camera stream for the TV monitor. |
+| `recovery.py` | Recovers state after a crash or power loss. |
+| `satellite_identity.py` | Stable per-satellite identity (used for lock ownership). |
+| _(removed)_ | Granting the operator role now lives in `mission-control/scripts/set-operator-role.mjs`. The old Python script wrote only the custom claim and replaced the whole claims object; the Node one writes the claim and the `users/{uid}` ledger, merges rather than clobbers, revokes refresh tokens on revoke, and is dry-run by default. |
+| `tests/` | pytest suites for the store, sync worker, console, proxying, and recovery. |
 
 ```bash
 # From the repo root
 npm run dev:satellite     # cross-platform launcher
 ```
 
-Nothing here requires a sign-in. That is deliberate: an auth gate that only
-works when the venue wifi does is not protecting a box whose whole purpose is
-running without it. The network boundary is the control.
+The Flask handlers only ever touch local SQLite; `sync_worker.py` is what makes
+the console keep working with no internet instead of failing at the door.

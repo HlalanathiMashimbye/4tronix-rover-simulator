@@ -14,9 +14,6 @@ import {
 } from '@/core/domain/entities/MissionRun';
 
 const run = (over: Partial<MissionRun> & { yardId: string }): MissionRun => ({
-  // Runs are keyed by runId now; deriving it keeps every existing case valid
-  // without threading an id nobody here asserts on.
-  runId: `run-${over.yardId}`,
   status: 'completed',
   ...over,
 });

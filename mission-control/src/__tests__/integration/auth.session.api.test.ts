@@ -12,16 +12,6 @@ const createSessionCookie = jest.fn();
 const verifySessionCookie = jest.fn();
 const revokeRefreshTokens = jest.fn();
 
-// The yard is validated against the live list at sign-in, so the repository
-// is stubbed with one selectable yard rather than reaching Firestore.
-jest.mock('@/infrastructure/container.server', () => ({
-  adminYardRepository: () => ({
-    findAll: async () => [
-      { id: 'curiosity', name: 'Cape Town Science Centre', area: 'Observatory', city: 'Cape Town', active: true },
-    ],
-  }),
-}));
-
 jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
   getFirebaseAdminAuth: () => ({
     verifyIdToken, createSessionCookie, verifySessionCookie, revokeRefreshTokens,
@@ -54,7 +44,7 @@ describe('POST /api/auth/session', () => {
   it('issues an httpOnly session cookie for an operator', async () => {
     verifyIdToken.mockResolvedValue({ uid: 'u1', role: 'operator', auth_time: recentSignIn() });
 
-    const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    const res = await POST(post({ token: 'id-token' }));
     const cookie = res.cookies.get('session');
 
     expect(res.status).toBe(200);
@@ -67,7 +57,7 @@ describe('POST /api/auth/session', () => {
     // The regression this route was rewritten for.
     verifyIdToken.mockResolvedValue({ uid: 'u1', role: 'admin', auth_time: recentSignIn() });
 
-    const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    const res = await POST(post({ token: 'id-token' }));
 
     expect(createSessionCookie).toHaveBeenCalledWith('id-token', expect.anything());
     expect(res.cookies.get('session')?.value).not.toBe('id-token');
@@ -76,7 +66,7 @@ describe('POST /api/auth/session', () => {
   it('gives a session long enough to cover an event day', async () => {
     verifyIdToken.mockResolvedValue({ uid: 'u1', role: 'operator', auth_time: recentSignIn() });
 
-    await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    await POST(post({ token: 'id-token' }));
 
     const [, opts] = createSessionCookie.mock.calls[0];
     expect(opts.expiresIn).toBe(12 * 60 * 60 * 1000);
@@ -87,7 +77,7 @@ describe('POST /api/auth/session', () => {
     // clear "no access" into a silent redirect loop.
     verifyIdToken.mockResolvedValue({ uid: 'u1', auth_time: recentSignIn() });
 
-    const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    const res = await POST(post({ token: 'id-token' }));
 
     expect(res.status).toBe(403);
     expect(createSessionCookie).not.toHaveBeenCalled();
@@ -100,7 +90,7 @@ describe('POST /api/auth/session', () => {
       uid: 'u1', role: 'operator', auth_time: Math.floor((NOW - 10 * 60_000) / 1000),
     });
 
-    const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    const res = await POST(post({ token: 'id-token' }));
 
     expect(res.status).toBe(401);
     expect(createSessionCookie).not.toHaveBeenCalled();
@@ -109,7 +99,7 @@ describe('POST /api/auth/session', () => {
   it('checks the token for revocation', async () => {
     verifyIdToken.mockResolvedValue({ uid: 'u1', role: 'operator', auth_time: recentSignIn() });
 
-    await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    await POST(post({ token: 'id-token' }));
 
     expect(verifyIdToken).toHaveBeenCalledWith('id-token', true);
   });
@@ -119,7 +109,7 @@ describe('POST /api/auth/session', () => {
     verifyIdToken.mockRejectedValue(new Error('Firebase ID token has expired'));
     jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+    const res = await POST(post({ token: 'id-token' }));
 
     expect(res.status).toBe(401);
     expect((await res.json()).error).toBe('Could not sign you in');

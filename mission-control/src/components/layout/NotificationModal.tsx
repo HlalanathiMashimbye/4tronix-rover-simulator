@@ -12,8 +12,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ChevronRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 // Kept in sync with the transition durations below - see EmailPrompt for
 // why the exit needs this rather than an instant unmount.
@@ -143,35 +142,18 @@ export function NotificationModal({
           ) : (
             notifications.map((notification) => (
               <div key={notification.id} className="group relative">
-                {/* The whole row is a link to the mission.
-                    It used to be a plain div, so the notification told a
-                    learner their run had finished and then left them to find
-                    it: back to the feed, scroll, and hope they recognised the
-                    name. The thing the notification is about is one tap away,
-                    so it should be one tap. Closing the panel is part of the
-                    same gesture - a modal still sitting over the page you just
-                    navigated to is its own small bug. */}
                 {notification.type === 'completed' && (
-                  <Link
-                    href={`/missions/${notification.id}`}
-                    onClick={onClose}
-                    className="flex items-center gap-2 bg-green-600/90 p-4 pr-10 text-white transition-colors hover:bg-green-600"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="mb-1 text-sm font-semibold">
-                        A mission finished on the rover
-                      </p>
-                      <p className="text-sm opacity-90">
-                        <span className="font-medium">{notification.missionName}</span> was
-                        completed {relativeTime(notification.completedAt)}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
-                  </Link>
+                  <div className="bg-green-600/90 p-4 pr-10 text-white">
+                    <p className="mb-1 text-sm font-semibold">
+                      A mission finished on the rover
+                    </p>
+                    <p className="text-sm opacity-90">
+                      <span className="font-medium">{notification.missionName}</span> was
+                      completed {relativeTime(notification.completedAt)}
+                    </p>
+                  </div>
                 )}
 
-                {/* Not a link: this one is about the feed as a whole, and its
-                    id does not name a mission to open. */}
                 {notification.type === 'new-mission' && (
                   <div className="bg-orange-500/90 p-4 pr-10 text-white">
                     <p className="mb-1 text-sm font-semibold">
@@ -185,14 +167,7 @@ export function NotificationModal({
 
                 {onDismiss && (
                   <button
-                    onClick={(e) => {
-                      // The row behind this is a link now. Without these the
-                      // X would dismiss the notification and navigate to the
-                      // mission at the same time.
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onDismiss(notification.id);
-                    }}
+                    onClick={() => onDismiss(notification.id)}
                     // Always visible, not hover-revealed: this is the fallback
                     // for when the automatic clear has not worked, and a
                     // fallback nobody can find is not one.

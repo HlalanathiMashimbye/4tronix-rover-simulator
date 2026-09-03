@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Lock, MapPin } from 'lucide-react';
+import { AlertTriangle, Lock } from 'lucide-react';
 
 import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
-import { selectableYards, type Yard } from '@/core/domain/entities/Yard';
 
 /**
  * Operator sign-in (AB#342).
@@ -16,20 +15,10 @@ import { selectableYards, type Yard } from '@/core/domain/entities/Yard';
  * token for a server session cookie, then hard-navigate. Nothing keeps client
  * auth state afterwards, because the server session is the only thing that
  * decides access.
- *
- * The yard is chosen HERE, and only here. It used to be a dropdown on the
- * console that could be changed at any moment, which made working at the wrong
- * yard a stray click; a mission attributed to the wrong place is invisible
- * until somebody notices a child's video is in the wrong city. Choosing it
- * with the password makes it part of starting a shift.
  */
-export function OperatorSignIn({ yards }: { yards: Yard[] }) {
-  const options = selectableYards(yards);
+export function OperatorSignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  // Preselected when there is only one, because a dropdown of one is a
-  // statement of fact rather than a decision.
-  const [yardId, setYardId] = useState(options.length === 1 ? options[0].id : '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -52,7 +41,7 @@ export function OperatorSignIn({ yards }: { yards: Yard[] }) {
       const response = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, yardId }),
+        body: JSON.stringify({ token }),
       });
 
       if (!response.ok) {
@@ -75,7 +64,7 @@ export function OperatorSignIn({ yards }: { yards: Yard[] }) {
   }
 
   return (
-    <main className="relative flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center px-4 sm:px-6">
+    <main className="relative flex h-[calc(100vh-64px)] items-center justify-center px-4 sm:px-6">
       <form
         onSubmit={handleSubmit}
         noValidate
@@ -134,42 +123,9 @@ export function OperatorSignIn({ yards }: { yards: Yard[] }) {
             />
           </label>
 
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Which yard are you at?
-            </span>
-            {options.length === 1 ? (
-              // One yard is a fact, not a choice. Shown so the operator can
-              // see what they are signing in to, and submitted all the same.
-              <span className="flex h-11 items-center gap-2 rounded-lg border border-border/60 bg-background/40 px-3 text-sm text-foreground">
-                <MapPin className="h-3.5 w-3.5 text-primary" />
-                {options[0].name}, {options[0].area}
-              </span>
-            ) : (
-              <select
-                value={yardId}
-                onChange={(e) => setYardId(e.target.value)}
-                required
-                className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
-              >
-                <option value="" disabled>
-                  Choose a yard
-                </option>
-                {options.map((yard) => (
-                  <option key={yard.id} value={yard.id}>
-                    {yard.name}, {yard.area} ({yard.city})
-                  </option>
-                ))}
-              </select>
-            )}
-            <span className="text-[11px] text-muted-foreground">
-              Every mission you run is recorded here. Changing it means signing out.
-            </span>
-          </label>
-
           <button
             type="submit"
-            disabled={busy || !email || !password || !yardId}
+            disabled={busy || !email || !password}
             className="clay-press mt-1 h-11 rounded-lg bg-gradient-mars font-display text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? 'Signing in…' : 'Sign in'}

@@ -79,19 +79,6 @@ await seed('learners/L1', { learnerEmail: S('a@b.com'), displayName: S('Ada') })
 await seed('missions/m_no_email/runs/curiosity', { status: S('completed'), youtubeUrl: S('https://youtu.be/x') });
 await seed('missions/m_no_email/audit/e1', { actor: S('op-1'), action: S('dispatch') });
 await seed('users/u1', { role: S('operator'), email: S('op@example.com') });
-await seed('yards/curiosity', { name: S('Cape Town Science Centre'), area: S('Observatory'), city: S('Cape Town') });
-
-// --- yards ------------------------------------------------------------------
-// Readable by anyone, because a learner's mission page prints the city a run
-// happened in and must resolve it without an account. Written only through the
-// Admin SDK, so the admin settings page is the one way in.
-check('yard: public read', await attempt('GET', 'yards/curiosity'), 'ALLOW');
-check('yard: list for the sign-in picker', await attempt('GET', 'yards'), 'ALLOW');
-check('yard: create blocked', await attempt('POST', 'yards?documentId=y_new', { name: S('x') }), 'DENY');
-check('yard: edit blocked', await attempt('PATCH', 'yards/curiosity', { body: { city: S('Durban') }, mask: ['city'] }), 'DENY');
-// No delete path exists even for an admin: missions reference a yard forever,
-// so retiring is active:false, never removal.
-check('yard: delete blocked', await attempt('DELETE', 'yards/curiosity'), 'DENY');
 
 // --- missions ---------------------------------------------------------------
 check('mission: public read (feed)', await attempt('GET', 'missions/m_no_email'), 'ALLOW');

@@ -214,11 +214,8 @@ export function RunStackCarousel({
                 />
               </div>
             ) : (
-              /* No padding and no card: the simulation fills the frame the
-                 same way the video does, so switching between the two runs
-                 does not change the size of the picture. */
-              <div className="h-full">
-                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare />
+              <div className="h-full p-2">
+                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" />
               </div>
             )}
           </div>

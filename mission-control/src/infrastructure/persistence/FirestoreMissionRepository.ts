@@ -234,21 +234,21 @@ export class FirestoreMissionRepository implements IMissionRepository {
    * applyBookkeeping below and sync_worker.should_run_local_win.
    */
   async upsertRun(missionId: string, run: MissionRun): Promise<void> {
-    const { runId, ...fields } = run;
-    const payload = this.removeUndefinedValues({ ...fields }) as Record<string, unknown>;
+    const { yardId, ...fields } = run;
+    const payload = this.removeUndefinedValues({ ...fields, yardId }) as Record<string, unknown>;
 
     if (this.isAdminFirestore()) {
       await this.adminDb()
         .collection(MISSIONS_COLLECTION)
         .doc(missionId)
         .collection(RUNS_SUBCOLLECTION)
-        .doc(runId)
+        .doc(yardId)
         .set(payload, { merge: true });
       return;
     }
 
     await setDoc(
-      doc(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION, runId),
+      doc(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION, yardId),
       payload,
       { merge: true }
     );
@@ -280,7 +280,6 @@ export class FirestoreMissionRepository implements IMissionRepository {
    */
   async applyBookkeeping(
     missionId: string,
-    runId: string,
     yardId: string,
     change: {
       status?: MissionStatus | null;
@@ -346,7 +345,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
     const missionRef = db.collection(MISSIONS_COLLECTION).doc(missionId);
     const batch = db.batch();
 
-    batch.set(missionRef.collection(RUNS_SUBCOLLECTION).doc(runId), runFields, { merge: true });
+    batch.set(missionRef.collection(RUNS_SUBCOLLECTION).doc(yardId), runFields, { merge: true });
     if (Object.keys(missionFields).length > 0) {
       batch.set(missionRef, missionFields, { merge: true });
     }
@@ -373,11 +372,10 @@ export class FirestoreMissionRepository implements IMissionRepository {
       .set({ deleted: true, deletedAt, deletedBy }, { merge: true });
   }
 
-  /** The document id IS the runId, so it is authoritative over any stored field. */
-  private toRun(runId: string, data: Partial<MissionRun>): MissionRun {
+  /** The document id IS the yard, so it is authoritative over any stored field. */
+  private toRun(yardId: string, data: Partial<MissionRun>): MissionRun {
     return {
-      runId,
-      yardId: data.yardId ?? '',
+      yardId,
       status: data.status ?? 'queued',
       startedAt: data.startedAt,
       completedAt: data.completedAt,

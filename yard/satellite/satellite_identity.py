@@ -3,17 +3,20 @@ Satellite identity - who this box is, for mission locking.
 
 Plan reference: yard/docs/offline-sync-plan.md section 3.3.
 
-Why this exists rather than using an operator's identity as the lock owner:
+Why this exists rather than using the operator's uid as the lock owner:
 
-there are no operator identities on this box. The sign-in went with the
-Firestore mirror, so there is nobody to attribute a lock to. The satellite's
-own id is the only stable principal it has, which is what this provides.
+`OPERATOR_AUTH=off` is the event-day escape hatch, and it is not hypothetical -
+it is what got 45 missions through on Mandela Day when the science centre wifi
+could not sustain Firebase sign-in. In that mode `current_operator()` returns a
+single shared stub whose uid is the literal string 'offline', so EVERY operator
+is the same principal. The lock check `holder != owner` then never fires, two
+tablets both acquire, and the rover runs the mission twice - the exact race the
+lock was built to prevent, disabled in precisely the conditions it matters most.
 
-It was already effectively that way before the removal: OPERATOR_AUTH=off is
-what got 45 missions through on Mandela Day when the science centre wifi could
-not sustain Firebase sign-in, and in that mode every operator was the same
-shared stub anyway.
-
+The lock is about which *satellite* owns the rover, not which human is tapping.
+One satellite owns one rover, so the satellite is the correct principal. This
+also matches the plan's intent that leases are held by satellites, so a second
+yard would contend correctly without any of this changing.
 """
 
 import json

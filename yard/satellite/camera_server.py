@@ -128,12 +128,8 @@ def setup_webcam(index=None):
             return False
 
         # Match the IMX500 configuration so downstream sizing is unchanged.
-        # Same setting for the webcam fallback, so a dev laptop and the Pi
-        # behave the same way rather than one silently ignoring it.
-        import tunables
-        _w, _h = tunables.resolution_size()
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, _w)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _h)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
         ok, _ = cap.read()
         if not ok:
@@ -181,15 +177,8 @@ def setup_camera():
 
         # Initialize Picamera2 with IMX500's camera number
         camera = Picamera2(imx500.camera_num)
-        # Picked on the Settings page, not hardcoded. A yard on a big screen
-        # wants more than 640x480; a yard on a weak link wants less. Both are
-        # decisions made in a science centre, not at a keyboard.
-        import tunables
-        frame_size = tunables.resolution_size()
-        logger.info("Camera resolution: %sx%s", *frame_size)
-
         config = camera.create_video_configuration(
-            main={"size": frame_size, "format": "RGB888"},
+            main={"size": (640, 480), "format": "RGB888"},
             controls={"FrameRate": intrinsics.inference_rate},
             buffer_count=12
         )
@@ -329,20 +318,9 @@ async def broadcast_frame(frame_data):
         'data': frame_data
     })
 
-    # Iterate a snapshot, never the live set.
-    #
-    # `await client.send(...)` yields, and while it is yielded a connection
-    # handler can add or discard a client - so iterating `clients` directly
-    # raises "RuntimeError: Set changed size during iteration" and kills the
-    # frame producer. The websocket server keeps accepting connections
-    # afterwards, so the camera looks alive and simply never sends a frame,
-    # which is a miserable thing to diagnose from the outside.
-    #
-    # Latent for as long as only the monitor connected. The readiness probe
-    # made it constant: it connects, waits, and disconnects every few seconds,
-    # which is precisely the window this race needs.
+    # Send to all clients
     disconnected = set()
-    for client in tuple(clients):
+    for client in clients:
         try:
             await client.send(message)
         except websockets.exceptions.ConnectionClosed:

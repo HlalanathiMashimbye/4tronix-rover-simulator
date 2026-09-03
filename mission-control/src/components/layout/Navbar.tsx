@@ -88,14 +88,14 @@ export function Navbar() {
   return (
     <>
       {/* Divider is an inset shadow (not border-b) so the bar stays exactly 64px
-          tall, matching the h-[calc(100dvh-var(--app-chrome))] page mains (no 1px overflow). */}
+          tall, matching the h-[calc(100vh-64px)] page mains (no 1px overflow). */}
       {/* The fill alone cannot separate this from the page: in Paper & Ink the
           card and the background are ~2% apart in lightness (0.99 vs 0.966),
           which measured 1.13:1 - not a band, just a smudge. A hairline plus a
           soft shadow underneath is what actually reads as a raised bar, and it
           works in both themes without touching the palette. The shadow is an
           OUTER one so the bar stays exactly 64px and the page mains below
-          (h-[calc(100dvh-var(--app-chrome))]) do not overflow by a pixel. */}
+          (h-[calc(100vh-64px)]) do not overflow by a pixel. */}
       <nav className="sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)]">
         {/* Use a balanced three-column layout so the search sits in the true
             visual center of the navbar, with the brand and action cluster

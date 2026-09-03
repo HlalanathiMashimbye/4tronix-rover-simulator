@@ -1,12 +1,10 @@
 import Link from 'next/link';
-import { ShieldCheck, SlidersHorizontal, Users } from 'lucide-react';
+import { ShieldCheck, Users } from 'lucide-react';
 
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { OperatorSignIn } from '@/components/operator/OperatorSignIn';
-import { YardChip } from '@/components/operator/YardChip';
-import { yardDirectory } from '@/infrastructure/config/yardDirectory';
-import { findYardIn, yardLabelOf } from '@/core/domain/entities/Yard';
 import { SignOutButton } from '@/components/operator/SignOutButton';
+import { YardPicker } from '@/components/operator/YardPicker';
 import { MissionQueue } from '@/components/operator/MissionQueue';
 
 /**
@@ -21,13 +19,11 @@ export default async function OperatorPage() {
   const session = await getOperatorSession();
 
   if (!session) {
-    return <OperatorSignIn yards={await yardDirectory()} />;
+    return <OperatorSignIn />;
   }
 
-  const yard = findYardIn(await yardDirectory(), session.yardId ?? undefined) ?? null;
-
   return (
-    <main className="relative flex h-[calc(100dvh-var(--app-chrome))] flex-col overflow-hidden px-4 sm:px-6">
+    <main className="relative flex h-[calc(100vh-64px)] flex-col overflow-hidden px-4 sm:px-6">
       <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
         <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
           Operator <span className="text-gradient-mars">Console</span>
@@ -43,9 +39,9 @@ export default async function OperatorPage() {
             <ShieldCheck className="h-3.5 w-3.5 text-primary" />
             {session.role}
           </span>
-          {/* Chosen at sign-in and fixed for the session, so this states where
-              they are rather than offering to change it. Clicking says how. */}
-          <YardChip yard={yard} />
+          {/* A choice, not a permission. An operator is an operator anywhere;
+              the yard decides which queue they are looking at. */}
+          <YardPicker />
 
           {/* Admins only. An operator has no use for it and the page redirects
               them anyway, so showing it would be an invitation to a dead end. */}
@@ -58,34 +54,9 @@ export default async function OperatorPage() {
               Manage access
             </Link>
           )}
-
-          {session.role === 'admin' && (
-            <Link
-              href="/operator/settings"
-              className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-              Settings
-            </Link>
-          )}
         </div>
 
-        {yard ? (
-          <MissionQueue
-            role={session.role}
-            yardId={yard.id}
-            yardName={yardLabelOf(yard)}
-            yards={await yardDirectory()}
-          />
-        ) : (
-          // No yard on the session: one minted before the choice existed, or a
-          // yard retired since. Sending them to sign in again is the only
-          // honest option, because every write needs a yard to attribute to.
-          <p className="rounded-2xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
-            Sign out and back in to choose which yard you are at. Missions are recorded
-            against a yard, so the queue cannot be shown without one.
-          </p>
-        )}
+        <MissionQueue role={session.role} />
 
         <div className="flex justify-end">
           <SignOutButton />
