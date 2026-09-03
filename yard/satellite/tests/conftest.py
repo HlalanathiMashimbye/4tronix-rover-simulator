@@ -82,6 +82,8 @@ try:  # pragma: no cover - trivial import probe
     import cv2  # noqa: F401
 except ImportError:
     collect_ignore.append('test_recording_control.py')
+    # Same reason: it pushes known colours through the real JPEG encode.
+    collect_ignore.append('test_camera_colour.py')
 
 
 def pytest_report_header(config):

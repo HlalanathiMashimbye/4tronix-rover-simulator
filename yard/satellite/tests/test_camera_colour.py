@@ -16,10 +16,14 @@ these assert, end to end through the real JPEG encode.
 
 import base64
 
-import numpy as np
 import pytest
 
+# conftest skips this whole file at collection when these are absent, which is
+# the case in CI - requirements-test.txt leaves opencv and numpy out to keep it
+# light. Imported after that guard rather than at the top of the file, because
+# a module-level numpy import fails collection before any skip can apply.
 cv2 = pytest.importorskip('cv2')
+np = pytest.importorskip('numpy')
 
 import camera_server
 
