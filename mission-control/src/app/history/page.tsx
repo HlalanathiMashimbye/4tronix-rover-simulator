@@ -1,4 +1,5 @@
 import { MissionHistory } from '@/components/mission/MissionHistory';
+import { LeaderboardSettings } from '@/components/leaderboard/LeaderboardSettings';
 
 export default function HistoryPage() {
   return (
@@ -12,7 +13,8 @@ export default function HistoryPage() {
         </p>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col pb-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-6 pb-5 overflow-y-auto">
+        <LeaderboardSettings />
         <MissionHistory />
       </div>
     </main>

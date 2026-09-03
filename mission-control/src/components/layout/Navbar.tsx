@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   Trophy,
+  Award,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
@@ -40,6 +41,7 @@ const NAV_ITEMS = [
     icon: HistoryIcon,
   },
   { href: '/challenges', label: 'Challenges', mobileLabel: 'Challenges', icon: Trophy },
+  { href: '/leaderboard', label: 'Leaderboard', mobileLabel: 'Leaderboard', icon: Award },
 ];
 
 export function Navbar() {
