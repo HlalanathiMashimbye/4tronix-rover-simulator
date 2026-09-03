@@ -286,7 +286,7 @@
             <section class="panel-card mission">
                 <div class="card-head">
                     <span class="card-title">The mission</span>
-                    <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
+                    <button class="btn primary" id="importBtn" type="button">Paste mission</button>
                 </div>
                 <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
 
@@ -330,7 +330,7 @@
                     <span class="meta-label" style="margin:0;">Python</span>
                     <span class="code-hint">Read it before you send. This is exactly what the rover runs.</span>
                 </div>
-                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
+                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Paste mission above."></textarea>
             </section>
 
             <div class="spine">
@@ -373,6 +373,13 @@
                         <textarea class="yt-box" id="ytDesc" readonly></textarea>
                         <div class="row">
                             <button class="btn primary" id="ytCopy" type="button">Copy description</button>
+                            <!-- The next thing the operator does after copying is open
+                                 Studio and paste it there, so the step ends with the
+                                 door rather than leaving them to find it. Opens in a
+                                 new tab: losing the run station mid-upload would mean
+                                 setting the mission up again. -->
+                            <a class="btn" id="ytStudio" href="https://studio.youtube.com/"
+                               target="_blank" rel="noopener noreferrer">Open YouTube Studio</a>
                             <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
                         </div>
                         <input type="text" id="ytTitle" readonly hidden>

@@ -113,3 +113,35 @@ class TestImportNeedsNoDialog:
         assert 'TYPED_FIELDS' in page
         for field in ('code', 'missionName', 'missionId', 'ytDesc'):
             assert f"'{field}'" in page.split('TYPED_FIELDS')[1].split(']')[0]
+
+
+class TestStandupFeedback:
+    """UI changes asked for at the 3 Sep standup."""
+
+    def test_the_import_button_says_paste(self, page):
+        """"Import" named a thing the operator does not do.
+
+        There is no file to import and no dialog: they copy in Mission Control
+        and paste here, so the button is named after the gesture.
+        """
+        assert 'Paste mission' in page
+        assert 'Import copied mission' not in page
+
+    def test_the_upload_step_links_to_youtube_studio(self, page):
+        """The next thing after copying the description is opening Studio."""
+        studio = re.search(r'<a[^>]*id="ytStudio"[^>]*>', page)
+        assert studio, 'the upload step should end with a link to Studio'
+        assert 'studio.youtube.com' in studio.group(0)
+        # New tab: losing the run station mid-upload means setting it up again.
+        assert 'target="_blank"' in studio.group(0)
+        # rel is not optional on a target=_blank link to a third party.
+        assert 'noopener' in studio.group(0)
+
+    def test_run_is_gated_on_the_rover_being_there(self, page):
+        """Standup asked for Run to be disabled when the rover is not up.
+
+        Already the case, so this pins it rather than adds it.
+        """
+        gate = page.split('function paintGate')[1].split('}')[0]
+        assert "runBtn" in gate and 'disabled' in gate
+        assert 'roverOk' in page.split('function paintGate')[1][:200]
