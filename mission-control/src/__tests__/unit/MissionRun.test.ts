@@ -12,10 +12,8 @@ import {
   isRunningAt,
   type MissionRun,
 } from '@/core/domain/entities/MissionRun';
-import { nanoid } from 'nanoid';
 
 const run = (over: Partial<MissionRun> & { yardId: string }): MissionRun => ({
-  runId: nanoid(),
   status: 'completed',
   ...over,
 });
