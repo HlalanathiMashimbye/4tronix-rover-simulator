@@ -153,7 +153,9 @@ To demo end to end before a domain is verified, set the redirect variable
 out-of-band (it is a personal address, so it is not committed):
 
 ```bash
-export TF_VAR_resend_sandbox_recipient='owner@example.com'
+# The sandbox redirect is no longer a Terraform variable: it sends every
+# learner email to one inbox and the sending domain is verified now. Set
+# RESEND_SANDBOX_RECIPIENT in a local .env if you need it while testing.
 terraform apply
 ```
 

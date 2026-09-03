@@ -73,7 +73,18 @@ Follow the [4tronix Pi Setup Guide](https://4tronix.co.uk/blog/?p=2409) for full
 
 ### 1. Image the SD Card
 
-Use **Raspberry Pi OS (Legacy, 32-bit) Bullseye, dated 22 October 2024**.
+**Bookworm 32-bit is validated and is what the yard runs.** Measured on a Pi
+Zero W Rev 1.1, kernel 6.12: the 4tronix library initialises, the PCA9685
+answers at `0x40`, and `rpi_ws281x` drives the LEDs. Enable I2C and SPI after
+flashing - they are off by default, and without them the rover boots, joins
+wifi and cannot move. See [bring-up.md](bring-up.md).
+
+**Do not use "Raspberry Pi OS (32-bit)"**, the app's default. It currently
+gives Trixie, which has no PWM chips, no `/dev/i2c-1` and no SPI on this board.
+
+**Bullseye Legacy 32-bit, dated 22 October 2024**, remains the fallback. It is
+the configuration with the longest history, and worth reaching for if anything
+hardware-side misbehaves.
 
 > **Note:** Raspberry Pi Imager no longer lists Bullseye. Download the image directly and use **"Use custom"** in the imager.
 
@@ -90,15 +101,47 @@ https://downloads.raspberrypi.com/raspios_oldstable_armhf/images/raspios_oldstab
 In Raspberry Pi Imager:
 1. Click **Choose OS**
 2. Select **Use custom** and pick the downloaded `.img.xz` file
-3. Choose your SD card and write
+3. Choose your SD card
+4. **Use OS Customisation (the gear).** Set hostname, the `mars` user and its
+   password, the `marsyard` wifi with country ZA, and enable SSH - paste your
+   public key there rather than relying on a password
+5. Write
 
-> **Important:** The OS Customisation screen (gear icon) does **not** work with custom images. Skip it — configure headless setup manually after writing as described below.
+### Use the app's customisation, not the manual files
+
+This section used to say the gear icon does not work with custom images and to
+configure the card by hand afterwards. **That has not held up in practice** -
+we have flashed these cards both ways and the app is the one that works. The
+manual route is kept below as a fallback, not as the recommendation.
+
+Three reasons it is better, beyond being fewer steps:
+
+- **It picks the right wifi mechanism for you.** A Bullseye card wants
+  `wpa_supplicant.conf`; a Bookworm one ignores that file completely and uses
+  NetworkManager. Writing the wrong one gives a Pi that boots and joins
+  nothing, with nothing in the logs pointing at the file you wrote. Imager
+  knows which image it just wrote. See
+  [bring-up.md](bring-up.md) for what that trap looks like.
+- **It sets the password properly.** `userconf.txt` is processed once, on
+  first boot, so a card that has already booted cannot be fixed by putting the
+  file back - a genuinely easy way to lock yourself out of a working rover.
+- **It can install your SSH key**, which is what stops the password mattering
+  at all. Do this. A key in Imager means nobody has to remember or share a
+  password later.
+
+> **One thing the app cannot do:** give the rover a *single* wifi network when
+> the card already has others. It writes what you give it to a fresh card, so a
+> clean flash starts with only the network you typed - which is exactly what we
+> want, and why re-flashing is the fix for a rover that keeps joining somebody's
+> phone hotspot.
 
 After imaging, macOS will show "disk not readable" - click **Ignore** (not Eject or Initialize). The boot partition will mount as `/Volumes/bootfs`.
 
-### 2. Headless Setup
+### 2. Headless setup by hand (fallback)
 
-Configure the SD card for headless boot before inserting it into the Pi.
+Only needed if you did not use the app's OS Customisation above. Prefer the
+app: everything in this section is what it does for you, and the failure modes
+below are the ones it avoids.
 
 > **macOS Note:** If you get "Operation not permitted" errors, add Terminal to **System Settings → Privacy & Security → Full Disk Access**, then restart Terminal.
 

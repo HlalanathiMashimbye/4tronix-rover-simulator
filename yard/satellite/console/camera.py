@@ -12,20 +12,25 @@ import os
 from flask import jsonify, request
 
 import camera_control
-from console.auth import require_operator
 from console.blueprint import operator_bp
 import tunables
 
 @operator_bp.route('/api/camera/start', methods=['POST'])
-@require_operator
 def api_camera_start():
     """Start (or restart) the camera server.
 
-    Behind require_operator deliberately. Spawning a process is the most
-    powerful thing this console can do, and it sits on a network anyone at the
-    venue can join. The command itself is hardcoded - see camera_control - so
-    nothing from this request reaches a shell; the auth gate is defence in
-    depth rather than the only control.
+    NOT behind require_operator, and that is a reversal. The old reasoning was
+    defence in depth: spawning a process is the most powerful thing here and
+    the venue network is open. But require_operator means a Firebase sign-in,
+    which means internet, and the yard exists to work without it. The station
+    at /run/ refuses to record until the camera is primed - so on a night with
+    no wifi, the camera could not be started, so nothing could be recorded,
+    and the offline path this whole console is built around was dead.
+
+    What actually protects this is unchanged and was always the real control:
+    the command is hardcoded in camera_control, so nothing from this request
+    reaches a shell, and the only outcome an attacker on the venue wifi can
+    force is a camera restart on a box that is already serving them the feed.
 
     An optional camera index is accepted and validated as an integer. It is the
     device selector on a development machine, the analogue of the rover URL.
@@ -44,6 +49,11 @@ def api_camera_start():
         _persist_camera_index(index)
 
     ok, detail = start(camera_index=index)
+    # The cached snapshot describes the camera as it was before this button,
+    # so without dropping it the next poll reports the old state and pressing
+    # Start looks like it did nothing.
+    from camera_state import invalidate
+    invalidate()
     if not ok:
         return jsonify({'error': detail}), 502
 
@@ -53,11 +63,14 @@ def api_camera_start():
 
 
 @operator_bp.route('/api/camera/stop', methods=['POST'])
-@require_operator
 def api_camera_stop():
+    # Login-free for the same reason as start: an operator who can start the
+    # camera offline has to be able to stop it too.
     from camera_control import stop
 
     ok, detail = stop()
+    from camera_state import invalidate
+    invalidate()
     if not ok:
         return jsonify({'error': detail}), 502
     return jsonify({'status': 'ok', 'detail': detail})
@@ -85,42 +98,12 @@ def _persist_camera_index(index):
 
 
 @operator_bp.route('/api/camera', methods=['GET'])
-@require_operator
 def api_camera_status():
-    """Whether the camera feed is up, and which backend is serving it.
+    """The shared camera snapshot.
 
-    The backend matters to an operator: on the Pi the IMX500 does object
-    detection on its own NPU, whereas a laptop webcam is a plain feed. Showing
-    'no detection' beats someone concluding detection is broken.
+    This used to run its own socket check and its own describe(), which is how
+    Settings ended up able to disagree with the run station about one camera -
+    each truthfully reporting its own poll. Same source now.
     """
-    port = int(os.environ.get('CAMERA_PORT', 8890))
-    host = tunables.get('cameraHost')
-
-    import socket
-    reachable = False
-    try:
-        with socket.create_connection((host, port), timeout=1.0):
-            reachable = True
-    except OSError:
-        pass
-
-    try:
-        from camera_control import describe
-        control = describe()
-    except Exception:
-        control = {'managedBy': 'unknown', 'running': reachable}
-
-    return jsonify({
-        'reachable': reachable,
-        'host': host,
-        'port': port,
-        'wsUrl': f'ws://{host}:{port}',
-        'managedBy': control.get('managedBy'),
-        'cameraIndex': int(os.environ.get('CAMERA_INDEX', 0)),
-        'hint': None if reachable else (
-            'Camera server is not running. Use Start below. On a Mac it uses '
-            'the built-in webcam (no object detection) and needs Camera '
-            'permission; press Start and the message will say what to do.'
-        ),
-    })
-
+    from camera_state import snapshot
+    return jsonify(snapshot())
