@@ -86,8 +86,10 @@
             padding: 0.9rem 1rem; border: 1px solid var(--border); border-radius: 14px;
             background: var(--surface); box-shadow: var(--e2);
         }
-        .card-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
-        .card-title { color: var(--heading); font-size: var(--fs-md); font-weight: 700; letter-spacing: -0.01em; }
+        /* .card-head and .card-title now live in yard-base.css, shared with
+           settings. The run station's cards put the title inline with a
+           button, so they cancel the shared bottom margin. */
+        .card-head .card-title { margin-bottom: 0; }
         .card-note { color: var(--text-faint); font-size: var(--fs-2xs); }
 
         /* ---- Mission identity -------------------------------------------- */
