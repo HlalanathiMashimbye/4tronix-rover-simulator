@@ -94,6 +94,21 @@
         .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
         .meta-field { min-width: 0; }
         .meta-field.full { grid-column: 1 / -1; }
+        /* The paste target. Hidden until the operator asks to import and the
+           clipboard turns out to be unreadable, so the common path stays a
+           single button and this never appears on a secure origin. */
+        .paste-catch { margin: 0.55rem 0 0.2rem; }
+        .paste-box {
+            width: 100%; box-sizing: border-box;
+            background: var(--bg-2); color: var(--text);
+            border: 1px solid var(--signal-edge); border-radius: 10px;
+            padding: 0.5rem 0.6rem; font-family: var(--mono); font-size: var(--fs-xs);
+            resize: none;
+        }
+        .paste-box::placeholder { color: var(--text-faint); }
+        .paste-box:focus { outline: none; box-shadow: 0 0 0 3px var(--signal-weak); }
+        #pasteHint { color: var(--signal); }
+
         .meta-label { display: block; color: var(--text-faint); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 0.3rem; }
         .meta-row {
             display: flex; align-items: center; gap: 0.5rem; min-width: 0;
@@ -271,9 +286,21 @@
             <section class="panel-card mission">
                 <div class="card-head">
                     <span class="card-title">The mission</span>
-                    <button class="btn primary" id="importBtn" type="button">Import copied mission</button>
+                    <button class="btn primary" id="importBtn" type="button">Paste mission</button>
                 </div>
                 <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
+
+                <!-- Shown only when the clipboard cannot be read directly. The
+                     yard is served over plain HTTP to a tablet, which is not a
+                     secure context, so navigator.clipboard.readText does not
+                     exist here and never will. This is where the operator
+                     pastes instead. It replaces a window.prompt: a modal
+                     typing dialog in the middle of a run. -->
+                <div class="paste-catch" id="pasteCatch" hidden>
+                    <label class="meta-label" for="pasteBox" id="pasteHint">Paste the copied mission</label>
+                    <textarea id="pasteBox" class="paste-box" rows="2" spellcheck="false"
+                              autocomplete="off" placeholder="Paste here"></textarea>
+                </div>
 
                 <div class="mission-meta">
                     <div class="meta-field">
@@ -291,7 +318,7 @@
                         </div>
                     </div>
                     <div class="meta-field full">
-                        <span class="meta-label">Run ID, which is also what the recording is called</span>
+                        <span class="meta-label">Run ID, which the recording is named after</span>
                         <div class="meta-row">
                             <span class="meta-value" id="runId">Waiting for the mission ID</span>
                             <button class="btn copy-compact" type="button" data-copy="runId">Copy</button>
@@ -303,7 +330,7 @@
                     <span class="meta-label" style="margin:0;">Python</span>
                     <span class="code-hint">Read it before you send. This is exactly what the rover runs.</span>
                 </div>
-                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Import above."></textarea>
+                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Paste mission above."></textarea>
             </section>
 
             <div class="spine">
@@ -346,6 +373,13 @@
                         <textarea class="yt-box" id="ytDesc" readonly></textarea>
                         <div class="row">
                             <button class="btn primary" id="ytCopy" type="button">Copy description</button>
+                            <!-- The next thing the operator does after copying is open
+                                 Studio and paste it there, so the step ends with the
+                                 door rather than leaving them to find it. Opens in a
+                                 new tab: losing the run station mid-upload would mean
+                                 setting the mission up again. -->
+                            <a class="btn" id="ytStudio" href="https://studio.youtube.com/"
+                               target="_blank" rel="noopener noreferrer">Open YouTube Studio</a>
                             <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
                         </div>
                         <input type="text" id="ytTitle" readonly hidden>
@@ -373,14 +407,18 @@
     // needs a secure context and the yard is plain HTTP on a LAN address, so
     // the read is attempted and then falls back to a prompt rather than the
     // button simply doing nothing on the machine it matters on.
-    async function readClipboard() {
-        try {
-            if (navigator.clipboard && navigator.clipboard.readText) {
-                return await navigator.clipboard.readText();
-            }
-        } catch (e) { /* insecure context or permission refused */ }
-        return window.prompt('Paste the mission here (Python, or Blockly JSON):') || '';
-    }
+    // Mission Control's Copy button writes the mission's identity into two
+    // header comments above the code. They are comments, so what it copies is
+    // still exactly the Python the rover runs, and the run station can still
+    // tell which mission it is looking at. Without reading these back a pasted
+    // mission arrives anonymous: no name, no id, and therefore no run id - and
+    // the run id is the recording's filename, so the video lands unattributable.
+    const HEADER_NAME = /^[ \t]*#[ \t]*Mission:[ \t]*(.+?)[ \t]*$/m;
+    const HEADER_ID = /^[ \t]*#[ \t]*MissionID:[ \t]*([A-Za-z0-9_-]+)[ \t]*$/m;
+    // A flag, not the workspace. Mission Control sends "Blocks: yes" rather
+    // than kilobytes of Blockly JSON, and the monitor only needs to know that
+    // this mission came from blocks so it can say so on the screen.
+    const HEADER_BLOCKS = /^[ \t]*#[ \t]*Blocks:[ \t]*yes[ \t]*$/mi;
 
     function applyImport(text) {
         text = (text || '').trim();
@@ -406,12 +444,69 @@
                 return;
             } catch (e) { /* not JSON after all, treat as Python */ }
         }
+        // Python, with the identity carried in header comments.
         code.value = text;
-        flash($('importMsg'), 'Python imported', 'ok');
-        paintYouTube();
+        const named = text.match(HEADER_NAME);
+        const identified = text.match(HEADER_ID);
+        if (named) missionName.value = named[1];
+        if (identified) missionId.value = identified[1];
+        // Always, not only when an id was found: this is what fills the run id
+        // and the upload description, and when there is no id it is what says
+        // so in the field rather than leaving a stale one from a previous run.
+        updateRunIdentity();
+        flash($('importMsg'),
+              identified ? 'Mission imported'
+                         : 'Python imported. No mission ID in it, so fill it in above.',
+              identified ? 'ok' : '');
     }
 
-    $('importBtn').addEventListener('click', async () => applyImport(await readClipboard()));
+    // ---- Getting the mission onto the page ----------------------------
+    // Reading the clipboard outright needs a secure context. The yard is
+    // served over plain HTTP to a tablet on the venue network, so that call is
+    // absent here and cannot be made to work; the operator pastes instead.
+    // Both paths end in applyImport, and neither opens a dialog.
+    const pasteCatch = $('pasteCatch'), pasteBox = $('pasteBox');
+    const PASTE_KEY = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
+        ? '\u2318V' : 'Ctrl-V';
+
+    function hidePaste() { pasteCatch.hidden = true; pasteBox.value = ''; }
+
+    function showPaste(reason) {
+        // The shortcut goes in the placeholder, not the label. This station is
+        // operated from a tablet as often as a laptop, and there the gesture is
+        // a long press, not a key combination - a label saying otherwise would
+        // be wrong for half the people reading it.
+        pasteBox.placeholder = `${PASTE_KEY}, or long press and paste`;
+        pasteCatch.hidden = false;
+        pasteBox.value = '';
+        pasteBox.focus();
+        if (reason) flash($('importMsg'), reason, '');
+    }
+
+    $('importBtn').addEventListener('click', async () => {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text && text.trim()) { hidePaste(); applyImport(text); return; }
+            } catch (e) { /* refused; fall through to the paste box */ }
+        }
+        showPaste();
+    });
+
+    // A paste anywhere on the page is an import, so the operator who has just
+    // copied in Mission Control can switch tab and paste without aiming at
+    // anything. Fields the operator edits by hand are left alone - pasting an
+    // id into the id box should put it in the id box.
+    const TYPED_FIELDS = ['code', 'missionName', 'missionId', 'ytDesc'];
+    document.addEventListener('paste', (e) => {
+        if (e.target && TYPED_FIELDS.includes(e.target.id)) return;
+        const text = ((e.clipboardData || window.clipboardData) || {}).getData
+            ? (e.clipboardData || window.clipboardData).getData('text') : '';
+        if (!text || !text.trim()) return;
+        e.preventDefault();
+        hidePaste();
+        applyImport(text);
+    });
 
     // ---- Step 4: the description that links the upload ----------------
     // "MissionID: <id>" and "Yard: <id>" are both matched literally by the
@@ -592,6 +687,9 @@
         const d = await resp.json();
         if (!resp.ok) throw new Error(d.error || 'Could not start recording');
         recordingName = d.name;
+        // Every run gets its own file now, so the name is not predictable from
+        // the mission alone and the operator is told the real one.
+        if (d.file) flash($('runMsg'), 'Recording to ' + d.file, 'ok');
         $('recDot').classList.add('on');
         $('recBtn').lastChild.textContent = ' Stop recording';
         paintGate();
@@ -662,6 +760,10 @@
             const params = { code: python };
             const missionRef = metaValue(missionId);
             if (missionRef) params.mission_id = missionRef;
+            // Travels with the dispatch for the same reason mission_id does:
+            // the rover echoes params back on the instruction, and the monitor
+            // renders from that.
+            if (HEADER_BLOCKS.test(python)) params.blockly = true;
 
             const resp = await fetch('/api/queue/add', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -57,6 +57,13 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     import web_server
     monkeypatch.setattr(web_server, 'ROVER_URL', 'http://127.0.0.1:9')
 
+    # Nor may a test go looking for a rover. Saving an address probes it, and
+    # discovery can sweep a whole /24 - neither belongs in a unit test, and
+    # leaving them real put twelve seconds back on the suite.
+    import rover_discovery
+    monkeypatch.setattr(rover_discovery, '_health', lambda url, timeout=None: None)
+    monkeypatch.setattr(rover_discovery, '_port_open', lambda *a, **k: False)
+
     yield
     camera_state.invalidate()
 
@@ -75,6 +82,8 @@ try:  # pragma: no cover - trivial import probe
     import cv2  # noqa: F401
 except ImportError:
     collect_ignore.append('test_recording_control.py')
+    # Same reason: it pushes known colours through the real JPEG encode.
+    collect_ignore.append('test_camera_colour.py')
 
 
 def pytest_report_header(config):

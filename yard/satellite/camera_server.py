@@ -302,8 +302,17 @@ def capture_frame():
         metadata = request.get_metadata()
         request.release()
 
-        # Convert RGB to BGR for OpenCV
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # No colour conversion here, deliberately. Picamera2's format names
+        # describe libcamera's packing, not numpy's axis order: configured as
+        # "RGB888" it hands back an array whose channels are already in the
+        # B, G, R order OpenCV expects. Converting RGB->BGR on top of that
+        # swapped red and blue a second time, which is why the yard's wooden
+        # desk filmed as blue-grey and the green wall panels as teal. Every
+        # recording inherited it too, since the writer decodes these JPEGs.
+        #
+        # The overlay hid it: detection boxes are drawn (0, 255, 0) and pure
+        # green survives an R/B swap untouched, so the one thing anybody
+        # looked at closely stayed the right colour.
 
         # Get and draw detections
         detections = parse_detections(metadata)

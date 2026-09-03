@@ -35,7 +35,7 @@ def client(tmp_path, monkeypatch):
 
 
 def test_set_rover_url(client):
-    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523'})
+    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523', 'force': True})
     data = resp.get_json()
 
     assert resp.status_code == 200
@@ -45,20 +45,20 @@ def test_set_rover_url(client):
 
 
 def test_set_rover_url_strips_trailing_slash(client):
-    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523/'})
+    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523/', 'force': True})
 
     assert resp.get_json()['rover_url'] == 'http://curiosity.local:8523'
 
 
 def test_set_rover_url_persists_to_config_file(client):
-    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523'})
+    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523', 'force': True})
 
     with open(web_server.CONFIG_FILE) as f:
         assert json.load(f)['rover_url'] == 'http://10.0.0.7:8523'
 
 
 def test_saved_url_used_by_api_status(client, monkeypatch):
-    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523'})
+    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523', 'force': True})
 
     captured = {}
 
@@ -73,12 +73,69 @@ def test_saved_url_used_by_api_status(client, monkeypatch):
     assert data['rover']['url'] == 'http://10.0.0.7:8523'
 
 
-@pytest.mark.parametrize('bad', ['', 'curiosity.local:8523', 'ftp://x', 'http://', None])
-def test_invalid_url_rejected(client, bad):
-    resp = client.post('/api/config/rover_url', json={'url': bad})
+@pytest.mark.parametrize('bad', ['', '   ', 'ftp://x', 'http://', '://', None])
+def test_malformed_url_rejected(client, bad):
+    """Malformed, which is different from unreachable - see below.
+
+    'curiosity.local:8523' used to be in this list. It is accepted now: a bare
+    host, with or without a port, is what an operator actually types, and
+    requiring them to remember `http://` and `:8523` under pressure is what
+    this whole change is about.
+    """
+    resp = client.post('/api/config/rover_url', json={'url': bad, 'force': True})
 
     assert resp.status_code == 400
     assert 'error' in resp.get_json()
+
+
+@pytest.mark.parametrize('typed,stored', [
+    ('curiosity.local',      'http://curiosity.local:8523'),
+    ('curiosity.local:8523', 'http://curiosity.local:8523'),
+    ('10.0.0.7',             'http://10.0.0.7:8523'),
+    ('http://10.0.0.7:8523', 'http://10.0.0.7:8523'),
+])
+def test_what_an_operator_types_is_accepted(client, typed, stored):
+    """The scheme and the port are filled in rather than demanded."""
+    resp = client.post('/api/config/rover_url', json={'url': typed, 'force': True})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['rover_url'] == stored
+
+
+def test_an_address_with_no_rover_is_refused_rather_than_saved(client, monkeypatch):
+    """The actual bug. Validation checked only that it started with http, so a
+    wrong-but-well-formed address saved happily and the yard looked broken with
+    nothing on the page saying why. That is what happened at a demo."""
+    import web_server
+    before = web_server.ROVER_URL
+
+    resp = client.post('/api/config/rover_url', json={'url': '192.168.1.99'})
+
+    assert resp.status_code == 409
+    body = resp.get_json()
+    assert body['unreachable'] is True
+    assert '192.168.1.99' in body['error']
+    assert web_server.ROVER_URL == before, 'a refused address must not be saved'
+
+
+def test_force_saves_an_address_that_is_not_answering_yet(client):
+    """Legitimate: setting the address before the rover is switched on. It
+    just should not be the accident."""
+    resp = client.post('/api/config/rover_url',
+                       json={'url': 'curiosity.local', 'force': True})
+
+    assert resp.status_code == 200
+
+
+def test_a_reachable_rover_saves_without_force(client, monkeypatch):
+    import rover_discovery
+    monkeypatch.setattr(rover_discovery, '_health',
+                        lambda url, timeout=None: {'driver': 'RealRoverDriver'})
+
+    resp = client.post('/api/config/rover_url', json={'url': 'curiosity.local', 'force': True})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['rover_url'] == 'http://curiosity.local:8523'
 
 
 def test_load_config_precedence(tmp_path, monkeypatch):
@@ -106,7 +163,7 @@ def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
-        resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523'})
+        resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523', 'force': True})
 
     assert resp.status_code == 200
     assert web_server.ROVER_URL == 'http://newrover.local:8523'
@@ -122,7 +179,7 @@ def test_rover_url_is_still_validated_without_a_login(tmp_path, monkeypatch):
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
-        resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)'})
+        resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)', 'force': True})
 
     assert resp.status_code == 400
     assert web_server.ROVER_URL == original_url, 'the URL must not have changed'
@@ -253,12 +310,19 @@ class TestConsoleDesignSystem:
     def test_health_reads_across_the_top_of_settings(self, client):
         """It was a narrow left column of three stacked cards, given a third of
         the width it never needed, with the bottom half empty while the middle
-        column scrolled."""
+        column scrolled. Then it was three cards across the top, which carried
+        very different amounts and sat at wildly different heights. It is one
+        module with a row per subsystem now, the same shape the run station
+        uses for readiness."""
         page = client.get('/settings').get_data(as_text=True)
 
-        assert 'class="health-strip"' in page
-        head = page.index('class="health-strip"')
-        assert head < page.index('class="settings-grid"'), 'health comes first'
+        assert 'class="health"' in page
+        assert page.count('class="hrow"') == 3
+        # It is the first thing in the grid now rather than a band above it: as
+        # a full-width strip every row ran the width of the page for a line of
+        # text needing a third of it.
+        assert page.index('class="settings-grid"') < page.index('class="health"')
+        assert page.index('class="health"') < page.index('id="tunablesSection"')
 
     def test_touch_targets_are_raised_for_a_finger(self, client):
         """The yard is operated from a tablet and these were tuned by eye on a
@@ -538,3 +602,31 @@ class TestOneCameraTruth:
 
         settings = client.get('/settings').get_data(as_text=True)
         assert 'setInterval(loadCamera' not in settings
+
+
+class TestSettingsIsQuietWhenNothingIsWrong:
+    """Every line on this page should be earning its place. A page an operator
+    scans under pressure is one where anything permanent and uninformative
+    trains the eye to skip the region that carries the real message."""
+
+    def test_the_camera_message_strip_is_hidden_until_there_is_a_message(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'id="camera-msg-panel" hidden' in page
+        assert 'panel.hidden = !text' in page
+
+    def test_who_manages_the_camera_sits_with_the_camera_controls(self, client):
+        """It was adrift in its own strip under the whole module, describing a
+        row two rows above it."""
+        page = client.get('/settings').get_data(as_text=True)
+        row = page[page.index('id="card-camera"'):page.index('id="camera-msg-panel"')]
+
+        assert 'id="camera-managed"' in row
+
+    def test_the_quality_buttons_carry_their_own_dimensions(self, client):
+        """The 4:3 was a line of grey prose repeating what 640 x 480 and
+        1280 x 960 already say on the buttons themselves."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert '4:3 like the camera' in page          # on the button, as a title
+        assert 'The camera is 4:3 at every setting' not in page

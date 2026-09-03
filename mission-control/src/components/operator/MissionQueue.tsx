@@ -28,6 +28,8 @@ import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
+import { missionClipboardText } from '@/lib/missionClipboard';
+import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
 /**
  * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
@@ -104,15 +106,18 @@ function YardQueue({
    */
   const [mode, setMode] = useState<ConsoleMode>('manual');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Read in an effect, not in useState's initialiser: this component renders
+  // on the server too, where localStorage does not exist.
+  const [consoleUrl, setConsoleUrl] = useState<string>('');
+  const [editingConsole, setEditingConsole] = useState(false);
+  useEffect(() => setConsoleUrl(readConsoleUrl()), []);
   const [done, setDone] = useState<QueueMission[] | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   async function copyCode(mission: QueueMission) {
-    const envelope = JSON.stringify({
-      missionName: mission.name || '',
-      missionId: mission.id,
-      code: mission.code,
-    });
+    // Shared with the mission page, so both Copy buttons put the same thing on
+    // the clipboard and the run station gets the same paste either way.
+    const envelope = missionClipboardText(mission);
     try {
       await navigator.clipboard.writeText(envelope);
       setCopiedId(mission.id);
@@ -297,6 +302,57 @@ function YardQueue({
           {flash}
         </p>
       )}
+
+      {/* The console runs on the satellite in the room, on a network this app
+          cannot reach, so the operator was expected to remember an address and
+          type it into a second tab. The button is the door; the address is
+          theirs and lives in their browser. */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {editingConsole ? (
+          <>
+            <input
+              type="text"
+              defaultValue={consoleUrl}
+              aria-label="Yard console address"
+              placeholder="mro.local:3001/run/"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-xs"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setConsoleUrl(writeConsoleUrl(e.currentTarget.value));
+                  setEditingConsole(false);
+                }
+                if (e.key === 'Escape') setEditingConsole(false);
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingConsole(false)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <a
+              href={consoleUrl || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+            >
+              Open operator console
+            </a>
+            <button
+              type="button"
+              className="rounded-md px-1.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingConsole(true)}
+            >
+              Change
+            </button>
+            <span className="truncate font-mono text-[11px] text-muted-foreground">{consoleUrl}</span>
+          </>
+        )}
+      </div>
 
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />

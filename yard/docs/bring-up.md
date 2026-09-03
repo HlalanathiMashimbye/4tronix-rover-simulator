@@ -17,6 +17,13 @@ credentials. A yard with no uplink at all runs missions.
         +-- satellite Pi    :3001   the pages, :8890 the camera
 ```
 
+> **The laptop is no longer the hotspot.** The satellite serves `marsyard`
+> itself now, so the yard needs no laptop at all - see
+> [yard-network.md](yard-network.md). The diagram above still describes the
+> first bring-up, where the satellite is a client of a laptop while it is being
+> flashed and configured; the satellite becomes the access point at the end of
+> it, with `setup-scripts/satellite-as-access-point.sh`.
+
 Mission Control is not on this diagram on purpose. It runs in a browser, the
 operator copies a mission out of it, and it never speaks to the satellite. If
 the laptop has internet to share, that is for the operator's browser, not for

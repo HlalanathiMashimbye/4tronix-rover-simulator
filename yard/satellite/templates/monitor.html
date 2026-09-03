@@ -998,7 +998,12 @@
                     paramsHtml = `<div class="instruction-params">${paramStr || 'no params'}</div>`;
                 }
 
-                const label = (cmd === 'run_python' && params.blockly_state)
+                // blockly_state comes from /code/, which has the workspace and
+                // gets the blocks drawn above. params.blockly comes from the run
+                // station, which only has the flag Mission Control put in the
+                // clipboard - so it gets the name but keeps the Python below it.
+                // Either way the screen says this mission was built from blocks.
+                const label = (cmd === 'run_python' && (params.blockly_state || params.blockly))
                     ? 'Run Blockly'
                     : cmd.replace(/_/g, ' ');
 

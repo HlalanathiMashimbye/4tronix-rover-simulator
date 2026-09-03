@@ -10,44 +10,121 @@
            the shared console layer in yard-base.css, so this page cannot drift
            away from the queue and mission pages the way it had. */
 
-        /* Health across the top, then two columns of settings.
+        /* Health as one instrument, then two columns of settings.
 
-           It was three equal columns, and the leftmost held the Satellite,
-           Rover and Camera cards stacked vertically. That put the three facts
-           an operator opens this page to check into a narrow strip down one
-           side, gave them a third of the width they never needed, and left the
-           bottom half of that column empty while the middle column scrolled.
+           It was three cards across the top. They carry very different
+           amounts - a hostname, a set of camera controls, an address editor -
+           so three identical containers sat at wildly different heights, one
+           nearly empty beside one bursting. Tinted by state they also read as
+           three alerts rather than three readings.
 
-           Health is status: it goes across the top where it is read in one
-           glance, the same shape the run station uses, so the two pages teach
-           each other. What is left below is genuinely two things - values you
-           tune, and operations you perform. */
-        .health-strip {
-            flex: 0 0 auto;
-            display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 0.7rem;
+           One module, a row per subsystem, hairlines between, colour only in
+           the lamp and the state word. The same shape the run station uses for
+           readiness, so the two pages teach each other. */
+        /* Two columns wide, not the whole page.
+
+           As a full-width band each row ran to about 1075px for a line of text
+           that needs a third of it, so every row had a gulf between its detail
+           and its controls. It is a card among cards now: wide enough for the
+           longest row (the rover's driver line plus its address and Change),
+           and no wider. */
+        .health {
+            display: flex; flex-direction: column;
+            border: 1px solid var(--border); border-radius: 12px;
+            background: var(--surface); box-shadow: var(--e1);
+            overflow: hidden;
         }
+        .hrow {
+            display: flex; align-items: center; gap: 0.7rem;
+            min-height: 46px;
+            padding: 0.6rem 0.9rem; min-width: 0;
+            /* Wrap rather than squeeze. The status pill and the address both
+               hold their width, so with a long label like "fake driver (no
+               hardware)" the diagnostic was crushed into a column six
+               characters wide and wrapped on every other word. */
+            flex-wrap: wrap;
+        }
+        .hrow + .hrow, .hpanel + .hrow { border-top: 1px solid var(--border); }
+        .hname {
+            flex: 0 0 5.5rem;
+            color: var(--text-dim); font-family: var(--mono);
+            font-size: var(--fs-2xs); font-weight: 600;
+            letter-spacing: 0.1em; text-transform: uppercase;
+        }
+        .hdetail {
+            /* A real basis, not auto: min-width 0 let this shrink to nothing
+               whenever a sibling refused to. Below ~16rem it takes its own
+               line instead. */
+            flex: 1 1 16rem; min-width: 0;
+            color: var(--text-dim); font-family: var(--mono);
+            font-size: var(--fs-2xs); line-height: 1.5;
+            /* Wraps rather than truncates. Ellipsis kept the rows a uniform
+               height, at the cost of "Mast cam: not detected (reseat + rebo..."
+               - and a diagnostic that stops before the instruction is worse
+               than a row that is a line taller. */
+            overflow-wrap: anywhere;
+        }
+        .hdetail span { color: var(--text); }
+        .haction { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
+        .haction code { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text); }
+        .haction .camera-managed { color: var(--text-faint); font-size: var(--fs-2xs); }
+        .haction .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
+
+        /* A panel belongs to the row above it and spans the module, so opening
+           it grows this and distorts nothing beside it. */
+        .hpanel {
+            display: flex; flex-direction: column; gap: 0.55rem;
+            padding: 0.75rem 0.9rem;
+            border-top: 1px solid var(--border);
+            background: var(--bg-2);
+        }
+        /* A stripe on the row, not a wash across it. Enough to find the bad
+           one at a glance, quiet enough that three good ones say nothing. */
+        .hrow { border-left: 3px solid transparent; }
+        .hrow[data-state="ok"]   { border-left-color: var(--ok); }
+        .hrow[data-state="warn"] { border-left-color: var(--warn); background: var(--warn-weak); }
+        .hrow[data-state="bad"]  { border-left-color: var(--bad); background: var(--bad-weak); }
+
+        .hpanel.quiet-panel { flex-direction: row; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.9rem; }
+        .hhint { color: var(--text-faint); font-size: var(--fs-2xs); }
+
+        /* Cap the width and let the cards be their own height.
+
+           The shell is full bleed, so on a 1440 screen this page was 1395px of
+           three short rows and two columns stretched to 574px tall by the grid
+           rather than by anything in them - wide and long, both for nothing.
+           There is not much on this page; it should look like there is not
+           much on this page.
+
+           align-items: start is the half that fixes the length: without it
+           every column is as tall as the tallest, and the grid is as tall as
+           the space left over. */
+        /* One column, the width of a thing you read.
+
+           Four cards in a grid on a full-height page read as a dashboard with
+           its data missing: airy boxes at the top, a void underneath, and no
+           amount of span arithmetic fixed that because the arithmetic was
+           never the problem. A settings page is a list of settings. One
+           column, sections down it, and the space either side is margin
+           instead of a hole.
+
+           720px because that is about as wide as the longest row wants - the
+           rover's driver line, its address and Change - and no wider. */
+        /* Centred, not just capped. Left-aligned at 720px on a wide screen the
+           empty space is all on one side, which reads as a hole rather than as
+           margin - the exact thing narrowing it was meant to fix. */
+        .settings-page { max-width: 720px; margin-inline: auto; }
+        /* The shell is 100dvh with no page scroll, which is right for the
+           run station and wrong here: a column of sections is meant to be
+           scrolled if it outgrows the screen, not clipped. */
+        .console.fixed-shell:has(.settings-page) { height: auto; min-height: 100dvh; overflow: visible; }
+        .settings-page { flex: 0 0 auto; }
         .settings-grid {
-            flex: 1 1 auto; min-height: 0;
-            display: grid;
-            grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+            flex: 0 0 auto;
+            display: flex; flex-direction: column;
             gap: 0.85rem;
         }
-        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-height: 0; }
-        .settings-col.scrolls { overflow-y: auto; padding-right: 4px; }
-        /* A column that scrolls should say so quietly, not with the platform's
-           default slab of grey down the middle of the page. */
-        .settings-col.scrolls { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
-        .settings-col.scrolls::-webkit-scrollbar { width: 8px; }
-        .settings-col.scrolls::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
-        .settings-col.scrolls::-webkit-scrollbar-track { background: transparent; }
-
-        /* Status tiles carry their state on the tile, not only in a 30px icon,
-           matching the run station's readiness strip. */
-        .health-strip .stat-card { border-left: 3px solid var(--text-faint); box-shadow: var(--e1); }
-        .health-strip .stat-card[data-state="ok"]   { border-left-color: var(--ok);   background: var(--ok-weak); }
-        .health-strip .stat-card[data-state="warn"] { border-left-color: var(--warn); background: var(--warn-weak); }
-        .health-strip .stat-card[data-state="bad"]  { border-left-color: var(--bad);  background: var(--bad-weak); }
+        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; }
 
         .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
         /* The page title, three card headings and a field label all sat within
@@ -63,7 +140,31 @@
         .url-editor { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .url-editor[hidden] { display: none; }
         .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
-        .url-error { color: var(--bad); font-size: var(--fs-sm); }
+        .url-error { color: var(--bad); font-size: var(--fs-sm); line-height: 1.45; display: block; margin-top: 0.4rem; }
+        /* The address lives in the Rover card now, not the page header. When
+           the rover is wrong, the Rover card is where you look - having the
+           only way to fix it somewhere else is how you end up typing an
+           address into the wrong box at a demo. */
+        .rover-addr { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.45rem; flex-wrap: wrap; }
+        .rover-addr code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text); }
+        .rover-addr .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
+        .url-editor { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
+        .sim-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .found-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .url-manual { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+        .url-manual input { flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: var(--fs-xs); }
+        /* A found rover is a button, because picking one is the point. */
+        .found { display: flex; flex-direction: column; gap: 0.35rem; }
+        .found button {
+            appearance: none; cursor: pointer; text-align: left;
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.5rem 0.65rem; border: 1px solid var(--signal-edge);
+            border-radius: 9px; background: var(--signal-weak); color: var(--text);
+            font: inherit; font-size: var(--fs-xs);
+        }
+        .found button:hover { background: color-mix(in oklab, var(--signal) 26%, transparent); }
+        .found .found-url { font-family: var(--mono); }
+        .found .found-meta { margin-left: auto; color: var(--text-dim); font-size: var(--fs-2xs); }
         /* A picked setting looks picked. Three named buttons rather than a
            box you type 1280x960 into: nobody operating a yard should have to
            know what that means, only that it is sharper and costs more. */
@@ -93,8 +194,7 @@
         .link-btn { color: var(--signal); }
 
         /* Status card: one compact row, not a 90px block */
-        .stat-card { display: flex; align-items: flex-start; gap: 0.7rem; }
-        .stat-ic {
+                .stat-ic {
             flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
             display: flex; align-items: center; justify-content: center;
             border: 1px solid var(--border); color: var(--text-faint);
@@ -104,9 +204,7 @@
         .stat-ic.amber { background: rgba(251,191,36,0.12);  color: var(--warn); border-color: rgba(251,191,36,0.3); }
         .stat-ic.red   { background: rgba(248,113,113,0.12); color: var(--bad);  border-color: rgba(248,113,113,0.3); }
         .stat-ic.grey  { background: var(--surface-3); color: var(--text-faint); border-color: var(--border); }
-        .stat-body { flex: 1; min-width: 0; }
-        .stat-head { display: flex; align-items: center; gap: 0.5rem; }
-        /* Matches .setup-name's treatment exactly - same page, same role (an
+                        /* Matches .setup-name's treatment exactly - same page, same role (an
            item's name), so the same typeface and weight. It used to be
            Fredoka at a different size while Setup's row names sat a few
            inches away in Inter, which is the "different fonts" this page got
@@ -183,13 +281,6 @@
         .act .hint { font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); }
 
 
-        /* Below this the three columns become a keyhole; let it scroll. */
-        /* Below the two-column width the page becomes one column and scrolls.
-           body was released but .console.fixed-shell keeps its own 100dvh with
-           overflow:hidden, and .shell keeps flex:1 with min-height:0 - so the
-           stacked columns were still being squeezed into one screen's worth of
-           box and drew straight over each other. Every part of the clamp has
-           to come off together, not just the one on body. */
 
         /* Same reason as the run station: this is operated from a tablet, and
            the camera device box, the inline edit link and the info tips were
@@ -201,22 +292,18 @@
             .info-tip { min-width: 44px; min-height: 44px; }
             .sync-input-row input { min-height: 44px; }
         }
-        @media (max-width: 1100px) {
-            body { height: auto; overflow: auto; }
-            body.console.fixed-shell { height: auto; overflow: visible; }
-            .console .shell { flex: 0 0 auto; min-height: 0; height: auto; }
-            .settings-grid { grid-template-columns: 1fr; min-height: 0; }
-            .settings-col, .settings-col.scrolls { overflow: visible; min-height: 0; }
-        }
 
         /* Three health tiles need about 240px each to hold a hostname and a
            status word without wrapping mid-sentence. Below that they wrap
            rather than shrink. */
         @media (max-width: 1000px) {
-            .health-strip { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+            /* The module stacks by nature; only its rows need to wrap. */
+            .hrow { flex-wrap: wrap; }
+            .hdetail { flex-basis: 100%; white-space: normal; }
         }
         @media (max-width: 560px) {
-            .health-strip { grid-template-columns: 1fr; }
+            .hname { flex-basis: auto; }
+            .haction { flex-basis: 100%; }
             .shell .h-page { font-size: var(--fs-lg); }
         }
     </style>
@@ -224,65 +311,98 @@
 <body class="console fixed-shell">
     {% set nav_active = 'status' %}{% include "_nav.html" %}
 
-    <main class="shell">
+    <main class="shell settings-page">
         <div class="headrow">
             <h1 class="h-page">Settings</h1>
-            <span class="rover-url">Rover: <code id="rover-url">{{ rover_url }}</code><button class="link-btn" id="edit-url-btn">edit</button></span>
+
         </div>
 
-        <div class="url-editor" id="url-editor" hidden>
-            <input type="text" id="url-input" spellcheck="false" aria-label="Rover address" placeholder="http://curiosity.local:8523">
-            <button class="btn quiet primary" id="save-url-btn">Save</button>
-            <button class="btn quiet" id="cancel-url-btn">Cancel</button>
-            <span class="url-error" id="url-error"></span>
-        </div>
 
-        <div class="health-strip">
-                <div class="card stat-card" id="card-satellite">
-                    <div class="stat-ic grey" id="badge-satellite"></div>
-                    <div class="stat-body">
-                        <div class="stat-head">
-                            <span class="stat-name">Satellite</span>
-                            <span class="status-label grey" id="label-satellite">checking</span>
-                        </div>
-                        <div class="stat-detail" id="detail-satellite">Loading&hellip;</div>
-                    </div>
-                </div>
 
-                <div class="card stat-card" id="card-rover">
-                    <div class="stat-ic grey" id="badge-rover"></div>
-                    <div class="stat-body">
-                        <div class="stat-head">
-                            <span class="stat-name">Rover</span>
-                            <span class="status-label grey" id="label-rover">checking</span>
-                        </div>
-                        <div class="stat-detail" id="detail-rover">Loading&hellip;</div>
-                    </div>
-                </div>
-
-                <div class="card stat-card" id="card-camera">
-                    <div class="stat-ic grey" id="badge-camera"></div>
-                    <div class="stat-body">
-                        <div class="stat-head">
-                            <span class="stat-name">Camera</span>
-                            <span class="status-label grey" id="label-camera">checking</span>
-                        </div>
-                        <div class="stat-detail" id="detail-camera">Loading&hellip;</div>
-                        <div class="camera-controls">
-                            <button class="btn" id="camera-start">Start</button>
-                            <button class="btn" id="camera-stop">Stop</button>
-                            <label class="camera-index-label" for="camera-index">Device</label>
-                            <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
-                            <span class="camera-managed" id="camera-managed"></span>
-                        </div>
-                        <div class="camera-msg" id="camera-msg" role="status" aria-live="polite"></div>
-                    </div>
-                </div>
-        </div>
 
         <div class="settings-grid">
+            <!-- One instrument, three rows.
 
-            <div class="settings-col scrolls">
+                 This was three cards. They held very different amounts - the
+                 satellite row is a hostname, the camera row has controls, and the
+                 rover row grew an address editor - so three identical containers
+                 sat at wildly different heights with one nearly empty beside one
+                 bursting. Tinted green they also read as three alerts rather than
+                 three readings.
+
+                 Same shape the run station uses for readiness: a bordered module,
+                 a row per subsystem, hairlines between, colour only in the lamp
+                 and the state word. A healthy yard is quiet, and a row can expand
+                 without distorting anything beside it. -->
+            <div class="health" id="health">
+                <div class="hrow" id="card-satellite">
+                    <span class="stat-ic grey" id="badge-satellite"></span>
+                    <span class="hname">Satellite</span>
+                    <span class="status-label grey" id="label-satellite">checking</span>
+                    <span class="hdetail" id="detail-satellite">Loading&hellip;</span>
+                </div>
+
+                <div class="hrow" id="card-rover">
+                    <span class="stat-ic grey" id="badge-rover"></span>
+                    <span class="hname">Rover</span>
+                    <span class="status-label grey" id="label-rover">checking</span>
+                    <span class="hdetail" id="detail-rover">Loading&hellip;</span>
+                    <span class="haction">
+                        <code id="rover-url">{{ rover_url }}</code>
+                        <button class="btn" id="edit-url-btn" type="button">Change</button>
+                    </span>
+                </div>
+
+                <!-- Full width beneath its row, so opening it grows this module and
+                     nothing else. Inside a status tile it made the tile burst. -->
+                <div class="hpanel" id="url-editor" hidden>
+                    <!-- First, because it is the one answer that is always
+                         right. The simulator runs on this satellite, so its
+                         address never changes and never has to be found -
+                         unlike the rover, which moves between networks and is
+                         the thing people mistype under pressure. -->
+                    <div class="sim-row">
+                        <button class="btn primary" id="use-sim-btn" type="button">Switch to the simulator</button>
+                        <span class="hhint" id="sim-hint"></span>
+                    </div>
+                    <div class="found-row">
+                        <button class="btn primary" id="findRoverBtn" type="button">Find rover</button>
+                        <span class="hhint">Looks for anything answering as a rover on this network.</span>
+                        <span class="camera-msg" id="findMsg" style="margin-top:0;"></span>
+                    </div>
+                    <div id="foundList"></div>
+                    <div class="url-manual">
+                        <input type="text" id="url-input" spellcheck="false"
+                               aria-label="Rover address" placeholder="curiosity.local">
+                        <button class="btn" id="save-url-btn" type="button">Use this</button>
+                        <button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button>
+                    </div>
+                    <span class="url-error" id="url-error"></span>
+                </div>
+
+                <div class="hrow" id="card-camera">
+                    <span class="stat-ic grey" id="badge-camera"></span>
+                    <span class="hname">Camera</span>
+                    <span class="status-label grey" id="label-camera">checking</span>
+                    <span class="hdetail" id="detail-camera">Loading&hellip;</span>
+                    <span class="haction camera-controls">
+                        <button class="btn" id="camera-start">Start</button>
+                        <button class="btn" id="camera-stop">Stop</button>
+                        <label class="camera-index-label" for="camera-index">Device</label>
+                        <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
+                        <!-- Who owns the camera's lifecycle belongs beside the
+                             buttons that change it, not adrift under the module. -->
+                        <span class="camera-managed" id="camera-managed"></span>
+                    </span>
+                </div>
+                <!-- Only appears when the camera has something to say. -->
+                <div class="hpanel quiet-panel" id="camera-msg-panel" hidden>
+                    <span class="camera-msg" id="camera-msg" role="status" aria-live="polite"></span>
+                </div>
+            </div>
+
+
+            <div class="settings-col">
                 <div class="card" id="tunablesSection">
                     <div class="card-head-row">
                         <h3 class="h-card" style="margin-bottom:0;">Console and camera</h3>
@@ -291,7 +411,7 @@
                     <div class="sync-field">
                         <span class="sync-label">Picture quality</span>
                         <div class="seg" id="tunResolution" role="radiogroup" aria-label="Picture quality"></div>
-                        <span class="sync-hint" id="resHint">Sharper fills a big screen better, and costs the Pi and the wifi more. The camera is 4:3 at every setting.</span>
+                        <span class="sync-hint" id="resHint">Sharper fills a big screen better and costs more bandwidth.</span>
                     </div>
 
 
@@ -311,7 +431,7 @@
                 </div>
             </div>
 
-            <div class="settings-col scrolls">
+            <div class="settings-col">
                 <div class="card">
                     <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h3>
                     <div class="acts">
@@ -320,6 +440,9 @@
                     </div>
                 </div>
 
+            </div>
+
+            <div class="settings-col">
                 <div class="card" id="recordingsSection">
                     <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h3>
                     <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
@@ -352,6 +475,11 @@
             camMsg.textContent = text || '';
             if (tone) camMsg.dataset.tone = tone; else delete camMsg.dataset.tone;
             camMsgIsError = tone === 'bad';
+            // The panel only exists while there is something to read. An empty
+            // strip under the camera row is a row of nothing pretending to be
+            // a row of something.
+            const panel = document.getElementById('camera-msg-panel');
+            if (panel) panel.hidden = !text;
         }
 
         async function cameraAction(path, body) {
@@ -381,7 +509,10 @@
                 setCamMsg(e.message || 'Could not reach the satellite.', 'bad');
             } finally {
                 camStart.disabled = camStop.disabled = false;
-                loadCamera();
+                // loadCamera() used to live here. The card paints from the
+                // shared status now, so ask that to refresh instead - calling
+                // the old name was a ReferenceError nothing caught.
+                YardStatus.refreshNow();
             }
         }
 
@@ -445,8 +576,13 @@
             const box = document.getElementById('tunResolution');
             if (!box || !options) return;
             resolutionChoice = current;
+            // The dimensions carry the 4:3 on their face - 640 x 480, 1280 x 960
+            // - so a sentence saying "the camera is 4:3 at every setting" was
+            // grey prose repeating what the buttons already show. The title is
+            // there for anyone who wants it spelled out.
             box.innerHTML = options.values.map((v, i) =>
                 `<button type="button" role="radio" data-value="${v}"` +
+                ` title="${v.replace('x', ' by ')}, 4:3 like the camera"` +
                 ` aria-checked="${v === current}">${options.labels[i]}` +
                 `<span class="seg-dim">${v.replace('x', ' \u00d7 ')}</span></button>`
             ).join('');
@@ -589,8 +725,9 @@
             el.innerHTML = BADGE_ICONS[state.colour] || '';
             lbl.className = 'status-label ' + state.colour;
             lbl.textContent = state.text;
-            // A 30px icon was the only thing carrying health on a page whose
-            // whole first row is health. The tile carries it too now.
+            // The row carries the state too, for the stripe. It is not a
+            // tinted tile any more - three of those read as three alerts even
+            // when everything was fine.
             if (card) {
                 const tile = TILE_STATE[state.colour];
                 if (tile) { card.dataset.state = tile; } else { delete card.dataset.state; }
@@ -721,7 +858,7 @@
         var refreshHint = document.getElementById('refreshHint');
         document.getElementById('refreshBtn').addEventListener('click', function () {
             refreshHint.textContent = 'refreshing\u2026';
-            Promise.allSettled([YardStatus.refreshNow(), loadCamera(), loadRecordings()])
+            Promise.allSettled([YardStatus.refreshNow(), loadRecordings()])
                 .then(function () {
                     refreshHint.textContent = 'done';
                     setTimeout(function () { refreshHint.textContent = ''; }, 1200);
@@ -748,24 +885,75 @@
             urlEditor.hidden = true;
         });
 
-        async function saveUrl() {
+        // Find rovers rather than make somebody remember an address.
+        //
+        // The address used to be a box you typed a scheme, a host and a port
+        // into, validated only for starting with http - so a wrong one saved
+        // happily and the yard looked broken with nothing saying why. Under
+        // pressure at a demo that is exactly what happens.
+        document.getElementById('findRoverBtn').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget, msg = document.getElementById('findMsg');
+            const list = document.getElementById('foundList');
+            btn.disabled = true;
+            msg.dataset.tone = ''; msg.textContent = 'Looking\u2026';
+            list.innerHTML = '';
+            try {
+                const d = await (await fetch('/api/rover/discover')).json();
+                const rovers = d.rovers || [];
+                if (!rovers.length) {
+                    msg.dataset.tone = 'bad';
+                    msg.textContent = 'No rover answered. Is it switched on and on this network?';
+                    return;
+                }
+                msg.textContent = rovers.length === 1 ? 'Found one' : `Found ${rovers.length}`;
+                list.className = 'found';
+                list.innerHTML = rovers.map((r) =>
+                    `<button type="button" data-url="${r.url}">` +
+                    `<span class="found-url">${r.url.replace('http://', '')}</span>` +
+                    `<span class="found-meta">${r.hardware ? 'real rover' : (r.driver || '')}` +
+                    `${r.current ? ' &middot; in use' : ''}</span></button>`).join('');
+                list.querySelectorAll('button').forEach((b) => {
+                    b.addEventListener('click', () => { urlInput.value = b.dataset.url; saveUrl(); });
+                });
+            } catch (e) {
+                msg.dataset.tone = 'bad';
+                msg.textContent = 'Could not search: ' + e.message;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        async function saveUrl(force) {
             urlError.textContent = '';
             try {
                 const resp = await fetch('/api/config/rover_url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: urlInput.value }),
+                    body: JSON.stringify({ url: urlInput.value, force: !!force }),
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    // No sign-in branch: the endpoint has no login gate. It
-                    // used to, and the message here sent the operator to
-                    // /operator/login - a Firebase sign-in, so internet, on
-                    // the one box that has to work without it.
+                    // 409 means the address is well formed but nothing is
+                    // there. That is the likely mistake, so it is offered as a
+                    // choice rather than either silently saved or flatly
+                    // refused - setting the address before switching the rover
+                    // on is legitimate.
+                    if (data.unreachable) {
+                        urlError.innerHTML = '';
+                        urlError.textContent = data.error + ' ';
+                        const anyway = document.createElement('button');
+                        anyway.type = 'button';
+                        anyway.className = 'btn';
+                        anyway.textContent = 'Save anyway';
+                        anyway.addEventListener('click', () => saveUrl(true));
+                        urlError.appendChild(anyway);
+                        return;
+                    }
                     urlError.textContent = data.error || 'Save failed';
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
+                paintSimSwitch();
                 if (data.persisted) {
                     urlEditor.hidden = true;
                 } else {
@@ -777,9 +965,56 @@
             }
         }
 
-        document.getElementById('save-url-btn').addEventListener('click', saveUrl);
+        // ---- The simulator -------------------------------------------
+        // The one rover address that never changes: it runs on this satellite,
+        // so it is always localhost:8523. Everything else about finding a
+        // rover exists because its address moves; this one does not, which is
+        // why it gets a button instead of a search.
+        const SIM_URL = 'http://localhost:8523';
+        const LAST_ROVER_KEY = 'yard:lastRoverUrl';
+        const simBtn = document.getElementById('use-sim-btn');
+        const simHint = document.getElementById('sim-hint');
+
+        function currentRoverUrl() {
+            return document.getElementById('rover-url').textContent.trim();
+        }
+
+        function onSimulator() {
+            // Host, not substring: an address that merely mentions localhost
+            // somewhere is not the simulator.
+            try {
+                const host = new URL(currentRoverUrl()).hostname;
+                return host === 'localhost' || host === '127.0.0.1';
+            } catch (e) { return false; }
+        }
+
+        function paintSimSwitch() {
+            const sim = onSimulator();
+            simBtn.textContent = sim ? 'Switch back to the rover' : 'Switch to the simulator';
+            simHint.textContent = sim
+                ? 'Simulated: nothing moves, and the console behaves exactly the same.'
+                : 'A rover that never moves, running on this satellite. No hardware needed.';
+        }
+
+        simBtn.addEventListener('click', () => {
+            if (onSimulator()) {
+                // Back to whatever real rover was set before the switch, so
+                // returning is one press rather than typing an address again.
+                let previous = '';
+                try { previous = localStorage.getItem(LAST_ROVER_KEY) || ''; } catch (e) {}
+                urlInput.value = previous || 'curiosity.local';
+            } else {
+                try { localStorage.setItem(LAST_ROVER_KEY, currentRoverUrl()); } catch (e) {}
+                urlInput.value = SIM_URL;
+            }
+            saveUrl(false);
+        });
+
+        paintSimSwitch();
+
+        document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(false));
         urlInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') saveUrl();
+            if (e.key === 'Enter') saveUrl(false);
             if (e.key === 'Escape') urlEditor.hidden = true;
         });
     </script>

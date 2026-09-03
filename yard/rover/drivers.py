@@ -282,7 +282,30 @@ class RealRoverDriver(RoverDriver):
 
 
 def create_driver() -> RoverDriver:
-    """Factory function to create appropriate driver based on environment"""
+    """Factory function to create appropriate driver based on environment.
+
+    ROVER_DRIVER overrides the detection: "fake" runs the simulator, "real"
+    insists on hardware and fails loudly if it is not there. Without it the
+    driver is chosen by whether an I2C device exists, which is right for a
+    rover and wrong everywhere else - a simulator on a Pi that happens to have
+    I2C enabled would otherwise try to drive motors that are not attached, and
+    a rover whose library failed to import would quietly become a simulator
+    and look like it was working.
+    """
+    requested = os.environ.get('ROVER_DRIVER', '').strip().lower()
+
+    if requested == 'fake':
+        return FakeRoverDriver()
+
+    if requested == 'real':
+        # No fallback on purpose. Asking for hardware and silently getting a
+        # stand-in is how a rover that never moves looks healthy.
+        return RealRoverDriver()
+
+    if requested:
+        raise ValueError(
+            f"ROVER_DRIVER must be 'fake' or 'real', not {requested!r}")
+
     # Check if running on Pi by looking for I2C device
     if os.path.exists('/dev/i2c-1'):
         try:
