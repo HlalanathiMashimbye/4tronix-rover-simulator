@@ -145,3 +145,17 @@ class TestStandupFeedback:
         gate = page.split('function paintGate')[1].split('}')[0]
         assert "runBtn" in gate and 'disabled' in gate
         assert 'roverOk' in page.split('function paintGate')[1][:200]
+
+    def test_a_block_built_mission_is_flagged_to_the_monitor(self, page):
+        """Standup: the monitor should say when a mission came from blocks.
+
+        Mission Control sends a flag, not the workspace, so the run station
+        passes a flag on to the rover. The monitor already draws real blocks
+        when /code/ gives it blockly_state; this is the run station's cheaper
+        version of the same statement.
+        """
+        blocks = _js_regex(page, 'HEADER_BLOCKS')
+        assert blocks.search('# Mission: X\n# MissionID: m1\n# Blocks: yes\n\nrover.stop()')
+        assert blocks.search('# MissionID: m1\n\nrover.stop()') is None
+        # It has to reach the rover, or the monitor never sees it.
+        assert 'params.blockly = true' in page

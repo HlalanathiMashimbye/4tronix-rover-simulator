@@ -42,4 +42,23 @@ describe('the mission clipboard payload', () => {
         .toBe(`# MissionID: m1\n\n${CODE}`);
     }
   });
+
+  it('flags a block-built mission without carrying the workspace', () => {
+    // The yard shows a "Run Blockly" label from this. The workspace itself is
+    // kilobytes of JSON and would wreck a payload meant to stay readable.
+    const text = missionClipboardText({
+      id: 'm1', name: 'Rock Lover', code: CODE,
+      blocklyState: '{"blocks":{"languageVersion":0,"blocks":[]}}',
+    });
+
+    expect(text).toBe(`# Mission: Rock Lover\n# MissionID: m1\n# Blocks: yes\n\n${CODE}`);
+    expect(text).not.toContain('languageVersion');
+  });
+
+  it('says nothing about blocks for a mission typed in Python', () => {
+    for (const blocklyState of [undefined, null, '']) {
+      expect(missionClipboardText({ id: 'm1', name: 'Rock Lover', code: CODE, blocklyState }))
+        .not.toContain('Blocks');
+    }
+  });
 });

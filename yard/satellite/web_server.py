@@ -466,7 +466,12 @@ def api_recording_start():
     ok, detail = start_recording(name, yard_id())
     if not ok:
         return jsonify({'error': detail}), 503
-    return jsonify({'status': 'recording', 'name': name})
+    # `name` is the key the caller stops with; `file` is what the run actually
+    # wrote, which now carries a per-run timestamp so a re-run cannot land on
+    # the previous attempt's video. The operator needs the second one to find
+    # the file, so it is returned rather than left to be guessed.
+    return jsonify({'status': 'recording', 'name': name,
+                    'file': os.path.basename(detail)})
 
 
 @app.route('/api/recording/stop', methods=['POST'])

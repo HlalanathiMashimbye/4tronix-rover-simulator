@@ -19,19 +19,27 @@ export interface CopyableMission {
   id: string;
   name?: string | null;
   code: string;
+  /** Serialized Blockly workspace, on block-built missions only. */
+  blocklyState?: string | null;
 }
 
 /** Header keys the yard's run station matches on. Changing either is a breaking change. */
 const NAME_KEY = 'Mission';
 const ID_KEY = 'MissionID';
+const BLOCKS_KEY = 'Blocks';
 
 export function missionClipboardText(mission: CopyableMission): string {
   // A name spanning lines would end the comment and leave the rest of it
   // sitting in the code as a syntax error, so it is flattened to one line.
   const name = (mission.name || '').replace(/\s+/g, ' ').trim();
+  // A flag, not the workspace itself. The serialized Blockly state runs to
+  // kilobytes of JSON, and this payload is meant to stay readable Python that
+  // a person can paste into an editor. The yard only needs to know that the
+  // mission was built from blocks so the monitor can say so.
   const header = [
     name ? `# ${NAME_KEY}: ${name}` : null,
     `# ${ID_KEY}: ${mission.id}`,
+    mission.blocklyState ? `# ${BLOCKS_KEY}: yes` : null,
   ].filter(Boolean).join('\n');
 
   return `${header}\n\n${mission.code}`;

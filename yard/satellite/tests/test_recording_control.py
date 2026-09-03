@@ -14,6 +14,9 @@ import asyncio
 import base64
 import json
 import os
+import re
+from datetime import datetime, timezone
+from unittest import mock
 import sys
 import time
 
@@ -137,8 +140,46 @@ def test_start_recording_registers_a_path_for_the_run():
     ok, path = recording_control.start_recording('m1', YARD)
 
     assert ok is True
-    assert path.endswith(f'm1__{YARD}.mp4')
+    # <mission>__<yard>__<stamp>.mp4 - the mission and the yard are still the
+    # front of the name, because that is what the operator matches by eye.
+    assert re.search(rf'/m1__{YARD}__\d{{8}}T\d{{6}}Z\.mp4$', path), path
     assert recording_control._paths[('m1', YARD)] == path
+
+
+def test_a_second_run_of_a_mission_does_not_overwrite_the_first():
+    """Re-running is the normal case, not the odd one.
+
+    The rover gets stuck, somebody nudges it, they go again. With the name
+    fixed at <mission>__<yard>.mp4 the second attempt wrote over the first
+    attempt's video, so the footage of the run that went wrong - often the
+    interesting one - was gone with no warning.
+    """
+    ok_one, first = recording_control.start_recording('m1', YARD)
+    recording_control.stop_recording('m1', YARD, keep=True)
+    # Same mission, same yard, a second later.
+    with mock.patch('recording_control.datetime') as fake_clock:
+        fake_clock.now.return_value = datetime(2026, 9, 3, 9, 12, 6, tzinfo=timezone.utc)
+        ok_two, second = recording_control.start_recording('m1', YARD)
+
+    assert ok_one and ok_two
+    assert first != second, 'a re-run must not land on the first run\'s file'
+    assert second.endswith('m1__curiosity__20260903T091206Z.mp4')
+
+
+def test_names_sort_chronologically_as_plain_text():
+    """The recordings list is sorted by name in places, so the stamp has to be
+    zero-padded and big-endian rather than something like 3/9/2026 9:12."""
+    stamps = []
+    for when in (datetime(2026, 9, 3, 9, 5, 0, tzinfo=timezone.utc),
+                 datetime(2026, 9, 3, 10, 5, 0, tzinfo=timezone.utc),
+                 datetime(2026, 12, 3, 9, 5, 0, tzinfo=timezone.utc)):
+        with mock.patch('recording_control.datetime') as fake_clock:
+            fake_clock.now.return_value = when
+            _, path = recording_control.start_recording('m1', YARD)
+            recording_control.stop_recording('m1', YARD, keep=True)
+        stamps.append(path)
+
+    assert stamps == sorted(stamps)
 
 
 def test_consumer_loop_writes_incoming_frames_to_the_file(monkeypatch):

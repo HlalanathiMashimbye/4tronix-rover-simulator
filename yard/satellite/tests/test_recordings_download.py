@@ -125,6 +125,25 @@ class TestRecordingACopyPasteRun:
         assert 'no frame received' in resp.get_json()['error']
         assert started == [], 'refused, so nothing should have been started'
 
+    def test_start_returns_the_file_the_run_is_writing(self, client, monkeypatch):
+        """The name is the key; the file is what it actually wrote.
+
+        Since every run gets its own timestamped file, the operator cannot work
+        the filename out from the mission id any more, so the server says what
+        it is rather than leaving them to match it by eye in step 2.
+        """
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (True, None))
+        monkeypatch.setattr(
+            recording_control, 'start_recording',
+            lambda *a: (True, '/srv/recordings/m1__curiosity__20260903T091205Z.mp4'))
+
+        body = client.post('/api/recording/start', json={'name': 'm1'}).get_json()
+
+        assert body['name'] == 'm1', 'the stop key stays the mission id'
+        assert body['file'] == 'm1__curiosity__20260903T091205Z.mp4'
+        assert '/' not in body['file'], 'a basename, not a server path'
+
     def test_start_records_once_frames_are_flowing(self, client, monkeypatch):
         monkeypatch.setattr(recording_control, 'is_ready',
                             lambda timeout=None: (True, None))

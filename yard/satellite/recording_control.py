@@ -152,7 +152,14 @@ def start_recording(mission_id, yard_id):
         return False, f'could not create the recording directory: {e}'
 
     key = (mission_id, yard_id)
-    path = os.path.join(_recording_dir(), f'{mission_id}__{yard_id}.mp4')
+    # The run's own stamp, so a second run of the same mission does not land on
+    # the first one's file. It used to be <mission>__<yard>.mp4 and nothing
+    # else, which meant re-running a mission silently destroyed the footage of
+    # the previous attempt - and re-running is the normal case, not the odd
+    # one: the rover gets stuck, someone nudges it, they go again. UTC and
+    # zero-padded so the names sort chronologically as plain text.
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    path = os.path.join(_recording_dir(), f'{mission_id}__{yard_id}__{stamp}.mp4')
 
     with _lock:
         _writers[key] = None
