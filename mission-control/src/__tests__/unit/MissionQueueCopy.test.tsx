@@ -125,6 +125,15 @@ describe('the door to the operator console', () => {
     expect(link.getAttribute('rel')).toContain('noopener');
   });
 
+  it('reads as a primary action rather than a ghost link', async () => {
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+
+    expect(link.className).toContain('bg-gradient-mars');
+    expect(link.querySelector('svg')).toBeInTheDocument();
+  });
+
   it('remembers a different address for this browser', async () => {
     // The console is on a private network in the room, so its address is a
     // property of where the operator is, not of the deployment.
@@ -149,6 +158,18 @@ describe('the door to the operator console', () => {
 describe('the door to YouTube Studio', () => {
   const mount = () =>
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+  it('is unmistakably YouTube, not another grey link in a row of them', async () => {
+    // It was a bordered ghost link among bordered ghost links, so the step
+    // ended in something the operator had to hunt for.
+    mount();
+
+    const link = await screen.findByRole('link', { name: /youtube studio/i });
+
+    expect(link).toHaveStyle({ backgroundColor: '#E60000' });
+    expect(link.className).toContain('text-white');
+    expect(link.querySelector('svg')).toBeInTheDocument();
+  });
 
   it('links to Studio, where the run video gets uploaded', async () => {
     mount();

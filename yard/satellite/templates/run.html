@@ -97,6 +97,20 @@
         /* The paste target. Hidden until the operator asks to import and the
            clipboard turns out to be unreadable, so the common path stays a
            single button and this never appears on a secure origin. */
+        /* The one control on this page that leaves it. It was a grey button
+           among grey buttons, so the step ended in something the operator had
+           to look for. YouTube's red, one shade off the brand value: #FF0000
+           on white is 4.0:1 and this is 4.8:1, which clears AA at this size
+           and is indistinguishable at a glance. */
+        .yt-btn {
+            background: #E60000 !important;
+            border-color: #E60000 !important;
+            color: #fff !important;
+            font-weight: 700 !important;
+        }
+        .yt-btn:hover { background: #cc0000 !important; border-color: #cc0000 !important; }
+        .yt-btn svg { flex: 0 0 auto; }
+
         .paste-catch { margin: 0.55rem 0 0.2rem; }
         .paste-box {
             width: 100%; box-sizing: border-box;
@@ -378,8 +392,11 @@
                                  door rather than leaving them to find it. Opens in a
                                  new tab: losing the run station mid-upload would mean
                                  setting the mission up again. -->
-                            <a class="btn" id="ytStudio" href="https://studio.youtube.com/"
-                               target="_blank" rel="noopener noreferrer">Open YouTube Studio</a>
+                            <a class="btn yt-btn" id="ytStudio" href="https://studio.youtube.com/"
+                               target="_blank" rel="noopener noreferrer">
+                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
+                                     fill="currentColor" focusable="false"><path d="M8 5v14l11-7z"/></svg>
+                                Open YouTube Studio</a>
                             <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
                         </div>
                         <input type="text" id="ytTitle" readonly hidden>
