@@ -20,8 +20,9 @@ three parts fit together and how the layers inside each map to MVC;
 ## Running it locally
 
 ```bash
-npm install      # first time only; a postinstall hook also installs mission-control/
-npm run dev      # start hub + satellite + rover, then open 3000 and 3001
+npm install                  # installs root tooling only
+npm install --prefix mission-control   # install the Next.js app dependencies
+npm run dev                  # start hub + satellite + rover, then open 3000 and 3001
 ```
 
 | Service | URL |
