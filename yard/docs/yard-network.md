@@ -12,15 +12,15 @@ room anyway.
 ## What talks to what
 
 ```
-        marsyard  (2.4GHz, WPA2, channel 6)
-              served by the satellite
+        marsyard  (2.4GHz, WPA2, no PMF, channel 6)
+          served by the satellite - or by anything
                        |
       +----------------+----------------+
       |                |                |
   satellite         rover           operator's
   mro               curiosity       tablet or laptop
   192.168.137.1     DHCP            DHCP
-  the AP itself     pinned to the AP's BSSID
+  serves the name   joins the name, whoever serves it
 ```
 
 The satellite is reachable at `http://mro.local:3001/`, or at
@@ -48,34 +48,60 @@ NetworkManager's shared mode routes the yard network out through it, so the
 access point keeps working and everything on it gets internet. That is the only
 change needed, and no configuration goes with it.
 
-## Why the rover is pinned to a BSSID
+## "marsyard" is a contract, not a device
 
-Two access points broadcasting `marsyard` with the same password do not look
-like a conflict to a client. They look like one roaming network, and the rover
-picks whichever is stronger. A laptop hotspot left switched on out of habit can
-therefore take the rover onto a different subnet, where the satellite cannot
-reach it, intermittently and by signal strength. It is the worst kind of fault:
-silent, and dependent on where somebody is standing.
+The rover joins `marsyard` and does not care what is serving it. That is the
+whole design, and it is what keeps the rover reachable without ever reflashing
+it:
 
-So the rover carries a connection locked to the satellite's radio:
+- normally, the satellite serves it
+- if the satellite is dead, a laptop hotspot serves it and the rover follows
+- a spare Pi, or somebody's phone, works just as well in an emergency
+
+Any box that offers that name and password becomes the yard. The rover has one
+connection, unpinned, set to autoconnect, and it needs nothing else:
 
 ```
-yard-satellite   priority 20   ssid marsyard   bssid 88:A2:9E:05:50:21
-preconfigured    priority 0    ssid marsyard   (no bssid)
+preconfigured   ssid marsyard   wpa-psk   autoconnect yes
 ```
 
-`yard-satellite` wins whenever the satellite is up, and no other access point
-can satisfy it whatever it calls itself. The satellite pins its own MAC onto
-the access point profile (`802-11-wireless.cloned-mac-address`) so that address
-is a promise rather than a guess.
+**The one case this cannot get right is two of them at once.** Two access
+points with the same name and password are not a conflict to a client, they
+are one roaming network, and the rover takes whichever is stronger. So the rule
+is simply: only one thing serves `marsyard` at a time. Turn the laptop hotspot
+off when the satellite is up.
 
-This is the rule in [bring-up.md](bring-up.md) - give the rover exactly one
-network, and let it fail visibly rather than attach itself to the wrong thing -
-applied one level down, to the access point rather than the name.
+An earlier version of this locked the rover to the satellite's BSSID to enforce
+that. It was the wrong trade. It coupled the rover to one specific radio, so
+replacing the satellite's wifi would have stranded it, and it destroyed the
+property that makes the name worth having - that anything can serve it. The
+laptop being able to take over is a feature, not a bug to be designed out.
 
-`preconfigured` is left behind it as the way back. It cannot connect to
-anything while the laptop hotspot is off, which is the point: it exists for the
-recovery case below.
+## Why the rover could not join at first
+
+The access point came up correctly and the rover was still refused. It is worth
+recording exactly what that looked like, because it reads like a wrong password
+and is not one:
+
+```
+wlan0: Trying to associate with 88:a2:9e:05:50:21 (SSID='marsyard' freq=2437 MHz)
+wlan0: CTRL-EVENT-ASSOC-REJECT bssid=00:00:00:00:00:00 status_code=16
+```
+
+Everything before the rejection is good news: the satellite was beaconing, on
+the right BSSID, on channel 6, and the rover found it and tried. The rejection
+is at **association**, which happens before the password is ever exchanged - a
+wrong PSK fails later, at the four-way handshake, and says so. The all-zero
+BSSID means wpa_supplicant generated the failure locally rather than receiving
+a reject frame from the access point.
+
+The cause is Protected Management Frames. NetworkManager offers PMF by default
+and the Pi Zero W's `brcmfmac` firmware cannot negotiate it. Windows ICS does
+not offer it, which is why the rover joined the laptop hotspot instantly and
+made this look like a satellite-only fault.
+
+`802-11-wireless-security.pmf 1` (1 means disabled) on the access point profile
+is the fix, and the setup script sets it.
 
 ## Making the switch
 

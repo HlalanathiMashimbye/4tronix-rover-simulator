@@ -38,11 +38,10 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-# The BSSID the rover is pinned to. The rover carries a connection locked to
-# this exact address so that a laptop still broadcasting "marsyard" cannot
-# quietly steal it: same name, different radio. Pinning the AP's MAC here is
-# what makes that address a promise rather than a guess, because NetworkManager
-# is otherwise free to hand the interface a generated one.
+# Keep the same BSSID across reboots. Not to pin any client to this machine -
+# the rover deliberately joins "marsyard" whoever is serving it - but so the
+# access point looks like the same network every time it comes up, rather than
+# a new one whenever NetworkManager feels like generating an address.
 PERM_MAC="$(cat "/sys/class/net/${WIFI_DEV}/address")"
 
 # Where to fall back to if the access point does not come up. Found rather than
@@ -55,15 +54,25 @@ echo "== plan =="
 echo "  device       : ${WIFI_DEV}"
 echo "  serving      : ${SSID}, 2.4GHz channel 6, WPA2"
 echo "  address      : ${AP_ADDR}"
-echo "  BSSID        : ${PERM_MAC}   (the rover is pinned to this)"
+echo "  BSSID        : ${PERM_MAC}   (stable across reboots)"
 echo "  falls back to: ${CLIENT_CON:-<none found>}"
 echo
 
 # ---- 1. The profile -------------------------------------------------------
-# WPA2 only, band and channel pinned, all for the same reason: the rover is a
-# Pi Zero W. It is 2.4GHz only, so a 5GHz access point is simply invisible to
-# it, and it cannot complete a WPA3 handshake offered in a transition-mode
-# beacon. None of these are defaults worth trusting.
+# WPA2 only, PMF off, band and channel pinned, all for the same reason: the
+# rover is a Pi Zero W. It is 2.4GHz only, so a 5GHz access point is invisible
+# to it, and its firmware cannot negotiate WPA3 or Protected Management Frames.
+# None of these are defaults worth trusting.
+#
+# pmf 1 means DISABLED, and it is not optional here. With NetworkManager's
+# default the access point came up perfectly and the rover was rejected before
+# the password was ever exchanged:
+#
+#   wlan0: Trying to associate with 88:a2:9e:05:50:21 (SSID='marsyard' ...)
+#   wlan0: CTRL-EVENT-ASSOC-REJECT bssid=00:00:00:00:00:00 status_code=16
+#
+# Rejected at association, not at the handshake, which is why this looked like
+# a wrong password and was not one.
 nmcli con delete "${AP_CON}" >/dev/null 2>&1 || true
 nmcli con add type wifi ifname "${WIFI_DEV}" con-name "${AP_CON}" \
     autoconnect no ssid "${SSID}" >/dev/null
@@ -73,6 +82,7 @@ nmcli con modify "${AP_CON}" \
     802-11-wireless.channel 6 \
     802-11-wireless.cloned-mac-address "${PERM_MAC}" \
     802-11-wireless-security.key-mgmt wpa-psk \
+    802-11-wireless-security.pmf 1 \
     802-11-wireless-security.proto rsn \
     802-11-wireless-security.pairwise ccmp \
     802-11-wireless-security.group ccmp \
@@ -104,7 +114,14 @@ if [[ -n "${CLIENT_CON}" ]]; then
 #!/usr/bin/env bash
 # Revert to being a wifi client, but only if the access point never came up.
 if nmcli -t -f NAME con show --active | grep -qx "${AP_CON}"; then
-    logger -t yard-ap-check "access point is up, leaving it alone"
+    # Up is not the same as joinable, which is the exact way this failed
+    # before: the access point ran perfectly and rejected every client. The
+    # lease count is logged rather than acted on - reverting a healthy access
+    # point because nobody has connected to it yet would be worse than the
+    # fault it is meant to catch. Read it with: journalctl -t yard-ap-check
+    leases=/var/lib/NetworkManager/dnsmasq-${WIFI_DEV}.leases
+    clients=\$(wc -l < "\$leases" 2>/dev/null || echo 0)
+    logger -t yard-ap-check "access point is up, leaving it alone (clients so far: \$clients)"
     exit 0
 fi
 logger -t yard-ap-check "access point did NOT come up, reverting to ${CLIENT_CON}"
@@ -131,8 +148,9 @@ Bringing up the access point. This SSH session will drop now.
      on and wait ${CHECK_MIN} minutes - the satellite reverts to it by itself.
   3. Join a device to "${SSID}" and open:
          http://mro.local:3001/        or   http://${AP_ADDR%/*}:3001/
-  4. The rover joins on its own. It is pinned to this satellite's radio, so a
-     laptop broadcasting the same name cannot take it.
+  4. The rover joins on its own. It looks for "${SSID}" and takes whoever is
+     serving it, which is why the laptop hotspot has to stay off - two of them
+     is the one case it cannot get right.
 
 There is nothing to cancel and nothing further to run. The access point is
 already set to come back after a reboot.
