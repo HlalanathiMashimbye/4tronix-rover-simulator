@@ -21,9 +21,9 @@ import os
 import threading
 import uuid
 
-CONFIG_FILE = os.environ.get(
-    'SATELLITE_CONFIG',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'satellite_config.json')
+CONFIG_FILE = (
+    os.environ.get('SATELLITE_CONFIG', '').strip()
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'satellite_config.json')
 )
 
 # Missions carry yardId; a satellite only ever manages its own yard's missions.

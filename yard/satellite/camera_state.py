@@ -70,7 +70,7 @@ def _build():
         'ready': ready,
         'detail': detail,
         'managedBy': control.get('managedBy'),
-        'cameraIndex': int(os.environ.get('CAMERA_INDEX', 0)),
+        'cameraIndex': int(os.environ.get('CAMERA_INDEX', '') or 0),
         'recording': active_recordings(),
         # Kept because the pages and their tests have always read this name.
         # It means "listening", which is what it always meant.

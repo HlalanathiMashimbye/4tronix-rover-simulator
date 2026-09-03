@@ -706,6 +706,34 @@
         let lastResolutionOptions = null;
         const tunMsg = document.getElementById('tunMsg');
 
+        const savedTunValues = {};
+        const savedCleanupValues = {};
+
+        function trackDirty(fields, saved, btnId) {
+            const btn = document.getElementById(btnId);
+            for (const id of Object.values(fields)) {
+                const el = document.getElementById(id);
+                if (el) el.addEventListener('input', () => checkDirty(fields, saved, btnId));
+            }
+            checkDirty(fields, saved, btnId);
+        }
+
+        function checkDirty(fields, saved, btnId) {
+            const btn = document.getElementById(btnId);
+            let dirty = false;
+            for (const [name, id] of Object.entries(fields)) {
+                const el = document.getElementById(id);
+                if (el && Number(el.value) !== saved[name]) { dirty = true; break; }
+            }
+            btn.disabled = !dirty;
+        }
+
+        function snapshotValues(fields, saved, values) {
+            for (const [name, id] of Object.entries(fields)) {
+                if (values[name] !== undefined) saved[name] = Number(values[name]);
+            }
+        }
+
         async function loadTunables() {
             try {
                 const resp = await fetch('/operator/api/config/tunables');
@@ -719,6 +747,10 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                snapshotValues(TUNABLE_FIELDS, savedTunValues, d.values);
+                snapshotValues(CLEANUP_FIELDS, savedCleanupValues, d.values);
+                trackDirty(TUNABLE_FIELDS, savedTunValues, 'tunSave');
+                trackDirty(CLEANUP_FIELDS, savedCleanupValues, 'cleanupSave');
                 lastResolutionOptions = (d.options || {}).cameraResolution || null;
                 paintResolution(lastResolutionOptions, d.values.cameraResolution);
             } catch (e) { /* offline: leave the fields as they are */ }
@@ -743,19 +775,18 @@
                 });
                 const d = await resp.json().catch(() => ({}));
                 if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
-                // Repaint from the response: the server clamps out-of-range
-                // values, so what you typed is not always what is in force.
                 for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                snapshotValues(TUNABLE_FIELDS, savedTunValues, d.values);
                 tunMsg.dataset.tone = 'ok';
-                tunMsg.textContent = 'Saved. Applies on next use, no restart.';
+                tunMsg.textContent = 'Saved.';
             } catch (e) {
                 tunMsg.dataset.tone = 'bad';
                 tunMsg.textContent = e.message || 'Could not save';
             } finally {
-                btn.disabled = false;
+                checkDirty(TUNABLE_FIELDS, savedTunValues, 'tunSave');
                 setTimeout(() => { tunMsg.textContent = ''; tunMsg.dataset.tone = ''; }, 5000);
             }
         });
@@ -787,13 +818,14 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                snapshotValues(CLEANUP_FIELDS, savedCleanupValues, d.values);
                 cleanupMsg.dataset.tone = 'ok';
-                cleanupMsg.textContent = 'Saved. Takes effect on the next cleanup pass.';
+                cleanupMsg.textContent = 'Saved.';
             } catch (e) {
                 cleanupMsg.dataset.tone = 'bad';
                 cleanupMsg.textContent = e.message || 'Could not save';
             } finally {
-                btn.disabled = false;
+                checkDirty(CLEANUP_FIELDS, savedCleanupValues, 'cleanupSave');
                 setTimeout(() => { cleanupMsg.textContent = ''; cleanupMsg.dataset.tone = ''; }, 5000);
             }
         });

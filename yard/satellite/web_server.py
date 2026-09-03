@@ -34,9 +34,9 @@ CAMERA_PORT = int(os.environ.get('CAMERA_PORT', 8890))
 SERVER_PORT = int(os.environ.get('SATELLITE_PORT', 3001))
 
 # Runtime config persisted across restarts (e.g. rover URL edited on /status)
-CONFIG_FILE = os.environ.get(
-    'SATELLITE_CONFIG',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'satellite_config.json')
+CONFIG_FILE = (
+    os.environ.get('SATELLITE_CONFIG', '').strip()
+    or os.path.join(os.path.dirname(os.path.abspath(__file__)), 'satellite_config.json')
 )
 
 
