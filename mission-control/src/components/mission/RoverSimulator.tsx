@@ -35,6 +35,18 @@ interface RoverSimulatorProps {
    * The simulator does not need to know what goes in it.
    */
   footer?: React.ReactNode;
+  /**
+   * Drop the card, the header and the padding, and let the arena fill whatever
+   * box it is given.
+   *
+   * For the run player, where the simulator sits in the same frame as the
+   * video of a real run. A card inside that frame meant switching between the
+   * two runs changed the size of the picture: the video went edge to edge and
+   * the simulation came back inset by its own padding, under a header the
+   * frame's own chrome already provides. The two runs are the same thing seen
+   * two ways, so they get the same shape.
+   */
+  bare?: boolean;
 }
 
 export function RoverSimulator({
@@ -44,6 +56,7 @@ export function RoverSimulator({
   editorMode,
   resetVersion = 0,
   footer,
+  bare = false,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -267,24 +280,38 @@ export function RoverSimulator({
   const hasTrajectory = trajectory.length > 0;
 
   return (
-    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
-          <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
-        </div>
-        {hasTrajectory && (
-          <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-            <Chip label="X" value={`${hud.x.toFixed(0)}`} />
-            <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
-            <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
+    <div
+      className={
+        bare
+          ? 'relative h-full w-full'
+          : 'panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay'
+      }
+    >
+      {/* The run player's own chrome already names the run and says it is a
+          simulation, so a second header inside the same frame is a repeat. */}
+      {!bare && (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
+            <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
           </div>
-        )}
-      </div>
+          {hasTrajectory && (
+            <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+              <Chip label="X" value={`${hud.x.toFixed(0)}`} />
+              <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
+              <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
+            </div>
+          )}
+        </div>
+      )}
 
       <div
         ref={wrapRef}
-        className="panel-inner relative min-h-0 w-full flex-1 overflow-hidden border border-border"
+        className={
+          bare
+            ? 'absolute inset-0 overflow-hidden'
+            : 'panel-inner relative min-h-0 w-full flex-1 overflow-hidden border border-border'
+        }
         // The colour the canvas paints at its own edges, so the two can never
         // disagree. This was simPalette.backdrop, which was correct while the
         // yard was letterboxed inside the canvas. Once the terrain grew to
@@ -314,7 +341,17 @@ export function RoverSimulator({
       </div>
 
       {hasTrajectory && (
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div
+          className={
+            bare
+              // Over the arena, not below it. Sitting below, this took 54px out
+              // of a 207px frame, so the picture shrank the moment you switched
+              // from the video of the real run to the simulation of it. A video's
+              // own controls overlay its picture; so do these.
+              ? 'absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-3 pb-2.5 pt-6'
+              : 'flex shrink-0 flex-col gap-1.5'
+          }
+        >
           <input
             type="range"
             min={0}

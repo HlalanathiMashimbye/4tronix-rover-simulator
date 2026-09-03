@@ -17,6 +17,9 @@ const subscribeToYardQueue = jest.fn();
 
 jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToYardQueue: (...args: unknown[]) => subscribeToYardQueue(...args),
+  // Selecting a mission subscribes to its runs across yards. Not what these
+  // tests are about, so it is a no-op unsubscribe.
+  subscribeToMissionRuns: () => () => {},
 }));
 
 jest.mock('@/components/mission/BlocklyViewer', () => ({
@@ -39,7 +42,7 @@ function renderQueue(missions = QUEUE) {
   });
   return render(
     <SearchProvider>
-      <MissionQueue role="operator" />
+      <MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} />
     </SearchProvider>,
   );
 }

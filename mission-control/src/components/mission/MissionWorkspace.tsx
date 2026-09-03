@@ -72,11 +72,7 @@ export function MissionWorkspace() {
   const [missionName, setMissionName] = useState('');
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setMissionName(generateRandomMissionName());
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+    setMissionName(generateRandomMissionName());
   }, []);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);

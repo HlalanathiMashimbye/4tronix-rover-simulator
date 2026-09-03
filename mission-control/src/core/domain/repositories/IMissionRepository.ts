@@ -65,6 +65,7 @@ export interface IMissionRepository {
    */
   applyBookkeeping(
     missionId: string,
+    runId: string,
     yardId: string,
     change: {
       status?: MissionStatus | null;

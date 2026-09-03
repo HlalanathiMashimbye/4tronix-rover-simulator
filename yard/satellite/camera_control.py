@@ -24,7 +24,9 @@ interpolated into a command line. subprocess is always called with a list and
 shell=False, so there is no shell to inject into.
 
 That matters more than usual here: this console is reachable by anyone on the
-venue network, and OPERATOR_AUTH=off removes the login entirely on event days.
+venue network and has no login at all - the sign-in went with the Firestore
+mirror, because it needed internet on a box built to work without it. The
+network boundary and this hardcoded command are the controls.
 """
 
 import os
@@ -87,28 +89,61 @@ def is_listening(host='localhost', port=None):
         return False
 
 
-def _run_systemctl(action):
-    systemctl = _systemctl()
+def _needs_authorisation(detail):
+    d = (detail or '').lower()
+    return ('access denied' in d or 'authentication' in d
+            or 'password is required' in d)
+
+
+def _try_systemctl(argv):
+    """Run one systemctl invocation. Returns (ok, detail)."""
     try:
-        result = subprocess.run(
-            [systemctl, action, f'{SERVICE_NAME}.service'],
-            capture_output=True, text=True, timeout=15,
-        )
+        result = subprocess.run(argv, capture_output=True, text=True, timeout=15)
     except (subprocess.SubprocessError, OSError) as e:
         return False, str(e)
-
     if result.returncode == 0:
-        return True, f'systemd: {action} {SERVICE_NAME}'
+        return True, None
+    return False, (result.stderr or result.stdout or '').strip()
 
-    detail = (result.stderr or result.stdout or '').strip()
-    # The most common failure by far, and the least obvious from the raw text.
-    if 'access denied' in detail.lower() or 'authentication' in detail.lower():
+
+def _run_systemctl(action):
+    """Manage the camera unit, asking sudo only if systemd refuses us directly.
+
+    The direct call goes through polkit, which on a headless box with nobody
+    logged in answers "Interactive authentication required". A sudoers entry is
+    the other way to allow it, so we retry through sudo before giving up.
+
+    Both spellings of the unit are tried under sudo, and that is not
+    belt-and-braces. sudo matches the exact argv, so a rule written for
+    `systemctl restart satellite-camera` does NOT authorise
+    `systemctl restart satellite-camera.service`. That single suffix produced a
+    correct-looking sudoers file, a passing `sudo -n` when tested by hand, and
+    "sudo: a password is required" from the console - with nothing to connect
+    the three. The code should not care which spelling someone wrote.
+    """
+    systemctl = _systemctl()
+    unit = SERVICE_NAME + '.service'
+
+    ok, detail = _try_systemctl([systemctl, action, unit])
+    if ok:
+        return True, 'systemd: ' + action + ' ' + SERVICE_NAME
+
+    if _needs_authorisation(detail) and os.geteuid() != 0:
+        sudo = shutil.which('sudo')
+        if sudo:
+            for name in (SERVICE_NAME, unit):
+                ok, sudo_detail = _try_systemctl([sudo, '-n', systemctl, action, name])
+                if ok:
+                    return True, 'systemd: ' + action + ' ' + SERVICE_NAME + ' (via sudo)'
+                detail = sudo_detail or detail
+
+    if _needs_authorisation(detail):
         detail += (
-            ' - the satellite user needs permission to manage this unit. '
-            'Add a polkit rule or a sudoers entry for '
-            f'`systemctl restart {SERVICE_NAME}`.'
+            ' - this user cannot manage ' + unit + '. Either add a polkit rule,'
+            ' or a sudoers entry for exactly: ' + systemctl + ' ' + action +
+            ' ' + SERVICE_NAME
         )
-    return False, detail or f'systemctl {action} failed'
+    return False, detail or ('systemctl ' + action + ' failed')
 
 
 def _spawn_dev(camera_index=None):
