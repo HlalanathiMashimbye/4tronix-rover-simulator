@@ -137,6 +137,16 @@ def is_recording(mission_id, yard_id):
         return (mission_id, yard_id) in _paths
 
 
+def active_paths():
+    """Absolute paths of files currently being written.
+
+    For recording_cleanup: a file in this set must never be deleted, even
+    if it matches every other cleanup rule.
+    """
+    with _lock:
+        return set(_paths.values())
+
+
 def start_recording(mission_id, yard_id):
     """(bool, detail). Begin persisting frames for this run.
 

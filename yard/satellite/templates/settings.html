@@ -281,6 +281,46 @@
 
 
 
+        /* Disk usage bar in the recordings card. */
+        .disk-bar-wrap {
+            display: flex; align-items: center; gap: 0.5rem;
+            margin-bottom: 0.6rem;
+        }
+        .disk-bar {
+            flex: 1; height: 6px; border-radius: 3px;
+            background: var(--surface-3); overflow: hidden;
+        }
+        .disk-bar-fill {
+            height: 100%; border-radius: 3px;
+            background: var(--ok);
+            transition: width 300ms var(--ease-out), background 300ms var(--ease-out);
+        }
+        .disk-bar-fill[data-tone="warn"] { background: var(--warn); }
+        .disk-bar-fill[data-tone="bad"]  { background: var(--bad); }
+        .disk-label {
+            flex: 0 0 auto;
+            font-size: var(--fs-2xs); font-family: var(--mono);
+            color: var(--text-dim); white-space: nowrap;
+        }
+
+        /* Download badge on recording rows. */
+        .dl-badge {
+            display: inline-flex; align-items: center;
+            font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.04em; padding: 0.1rem 0.4rem; border-radius: 999px;
+            margin-left: 0.4rem; vertical-align: middle;
+        }
+        .dl-badge.yes {
+            color: var(--ok);
+            background: rgba(52,211,153,0.1);
+            border: 1px solid rgba(52,211,153,0.3);
+        }
+        .dl-badge.no {
+            color: var(--text-faint);
+            background: var(--surface-3);
+            border: 1px solid var(--border);
+        }
+
         /* Same reason as the run station: this is operated from a tablet, and
            the camera device box, the inline edit link and the info tips were
            all well under the 44px a finger needs. */
@@ -431,6 +471,47 @@
             </div>
 
             <div class="settings-col">
+                <div class="card" id="cleanupSection">
+                    <div class="card-head-row">
+                        <h2 class="card-title" style="margin-bottom:0;">Storage cleanup</h2>
+                    </div>
+                    <p class="sync-hint" style="margin:0 0 0.6rem;">Downloaded recordings are deleted automatically after the grace period. Very old recordings are deleted regardless. If the card is nearly full, the oldest downloaded recordings go first.</p>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Keep downloaded recordings for</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunGracePeriod" min="1" max="168" step="1">
+                            <span class="sync-unit">hours</span>
+                        </span>
+                        <span class="sync-hint">After this, downloaded recordings are deleted. Default 72 (3 days).</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Delete any recording older than</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunMaxAge" min="1" max="60" step="1">
+                            <span class="sync-unit">days</span>
+                        </span>
+                        <span class="sync-hint">Even if nobody downloaded it. Default 21 (3 weeks).</span>
+                    </label>
+
+                    <label class="sync-field">
+                        <span class="sync-label">Emergency cleanup below</span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunMinFreeGB" min="0.5" max="16" step="0.5">
+                            <span class="sync-unit">GB free</span>
+                        </span>
+                        <span class="sync-hint">If the card drops below this, delete the oldest downloaded recordings immediately.</span>
+                    </label>
+
+                    <div class="camera-controls" style="margin-top:0;">
+                        <button class="btn primary" id="cleanupSave">Save</button>
+                        <span class="camera-msg" id="cleanupMsg" style="margin-top:0;"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-col">
                 <div class="card">
                     <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h2>
                     <div class="acts">
@@ -444,6 +525,10 @@
             <div class="settings-col">
                 <div class="card" id="recordingsSection">
                     <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h2>
+                    <div id="diskBar" class="disk-bar-wrap" hidden>
+                        <div class="disk-bar"><div class="disk-bar-fill" id="diskBarFill"></div></div>
+                        <span class="disk-label" id="diskLabel"></span>
+                    </div>
                     <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
                     <div id="recordingsList"><span class="skel"></span></div>
                 </div>
@@ -563,6 +648,12 @@
             cameraReadyTimeout: 'tunCameraReady',
         };
 
+        const CLEANUP_FIELDS = {
+            cleanupGracePeriod: 'tunGracePeriod',
+            cleanupMaxAge: 'tunMaxAge',
+            cleanupMinFreeGB: 'tunMinFreeGB',
+        };
+
         // Picture quality is a choice, not a number, so it renders as buttons
         // and saves on click. It is also the one tunable that does NOT take
         // effect on next use: the camera reads its resolution when it starts,
@@ -624,6 +715,10 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (el && d.values[name] !== undefined) el.value = d.values[name];
+                }
                 lastResolutionOptions = (d.options || {}).cameraResolution || null;
                 paintResolution(lastResolutionOptions, d.values.cameraResolution);
             } catch (e) { /* offline: leave the fields as they are */ }
@@ -667,6 +762,42 @@
 
         loadTunables();
 
+        // --- Cleanup tunables save ------------------------------------
+        const cleanupMsg = document.getElementById('cleanupMsg');
+        document.getElementById('cleanupSave').addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            btn.disabled = true;
+            cleanupMsg.dataset.tone = '';
+            cleanupMsg.textContent = 'Saving…';
+            try {
+                const body = {};
+                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (!el) continue;
+                    body[name] = Number(el.value);
+                }
+                const resp = await fetch('/operator/api/config/tunables', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                const d = await resp.json().catch(() => ({}));
+                if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
+                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
+                    const el = document.getElementById(id);
+                    if (el && d.values[name] !== undefined) el.value = d.values[name];
+                }
+                cleanupMsg.dataset.tone = 'ok';
+                cleanupMsg.textContent = 'Saved. Takes effect on the next cleanup pass.';
+            } catch (e) {
+                cleanupMsg.dataset.tone = 'bad';
+                cleanupMsg.textContent = e.message || 'Could not save';
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { cleanupMsg.textContent = ''; cleanupMsg.dataset.tone = ''; }, 5000);
+            }
+        });
+
         // --- Recordings ------------------------------------------------
         // Downloads come off the satellite over the LAN, which is the whole
         // point: the operator's phone is on the venue's wifi with no route to
@@ -677,23 +808,47 @@
             return (n / 1024 / 1024).toFixed(1) + ' MB';
         }
 
+        function paintDiskBar(disk) {
+            const wrap = document.getElementById('diskBar');
+            const fill = document.getElementById('diskBarFill');
+            const label = document.getElementById('diskLabel');
+            if (!wrap || !disk || !disk.total_bytes) return;
+
+            const pct = Math.round((disk.used_bytes / disk.total_bytes) * 100);
+            const freeGB = (disk.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
+            const totalGB = (disk.total_bytes / (1024 * 1024 * 1024)).toFixed(0);
+
+            fill.style.width = pct + '%';
+            if (pct >= 90) fill.dataset.tone = 'bad';
+            else if (pct >= 75) fill.dataset.tone = 'warn';
+            else delete fill.dataset.tone;
+
+            label.textContent = freeGB + ' GB free of ' + totalGB + ' GB';
+            wrap.hidden = false;
+        }
+
         async function loadRecordings() {
             const box = document.getElementById('recordingsList');
             if (!box) return;
             try {
                 const resp = await fetch('/api/recordings');
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                const list = (await resp.json()).recordings || [];
+                const data = await resp.json();
+                const list = data.recordings || [];
+
+                paintDiskBar(data.disk);
+
                 if (!list.length) {
                     box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
                     return;
                 }
                 box.innerHTML = list.map(function (r) {
-                    // download, not target=_blank: a tablet should save the
-                    // file rather than open a video in a tab the operator
-                    // then has to work out how to get a file out of.
+                    var badge = r.downloaded
+                        ? '<span class="dl-badge yes">downloaded</span>'
+                        : '<span class="dl-badge no">not yet</span>';
                     return '<div class="kv"><a class="k" style="text-decoration:none" download href="/api/recordings/'
                         + encodeURIComponent(r.name) + '">' + r.name + '</a>'
+                        + badge
                         + '<span class="v">' + humanBytes(r.bytes) + '</span></div>';
                 }).join('');
             } catch (e) {

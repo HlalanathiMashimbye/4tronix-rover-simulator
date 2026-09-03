@@ -77,6 +77,9 @@ TUNABLES = {
     'cameraHost': ('camera_host', 'CAMERA_HOST', 'localhost', str, None),
     'cameraReadyTimeout': ('camera_ready_timeout', 'CAMERA_READY_TIMEOUT', 2.0, float, (0.5, 30.0)),
     'cameraResolution': ('camera_resolution', 'CAMERA_RESOLUTION', '640x480', str, CAMERA_RESOLUTIONS),
+    'cleanupGracePeriod': ('cleanup_grace_hours', 'CLEANUP_GRACE_HOURS', 72.0, float, (1.0, 168.0)),
+    'cleanupMaxAge': ('cleanup_max_days', 'CLEANUP_MAX_DAYS', 21.0, float, (1.0, 60.0)),
+    'cleanupMinFreeGB': ('cleanup_min_free_gb', 'CLEANUP_MIN_FREE_GB', 2.0, float, (0.5, 16.0)),
 }
 
 

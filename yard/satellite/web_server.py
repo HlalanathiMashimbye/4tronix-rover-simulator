@@ -169,9 +169,12 @@ def status():
 
 @app.route('/api/status', methods=['GET'])
 def api_status():
+    from recording_cleanup import disk_stats
+
     satellite = {
         'hostname': socket.gethostname(),
         'ip': _local_ip(),
+        'disk': disk_stats(),
     }
 
     rover = {'reachable': False, 'driver': None, 'queue_size': None, 'url': ROVER_URL}
@@ -505,30 +508,34 @@ def api_recordings():
     by being able to read a video of it.
     """
     from recording_control import RECORDINGS_DIR
+    from recording_cleanup import is_downloaded, disk_stats
 
     try:
         names = os.listdir(RECORDINGS_DIR)
     except OSError:
-        # No directory yet simply means nothing has been recorded.
-        return jsonify({'recordings': []})
+        return jsonify({'recordings': [], 'disk': disk_stats()})
 
     files = []
     for name in names:
         if not name.endswith('.mp4'):
             continue
+        path = os.path.join(RECORDINGS_DIR, name)
         try:
-            stat = os.stat(os.path.join(RECORDINGS_DIR, name))
+            stat = os.stat(path)
         except OSError:
             continue
+        dl, dl_at = is_downloaded(path)
         files.append({
             'name': name,
             'bytes': stat.st_size,
             'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
                 .isoformat().replace('+00:00', 'Z'),
+            'downloaded': dl,
+            'downloadedAt': dl_at.isoformat().replace('+00:00', 'Z') if dl_at else None,
         })
 
     files.sort(key=lambda f: f['modified'], reverse=True)
-    return jsonify({'recordings': files})
+    return jsonify({'recordings': files, 'disk': disk_stats()})
 
 
 @app.route('/api/recordings/<path:name>', methods=['GET'])
@@ -548,6 +555,9 @@ def api_recording_download(name):
         return jsonify({'error': 'No such recording'}), 404
     if not os.path.isfile(target):
         return jsonify({'error': 'No such recording'}), 404
+
+    from recording_cleanup import mark_downloaded
+    mark_downloaded(target)
 
     return send_file(target, mimetype='video/mp4', as_attachment=True,
                      download_name=os.path.basename(target))
