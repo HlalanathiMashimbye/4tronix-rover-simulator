@@ -126,11 +126,10 @@
         }
         .settings-col { display: flex; flex-direction: column; gap: 0.85rem; }
 
-        .headrow { flex: 0 0 auto; display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+        .page-head { flex: 0 0 auto; margin-bottom: 0.2rem; }
         /* The page title, three card headings and a field label all sat within
            4px of each other, so nothing announced itself and the eye had no
            entry point. Size and weight do that work now. */
-        .shell .h-page { font-size: var(--fs-xl); line-height: 1.1; letter-spacing: -0.015em; }
         .rover-url code { font-family: var(--mono); font-size: var(--fs-xs); }
         .card-head-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.7rem; }
         .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
@@ -304,7 +303,6 @@
         @media (max-width: 560px) {
             .hname { flex-basis: auto; }
             .haction { flex-basis: 100%; }
-            .shell .h-page { font-size: var(--fs-lg); }
         }
     </style>
 </head>
@@ -312,9 +310,10 @@
     {% set nav_active = 'status' %}{% include "_nav.html" %}
 
     <main class="shell settings-page">
-        <div class="headrow">
-            <h1 class="h-page">Settings</h1>
-
+        <div class="page-head">
+            <div class="eyebrow">Satellite</div>
+            <h1 class="page-title">Settings</h1>
+            <p class="page-sub">Rover and camera health, recordings to download, and how this satellite is tuned.</p>
         </div>
 
 
@@ -405,7 +404,7 @@
             <div class="settings-col">
                 <div class="card" id="tunablesSection">
                     <div class="card-head-row">
-                        <h3 class="h-card" style="margin-bottom:0;">Console and camera</h3>
+                        <h2 class="card-title" style="margin-bottom:0;">Console and camera</h2>
                     </div>
 
                     <div class="sync-field">
@@ -433,7 +432,7 @@
 
             <div class="settings-col">
                 <div class="card">
-                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h3>
+                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h2>
                     <div class="acts">
                         <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
                         <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
@@ -444,7 +443,7 @@
 
             <div class="settings-col">
                 <div class="card" id="recordingsSection">
-                    <h3 class="h-card rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h3>
+                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h2>
                     <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
                     <div id="recordingsList"><span class="skel"></span></div>
                 </div>

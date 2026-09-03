@@ -630,3 +630,63 @@ class TestSettingsIsQuietWhenNothingIsWrong:
 
         assert '4:3 like the camera' in page          # on the button, as a title
         assert 'The camera is 4:3 at every setting' not in page
+
+
+class TestSettingsSpeaksTheConsoleLanguage:
+    """Settings had invented its own vocabulary and stopped looking like the
+    console it belongs to: no eyebrow, a page-local title class, and section
+    headings styled as small faint uppercase labels rather than titles. The
+    result read as a form dump bolted onto the side of the app.
+    """
+
+    def _page(self, path):
+        import web_server
+        web_server.app.config['TESTING'] = True
+        with web_server.app.test_client() as client:
+            return client.get(path).get_data(as_text=True)
+
+    def test_it_has_the_same_page_header_as_every_other_page(self):
+        page = self._page('/settings')
+        assert 'class="eyebrow"' in page
+        assert 'class="page-title"' in page
+        assert 'class="page-sub"' in page
+
+    def test_the_header_classes_are_the_shared_ones(self):
+        """Not a page-local h-page that only looks similar."""
+        page = self._page('/settings')
+        assert 'h-page' not in page
+        assert 'headrow' not in page
+
+    def test_section_headings_use_the_shared_card_title(self):
+        page = self._page('/settings')
+        assert page.count('class="card-title') >= 3
+        # The faint uppercase label this replaced.
+        assert 'h-card' not in page
+
+    def test_run_and_settings_name_a_heading_the_same_way(self):
+        """One definition, not two that happen to agree today."""
+        import re
+        run, settings = self._page('/run/'), self._page('/settings')
+        assert 'card-title' in run and 'card-title' in settings
+        # A bare redefinition is the drift. A scoped override like
+        # `.card-head .card-title { margin-bottom: 0 }` is a page adapting the
+        # shared rule to its own layout, which is the point of having one.
+        for name, page in (('run', run), ('settings', settings)):
+            assert not re.search(r'^\s*\.card-title\s*\{', page, re.M), \
+                f'{name} redefines card-title; it belongs in yard-base.css'
+
+        # And the shared sheet must actually define it. Without this the rule
+        # above is satisfied by nobody defining it anywhere, which is how both
+        # pages would quietly lose the styling they are asserting they share.
+        import web_server
+        web_server.app.config['TESTING'] = True
+        with web_server.app.test_client() as client:
+            css = client.get('/static/yard-base.css').get_data(as_text=True)
+        assert re.search(r'\.console\s+\.card-title\s*\{', css), \
+            'yard-base.css no longer defines the shared card-title'
+
+    def test_heading_levels_do_not_skip(self):
+        """h1 straight to h3 announces a missing level to a screen reader."""
+        import re
+        levels = sorted({int(m) for m in re.findall(r'<h([1-6])[ >]', self._page('/settings'))})
+        assert levels == list(range(1, len(levels) + 1)), f'levels present: {levels}'
