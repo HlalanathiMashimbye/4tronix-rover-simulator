@@ -449,15 +449,56 @@ Expected: 34 tests passing
 
 ---
 
+## Challenge Integration
+
+The leaderboard is now integrated with the Progressive Challenges system:
+
+### Challenge Points
+
+Each challenge has a point value:
+- `platform-orientation`: 100 points
+- `basic-movement`: 150 points
+- `loop-structures`: 200 points
+- `sensor-operations`: 250 points
+- Unknown challenges: 100 points (default)
+
+### Challenge Tracking
+
+- Missions carry optional `challengeId` field
+- Leaderboard tracks `completedChallengeIds` array
+- Score calculated as sum of completed challenge points
+- Each challenge scores once per learner (idempotent)
+
+### Challenge Completion Flow
+
+1. Learner submits mission for a challenge
+2. Mission stored with `challengeId` reference
+3. Challenge verification system checks mission code
+4. Upon verification, POST `/api/leaderboard/challenges/{challengeId}`
+5. Server calls `LeaderboardService.recordChallengeCompletion()`
+6. If not already completed, adds challenge to score
+7. Leaderboard entry updated (idempotently)
+
+### Idempotency
+
+Duplicate challenge completion requests are ignored:
+- Challenge ID checked against `completedChallengeIds` array
+- If already present, returns current stats without re-scoring
+- Same learner completing same challenge multiple times scores only once
+
+---
+
 ## Known Limitations
 
-1. **Score Count Not Implemented**: The `countCompletedMissions()` method currently returns 0 as a placeholder. Production implementation needs to query missions by `learnerRef` or use a separate tracking collection.
+1. **Challenge Definition Points**: Challenge definitions on `feat/progressive_challenges` branch do not yet include a `points` field. When integrating that branch, add `points` to Challenge interface and update `CHALLENGE_POINTS` constant.
 
-2. **No Real-Time Updates**: Leaderboard scores update only when API is called. Cloud Functions (future) would enable automatic updates on mission completion.
+2. **No Real-Time Updates**: Leaderboard scores update only when `/api/leaderboard/challenges/[challengeId]` is called. Cloud Functions (future) would enable automatic updates on challenge verification.
 
 3. **No Pagination Component**: The leaderboard page currently shows all results. For large lists, infinite scroll would be needed.
 
 4. **Firestore Indexes Not Created**: Production deployment must create the composite index for efficient queries: `(optedIn, score DESC, updatedAt DESC)`.
+
+5. **Challenge Verification Not Implemented**: This leaderboard implementation expects an external system to verify challenge completion and call the API. That verification system is not included in scope.
 
 ---
 
