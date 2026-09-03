@@ -74,6 +74,50 @@ python web_server.py
 
 Use these steps if you can't SSH to the satellite and need to update the code by hand (e.g. the Pi is on a different network, or SSH is unavailable).
 
+### First: what is it actually running?
+
+Ask before you debug anything. A satellite serving stale code produces faults
+that exist nowhere in the repository, and you can lose an evening to them.
+
+```bash
+ssh mars@mro.local 'cd ~/4tronix-rover-simulator && git log --oneline -1 && git status --porcelain'
+```
+
+Two things to look for. The commit should be one you recognise. `git status`
+should be **empty** - anything listed there is a file that differs from every
+commit in the repository, so the machine matches no known state.
+
+### Do not copy single files onto it
+
+`scp`-ing one file to fix one thing is the fastest way to create that state. It
+is tempting mid-debug and it costs more than it saves: the tree ends up part
+one commit, part another, part something that was never committed at all, and
+the next person to look - including you, an hour later - has no way to know
+which. It happened on 3 Sep: six files had been copied over by hand and a
+seventh was a stale copy from mid-edit, so the console was missing a feature
+that was demonstrably working in the repository and in local testing.
+
+Push the branch and check it out instead. It takes the same thirty seconds and
+the machine is then a state you can name:
+
+```bash
+ssh mars@mro.local
+cd ~/4tronix-rover-simulator
+git fetch origin && git checkout -f -B <branch> origin/<branch>
+sudo systemctl restart satellite-web
+sudo systemctl restart satellite-camera
+```
+
+Two commands, not one. The `mars` user's passwordless sudo is granted per unit
+(`systemctl restart satellite-web`, `systemctl restart satellite-camera`), and
+sudo matches the whole argument list, so restarting both in a single command
+matches no rule and silently asks for a password you cannot type over a script.
+
+`git checkout -f` discards local edits to tracked files, which is the point.
+`satellite_config.json` and `recordings/` are gitignored, so the yard's own
+settings and its videos survive it. Do not reach for `git clean` - that is what
+would delete the recordings.
+
 ### What you need
 - A laptop on the same WiFi network as the satellite (`marsyard` or `mars-relay-network`)
 - USB keyboard + HDMI monitor, **or** physical access to connect one
@@ -112,7 +156,8 @@ git pull
 
 **If running under systemd** (auto-start on boot):
 ```bash
-sudo systemctl restart satellite-web satellite-camera
+sudo systemctl restart satellite-web
+sudo systemctl restart satellite-camera
 sudo systemctl status satellite-web       # check it started ok
 ```
 
