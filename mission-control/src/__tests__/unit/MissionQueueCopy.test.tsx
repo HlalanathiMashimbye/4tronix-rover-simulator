@@ -50,6 +50,9 @@ function emitQueue(missions = [MISSION]) {
 beforeEach(() => {
   jest.clearAllMocks();
   emitQueue();
+  // The console address is per-browser and persists, so without this the
+  // tests below would only pass in the order they happen to be written in.
+  localStorage.clear();
 });
 
 describe('copying a mission to paste into the yard', () => {
@@ -106,5 +109,39 @@ describe('copying a mission to paste into the yard', () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
     expect(await screen.findByRole('button', { name: /copy/i })).toBeDisabled();
+  });
+});
+
+describe('the door to the operator console', () => {
+  it('offers a link to the yard console, defaulting to the satellite', async () => {
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+
+    expect(link).toHaveAttribute('href', 'http://mro.local:3001/run/');
+    // The queue is what the operator works from; losing it to navigate away
+    // mid-shift would mean signing back in.
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('remembers a different address for this browser', async () => {
+    // The console is on a private network in the room, so its address is a
+    // property of where the operator is, not of the deployment.
+    localStorage.setItem('yard:consoleUrl', 'http://192.168.137.1:3001/run/');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+    expect(link).toHaveAttribute('href', 'http://192.168.137.1:3001/run/');
+  });
+
+  it('ignores a stored address that is not safe to open', async () => {
+    localStorage.setItem('yard:consoleUrl', 'javascript://mro.local/%0aalert(1)');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+    expect(link).toHaveAttribute('href', 'http://mro.local:3001/run/');
   });
 });

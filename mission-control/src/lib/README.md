@@ -45,7 +45,14 @@ missionDuration.ts    a human label for how long a run took
 roverCommandHelp.ts   help text per rover command, for editor hovers
 missionRuns.ts        which runs a learner can actually watch
 missionClipboard.ts   what every Copy button puts on the clipboard
+yardConsole.ts        where this operator's yard console lives
 ```
+
+`yardConsole.ts` holds a browser-local address rather than a setting, because
+the console runs on the satellite in the room, on a private network this app
+cannot see or reach. It is a property of where the operator is standing, not of
+the deployment, so it belongs in their browser and not in Secret Manager beside
+the API keys.
 
 `missionClipboard.ts` sits here because it is a formatting helper used by two
 components, but it is worth knowing that its output is a contract, not a
