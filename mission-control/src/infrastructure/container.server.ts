@@ -22,6 +22,8 @@ import { MissionService } from '@/core/application/services/MissionService';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
+import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
+import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
@@ -37,4 +39,9 @@ export function missionService(): MissionService {
 /** Privileged. Yards are world-readable but only ever written through here. */
 export function adminYardRepository(): IYardRepository {
   return new FirestoreYardRepository(getFirestoreInstance());
+}
+
+/** Privileged. Leaderboard writes are server-side only. */
+export function adminLeaderboardRepository(): ILeaderboardRepository {
+  return new FirestoreLeaderboardRepository(getFirestoreInstance());
 }
