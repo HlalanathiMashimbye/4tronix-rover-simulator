@@ -9,8 +9,10 @@ import {
   Copy,
   Hourglass,
   Loader2,
+  Play,
   Radio,
   Rocket,
+  SatelliteDish,
   Layers,
   CheckCircle2,
 } from 'lucide-react';
@@ -41,6 +43,18 @@ import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
  * when they realise they still have a video to put up.
  */
 const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+
+/**
+ * YouTube's red, one shade off the brand value.
+ *
+ * #FF0000 against white text is 4.0:1, under the 4.5:1 AA needs at this size.
+ * #E60000 is 4.8:1 and indistinguishable from it at a glance, so the button
+ * reads as YouTube without being unreadable to anyone who needs the contrast.
+ * A literal rather than a token on purpose: this is a third party's brand
+ * colour, not a semantic role in our palette, and it must not start meaning
+ * "danger" to the next person who reaches for a red.
+ */
+const YOUTUBE_RED = '#E60000';
 
 /**
  * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
@@ -349,8 +363,9 @@ function YardQueue({
               href={consoleUrl || undefined}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background/60 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+              className="inline-flex items-center gap-1.5 rounded-md bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
             >
+              <SatelliteDish className="h-3.5 w-3.5" aria-hidden="true" />
               Open operator console
             </a>
             <button
@@ -370,8 +385,10 @@ function YardQueue({
           href={YOUTUBE_STUDIO_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background/60 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+          style={{ backgroundColor: YOUTUBE_RED }}
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
         >
+          <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
           YouTube Studio
         </a>
       </div>
