@@ -32,6 +32,17 @@ import { missionClipboardText } from '@/lib/missionClipboard';
 import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
 /**
+ * Where the operator uploads the run video.
+ *
+ * Not configurable, unlike the yard console: Studio is the same address for
+ * everyone, and the channel it opens is whichever the operator is signed into.
+ * The run station links here too, at the end of its upload step - this is the
+ * same door from the other side, for an operator who is in Mission Control
+ * when they realise they still have a video to put up.
+ */
+const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+
+/**
  * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
  *
  * The yard comes from the session, chosen at sign-in, so it cannot change
@@ -352,6 +363,17 @@ function YardQueue({
             <span className="truncate font-mono text-[11px] text-muted-foreground">{consoleUrl}</span>
           </>
         )}
+
+        {/* Outside the branch above, so editing the console address does not
+            make the other door disappear. */}
+        <a
+          href={YOUTUBE_STUDIO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-background/60 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+        >
+          YouTube Studio
+        </a>
       </div>
 
       <div className="flex items-center gap-2">

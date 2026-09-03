@@ -145,3 +145,29 @@ describe('the door to the operator console', () => {
     expect(link).toHaveAttribute('href', 'http://mro.local:3001/run/');
   });
 });
+
+describe('the door to YouTube Studio', () => {
+  const mount = () =>
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+  it('links to Studio, where the run video gets uploaded', async () => {
+    mount();
+
+    const link = await screen.findByRole('link', { name: /youtube studio/i });
+
+    expect(link).toHaveAttribute('href', 'https://studio.youtube.com/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('stays put while the console address is being edited', async () => {
+    // Both are doors the operator needs; changing where one goes should not
+    // take the other off the screen.
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /^change$/i }));
+
+    expect(await screen.findByRole('link', { name: /youtube studio/i })).toBeInTheDocument();
+    // And the console link really is the thing that went away.
+    expect(screen.queryByRole('link', { name: /operator console/i })).not.toBeInTheDocument();
+  });
+});
