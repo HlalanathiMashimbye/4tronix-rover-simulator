@@ -17,7 +17,7 @@ import { nanoid } from 'nanoid';
 const run = (over: Partial<MissionRun> & { yardId: string }): MissionRun => ({
   runId: nanoid(),
   status: 'completed',
-  ...(over as any),
+  ...over,
 });
 
 describe('watchableRuns', () => {
