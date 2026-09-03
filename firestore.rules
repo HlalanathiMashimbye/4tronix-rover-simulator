@@ -185,5 +185,16 @@ service cloud.firestore {
     match /learners/{learnerId}/{document=**} {
       allow read, write: if false;
     }
+
+    // Leaderboard entries: pseudonymous public rankings
+    // World-readable for public leaderboard display.
+    // Written only through Admin SDK to prevent client manipulation.
+    //
+    // Only public entries (optedIn: true) should be visible, but rules cannot
+    // filter on read, so the repository enforces this at query time.
+    match /leaderboardEntries/{learnerHash} {
+      allow get, list: if true;
+      allow write: if false;
+    }
   }
 }
