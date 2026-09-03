@@ -18,8 +18,9 @@ export interface LeaderboardEntry {
 
   // Public profile (pseudonymous)
   displayName: string; // Random generated nickname
-  score: number; // Total points from completed missions
-  completedChallenges: number; // Count of completed missions
+  score: number; // Total points from completed challenges
+  completedChallenges: number; // Count of unique challenges completed
+  completedChallengeIds: string[]; // IDs of completed challenges (for idempotency)
 
   // Opt-in status
   optedIn: boolean; // Whether learner is publicly visible
@@ -46,6 +47,7 @@ export function createLeaderboardEntry(
     displayName,
     score: 0,
     completedChallenges: 0,
+    completedChallengeIds: [],
     optedIn: false,
     createdAt: now,
     updatedAt: now,

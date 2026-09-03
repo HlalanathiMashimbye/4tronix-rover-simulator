@@ -13,6 +13,7 @@ describe('LeaderboardEntry', () => {
       expect(entry.displayName).toBe('Test Learner');
       expect(entry.score).toBe(0);
       expect(entry.completedChallenges).toBe(0);
+      expect(entry.completedChallengeIds).toEqual([]);
       expect(entry.optedIn).toBe(false);
       expect(entry.leaderboardId).toBe('default');
     });
@@ -64,6 +65,9 @@ describe('LeaderboardEntry', () => {
         score: 0,
         completedChallenges: 0,
       });
+
+      // Challenge IDs are private (not shown on public leaderboard)
+      expect((entry as unknown as Record<string, unknown>).completedChallengeIds).toBeDefined();
     });
   });
 });

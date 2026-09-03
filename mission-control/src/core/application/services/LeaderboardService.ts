@@ -2,75 +2,84 @@
  * Leaderboard Service
  *
  * Business logic for leaderboard operations.
- * Handles scoring, opt-in/out, and rank calculation.
+ * Handles challenge-based scoring, opt-in/out, and rank calculation.
  * All score writes are server-side only (via Admin SDK).
  */
 
 import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
-import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { LeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
-import { isCompletedAnywhere } from '@/core/domain/entities/MissionRun';
 import { calculateScore } from '@/core/domain/services/scoreCalculation';
 import { generateNickname } from '@/core/domain/services/nicknameGenerator';
 
 export interface LeaderboardStats {
   score: number;
   completedChallenges: number;
+  completedChallengeIds: string[];
   rank?: number;
   entry: LeaderboardEntry;
 }
 
 export class LeaderboardService {
   constructor(
-    private readonly leaderboardRepository: ILeaderboardRepository,
-    private readonly missionRepository: IMissionRepository
+    private readonly leaderboardRepository: ILeaderboardRepository
   ) {}
 
   /**
-   * Calculate and update learner's leaderboard score
-   * Called server-side after mission completion
+   * Record a completed challenge for a learner
+   * Called server-side after challenge completion verification
+   *
+   * @param learnerRefHash - Hash of learner ID
+   * @param challengeId - ID of the challenge completed
+   * @returns Updated leaderboard stats
    */
-  async updateLeaderboardScore(learnerRefHash: string): Promise<LeaderboardStats> {
+  async recordChallengeCompletion(
+    learnerRefHash: string,
+    challengeId: string
+  ): Promise<LeaderboardStats> {
     // Ensure entry exists
-    const entry = await this.leaderboardRepository.getOrCreate(
+    let entry = await this.leaderboardRepository.getOrCreate(
       learnerRefHash,
       generateNickname()
     );
 
-    // Count completed missions for this learner
-    // This requires querying all missions by learnerRef
-    // For now, we'll use a placeholder - in production, this would need
-    // a dedicated Firestore index or a batch job
-    const completedCount = await this.countCompletedMissions(learnerRefHash);
+    // Check if challenge already completed (idempotency)
+    if (entry.completedChallengeIds.includes(challengeId)) {
+      // Already completed - return current stats without updating
+      const rank = entry.optedIn
+        ? await this.leaderboardRepository.getRank(learnerRefHash)
+        : undefined;
 
-    const score = calculateScore(completedCount);
+      return {
+        score: entry.score,
+        completedChallenges: entry.completedChallenges,
+        completedChallengeIds: entry.completedChallengeIds,
+        rank,
+        entry,
+      };
+    }
+
+    // Add challenge to completed list
+    const updatedChallengeIds = [...entry.completedChallengeIds, challengeId];
+    const newScore = calculateScore(updatedChallengeIds);
 
     const updated = await this.leaderboardRepository.updateScore(
       learnerRefHash,
-      completedCount,
-      score
+      updatedChallengeIds.length,
+      newScore,
+      updatedChallengeIds
     );
 
-    const rank = updated.optedIn ? await this.leaderboardRepository.getRank(learnerRefHash) : undefined;
+    const rank = updated.optedIn
+      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      : undefined;
 
     return {
       score: updated.score,
       completedChallenges: updated.completedChallenges,
+      completedChallengeIds: updated.completedChallengeIds,
       rank,
       entry: updated,
     };
-  }
-
-  /**
-   * Count missions completed by a learner
-   * This is a simplified version - in production, would use Firestore query
-   */
-  private async countCompletedMissions(learnerRefHash: string): Promise<number> {
-    // Query for missions by this learner that have been completed
-    // This would require a Firestore index or a separate tracking collection
-    // For now, return 0 as placeholder - actual implementation depends on
-    // how missions track learnerRef
-    return 0;
   }
 
   /**
@@ -101,11 +110,14 @@ export class LeaderboardService {
     const entry = await this.leaderboardRepository.findByLearnerRef(learnerRefHash);
     if (!entry) return null;
 
-    const rank = entry.optedIn ? await this.leaderboardRepository.getRank(learnerRefHash) : undefined;
+    const rank = entry.optedIn
+      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      : undefined;
 
     return {
       score: entry.score,
       completedChallenges: entry.completedChallenges,
+      completedChallengeIds: entry.completedChallengeIds,
       rank,
       entry,
     };

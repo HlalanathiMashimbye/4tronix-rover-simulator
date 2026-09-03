@@ -66,7 +66,7 @@ export default function LeaderboardPage() {
 
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
-                <p className="text-sm text-muted-foreground">Missions Completed</p>
+                <p className="text-sm text-muted-foreground">Challenges Completed</p>
                 <p className="text-3xl font-bold text-gradient-mars">
                   {status.completedChallenges}
                 </p>
@@ -144,7 +144,7 @@ export default function LeaderboardPage() {
                   <tr>
                     <th className="text-left px-6 py-3 font-semibold text-muted-foreground">Rank</th>
                     <th className="text-left px-6 py-3 font-semibold text-muted-foreground">Name</th>
-                    <th className="text-right px-6 py-3 font-semibold text-muted-foreground">Missions</th>
+                    <th className="text-right px-6 py-3 font-semibold text-muted-foreground">Challenges</th>
                     <th className="text-right px-6 py-3 font-semibold text-muted-foreground">Score</th>
                   </tr>
                 </thead>

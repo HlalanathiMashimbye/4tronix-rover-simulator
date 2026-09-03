@@ -55,25 +55,31 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
   async updateScore(
     learnerRefHash: string,
     completedChallenges: number,
-    score: number
+    score: number,
+    completedChallengeIds?: string[]
   ): Promise<LeaderboardEntry> {
     const ref = this.db.collection(LEADERBOARD_COLLECTION).doc(learnerRefHash);
 
     // Ensure entry exists before updating
     const entry = await this.getOrCreate(learnerRefHash, generateNickname());
 
-    const updates = {
+    const updates: Record<string, unknown> = {
       completedChallenges,
       score,
       updatedAt: new Date().toISOString(),
     };
+
+    if (completedChallengeIds) {
+      updates.completedChallengeIds = completedChallengeIds;
+    }
 
     await ref.update(updates);
 
     return {
       ...entry,
       ...updates,
-    };
+      completedChallengeIds: completedChallengeIds ?? entry.completedChallengeIds,
+    } as LeaderboardEntry;
   }
 
   async optIn(learnerRefHash: string, displayName: string): Promise<LeaderboardEntry> {

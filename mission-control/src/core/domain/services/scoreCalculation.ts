@@ -1,22 +1,43 @@
 /**
  * Score calculation for leaderboard
  *
- * Determines points awarded for mission completion.
+ * Determines points awarded for challenge completion.
  * All calculations are server-side and non-repudiable.
  *
  * Scoring model (learning-focused):
- * - Base: 100 points per completed mission
- * - Each mission is counted once (idempotent)
+ * - Base: Points per completed challenge (varies by challenge)
+ * - Each challenge is counted once per learner (idempotent)
  */
 
+export const CHALLENGE_POINTS: Record<string, number> = {
+  'platform-orientation': 100,
+  'basic-movement': 150,
+  'loop-structures': 200,
+  'sensor-operations': 250,
+};
+
+const DEFAULT_CHALLENGE_POINTS = 100;
+
 /**
- * Calculate score for a completed mission
+ * Get points for a specific challenge
  *
- * @param completedMissionCount - Number of missions completed by this learner
+ * @param challengeId - ID of the challenge
+ * @returns Points awarded for completing this challenge
+ */
+export function getChallengePoints(challengeId: string): number {
+  return CHALLENGE_POINTS[challengeId] ?? DEFAULT_CHALLENGE_POINTS;
+}
+
+/**
+ * Calculate total score from completed challenge IDs
+ *
+ * @param completedChallengeIds - Array of unique challenge IDs completed
  * @returns Total points
  */
-export function calculateScore(completedMissionCount: number): number {
-  return completedMissionCount * 100;
+export function calculateScore(completedChallengeIds: string[]): number {
+  return completedChallengeIds.reduce((total, challengeId) => {
+    return total + getChallengePoints(challengeId);
+  }, 0);
 }
 
 /**

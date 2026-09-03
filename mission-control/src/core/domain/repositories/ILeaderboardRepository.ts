@@ -30,12 +30,13 @@ export interface ILeaderboardRepository {
   findByLearnerRef(learnerRefHash: string): Promise<LeaderboardEntry | null>;
 
   /**
-   * Update leaderboard entry with new score
+   * Update leaderboard entry with new score and completed challenges
    */
   updateScore(
     learnerRefHash: string,
     completedChallenges: number,
-    score: number
+    score: number,
+    completedChallengeIds?: string[]
   ): Promise<LeaderboardEntry>;
 
   /**
