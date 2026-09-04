@@ -37,7 +37,7 @@ export class LeaderboardService {
     challengeId: string
   ): Promise<LeaderboardStats> {
     // Ensure entry exists
-    let entry = await this.leaderboardRepository.getOrCreate(
+    const entry = await this.leaderboardRepository.getOrCreate(
       learnerRefHash,
       generateNickname()
     );

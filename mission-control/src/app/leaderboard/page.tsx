@@ -16,10 +16,6 @@ export default function LeaderboardPage() {
   const [error, setError] = useState<string | null>(null);
   const { status, optIn, optOut, regenerateNickname } = useLeaderboard();
 
-  useEffect(() => {
-    loadLeaderboard();
-  }, []);
-
   const loadLeaderboard = async () => {
     try {
       setLoading(true);
@@ -38,6 +34,10 @@ export default function LeaderboardPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, []);
 
   const learnerRank = useMemo(() => {
     if (!status?.optedIn) return null;
@@ -62,7 +62,7 @@ export default function LeaderboardPage() {
             <Trophy className="h-16 w-16 text-gradient-mars mx-auto mb-4" />
             <h2 className="font-display text-2xl font-bold text-foreground mb-2">Join the Leaderboard</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              See how you rank among other learners. Your real identity stays private—we'll give you a random nickname like "Brave Rover."
+              See how you rank among other learners. Your real identity stays private—we&apos;ll give you a random nickname like &quot;Brave Rover.&quot;
             </p>
 
             <div className="space-y-2">
@@ -122,7 +122,7 @@ export default function LeaderboardPage() {
                 <p className="text-sm text-muted-foreground">Rank</p>
                 <p className="text-2xl font-bold text-gradient-mars">#{learnerRank}</p>
                 <p className="text-sm text-foreground mt-1">
-                  You're {status.displayName} on the leaderboard
+                  You&apos;re {status.displayName} on the leaderboard
                 </p>
               </div>
             )}
