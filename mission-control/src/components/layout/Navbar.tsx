@@ -32,6 +32,12 @@ import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
   {
+    href: '/challenges',
+    label: 'Challenges',
+    mobileLabel: 'Challenges',
+    icon: Trophy,
+  },
+  {
     href: '/history',
     label: 'My History',
     mobileLabel: 'History',
