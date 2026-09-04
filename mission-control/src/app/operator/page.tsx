@@ -28,13 +28,20 @@ export default async function OperatorPage() {
 
   return (
     <main className="relative flex h-[calc(100dvh-var(--app-chrome))] flex-col overflow-hidden px-4 sm:px-6">
-      <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
-          Operator <span className="text-gradient-mars">Console</span>
-        </h1>
-        <p className="mt-0.5 hidden text-sm text-muted-foreground sm:block">
-          Signed in as {session.email ?? session.uid}.
-        </p>
+      {/* One line, not two. This console is a fixed-height page: everything
+          spent here comes straight off the mission pane below, which is where
+          the code and blocks have to fit. At 720px - an ordinary laptop - the
+          old stacked header took 86px, leaving the code area 264px, about
+          eleven lines. Title and identity on one baseline is 52px. */}
+      <header className="mx-auto w-full max-w-page shrink-0 pt-3 pb-2">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h1 className="font-display text-xl font-bold tracking-tight text-foreground md:text-2xl">
+            Operator <span className="text-gradient-mars">Console</span>
+          </h1>
+          <p className="hidden text-xs text-muted-foreground sm:block">
+            Signed in as {session.email ?? session.uid}.
+          </p>
+        </div>
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-3 pb-5">
