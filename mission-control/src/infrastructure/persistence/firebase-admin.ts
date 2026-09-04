@@ -49,12 +49,16 @@ function normalizeEnvValue(value?: string): string | undefined {
   return trimmedValue;
 }
 
-function resolveProjectId(): string {
-  const projectId = normalizeEnvValue(
+function configuredProjectId(): string | undefined {
+  return normalizeEnvValue(
     process.env.FIREBASE_PROJECT_ID ??
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ??
     process.env.REACT_APP_FIREBASE_PROJECT_ID
   );
+}
+
+function resolveProjectId(): string {
+  const projectId = configuredProjectId();
 
   if (!projectId) {
     throw new Error(
@@ -86,6 +90,10 @@ function resolveProjectId(): string {
   return projectId;
 }
 
+function isFirestoreEmulator(): boolean {
+  return Boolean(normalizeEnvValue(process.env.FIRESTORE_EMULATOR_HOST));
+}
+
 /**
  * Initialize Firebase Admin SDK
  * Safe to call multiple times - only initializes once
@@ -98,6 +106,13 @@ export function initializeFirebaseAdmin(): App {
   const existingApps = getApps();
   if (existingApps.length > 0) {
     app = existingApps[0];
+    return app;
+  }
+
+  if (isFirestoreEmulator()) {
+    app = initializeApp({
+      projectId: configuredProjectId() ?? 'demo-rover-simulator',
+    });
     return app;
   }
 
