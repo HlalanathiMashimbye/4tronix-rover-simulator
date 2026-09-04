@@ -36,6 +36,7 @@ import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {
+  decideAnotherRun,
   decideAttachVideo,
   decideCancel,
   decideComplete,
@@ -58,6 +59,7 @@ const yardId = z.string().min(1);
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), yardId }),
   z.object({ action: z.literal('cancel'), yardId }),
+  z.object({ action: z.literal('another-run'), yardId }),
   z.object({ action: z.literal('attach-video'), yardId, url: z.string().trim().min(1) }),
   z.object({
     action: z.literal('resolve'),
@@ -171,6 +173,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       case 'cancel':
         decision = decideCancel(snapshot);
         break;
+      case 'another-run':
+        decision = decideAnotherRun(snapshot);
+        break;
       case 'attach-video': {
         // Parsed rather than pattern-matched, using the same helper the learner
         // player uses. If the id cannot be read out of it, the mission page
@@ -212,7 +217,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const decidedAt = new Date().toISOString();
     // For offline yards, the run may not exist yet. Generate a runId if needed.
-    const runId = run?.runId ?? nanoid();
+    //
+    // 'another-run' always takes a fresh one, which is the entire point of it:
+    // reusing the existing runId would merge the second attempt over the first
+    // and destroy the record this action exists to create. Every other action
+    // acts on the run in front of the operator.
+    const runId =
+      command.action === 'another-run' ? nanoid() : (run?.runId ?? nanoid());
 
     await repository.applyBookkeeping(id, runId, command.yardId, {
       status: decision.change.status,

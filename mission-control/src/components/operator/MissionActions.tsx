@@ -25,7 +25,7 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  * therefore belongs somewhere that works when the yard's network does not.
  */
 
-type Action = 'complete' | 'cancel' | 'attach-video' | 'resolve' | 'feedback';
+type Action = 'complete' | 'cancel' | 'another-run' | 'attach-video' | 'resolve' | 'feedback';
 
 export function MissionActions({
   mission,
@@ -194,6 +194,33 @@ export function MissionActions({
         </p>
       )}
 
+      {/* Where an operator is standing when they realise they ran it twice:
+          they have just attached one video and have a second file on the
+          satellite with nowhere to go. The yard keeps every run's recording;
+          this is how the platform gets a run for the next one to attach to. */}
+      {settled && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/50 bg-background/40 p-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold text-foreground">Ran it again?</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Logs another completed run at this yard, so the second recording
+              has something to attach to.
+            </p>
+          </div>
+          <ActionButton
+            label="Log another run"
+            busy={pending === 'another-run'}
+            onClick={() => run('another-run', 'another-run')}
+            disabled={isHandledAutomatically('complete', mode)}
+            title={
+              isHandledAutomatically('complete', mode)
+                ? automatedReason('complete')
+                : undefined
+            }
+          />
+        </div>
+      )}
+
       {mission.status === 'completed' && (
         <div className="rounded-xl border border-border/50 bg-background/40 p-3">
           <label
@@ -285,6 +312,8 @@ function successMessage(action: Action, name?: string): string {
       return `Marked ${mission} complete.`;
     case 'cancel':
       return `Cancelled ${mission}. The record is kept.`;
+    case 'another-run':
+      return `Logged another run of ${mission}. Attach its video below.`;
     case 'attach-video':
       return `Attached the video to ${mission}.`;
     case 'resolve':
