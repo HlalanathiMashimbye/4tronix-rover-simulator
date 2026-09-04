@@ -77,6 +77,15 @@ replacing the satellite's wifi would have stranded it, and it destroyed the
 property that makes the name worth having - that anything can serve it. The
 laptop being able to take over is a feature, not a bug to be designed out.
 
+## Currently unsolved: the rover will not join the satellite
+
+The rover joins `marsyard` when a laptop serves it and not when the satellite
+does, and that is open. Do not start from scratch on it -
+[rover-join-handover.md](rover-join-handover.md) has what is ruled out, the
+flight-recorder technique for observing a rover you cannot SSH into, and the
+discipline for switching between the two access points without confusing
+yourself.
+
 ## Why the rover could not join at first
 
 The access point came up correctly and the rover was still refused. It is worth
