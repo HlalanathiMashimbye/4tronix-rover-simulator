@@ -10,6 +10,8 @@
  * - Progressive enhancement: Can be upgraded to authenticated user later
  */
 
+import { ChallengeProgress } from './ChallengeProgress';
+
 export interface Learner {
   // Identifiers
   id: string;                        // Unique learner ID (nanoid)
@@ -37,6 +39,12 @@ export interface Learner {
 
   // Device info (for multi-device detection)
   devices: LearnerDevice[];
+
+  // Progressive Challenges advancement. Absent until a learner completes
+  // their first challenge - same as displayName, there is no eager default.
+  // firestore.rules already allowlisted this field on the learner document
+  // ahead of this feature; this is the entity catching up to that.
+  progress?: ChallengeProgress;
 }
 
 export interface LearnerDevice {

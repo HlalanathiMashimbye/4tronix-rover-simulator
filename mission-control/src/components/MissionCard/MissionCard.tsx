@@ -131,6 +131,12 @@ export function MissionCard({ mission }: MissionCardProps) {
           {discoveryStatus}
         </span>
 
+        {mission.origin === 'challenge' && (
+          <span className="absolute right-3 top-3 z-10 rounded-full bg-primary/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-primary-foreground shadow-sm">
+            Challenge solution
+          </span>
+        )}
+
         {durationMs ? (
           <span className="absolute bottom-3 right-3 z-10 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-white">
             {formatDuration(durationMs)}

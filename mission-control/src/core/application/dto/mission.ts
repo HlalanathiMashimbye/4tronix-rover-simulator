@@ -33,6 +33,10 @@ export interface CreateMissionDto {
   code: string;
   /** Serialised Blockly workspace, when the mission was built from blocks. */
   blocklyState?: string;
+  /** Set when this mission was submitted via the Create Mission handoff from a completed Progressive Challenges challenge. */
+  origin?: 'challenge';
+  /** Which challenge this mission's solution came from. Only set alongside origin: 'challenge'. */
+  challengeId?: string;
 }
 
 /** An operator or the satellite recording what happened to a mission. */

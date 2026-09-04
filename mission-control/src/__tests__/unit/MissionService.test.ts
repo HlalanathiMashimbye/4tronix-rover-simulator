@@ -164,6 +164,29 @@ describe('MissionService', () => {
       expect(result.mission?.status).toBe('queued');
     });
 
+    it('carries a Progressive Challenges origin/challengeId onto the mission', async () => {
+      const result = await service.submitMission(
+        makeDto({
+          yardId: 'yard-1',
+          code: 'rover.forward(100)',
+          origin: 'challenge',
+          challengeId: 'basic-movement',
+        })
+      );
+
+      expect(result.mission?.origin).toBe('challenge');
+      expect(result.mission?.challengeId).toBe('basic-movement');
+    });
+
+    it('leaves origin/challengeId unset for a freeform mission', async () => {
+      const result = await service.submitMission(
+        makeDto({ yardId: 'yard-1', code: 'rover.forward(100)' })
+      );
+
+      expect(result.mission?.origin).toBeUndefined();
+      expect(result.mission?.challengeId).toBeUndefined();
+    });
+
   });
 
   describe('getMissionById', () => {

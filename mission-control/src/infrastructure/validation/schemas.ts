@@ -80,6 +80,9 @@ export const createMissionSchema = z.object({
     }),
 
   blocklyState: z.string().optional(),
+
+  origin: z.literal('challenge').optional(),
+  challengeId: z.string().max(100, 'Challenge ID too long').optional(),
 }) satisfies z.ZodType<CreateMissionDto>;
 
 /**

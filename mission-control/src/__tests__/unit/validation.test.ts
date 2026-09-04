@@ -196,4 +196,36 @@ describe('Mission Schema Validation', () => {
       expect(() => createMissionSchema.parse(invalidData)).toThrow();
     });
   });
+
+  describe('Progressive Challenges handoff fields', () => {
+    const base = {
+      yardId: 'curiosity',
+      learnerId: 'learner-123',
+      sessionId: 'test-session-123',
+      name: 'Red Explorer',
+      code: 'rover.forward(100)',
+    };
+
+    it('accepts origin: "challenge" with a challengeId', () => {
+      const result = validateMission({ ...base, origin: 'challenge', challengeId: 'basic-movement' });
+
+      expect(result.success).toBe(true);
+      expect(result.data?.origin).toBe('challenge');
+      expect(result.data?.challengeId).toBe('basic-movement');
+    });
+
+    it('is optional - a freeform mission carries neither field', () => {
+      const result = validateMission(base);
+
+      expect(result.success).toBe(true);
+      expect(result.data?.origin).toBeUndefined();
+      expect(result.data?.challengeId).toBeUndefined();
+    });
+
+    it('rejects any origin other than "challenge"', () => {
+      const result = validateMission({ ...base, origin: 'freeform' });
+
+      expect(result.success).toBe(false);
+    });
+  });
 });

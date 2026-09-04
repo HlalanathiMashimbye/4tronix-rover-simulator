@@ -491,6 +491,8 @@ export class FirestoreMissionRepository implements IMissionRepository {
       name: data.name as string | undefined,
       code: data.code as string,
       blocklyState: data.blocklyState as string | undefined,
+      origin: data.origin as Mission['origin'],
+      challengeId: data.challengeId as string | undefined,
       status: data.status as Mission['status'],
       deleted: (data.deleted as boolean) ?? false,
       deletedAt: data.deletedAt as string | undefined,
