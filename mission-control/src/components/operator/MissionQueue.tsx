@@ -322,15 +322,6 @@ function YardQueue({
     <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
       selectedId ? 'hidden lg:block' : ''
     }`}>
-      {flash && (
-        <p
-          role="status"
-          className="mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-foreground"
-        >
-          {flash}
-        </p>
-      )}
-
       {/* The console runs on the satellite in the room, on a network this app
           cannot reach, so the operator was expected to remember an address and
           type it into a second tab. The button is the door; the address is
@@ -541,6 +532,19 @@ function YardQueue({
     <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
       selectedId ? '' : 'hidden lg:block'
     }`}>
+      {/* Beside the button that caused it. This used to render at the top of
+          the queue pane, on the opposite side of the screen from every control
+          that raises it, which is a confirmation an operator can look straight
+          past. */}
+      {flash && (
+        <p
+          role="status"
+          className="mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-foreground"
+        >
+          {flash}
+        </p>
+      )}
+
       <MissionDetail
         mission={selected}
         runs={runs}

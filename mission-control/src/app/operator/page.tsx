@@ -41,42 +41,42 @@ export default async function OperatorPage() {
           <p className="hidden text-xs text-muted-foreground sm:block">
             Signed in as {session.email ?? session.uid}.
           </p>
+
+          {/* Chips and sign-out live on the title's line rather than in rows of
+              their own. This page is a fixed-height shell: the header, a chip
+              row and a sign-out row were three separate blocks, and every one
+              of them came off the mission pane, which is the only part with
+              something to fit. */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <span className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-2.5 py-1 text-[11px] font-medium text-foreground">
+              <ShieldCheck className="h-3 w-3 text-primary" />
+              {session.role}
+            </span>
+            <YardChip yard={yard} />
+            {session.role === 'admin' && (
+              <Link
+                href="/operator/team"
+                className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-primary/70"
+              >
+                <Users className="h-3 w-3 text-primary" />
+                Manage access
+              </Link>
+            )}
+            {session.role === 'admin' && (
+              <Link
+                href="/operator/settings"
+                className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:border-primary/70"
+              >
+                <SlidersHorizontal className="h-3 w-3 text-primary" />
+                Settings
+              </Link>
+            )}
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-3 pb-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-            {session.role}
-          </span>
-          {/* Chosen at sign-in and fixed for the session, so this states where
-              they are rather than offering to change it. Clicking says how. */}
-          <YardChip yard={yard} />
-
-          {/* Admins only. An operator has no use for it and the page redirects
-              them anyway, so showing it would be an invitation to a dead end. */}
-          {session.role === 'admin' && (
-            <Link
-              href="/operator/team"
-              className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
-            >
-              <Users className="h-3.5 w-3.5 text-primary" />
-              Manage access
-            </Link>
-          )}
-
-          {session.role === 'admin' && (
-            <Link
-              href="/operator/settings"
-              className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5 text-primary" />
-              Settings
-            </Link>
-          )}
-        </div>
-
         {yard ? (
           <MissionQueue
             role={session.role}
@@ -93,10 +93,6 @@ export default async function OperatorPage() {
             against a yard, so the queue cannot be shown without one.
           </p>
         )}
-
-        <div className="flex justify-end">
-          <SignOutButton />
-        </div>
       </div>
     </main>
   );

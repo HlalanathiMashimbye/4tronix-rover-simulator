@@ -164,6 +164,29 @@ export function decideAttachVideo(snapshot: RunSnapshot): Decision {
 }
 
 /**
+ * Take the video off a run, leaving the run itself.
+ *
+ * Separate from replacing it, because they answer different questions. An
+ * operator who pasted the wrong link replaces it; one who uploaded the wrong
+ * recording and has taken it down needs the run to go back to having none, and
+ * pasting an empty string is not an answer the attach path accepts.
+ *
+ * Allowed on a settled run only, matching where a video can be attached in the
+ * first place.
+ */
+export function decideRemoveVideo(snapshot: RunSnapshot): Decision {
+  if (isOpen(snapshot)) {
+    return {
+      ok: false,
+      error: 'This run has not finished, so it has no video to remove.',
+    };
+  }
+  // Status untouched: taking a link off is not a state change, exactly as
+  // putting one on is not.
+  return { ok: true, change: { status: null, clearsReview: false } };
+}
+
+/**
  * Whether an operator may leave feedback on this run.
  *
  * Only on a run that actually happened. Feedback on a queued mission would be

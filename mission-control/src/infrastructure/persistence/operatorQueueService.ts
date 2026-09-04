@@ -201,15 +201,21 @@ export function subscribeToMissionRuns(
     collection(db, 'missions', missionId, 'runs'),
     (snapshot) => {
       onRuns(
-        snapshot.docs.map((doc) => ({
-          ...(doc.data() as Omit<MissionRun, 'runId'>),
-          // The document id IS the runId (PR #139) and is authoritative over
-          // any stored copy. The yard comes from the field; satellite-written
-          // documents that predate the field keyed the doc BY yard, so the id
-          // is the honest fallback rather than an empty string.
-          runId: doc.id,
-          yardId: (doc.data() as { yardId?: string }).yardId ?? doc.id,
-        })),
+        snapshot.docs
+          // Soft-deleted runs read as gone, matching findRuns on the server.
+          // Filtered here rather than in the query because runs written before
+          // soft delete existed carry no `deleted` field, and a where() clause
+          // would drop every one of them.
+          .filter((doc) => !(doc.data() as { deleted?: boolean }).deleted)
+          .map((doc) => ({
+            ...(doc.data() as Omit<MissionRun, 'runId'>),
+            // The document id IS the runId (PR #139) and is authoritative over
+            // any stored copy. The yard comes from the field; satellite-written
+            // documents that predate the field keyed the doc BY yard, so the
+            // id is the honest fallback rather than an empty string.
+            runId: doc.id,
+            yardId: (doc.data() as { yardId?: string }).yardId ?? doc.id,
+          })),
       );
     },
     (error) => onError(error instanceof Error ? error : new Error(String(error))),

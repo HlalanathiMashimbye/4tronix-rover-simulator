@@ -206,14 +206,21 @@ export class FirestoreMissionRepository implements IMissionRepository {
         .collection(RUNS_SUBCOLLECTION)
         .get();
 
-      return snapshot.docs.map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
+      // Filtered here rather than in the query, for the same reason missions
+      // are: runs written before soft delete existed carry no `deleted` field
+      // at all, and a where() clause would silently drop every one of them.
+      return snapshot.docs
+        .filter((d) => !(d.data() as { deleted?: boolean }).deleted)
+        .map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
     }
 
     const snapshot = await getDocs(
       collection(this.clientDb(), MISSIONS_COLLECTION, missionId, RUNS_SUBCOLLECTION)
     );
 
-    return snapshot.docs.map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
+    return snapshot.docs
+      .filter((d) => !(d.data() as { deleted?: boolean }).deleted)
+      .map((d) => this.toRun(d.id, d.data() as Partial<MissionRun>));
   }
 
   /**
@@ -285,6 +292,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
     change: {
       status?: MissionStatus | null;
       youtubeUrl?: string;
+      clearsVideo?: boolean;
       clearsReview?: boolean;
       feedback?: string;
       decidedAt: string;
@@ -319,7 +327,13 @@ export class FirestoreMissionRepository implements IMissionRepository {
       }
     }
 
-    if (change.youtubeUrl) {
+    if (change.clearsVideo) {
+      // Written as null rather than deleted: toRun reads the field straight
+      // through, and a null is what the rest of the code already treats as
+      // "no video" - youtubeUrl is optional everywhere it is consumed.
+      runFields.youtubeUrl = null;
+      missionFields.youtubeUrl = null;
+    } else if (change.youtubeUrl) {
       runFields.youtubeUrl = change.youtubeUrl;
       // Mirrored onto the mission for the same reason as status: missions that
       // predate the run model still read their video from there.
@@ -362,6 +376,24 @@ export class FirestoreMissionRepository implements IMissionRepository {
    * for someone who can reach the database. A mis-tap on a child's work should
    * be recoverable by a human even though the interface promises it is not.
    */
+  async softDeleteRun(
+    missionId: string,
+    runId: string,
+    deletedAt: string,
+    deletedBy: string,
+  ): Promise<void> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Deleting a run requires the Admin SDK.');
+    }
+
+    await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .collection(RUNS_SUBCOLLECTION)
+      .doc(runId)
+      .set({ deleted: true, deletedAt, deletedBy }, { merge: true });
+  }
+
   async softDeleteMission(missionId: string, deletedAt: string, deletedBy: string): Promise<void> {
     if (!this.isAdminFirestore()) {
       throw new Error('Deleting a mission requires the Admin SDK.');
@@ -381,7 +413,7 @@ export class FirestoreMissionRepository implements IMissionRepository {
       status: data.status ?? 'queued',
       startedAt: data.startedAt,
       completedAt: data.completedAt,
-      youtubeUrl: data.youtubeUrl,
+      youtubeUrl: data.youtubeUrl ?? undefined,
       needsReview: data.needsReview,
       reviewReason: data.reviewReason ?? null,
       statusUpdatedAt: data.statusUpdatedAt ?? null,
@@ -497,7 +529,10 @@ export class FirestoreMissionRepository implements IMissionRepository {
       executionResult: data.executionResult as Mission['executionResult'],
       executionMetadata: data.executionMetadata as Mission['executionMetadata'],
       videoUrl: data.videoUrl as string | undefined,
-      youtubeUrl: data.youtubeUrl as string | undefined,
+      // Coerced, because removing a video writes null and this field is
+      // typed as optional. Leaving the null would make every consumer's
+      // `string | undefined` a lie.
+      youtubeUrl: (data.youtubeUrl as string | null | undefined) ?? undefined,
       submittedAt: data.submittedAt as string,
       startedAt: data.startedAt as string | undefined,
       completedAt: data.completedAt as string | undefined,

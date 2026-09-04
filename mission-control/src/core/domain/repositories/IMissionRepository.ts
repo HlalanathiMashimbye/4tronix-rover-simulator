@@ -70,6 +70,8 @@ export interface IMissionRepository {
     change: {
       status?: MissionStatus | null;
       youtubeUrl?: string;
+      /** Take the video off this run. Distinct from not supplying one. */
+      clearsVideo?: boolean;
       clearsReview?: boolean;
       /** An operator's note to the learner. Written to the run, not the mission. */
       feedback?: string;
@@ -84,6 +86,22 @@ export interface IMissionRepository {
    * a public feed, not asking for it to be unrecoverable.
    */
   softDeleteMission(missionId: string, deletedAt: string, deletedBy: string): Promise<void>;
+
+  /**
+   * Remove one attempt from a mission's history.
+   *
+   * Soft, for the same reason a mission is: a run is the record that a child's
+   * program was actually driven on a rover, and an operator tidying a
+   * mis-logged attempt should not be able to erase the fact that an attempt
+   * happened. findRuns filters these out, so the console and the learner both
+   * stop seeing it.
+   */
+  softDeleteRun(
+    missionId: string,
+    runId: string,
+    deletedAt: string,
+    deletedBy: string,
+  ): Promise<void>;
 }
 
 /** Where a page ended. Both ordering fields, so ties cannot skip or repeat. */
