@@ -26,10 +26,14 @@ export async function GET(
     const entry = await repository.findByLearnerRef(learnerRefHash);
 
     if (!entry) {
-      return NextResponse.json(
-        { success: false, error: 'Not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({
+        success: true,
+        optedIn: false,
+        displayName: generateNickname(),
+        score: 0,
+        completedChallenges: 0,
+        rank: null,
+      });
     }
 
     const rank = entry.optedIn ? await repository.getRank(learnerRefHash) : null;
