@@ -80,7 +80,7 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
       ...entry,
       ...updates,
       completedChallengeIds: completedChallengeIds ?? entry.completedChallengeIds,
-    } as LeaderboardEntry;
+    };
   }
 
   async optIn(learnerRefHash: string, displayName: string): Promise<LeaderboardEntry> {
@@ -101,9 +101,9 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
       ...entry,
       optedIn: true,
       displayName,
-      optedInAt: now,
       updatedAt: now,
-    };
+      optedInAt: now,
+    } as LeaderboardEntry;
   }
 
   async optOut(learnerRefHash: string): Promise<void> {
@@ -180,6 +180,6 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
     return {
       ...entry,
       ...updates,
-    };
+    } as LeaderboardEntry;
   }
 }

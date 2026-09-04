@@ -45,9 +45,10 @@ export class LeaderboardService {
     // Check if challenge already completed (idempotency)
     if (entry.completedChallengeIds.includes(challengeId)) {
       // Already completed - return current stats without updating
-      const rank = entry.optedIn
-        ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
-        : undefined;
+      const rankOrNull = entry.optedIn
+        ? await this.leaderboardRepository.getRank(learnerRefHash)
+        : null;
+      const rank = rankOrNull ?? undefined;
 
       return {
         score: entry.score,
@@ -69,9 +70,10 @@ export class LeaderboardService {
       updatedChallengeIds
     );
 
-    const rank = updated.optedIn
-      ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
-      : undefined;
+    const rankOrNull = updated.optedIn
+      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      : null;
+    const rank = rankOrNull ?? undefined;
 
     return {
       score: updated.score,
@@ -110,9 +112,10 @@ export class LeaderboardService {
     const entry = await this.leaderboardRepository.findByLearnerRef(learnerRefHash);
     if (!entry) return null;
 
-    const rank = entry.optedIn
-      ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
-      : undefined;
+    const rankOrNull = entry.optedIn
+      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      : null;
+    const rank = rankOrNull ?? undefined;
 
     return {
       score: entry.score,

@@ -49,7 +49,7 @@ describe('nicknameGenerator', () => {
       ];
 
       nicknames.forEach((nickname) => {
-        const [adj, noun] = nickname.split(' ');
+        const [adj, noun] = nickname.split(' ') as [string, string];
         expect(adjectives).toContain(adj);
         expect(nouns).toContain(noun);
       });
