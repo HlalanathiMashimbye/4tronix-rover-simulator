@@ -16,7 +16,7 @@ describe('nicknameGenerator', () => {
     });
 
     it('generates different nicknames on each call', () => {
-      const nicknames = new Set();
+      const nicknames = new Set<string>();
       for (let i = 0; i < 100; i++) {
         nicknames.add(generateNickname());
       }
@@ -32,7 +32,7 @@ describe('nicknameGenerator', () => {
     });
 
     it('never exposes raw learner data', () => {
-      const nicknames = new Set();
+      const nicknames = new Set<string>();
       for (let i = 0; i < 50; i++) {
         nicknames.add(generateNickname());
       }

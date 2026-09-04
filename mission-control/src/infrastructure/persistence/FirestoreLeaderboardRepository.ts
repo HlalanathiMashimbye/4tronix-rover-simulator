@@ -37,6 +37,7 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
       displayName: nickname,
       score: 0,
       completedChallenges: 0,
+      completedChallengeIds: [],
       optedIn: false,
       createdAt: now,
       updatedAt: now,

@@ -46,7 +46,7 @@ export class LeaderboardService {
     if (entry.completedChallengeIds.includes(challengeId)) {
       // Already completed - return current stats without updating
       const rank = entry.optedIn
-        ? await this.leaderboardRepository.getRank(learnerRefHash)
+        ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
         : undefined;
 
       return {
@@ -70,7 +70,7 @@ export class LeaderboardService {
     );
 
     const rank = updated.optedIn
-      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
       : undefined;
 
     return {
@@ -111,7 +111,7 @@ export class LeaderboardService {
     if (!entry) return null;
 
     const rank = entry.optedIn
-      ? await this.leaderboardRepository.getRank(learnerRefHash)
+      ? (await this.leaderboardRepository.getRank(learnerRefHash)) ?? undefined
       : undefined;
 
     return {

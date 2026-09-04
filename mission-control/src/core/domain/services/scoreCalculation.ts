@@ -44,8 +44,8 @@ export function calculateScore(completedChallengeIds: string[]): number {
  * Verify that score calculation is idempotent
  * (same input always produces same output, no side effects)
  */
-export function verifyScoreIdempotent(count: number): boolean {
-  const score1 = calculateScore(count);
-  const score2 = calculateScore(count);
+export function verifyScoreIdempotent(challengeIds: string[]): boolean {
+  const score1 = calculateScore(challengeIds);
+  const score2 = calculateScore(challengeIds);
   return score1 === score2;
 }
