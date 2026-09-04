@@ -19,6 +19,7 @@ import {
   Plus,
   Sun,
   Moon,
+  Trophy,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
@@ -36,6 +37,12 @@ const NAV_ITEMS = [
     // Not a plain Clock: the Pending filter chip sits a few pixels away in the
     // same bar and was using the same clock face.
     icon: HistoryIcon,
+  },
+  {
+    href: '/leaderboard',
+    label: 'Leaderboard',
+    mobileLabel: 'Leaderboard',
+    icon: Trophy,
   },
 ];
 

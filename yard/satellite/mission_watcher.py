@@ -102,6 +102,9 @@ def stop_finished_recordings(rover_url, yard_id=None):
     return stopped
 
 
+CLEANUP_EVERY = 30  # ticks (~5 min at 10s interval)
+
+
 def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
     """Poll the rover forever. Intended to run on a daemon thread.
 
@@ -109,11 +112,23 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
     so a rover path edited on Settings applies without a restart.
     """
     def _loop():
+        tick = 0
         while True:
             try:
                 stop_finished_recordings(rover_url_getter())
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
+
+            tick += 1
+            if tick % CLEANUP_EVERY == 0:
+                try:
+                    from recording_cleanup import sweep
+                    deleted = sweep()
+                    if deleted:
+                        print(f'[watcher] Cleanup: removed {len(deleted)} recording(s).')
+                except Exception as e:
+                    print(f'[watcher] Cleanup failed: {e}')
+
             time.sleep(interval)
 
     _loop()
