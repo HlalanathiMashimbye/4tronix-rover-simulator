@@ -53,6 +53,17 @@ export function MissionWorkspace() {
   const [editorMode, setEditorMode] = useState<EditorMode>(initialMode);
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [blocklyState, setBlocklyState] = useState<string | null>(null);
+  /**
+   * The exact code the simulator last ran, or null if it has not run.
+   *
+   * The code itself rather than a boolean, because the useful question is not
+   * "has anything been simulated" but "has THIS been simulated". A learner who
+   * runs a mission, sees it work, then adds four more blocks has not watched
+   * what they are about to submit - and a boolean would happily tell them they
+   * had. Compared against currentCode at render time, so any edit takes the
+   * tick away on the next keystroke and putting it back restores it.
+   */
+  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [missionSentOpen, setMissionSentOpen] = useState(false);
@@ -140,6 +151,7 @@ export function MissionWorkspace() {
     const simulated = simulateCommands(commands);
     setTrajectory(simulated);
     setIsPlaying(true);
+    setSimulatedCode(currentCode);
   };
 
   // Switching editor mode starts a clean simulator: clear the previous run's
@@ -149,6 +161,9 @@ export function MissionWorkspace() {
     setTrajectory([]);
     setIsPlaying(false);
     setError(null);
+    // The cleared canvas is no longer a run of anything, so the submit gate
+    // closes with it.
+    setSimulatedCode(null);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -220,6 +235,7 @@ export function MissionWorkspace() {
     }
     setTrajectory([]);
     setIsPlaying(false);
+    setSimulatedCode(null);
   }, [editorMode]);
 
   const handleSubmitToQueue = async () => {
@@ -355,6 +371,10 @@ export function MissionWorkspace() {
                   submitting={submitting}
                   submitSuccess={submitSuccess}
                   currentCode={currentCode}
+                  // Not "has a run happened" but "has THIS been run" - see
+                  // simulatedCode. An empty program is excluded so that
+                  // clearing the editor cannot leave a stale tick behind.
+                  hasRunSimulation={simulatedCode !== null && simulatedCode === currentCode}
                 />
               )
             }

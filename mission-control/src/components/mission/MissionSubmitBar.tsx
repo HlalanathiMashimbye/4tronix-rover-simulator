@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Rocket, CheckCircle2 } from 'lucide-react';
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
+import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
+import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 
 // Deliberately plain CSS, not Motion's AnimatePresence - see NotificationModal
 // for why: verified in a clean production build that AnimatePresence's exit
@@ -33,6 +35,8 @@ interface MissionSubmitBarProps {
   submitting: boolean;
   submitSuccess: boolean;
   currentCode: string;
+  /** Whether the simulator has run the code currently in the editor. */
+  hasRunSimulation: boolean;
 }
 
 export function MissionSubmitBar({
@@ -42,9 +46,20 @@ export function MissionSubmitBar({
   submitting,
   submitSuccess,
   currentCode,
+  hasRunSimulation,
 }: MissionSubmitBarProps) {
   const [mounted, setMounted] = useState(submitSuccess);
   const [visible, setVisible] = useState(false);
+
+  // A parse of the whole program on every keystroke. Cheap enough to do plainly
+  // - it is one pass over the lines - but memoised because Blockly re-reports
+  // identical code on any workspace event, drag included.
+  const preFlight = useMemo(
+    () => runPreFlightChecks(currentCode, { hasRunSimulation }),
+    [currentCode, hasRunSimulation],
+  );
+
+  const hasCode = currentCode.trim().length > 0;
 
   // Mount immediately, flip visible a frame later so the transition has a
   // "before" state to run from, and hold the unmount until the exit
@@ -63,12 +78,25 @@ export function MissionSubmitBar({
 
   return (
     <div className="@container shrink-0 border-t border-border/60 pt-2">
+      {/* Only once there is something to check. An empty workspace failing
+          three checks reads as an error the learner has made, when in fact
+          they have not started yet. */}
+      {hasCode && (
+        <div className="mb-2">
+          <PreFlightChecklist result={preFlight} />
+        </div>
+      )}
+
       <div className="flex flex-wrap items-start gap-2">
         <MissionNameInput value={missionName} onChange={onMissionNameChange} />
 
         <button
           onClick={onSubmit}
-          disabled={submitting || !currentCode.trim() || !missionName.trim()}
+          disabled={submitting || !hasCode || !missionName.trim() || !preFlight.ready}
+          // The checklist directly above says which check is holding it, so the
+          // button does not repeat itself - but a disabled control with no
+          // accessible reason is invisible to a screen reader.
+          title={!preFlight.ready && hasCode ? 'Pre-flight checks are not complete yet' : undefined}
           className="clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-mars px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto"
         >
           {submitting ? (

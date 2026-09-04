@@ -13,7 +13,13 @@ def calculate_python_duration(code: str) -> float:
     A parse rather than an execution, so it is a floor and not a guarantee: a
     `while` loop, or a sleep whose argument is a variable, is invisible here.
 
-    Mirrors calculatePythonDuration in mission-control/src/lib/calculateMissionDuration.ts.
+    Both ways of pausing count. `rover.wait` is on the allowlist and is what a
+    learner writing Python by hand tends to reach for, but this only ever
+    matched `time.sleep`, so a mission built from rover.wait measured as zero
+    seconds and cleared the ceiling on both sides of the LAN.
+
+    Mirrors calculatePythonDuration in
+    mission-control/src/core/domain/safety/calculateMissionDuration.ts.
     """
     total_seconds = 0.0
 
@@ -38,7 +44,7 @@ def calculate_python_duration(code: str) -> float:
         if loop_match:
             loops.append((indent, int(loop_match.group(1)) or 1))
 
-        sleep_match = re.search(r'time\.sleep\s*\(\s*([\d.]+)\s*\)', trimmed)
+        sleep_match = re.search(r'(?:time\.sleep|rover\.wait)\s*\(\s*([\d.]+)\s*\)', trimmed)
         if sleep_match:
             multiplier = 1
             for _, times in loops:

@@ -53,6 +53,12 @@ export function calculateBlocklyDuration(workspace: any): number {
  * `while` loop, or a sleep whose argument is a variable, is invisible here. It
  * catches the case the ceiling is actually for, which is a learner stacking up
  * blocks until the yard is tied up for ten minutes.
+ *
+ * Both ways of pausing count. `rover.wait` is on the allowlist and is what a
+ * learner writing Python by hand tends to reach for, but this only ever matched
+ * `time.sleep`, so a mission built from rover.wait measured as zero seconds and
+ * had no ceiling at all. The Blockly generator emits time.sleep, which is why
+ * the gap survived: nothing the blocks produce could show it.
  */
 export function calculatePythonDuration(code: string): number {
   let totalSeconds = 0;
@@ -75,7 +81,7 @@ export function calculatePythonDuration(code: string): number {
     const loopMatch = trimmed.match(/^for\s+\w+\s+in\s+range\s*\(\s*(\d+)\s*\)/);
     if (loopMatch) loops.push({ indent, times: Number(loopMatch[1]) || 1 });
 
-    const sleepMatch = trimmed.match(/time\.sleep\s*\(\s*([\d.]+)\s*\)/);
+    const sleepMatch = trimmed.match(/(?:time\.sleep|rover\.wait)\s*\(\s*([\d.]+)\s*\)/);
     if (sleepMatch) {
       const sleepTime = Number(sleepMatch[1]) || 0;
       totalSeconds += sleepTime * loops.reduce((acc, l) => acc * l.times, 1);

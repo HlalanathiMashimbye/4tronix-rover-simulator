@@ -93,6 +93,31 @@ export const ROVER_COMMAND_ALLOWLIST = [
 ] as const;
 
 /**
+ * The subset of the allowlist that actually moves the rover, used by the
+ * pre-flight checklist to answer "will anything happen if we run this".
+ *
+ * The wheels and the mast, not the lights: setColor/show change what the rover
+ * looks like without moving it, and a mission that only does that is a
+ * legitimate thing to build - it simply is not a drive. Sensor reads are absent
+ * for the same reason.
+ *
+ * Kept next to the allowlist rather than in preFlightChecks so a command added
+ * above is one edit away from being counted here, not one file away.
+ */
+export const ROVER_MOVEMENT_COMMANDS = [
+  'rover.forward',
+  'rover.backward',
+  'rover.reverse',
+  'rover.turn_left',
+  'rover.turn_right',
+  'rover.spinLeft',
+  'rover.spinRight',
+  'rover.steerLeft',
+  'rover.steerRight',
+  'rover.setServo',
+] as const;
+
+/**
  * Allowed Python built-ins for learner code
  *
  * Allowed for basic programming:

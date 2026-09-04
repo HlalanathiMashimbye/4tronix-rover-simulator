@@ -1,9 +1,12 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Play, Rocket } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
+import { MissionSimCover } from '@/components/MissionCard/MissionSimCover';
+import { missionCoverTrajectory } from '@/core/domain/services/missionCover';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;
@@ -81,8 +84,26 @@ export function MissionCard({ mission }: MissionCardProps) {
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const videoUrl = mission.youtubeUrl || mission.videoUrl;
   const youtubeId = getYouTubeId(videoUrl);
-  const thumbnailUrl = youtubeId ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
   const durationMs = mission.executionMetadata?.duration_ms;
+  /**
+   * A thumbnail that 404s, or that nobody can reach, is not a cover.
+   *
+   * img.youtube.com is a third party on the other side of venue wifi, and the
+   * video behind it can be deleted or made private long after the mission ran.
+   * Until this was tracked, either of those left a broken-image glyph in the
+   * tile - the one state the grid had no art for.
+   */
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
+  const youtubeThumbnail =
+    youtubeId && !thumbnailFailed ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
+
+  // Derived whenever the video is not carrying the tile, which now includes a
+  // video whose thumbnail failed to load: every mission that drove somewhere
+  // has a cover of its own to fall back on.
+  const coverTrajectory = useMemo(
+    () => missionCoverTrajectory(youtubeThumbnail ? undefined : mission.code),
+    [youtubeThumbnail, mission.code],
+  );
 
   return (
     <Link
@@ -95,12 +116,13 @@ export function MissionCard({ mission }: MissionCardProps) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-[transform,border-color,box-shadow] duration-200 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 [@media(hover:hover)_and_(pointer:fine)]:hover:border-foreground/25 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[var(--shadow-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="relative aspect-video w-full overflow-hidden bg-secondary">
-        {thumbnailUrl ? (
+        {youtubeThumbnail ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- thumbnail hosts vary per mission record; next/image would need remotePatterns per host */}
             <img
-              src={thumbnailUrl}
+              src={youtubeThumbnail}
               alt=""
+              onError={() => setThumbnailFailed(true)}
               className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-foreground/10 opacity-0 transition-opacity duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100">
@@ -108,6 +130,21 @@ export function MissionCard({ mission }: MissionCardProps) {
                 <Play className="ml-0.5 h-5 w-5 text-foreground" fill="currentColor" />
               </span>
             </div>
+          </>
+        ) : coverTrajectory ? (
+          // No rover video yet, so the cover is the mission's own simulation -
+          // the same arena, drawn by the same renderer as the mission page, so
+          // the tile and the page it opens are recognisably one thing.
+          //
+          // Labelled, because a child promised a video of a real rover must not
+          // mistake this for one. "Built with Blocks" mirrors the wording of
+          // the mission page's own metadata row rather than inventing a second
+          // vocabulary for the same fact.
+          <>
+            <MissionSimCover trajectory={coverTrajectory} />
+            <span className="absolute bottom-2 left-3 z-10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
+              {mission.blocklyState ? 'Simulated · Blocks' : 'Simulated · Python'}
+            </span>
           </>
         ) : (
           // Generic placeholder art. Deliberately built from theme tokens and a
