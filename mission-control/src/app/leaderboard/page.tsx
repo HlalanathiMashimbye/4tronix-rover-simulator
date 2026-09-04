@@ -44,6 +44,46 @@ export default function LeaderboardPage() {
     return entries.findIndex((e) => e.displayName === status.displayName) + 1;
   }, [entries, status]);
 
+  // Show opt-in prompt if not opted in
+  if (status && !status.optedIn) {
+    return (
+      <main className="relative flex h-[calc(100dvh-var(--app-chrome))] flex-col overflow-hidden px-4 sm:px-6">
+        <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-6 w-6 text-gradient-mars" />
+            <h1 className="font-display text-2xl font-bold tracking-tight text-foreground md:text-3xl">
+              Leaderboard
+            </h1>
+          </div>
+        </header>
+
+        <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col items-center justify-center pb-5">
+          <div className="rounded-3xl border border-border bg-card p-8 clay max-w-md text-center">
+            <Trophy className="h-16 w-16 text-gradient-mars mx-auto mb-4" />
+            <h2 className="font-display text-2xl font-bold text-foreground mb-2">Join the Leaderboard</h2>
+            <p className="text-sm text-muted-foreground mb-6">
+              See how you rank among other learners. Your real identity stays private—we'll give you a random nickname like "Brave Rover."
+            </p>
+
+            <div className="space-y-2">
+              <button
+                onClick={optIn}
+                className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-mars px-4 py-2.5 font-display font-semibold text-primary-foreground"
+              >
+                <LogIn className="h-4 w-4" />
+                Join the leaderboard
+              </button>
+            </div>
+
+            <p className="text-xs text-muted-foreground mt-4">
+              You can leave anytime without affecting your progress.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative flex h-[calc(100dvh-var(--app-chrome))] flex-col overflow-hidden px-4 sm:px-6">
       <header className="mx-auto w-full max-w-page shrink-0 pt-4 pb-3">
@@ -54,13 +94,13 @@ export default function LeaderboardPage() {
           </h1>
         </div>
         <p className="mt-0.5 hidden text-sm text-muted-foreground sm:block">
-          Top learners ranked by completed missions.
+          Top learners ranked by completed challenges.
         </p>
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-6 pb-5 overflow-y-auto">
-        {/* Your Status Card */}
-        {status && (
+        {/* Your Status Card - Only show if opted in */}
+        {status && status.optedIn && (
           <div className="rounded-2xl border border-border bg-card p-6 clay">
             <h2 className="font-display font-bold text-foreground mb-4">Your Progress</h2>
 
@@ -77,7 +117,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
 
-            {status.optedIn && learnerRank && (
+            {learnerRank && (
               <div className="mb-4">
                 <p className="text-sm text-muted-foreground">Rank</p>
                 <p className="text-2xl font-bold text-gradient-mars">#{learnerRank}</p>
@@ -88,32 +128,20 @@ export default function LeaderboardPage() {
             )}
 
             <div className="space-y-2">
-              {!status.optedIn ? (
-                <button
-                  onClick={optIn}
-                  className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-mars px-4 py-2.5 font-display font-semibold text-primary-foreground"
-                >
-                  <LogIn className="h-4 w-4" />
-                  Show me on the leaderboard
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={regenerateNickname}
-                    className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 font-display font-semibold text-foreground"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    Get a new nickname
-                  </button>
-                  <button
-                    onClick={optOut}
-                    className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 font-display font-semibold text-destructive"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Hide from leaderboard
-                  </button>
-                </>
-              )}
+              <button
+                onClick={regenerateNickname}
+                className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 font-display font-semibold text-foreground"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Get a new nickname
+              </button>
+              <button
+                onClick={optOut}
+                className="clay clay-press w-full flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 font-display font-semibold text-destructive"
+              >
+                <LogOut className="h-4 w-4" />
+                Hide from leaderboard
+              </button>
             </div>
           </div>
         )}
