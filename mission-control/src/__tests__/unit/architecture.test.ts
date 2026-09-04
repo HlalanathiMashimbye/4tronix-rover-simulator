@@ -11,7 +11,7 @@
  * broken rather than waiting for a marker to notice.
  */
 
-import { readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
 
 const SRC = join(__dirname, '..', '..');
@@ -167,5 +167,41 @@ describe('the Copy buttons', () => {
     }
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('the agent instructions', () => {
+  /**
+   * AGENTS.md tells every model working here what the layering rules are and
+   * that core depends outward on nothing. It is only load-bearing if the tools
+   * that read it actually reach it, and only trustworthy if there is exactly
+   * one copy - a rule written in two places is the drift the file itself warns
+   * about.
+   */
+  const root = (name: string) => readFileSync(join(SRC, '..', '..', name), 'utf8');
+
+  it('is reachable by Claude, Copilot and anything reading AGENTS.md', () => {
+    expect(root('AGENTS.md')).toContain('core');
+    // Claude Code reads CLAUDE.md; the @ syntax imports rather than copies.
+    expect(root('CLAUDE.md').trim()).toBe('@AGENTS.md');
+    expect(root('.github/copilot-instructions.md')).toContain('AGENTS.md');
+  });
+
+  it('has one copy of the rules, not three', () => {
+    // The giveaway would be CLAUDE.md growing into a second full document.
+    expect(root('CLAUDE.md').split('\n').filter(Boolean).length).toBe(1);
+  });
+
+  it('points at rules that exist', () => {
+    const agents = root('AGENTS.md');
+    for (const path of [
+      'mission-control/src/__tests__/unit/architecture.test.ts',
+      'mission-control/src/lib/README.md',
+      'yard/rover/drivers.py',
+      'yard/satellite/camera_state.py',
+    ]) {
+      expect(agents).toContain(path.split('/').pop()!);
+      expect(existsSync(join(SRC, '..', '..', path))).toBe(true);
+    }
   });
 });
