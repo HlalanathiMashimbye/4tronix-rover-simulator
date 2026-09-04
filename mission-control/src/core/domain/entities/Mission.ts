@@ -64,7 +64,6 @@ export interface Mission {
   // the "Finish & Export" handoff from a completed challenge - drives the
   // [CHALLENGE SOLUTION] badge in History (MissionCard).
   origin?: 'challenge';
-  challengeId?: string;
 
   status: MissionStatus;
 
