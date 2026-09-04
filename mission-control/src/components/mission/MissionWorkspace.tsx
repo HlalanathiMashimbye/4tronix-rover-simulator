@@ -75,7 +75,11 @@ export function MissionWorkspace() {
   const [missionName, setMissionName] = useState('');
 
   useEffect(() => {
-    setMissionName(generateRandomMissionName());
+    const timer = window.setTimeout(() => {
+      setMissionName(generateRandomMissionName());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   /** Set when this session arrived via "Finish & Export" from a challenge. */

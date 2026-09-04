@@ -119,7 +119,7 @@ export function LeaderboardSettings() {
       ) : (
         <>
           <p className="text-sm text-muted-foreground mb-4">
-            You're not on the leaderboard yet. Join to see how you rank!
+            You&apos;re not on the leaderboard yet. Join to see how you rank!
           </p>
           <button
             onClick={handleOptIn}

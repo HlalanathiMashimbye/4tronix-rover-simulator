@@ -1,14 +1,9 @@
 /**
  * POST /api/leaderboard/challenges/[challengeId] - Record verified challenge completion
  *
- * Called server-side after a challenge is verified as complete via Progressive Challenges.
+ * Called server-side after a challenge is verified as complete.
  * Updates learner's leaderboard score with idempotency.
  * Only accessible via Admin SDK (server-side only).
- *
- * Request body:
- * {
- *   "learnerId": "nanoid-learner-id"  // Required: raw learner ID (hashed to learnerRef)
- * }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -49,7 +44,7 @@ export async function POST(
       );
     }
 
-    // Hash the learner ID to get the public reference (learnerRef)
+    // Hash the learner ID to get the public reference
     const learnerRefHash = await hashLearnerId(learnerId);
 
     // Create service and record challenge completion

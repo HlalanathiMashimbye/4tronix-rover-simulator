@@ -3,13 +3,11 @@
  *
  * Business logic for leaderboard operations.
  * Handles challenge-based scoring, opt-in/out, and rank calculation.
- * Integrates with Progressive Challenges for verified completions.
  * All score writes are server-side only (via Admin SDK).
  */
 
 import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
 import { LeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
-import { ChallengeProgress } from '@/core/domain/entities/ChallengeProgress';
 import { calculateScore } from '@/core/domain/services/scoreCalculation';
 import { generateNickname } from '@/core/domain/services/nicknameGenerator';
 
@@ -39,7 +37,7 @@ export class LeaderboardService {
     challengeId: string
   ): Promise<LeaderboardStats> {
     // Ensure entry exists
-    let entry = await this.leaderboardRepository.getOrCreate(
+    const entry = await this.leaderboardRepository.getOrCreate(
       learnerRefHash,
       generateNickname()
     );
@@ -47,9 +45,10 @@ export class LeaderboardService {
     // Check if challenge already completed (idempotency)
     if (entry.completedChallengeIds.includes(challengeId)) {
       // Already completed - return current stats without updating
-      const rank = entry.optedIn
+      const rankOrNull = entry.optedIn
         ? await this.leaderboardRepository.getRank(learnerRefHash)
-        : undefined;
+        : null;
+      const rank = rankOrNull ?? undefined;
 
       return {
         score: entry.score,
@@ -71,73 +70,10 @@ export class LeaderboardService {
       updatedChallengeIds
     );
 
-    const rank = updated.optedIn
+    const rankOrNull = updated.optedIn
       ? await this.leaderboardRepository.getRank(learnerRefHash)
-      : undefined;
-
-    return {
-      score: updated.score,
-      completedChallenges: updated.completedChallenges,
-      completedChallengeIds: updated.completedChallengeIds,
-      rank,
-      entry: updated,
-    };
-  }
-
-  /**
-   * Sync leaderboard with challenge progress
-   * Called server-side to update leaderboard from verified challenge completions
-   *
-   * @param learnerRefHash - Hash of learner ID
-   * @param challengeProgress - Learner's challenge progress from Firestore
-   * @returns Updated leaderboard stats
-   */
-  async syncWithChallengeProgress(
-    learnerRefHash: string,
-    challengeProgress: ChallengeProgress
-  ): Promise<LeaderboardStats> {
-    // Extract completed challenge IDs from progress
-    const completedIds = challengeProgress.completions.map((c) => c.challengeId);
-
-    // Ensure entry exists
-    let entry = await this.leaderboardRepository.getOrCreate(
-      learnerRefHash,
-      generateNickname()
-    );
-
-    // Check if already in sync
-    const currentIds = entry.completedChallengeIds;
-    const newIds = completedIds.filter((id) => !currentIds.includes(id));
-
-    if (newIds.length === 0) {
-      // Already in sync
-      const rank = entry.optedIn
-        ? await this.leaderboardRepository.getRank(learnerRefHash)
-        : undefined;
-
-      return {
-        score: entry.score,
-        completedChallenges: entry.completedChallenges,
-        completedChallengeIds: entry.completedChallengeIds,
-        rank,
-        entry,
-      };
-    }
-
-    // Update with all completed challenges
-    const allCompletedIds = [...currentIds, ...newIds];
-    const newScore = calculateScore(allCompletedIds);
-
-    const updated = await this.leaderboardRepository.updateScore(
-      learnerRefHash,
-      allCompletedIds.length,
-      newScore,
-      allCompletedIds
-    );
-
-    const rank = updated.optedIn
-      ? await this.leaderboardRepository.getRank(learnerRefHash)
-      : undefined;
+      : null;
+    const rank = rankOrNull ?? undefined;
 
     return {
       score: updated.score,
@@ -176,9 +112,10 @@ export class LeaderboardService {
     const entry = await this.leaderboardRepository.findByLearnerRef(learnerRefHash);
     if (!entry) return null;
 
-    const rank = entry.optedIn
+    const rankOrNull = entry.optedIn
       ? await this.leaderboardRepository.getRank(learnerRefHash)
-      : undefined;
+      : null;
+    const rank = rankOrNull ?? undefined;
 
     return {
       score: entry.score,

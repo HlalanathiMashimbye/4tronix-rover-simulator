@@ -9,7 +9,7 @@
  * - No PII is leaked in any operation
  */
 
-import { LeaderboardEntry, createLeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
+import { createLeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
 
 describe('Leaderboard Privacy', () => {
   describe('Entry structure', () => {

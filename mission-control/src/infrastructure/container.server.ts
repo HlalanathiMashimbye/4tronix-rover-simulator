@@ -41,7 +41,7 @@ export function adminYardRepository(): IYardRepository {
   return new FirestoreYardRepository(getFirestoreInstance());
 }
 
-/** Privileged. Leaderboard writes are server-side only. */
+/** Privileged. Leaderboard writes only through Admin SDK. */
 export function adminLeaderboardRepository(): ILeaderboardRepository {
   return new FirestoreLeaderboardRepository(getFirestoreInstance());
 }

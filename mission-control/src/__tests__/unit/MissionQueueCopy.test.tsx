@@ -50,6 +50,9 @@ function emitQueue(missions = [MISSION]) {
 beforeEach(() => {
   jest.clearAllMocks();
   emitQueue();
+  // The console address is per-browser and persists, so without this the
+  // tests below would only pass in the order they happen to be written in.
+  localStorage.clear();
 });
 
 describe('copying a mission to paste into the yard', () => {
@@ -64,7 +67,9 @@ describe('copying a mission to paste into the yard', () => {
     // resolves, so asserting synchronously both races the write and leaves an
     // act() warning behind.
     await waitFor(() =>
-      expect(writeText).toHaveBeenCalledWith('rover.forward(60)\nrover.stop()'),
+      expect(writeText).toHaveBeenCalledWith(
+        '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
+      ),
     );
     await screen.findByRole('button', { name: /copied/i });
   });
@@ -90,7 +95,10 @@ describe('copying a mission to paste into the yard', () => {
     fireEvent.click(await screen.findByRole('button', { name: /copy/i }));
 
     await waitFor(() =>
-      expect(prompt).toHaveBeenCalledWith(expect.stringContaining('paste it into the yard'), MISSION.code),
+      expect(prompt).toHaveBeenCalledWith(
+        expect.stringContaining('paste it into the yard'),
+        '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
+      ),
     );
     expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();
   });
@@ -101,5 +109,86 @@ describe('copying a mission to paste into the yard', () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
     expect(await screen.findByRole('button', { name: /copy/i })).toBeDisabled();
+  });
+});
+
+describe('the door to the operator console', () => {
+  it('offers a link to the yard console, defaulting to the satellite', async () => {
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+
+    expect(link).toHaveAttribute('href', 'http://mro.local:3001/run/');
+    // The queue is what the operator works from; losing it to navigate away
+    // mid-shift would mean signing back in.
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('reads as a primary action rather than a ghost link', async () => {
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+
+    expect(link.className).toContain('bg-gradient-mars');
+    expect(link.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('remembers a different address for this browser', async () => {
+    // The console is on a private network in the room, so its address is a
+    // property of where the operator is, not of the deployment.
+    localStorage.setItem('yard:consoleUrl', 'http://192.168.137.1:3001/run/');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+    expect(link).toHaveAttribute('href', 'http://192.168.137.1:3001/run/');
+  });
+
+  it('ignores a stored address that is not safe to open', async () => {
+    localStorage.setItem('yard:consoleUrl', 'javascript://mro.local/%0aalert(1)');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+    expect(link).toHaveAttribute('href', 'http://mro.local:3001/run/');
+  });
+});
+
+describe('the door to YouTube Studio', () => {
+  const mount = () =>
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+  it('is unmistakably YouTube, not another grey link in a row of them', async () => {
+    // It was a bordered ghost link among bordered ghost links, so the step
+    // ended in something the operator had to hunt for.
+    mount();
+
+    const link = await screen.findByRole('link', { name: /youtube studio/i });
+
+    expect(link).toHaveStyle({ backgroundColor: '#E60000' });
+    expect(link.className).toContain('text-white');
+    expect(link.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('links to Studio, where the run video gets uploaded', async () => {
+    mount();
+
+    const link = await screen.findByRole('link', { name: /youtube studio/i });
+
+    expect(link).toHaveAttribute('href', 'https://studio.youtube.com/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('stays put while the console address is being edited', async () => {
+    // Both are doors the operator needs; changing where one goes should not
+    // take the other off the screen.
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /^change$/i }));
+
+    expect(await screen.findByRole('link', { name: /youtube studio/i })).toBeInTheDocument();
+    // And the console link really is the thing that went away.
+    expect(screen.queryByRole('link', { name: /operator console/i })).not.toBeInTheDocument();
   });
 });

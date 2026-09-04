@@ -34,6 +34,9 @@ export interface Mission {
   id: string;                        // Firestore document ID
   yardId: string;                    // Which physical rover yard, named for the rover itself (e.g., "curiosity")
 
+  // Challenge tracking (optional - missions may be freeform or challenge-based)
+  challengeId?: string;              // Challenge ID if this mission is for a specific challenge
+
   // Learner tracking
   //
   // A one-way hash of the learner's id, NEVER the id itself. Mission documents
