@@ -145,6 +145,62 @@ describe('spinning on the spot', () => {
   });
 });
 
+describe('a steered square, the shape that exposed all of this', () => {
+  /**
+   * The "Rocky Square" mission, which is what a learner builds from steer
+   * blocks: four corners of 4 seconds at 45 degrees, with straight runs
+   * between, starting and ending halfway along one side.
+   *
+   * Uncalibrated, each corner turned 121.5 degrees. The shape therefore closed
+   * after THREE corners, so the simulator drew a triangle while the rover in
+   * the room drove the square. The rover was right and the simulator was not.
+   */
+  const corner = () => steerProgram('left', 45, 4);
+  const straight = (seconds: number) =>
+    ['rover.setServo(9, 0)', 'rover.setServo(11, 0)', 'rover.setServo(13, 0)',
+     'rover.setServo(15, 0)', 'rover.forward(60)', `time.sleep(${seconds})`,
+     'rover.stop()'].join('\n');
+
+  const square = [
+    straight(2), corner(), straight(4), corner(),
+    straight(4), corner(), straight(4), corner(), straight(2),
+  ].join('\n');
+
+  it('turns about 90 degrees at each corner, not 121', () => {
+    const oneCorner = endPose(corner());
+
+    expect(Math.abs(oneCorner.heading)).toBeGreaterThan(85);
+    expect(Math.abs(oneCorner.heading)).toBeLessThan(97);
+  });
+
+  it('closes, instead of shutting after three corners', () => {
+    const end = endPose(square);
+
+    // Within a couple of centimetres of where it set off, on a 240cm yard.
+    expect(Math.hypot(end.x, end.y)).toBeLessThan(4);
+  });
+
+  it('comes back to its starting heading after four corners', () => {
+    const end = endPose(square);
+    const turned = Math.abs(end.heading);
+
+    // Four corners is one full circle. Three corners at the old rate was 364
+    // degrees, which is why this asserts a total and not just "a multiple".
+    expect(turned).toBeGreaterThan(350);
+    expect(turned).toBeLessThan(375);
+  });
+
+  it('travels a wider arc through the corner, not just a different heading', () => {
+    // The calibration is applied to the turning radius. If it were applied to
+    // the heading alone the rover would end up facing the right way having
+    // driven a circle it was never on, so the corner's displacement is
+    // checked too: a gentler turn covers more ground.
+    const gentle = endPose(steerProgram('left', 45, 4));
+
+    expect(Math.hypot(gentle.x, gentle.y)).toBeGreaterThan(14);
+  });
+});
+
 describe('driving in a line', () => {
   it('is unaffected by all of the above', () => {
     // The spin branch and the steering angle must not have disturbed the one

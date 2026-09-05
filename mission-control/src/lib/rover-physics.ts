@@ -51,6 +51,38 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  */
 export const SPIN_RATE_CALIBRATION = 1.178;
 
+/**
+ * How much of the geometric turn the rover actually achieves when steering.
+ *
+ * MEASURED ON THE ROVER, 5 September 2026, high-grip floor, speed 60:
+ *
+ *     4s at 45 degrees ->  90 deg turned   (geometry says 121.5) ratio 0.74
+ *     8s at 20 degrees -> ~102 deg turned  (geometry says 117.6) ratio 0.87
+ *     6s at 30 degrees ->  90 deg turned   (geometry says 129.0) ratio 0.70
+ *
+ * The 30 degree run was an out-of-sample check, not part of the fit: with the
+ * constant already set from 45 and 20, the simulator predicted 97 degrees
+ * there and the rover turned about 90. Uncalibrated it would have been 129.
+ *
+ * The ratios scatter around 0.75 with no trend against angle, so
+ * the formula's shape is right and it simply over-turns by a fixed proportion.
+ * The rover understeers: the tyres slip outward and it traces a wider arc than
+ * the wheel angle implies. Applied to the turning radius rather than to the
+ * heading alone, so the path it draws stays consistent with the heading it
+ * ends on - scaling only the heading would curve the rover round a circle it
+ * was not actually driving.
+ *
+ * WHY IT MATTERED. The "Rocky Square" mission turns 4 seconds at 45 degrees
+ * per corner. Uncalibrated the simulator turned 121.5 degrees there, so the
+ * shape closed after three corners and a child who had built a square watched
+ * the simulator draw a triangle, while the rover in the room drew the square.
+ *
+ * ONE SURFACE, ONE BATTERY, and read by eye at two angles. Recalibrate the
+ * same way: steer a known angle for a known time, measure the degrees turned,
+ * and set this to (measured) / (what the simulator draws uncalibrated).
+ */
+export const STEER_RATE_CALIBRATION = 0.75;
+
 /** The wheel angle a steer block uses when the caller does not name one. */
 export const DEFAULT_STEER_DEGREES = 30;
 
@@ -197,7 +229,8 @@ export class RoverPhysics {
         const distanceBetweenWheelsCm = DISTANCE_BETWEEN_WHEEL_PAIRS_CM;
 
         const wheelAngleRadians = (wheelAngleDegrees / 180.0) * Math.PI;
-        const turningRadiusToSteerableWheelCm = distanceBetweenWheelsCm / Math.sin(wheelAngleRadians);
+        const turningRadiusToSteerableWheelCm =
+          distanceBetweenWheelsCm / Math.sin(wheelAngleRadians) / STEER_RATE_CALIBRATION;
         const circumferenceCm = 2 * Math.PI * turningRadiusToSteerableWheelCm;
 
         const revolutionsPerSecond = wheelSpeedCmPerSecond / circumferenceCm;
