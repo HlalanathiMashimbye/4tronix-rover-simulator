@@ -31,6 +31,7 @@ import { Search, X } from 'lucide-react';
 
 import { useSearch } from '@/contexts/SearchContext';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { SortSelect } from './SortSelect';
 
 export function MobileSearch() {
   const { query, setQuery, activeFilter, setActiveFilter, filters } = useSearch();
@@ -62,6 +63,7 @@ export function MobileSearch() {
           </button>
         )}
       </div>
+
 
       {/* Labelled, unlike the navbar's icon-only chips. There is room for the
           words here, and a filter whose meaning has to be guessed from a glyph
@@ -112,6 +114,13 @@ export function MobileSearch() {
           );
         })}
       </div>
+
+      {/* Below the chips, not above them. The chips are the control a learner
+          reaches for first and they belong nearest the field; ordering is the
+          adjustment you make once you can see the list, so it sits last. Its
+          own row either way: the field already carries the clear button, and a
+          second control inside it is how a 375px layout starts truncating. */}
+      <SortSelect variant="labelled" className="self-start px-1" />
     </div>
   );
 }

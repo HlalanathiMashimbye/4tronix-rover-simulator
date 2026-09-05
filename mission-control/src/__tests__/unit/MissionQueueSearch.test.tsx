@@ -14,12 +14,17 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const subscribeToYardQueue = jest.fn();
+const subscribeToYardCompleted = jest.fn();
 
 jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToYardQueue: (...args: unknown[]) => subscribeToYardQueue(...args),
   // Selecting a mission subscribes to its runs across yards. Not what these
   // tests are about, so it is a no-op unsubscribe.
   subscribeToMissionRuns: () => () => {},
+  // Typing now also opens the settled list, so a mission that has already
+  // finished can still be found by name. These tests hand it whatever
+  // SETTLED holds.
+  subscribeToYardCompleted: (...args: unknown[]) => subscribeToYardCompleted(...args),
 }));
 
 jest.mock('@/components/mission/BlocklyViewer', () => ({
@@ -35,9 +40,13 @@ const QUEUE = [
   { id: 'c', name: 'Crater Pioneer', code: 'rover.stop()', status: 'queued' as const, needsReview: true },
 ];
 
-function renderQueue(missions = QUEUE) {
+function renderQueue(missions = QUEUE, settled: unknown[] = []) {
   subscribeToYardQueue.mockImplementation((_yard, onMissions) => {
     onMissions(missions);
+    return () => {};
+  });
+  subscribeToYardCompleted.mockImplementation((_yard, onMissions) => {
+    onMissions(settled);
     return () => {};
   });
   return render(
@@ -120,5 +129,61 @@ describe('filtering the queue', () => {
 
     expect(screen.getByText('Crater Pioneer')).toBeInTheDocument();
     expect(screen.queryByText('Rock Lover')).not.toBeInTheDocument();
+  });
+});
+
+
+describe('finding a mission that has already finished', () => {
+  /**
+   * The report: "Search does not work sometimes, could not search for Rocky
+   * Attempt". It had finished, and search only ever looked at the list behind
+   * the SELECTED chip. On the default "All in queue" there was no text that
+   * could find it, because it was not in that list to match - which reads as
+   * the mission being gone rather than as being one chip away.
+   */
+  const SETTLED = [
+    { id: 'z', name: 'Rocky Square Attempt', code: 'rover.forward(60)', status: 'completed' as const },
+    { id: 'y', name: 'Abandoned Run', code: 'rover.stop()', status: 'cancelled' as const },
+  ];
+
+  it('finds a completed mission from the default queue filter', () => {
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.change(screen.getByLabelText(/search missions/i), {
+      target: { value: 'Rocky' },
+    });
+
+    expect(screen.getByText('Rocky Square Attempt')).toBeInTheDocument();
+  });
+
+  it('finds a cancelled mission, which is in neither list by status', () => {
+    // Cancel keeps the record on purpose. It has to be reachable.
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.change(screen.getByLabelText(/search missions/i), {
+      target: { value: 'Abandoned' },
+    });
+
+    expect(screen.getByText('Abandoned Run')).toBeInTheDocument();
+  });
+
+  it('still narrows to the query, rather than showing everything', () => {
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.change(screen.getByLabelText(/search missions/i), {
+      target: { value: 'Rocky' },
+    });
+
+    expect(screen.queryByText('Rock Lover')).not.toBeInTheDocument();
+    expect(screen.queryByText('Abandoned Run')).not.toBeInTheDocument();
+  });
+
+  it('does not mix the settled list in when nothing is typed', () => {
+    // The queue is work waiting. A finished mission appearing in it would be
+    // a worse bug than the one being fixed.
+    renderQueue(QUEUE, SETTLED);
+
+    expect(screen.queryByText('Rocky Square Attempt')).not.toBeInTheDocument();
+    expect(screen.getByText('Rock Lover')).toBeInTheDocument();
   });
 });

@@ -12,8 +12,16 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
 import { useSearch, useRegisterSearchFilters } from '@/contexts/SearchContext';
+import { useRegisterSort } from '@/contexts/SearchContext';
+import { sortMissions } from '@/core/domain/services/missionSort';
 
 type StatusFilter = 'all' | 'favorites' | DiscoveryStatus;
+
+const STATUS_FILTERS: StatusFilter[] = ['all', 'favorites', 'Completed', 'Pending'];
+
+function isStatusFilter(value: string): value is StatusFilter {
+  return (STATUS_FILTERS as string[]).includes(value);
+}
 
 /**
  * Missions per page. Each page costs FEED_SIZE + 1 Firestore reads (the extra
@@ -76,8 +84,24 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
   const [error, setError] = useState<string | null>(null);
   // Search and filter state lives in SearchContext because the controls now
   // live in the navbar; this page still owns the DATA they filter.
-  const { query, setQuery, activeFilter, setActiveFilter, lastChange } = useSearch();
-  const statusFilter = activeFilter as StatusFilter;
+  const { query, setQuery, activeFilter, setActiveFilter, lastChange, sort } = useSearch();
+  useRegisterSort();
+  /**
+   * Validated, not cast.
+   *
+   * This was `activeFilter as StatusFilter`, and the filter keys are not
+   * shared between pages: the operator console registers 'done' and 'review',
+   * which are not StatusFilter values at all. Carrying one of those over from
+   * the console left this line asserting a type the value did not have, and
+   * the feed then filtered on a key nothing matches - an empty page, with no
+   * filter visible to clear because the console's chips had unregistered
+   * themselves on the way out.
+   *
+   * SearchContext now resets on navigation, so this should not arise. It is
+   * validated anyway: a cast that is only correct because of something another
+   * file does is the kind that comes back.
+   */
+  const statusFilter: StatusFilter = isStatusFilter(activeFilter) ? activeFilter : 'all';
   const { favorites, isFavorite } = useFavorites();
   const reduceMotion = useReducedMotion();
   // Cards remounting purely because a live search narrowed the list should not
@@ -226,6 +250,12 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
     });
   }, [missions, query, statusFilter, isFavorite]);
 
+  // Ordered with the same rule the operator console uses, so "most recent"
+  // means the same thing on both. Applied to what has loaded: the feed pages
+  // from the server newest-first, so a different ordering reorders the pages
+  // fetched so far rather than reaching back for older ones.
+  const ordered = useMemo(() => sortMissions(filtered, sort), [filtered, sort]);
+
   const filters: { key: StatusFilter; label: string; count: number; icon: typeof Star }[] = [
     { key: 'all', label: 'All missions', count: counts.all, icon: Grid2x2 },
     { key: 'favorites', label: 'Favorite missions', count: favorites.length, icon: Star },
@@ -260,7 +290,7 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
           subtitle="Be the first to send a rover across Mars."
           cta
         />
-      ) : filtered.length === 0 ? (
+      ) : ordered.length === 0 ? (
         /* "No missions match" was a lie whenever older pages existed. The
            feed had only looked at the 24 it happened to have loaded, and
            every new submission pushed one more mission out of reach, so a
@@ -284,7 +314,7 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
         />
       ) : (
         <div className="grid gap-3 pt-1 grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))]">
-          {filtered.map((mission, index) => (
+          {ordered.map((mission, index) => (
             <StaggeredEntrance
               key={mission.id}
               index={index}

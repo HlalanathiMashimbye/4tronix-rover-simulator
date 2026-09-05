@@ -30,6 +30,8 @@ import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
+import { useRegisterSort } from '@/contexts/SearchContext';
+import { sortMissions } from '@/core/domain/services/missionSort';
 import { missionClipboardText } from '@/lib/missionClipboard';
 import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
@@ -156,7 +158,8 @@ function YardQueue({
     }
   }
 
-  const { query, activeFilter } = useSearch();
+  const { query, activeFilter, sort } = useSearch();
+  useRegisterSort();
 
   // The same control the learner feed uses, for the same reason: an operator
   // at a busy event is looking for one mission among a queue, and asking them
@@ -206,22 +209,49 @@ function YardQueue({
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return source.filter((m) => {
-      if (activeFilter === 'review' && !m.needsReview) return false;
-      if (activeFilter === 'queued' && m.status !== 'queued') return false;
-      if (activeFilter === 'processing' && m.status !== 'processing') return false;
-      if (!q) return true;
+
+    /**
+     * A search looks at everything loaded, not just the selected filter.
+     *
+     * Searching used to run over `source` alone, so with the default "All in
+     * queue" filter selected there was no text that could find a mission which
+     * had already finished - it was not in that list to be matched. An
+     * operator looking for a mission by name got "no matches" for a mission
+     * that was right there under a different chip, which reads as the mission
+     * being gone.
+     *
+     * The two lists hold disjoint statuses, so concatenating them cannot
+     * produce a duplicate.
+     */
+    const searching = q.length > 0;
+    const pool = searching ? [...(missions ?? []), ...(done ?? [])] : source;
+
+    const matched = pool.filter((m) => {
+      // While searching, the status chips do not also narrow the result: the
+      // point of typing a name is to find it wherever it is.
+      if (!searching) {
+        if (activeFilter === 'review' && !m.needsReview) return false;
+        if (activeFilter === 'queued' && m.status !== 'queued') return false;
+        if (activeFilter === 'processing' && m.status !== 'processing') return false;
+        return true;
+      }
       // Name and code, the same two fields the learner feed searches. There is
       // deliberately nothing about the learner to search on - see above.
       return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
     });
-  }, [source, query, activeFilter]);
+
+    return sortMissions(matched, sort);
+  }, [source, missions, done, query, activeFilter, sort]);
 
   // Only while the operator is looking at it. Completed missions accumulate
   // forever, so a listener on them is a read bill that grows with the life of
   // the project, and most console sessions never open this view.
+  const searching = query.trim().length > 0;
+
   useEffect(() => {
-    if (activeFilter !== 'done') return;
+    // Also while searching: the settled list is what makes a finished mission
+    // findable by name, and it cannot be searched if it was never fetched.
+    if (activeFilter !== 'done' && !searching) return;
 
     const unsubscribe = subscribeToYardCompleted(
       yardId,
@@ -244,7 +274,7 @@ function YardQueue({
       unsubscribe();
       setDone(null);
     };
-  }, [yardId, activeFilter]);
+  }, [yardId, activeFilter, searching]);
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(

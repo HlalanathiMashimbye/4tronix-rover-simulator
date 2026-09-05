@@ -26,6 +26,7 @@ import { useReducedMotion } from 'motion/react';
 import { Search, X } from 'lucide-react';
 import { useSearch } from '@/contexts/SearchContext';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { SortSelect } from './SortSelect';
 
 export function NavbarSearch() {
   const { query, setQuery, activeFilter, setActiveFilter, filters } = useSearch();
@@ -54,7 +55,7 @@ export function NavbarSearch() {
         // Right padding clears the chips, which are absolutely positioned over
         // the field so the whole thing reads as one control rather than an
         // input with a toolbar bolted on.
-        className="h-10 w-full min-w-[20rem] rounded-full border border-border/60 bg-card/60 pl-10 pr-40 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary lg:pr-44"
+        className="h-10 w-full min-w-[20rem] rounded-full border border-border/60 bg-card/60 pl-10 pr-44 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary lg:pr-48"
       />
 
       <div
@@ -71,6 +72,8 @@ export function NavbarSearch() {
             <X className="h-4 w-4" />
           </button>
         )}
+
+        <SortSelect />
 
         <span className="h-6 w-px bg-border/70" aria-hidden />
 
