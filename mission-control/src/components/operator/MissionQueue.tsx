@@ -315,19 +315,13 @@ function YardQueue({
     {/* Two panes from lg up. Below that they take turns: a queue stacked above
         a detail pane means scrolling past every mission to reach the one you
         picked, and a tablet is the device an operator actually holds. */}
-    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    {/* Not an even split. The queue is a list of short rows; the mission
+        pane holds the code and the blocks, which is the thing anyone is
+        actually reading. */}
+    <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
     <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
       selectedId ? 'hidden lg:block' : ''
     }`}>
-      {flash && (
-        <p
-          role="status"
-          className="mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-foreground"
-        >
-          {flash}
-        </p>
-      )}
-
       {/* The console runs on the satellite in the room, on a network this app
           cannot reach, so the operator was expected to remember an address and
           type it into a second tab. The button is the door; the address is
@@ -375,7 +369,11 @@ function YardQueue({
             >
               Change
             </button>
-            <span className="truncate font-mono text-[11px] text-muted-foreground">{consoleUrl}</span>
+            {/* Informational only, and the first thing to go when the row is tight:
+                the button works without anyone reading the address. Hiding it
+                below 2xl keeps this toolbar on one line, and a second line here
+                comes out of the queue below it. */}
+            <span className="hidden truncate font-mono text-[11px] text-muted-foreground 2xl:inline">{consoleUrl}</span>
           </>
         )}
 
@@ -534,6 +532,19 @@ function YardQueue({
     <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
       selectedId ? '' : 'hidden lg:block'
     }`}>
+      {/* Beside the button that caused it. This used to render at the top of
+          the queue pane, on the opposite side of the screen from every control
+          that raises it, which is a confirmation an operator can look straight
+          past. */}
+      {flash && (
+        <p
+          role="status"
+          className="mb-3 rounded-xl border border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-foreground"
+        >
+          {flash}
+        </p>
+      )}
+
       <MissionDetail
         mission={selected}
         runs={runs}

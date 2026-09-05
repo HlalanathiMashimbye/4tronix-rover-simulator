@@ -74,6 +74,8 @@ class MockMissionRepository implements IMissionRepository {
   async applyBookkeeping() { return; }
   async softDeleteMission() { return; }
 
+  async softDeleteRun(): Promise<void> {}
+
   async findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage> {
     const ordered = Array.from(this.missions.values()).sort((a, b) => {
       const byDate = b.submittedAt.localeCompare(a.submittedAt);

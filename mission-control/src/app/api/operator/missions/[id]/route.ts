@@ -36,7 +36,9 @@ import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {
+  decideAnotherRun,
   decideAttachVideo,
+  decideRemoveVideo,
   decideCancel,
   decideComplete,
   decideFeedback,
@@ -58,7 +60,17 @@ const yardId = z.string().min(1);
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), yardId }),
   z.object({ action: z.literal('cancel'), yardId }),
-  z.object({ action: z.literal('attach-video'), yardId, url: z.string().trim().min(1) }),
+  z.object({ action: z.literal('another-run'), yardId }),
+  // runId is optional on purpose: without one these act on the operator's
+  // latest run at this yard, which is what every existing caller means. With
+  // one they act on a named attempt, which is what managing several needs.
+  z.object({
+    action: z.literal('attach-video'), yardId,
+    url: z.string().trim().min(1),
+    runId: z.string().trim().min(1).optional(),
+  }),
+  z.object({ action: z.literal('remove-video'), yardId, runId: z.string().trim().min(1).optional() }),
+  z.object({ action: z.literal('delete-run'), yardId, runId: z.string().trim().min(1) }),
   z.object({
     action: z.literal('resolve'),
     yardId,
@@ -160,9 +172,45 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       needsReview: run?.needsReview ?? mission.needsReview ?? false,
     };
 
+    // Removing a run returns here rather than joining the decision switch
+    // below: it produces no status change, so threading it through
+    // applyBookkeeping would mean inventing one.
+    //
+    // Operator rather than admin, unlike deleting a mission. This is somebody
+    // tidying an attempt they logged themselves a minute ago, not erasing a
+    // child's work, and the yard check below is what keeps it to their own.
+    if (command.action === 'delete-run') {
+      if (command.yardId !== session.yardId) {
+        return NextResponse.json(
+          { success: false, error: 'That mission is at another yard. Sign out to change yards.' },
+          { status: 403 },
+        );
+      }
+
+      const target = runs.find((r) => r.runId === command.runId);
+      if (!target) {
+        return NextResponse.json({ success: false, error: 'Run not found' }, { status: 404 });
+      }
+      if (target.yardId !== command.yardId) {
+        return NextResponse.json(
+          { success: false, error: 'That run belongs to another yard.' },
+          { status: 403 },
+        );
+      }
+
+      await repository.softDeleteRun(
+        id,
+        command.runId,
+        new Date().toISOString(),
+        session.email ?? session.uid,
+      );
+      return NextResponse.json({ success: true });
+    }
+
     let decision: Decision;
     let youtubeUrl: string | undefined;
     let feedback: string | undefined;
+    let clearsVideo = false;
 
     switch (command.action) {
       case 'complete':
@@ -170,6 +218,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         break;
       case 'cancel':
         decision = decideCancel(snapshot);
+        break;
+      case 'another-run':
+        decision = decideAnotherRun(snapshot);
         break;
       case 'attach-video': {
         // Parsed rather than pattern-matched, using the same helper the learner
@@ -186,6 +237,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         decision = decideAttachVideo(snapshot);
         break;
       }
+      case 'remove-video':
+        clearsVideo = true;
+        decision = decideRemoveVideo(snapshot);
+        break;
       case 'resolve':
         decision = decideResolve(snapshot, command.outcome);
         break;
@@ -193,6 +248,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         feedback = command.text;
         decision = decideFeedback(snapshot);
         break;
+    }
+
+    // A named run has to be one of this yard's own. Without this the runId
+    // above is an arbitrary document path from the request body, and an
+    // operator could attach a video to - or clear one from - another yard's
+    // attempt at the same mission.
+    if ('runId' in command && command.runId) {
+      const named = runs.find((r) => r.runId === command.runId);
+      if (!named) {
+        return NextResponse.json({ success: false, error: 'Run not found' }, { status: 404 });
+      }
+      if (named.yardId !== session.yardId) {
+        return NextResponse.json(
+          { success: false, error: 'That run belongs to another yard.' },
+          { status: 403 },
+        );
+      }
     }
 
     if (command.yardId !== session.yardId) {
@@ -212,12 +284,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const decidedAt = new Date().toISOString();
     // For offline yards, the run may not exist yet. Generate a runId if needed.
-    const runId = run?.runId ?? nanoid();
+    //
+    // 'another-run' always takes a fresh one, which is the entire point of it:
+    // reusing the existing runId would merge the second attempt over the first
+    // and destroy the record this action exists to create. Every other action
+    // acts on the run in front of the operator.
+    const runId =
+      command.action === 'another-run'
+        ? nanoid()
+        // A named run when the caller gave one, which is how a mission with
+        // several attempts says which video belongs to which. Falls back to
+        // the latest at this yard, which is what every caller meant when a
+        // mission could only have one.
+        : ('runId' in command && command.runId ? command.runId : (run?.runId ?? nanoid()));
 
     await repository.applyBookkeeping(id, runId, command.yardId, {
       status: decision.change.status,
       clearsReview: decision.change.clearsReview,
       youtubeUrl,
+      clearsVideo,
       feedback,
       decidedAt,
       decidedBy: session.email ?? session.uid,
