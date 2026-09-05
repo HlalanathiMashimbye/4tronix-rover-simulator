@@ -13,11 +13,13 @@
 
 import {
   collection,
+  doc,
   query,
   where,
   orderBy,
   limit,
   onSnapshot,
+  type DocumentData,
   type Query,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -166,7 +168,67 @@ export function subscribeToYardCompleted(
   return listen(q, onMissions, onError, 'completed');
 }
 
-/** Shared by both subscriptions: the same documents, read the same way. */
+/** One Firestore document as the console reads it. Shared by every listener
+ *  here so a field added in one view cannot go missing in another. */
+function toQueueMission(id: string, data: DocumentData): QueueMission {
+  return {
+    id,
+    name: data.name,
+    code: data.code ?? '',
+    blocklyState: data.blocklyState,
+    status: data.status,
+    submittedAt: data.submittedAt,
+    completedAt: data.completedAt,
+    needsReview: data.needsReview,
+    reviewReason: data.reviewReason ?? null,
+    youtubeUrl: data.youtubeUrl,
+  };
+}
+
+/**
+ * One mission, watched on its own.
+ *
+ * WHY A SINGLE-DOCUMENT LISTENER EXISTS AT ALL. Every other view here is a
+ * windowed list, and a mission moves between those windows the moment its
+ * status changes. Marking one complete dropped it out of the queue while the
+ * operator was still looking at it, and the detail pane went blank - at
+ * exactly the point their next job was attaching its recording. They then had
+ * to go and find it again under Done.
+ *
+ * Reading it from the settled list instead would not fix that: that list is
+ * capped and ordered by submission, so a mission submitted this morning and
+ * completed now can settle outside the newest 25 and still be unreachable.
+ * A listener on the document itself cannot miss it, costs one read, and keeps
+ * the pane live rather than showing a snapshot taken before the change.
+ *
+ * Calls back with null when the mission is gone or soft-deleted, so the caller
+ * can tell "not loaded yet" from "no longer there".
+ */
+export function subscribeToMission(
+  missionId: string,
+  onMission: (mission: QueueMission | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const db = getFirestoreClient();
+
+  return onSnapshot(
+    doc(db, 'missions', missionId),
+    (snapshot) => {
+      const data = snapshot.data();
+      if (!snapshot.exists() || !data || data.deleted) {
+        onMission(null);
+        return;
+      }
+      onMission(toQueueMission(snapshot.id, data));
+    },
+    (error) => {
+      console.error('[operator mission] listener failed:', error);
+      onError(error);
+    },
+  );
+}
+
+/** Shared by both list subscriptions: the same documents, read the same way. */
 function listen(
   q: Query,
   onMissions: (missions: QueueMission[]) => void,
@@ -178,26 +240,17 @@ function listen(
     (snapshot) => {
       const missions: QueueMission[] = [];
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
+      // Not named `doc`: that is now the imported Firestore helper, and
+      // shadowing it here would break the next person who reaches for it.
+      for (const snap of snapshot.docs) {
+        const data = snap.data();
 
         // Soft-deleted missions stay out of every view, operator included. An
         // operator removed it on purpose; showing it back to them as work
         // waiting would undo that decision by accident.
         if (data.deleted) continue;
 
-        missions.push({
-          id: doc.id,
-          name: data.name,
-          code: data.code ?? '',
-          blocklyState: data.blocklyState,
-          status: data.status,
-          submittedAt: data.submittedAt,
-          completedAt: data.completedAt,
-          needsReview: data.needsReview,
-          reviewReason: data.reviewReason ?? null,
-          youtubeUrl: data.youtubeUrl,
-        });
+        missions.push(toQueueMission(snap.id, data));
       }
 
       onMissions(missions);

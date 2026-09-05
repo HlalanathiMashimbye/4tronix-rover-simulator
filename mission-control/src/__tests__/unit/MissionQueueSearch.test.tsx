@@ -21,6 +21,9 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   // Selecting a mission subscribes to its runs across yards. Not what these
   // tests are about, so it is a no-op unsubscribe.
   subscribeToMissionRuns: () => () => {},
+  // Selecting also watches the mission's own document, so it survives
+  // leaving the queue. These tests read the lists, so it stays quiet.
+  subscribeToMission: () => () => {},
   // Typing now also opens the settled list, so a mission that has already
   // finished can still be found by name. These tests hand it whatever
   // SETTLED holds.

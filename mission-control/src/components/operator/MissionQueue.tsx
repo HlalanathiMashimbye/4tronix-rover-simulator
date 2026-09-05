@@ -6,6 +6,7 @@ import { AlertTriangle, Blocks, Check, CheckCircle2, Code2, Copy, Layers, Loader
 import {
   subscribeToMissionRuns,
   subscribeToYardCompleted,
+  subscribeToMission,
   subscribeToYardQueue,
   type QueueMission,
 } from '@/infrastructure/persistence/operatorQueueService';
@@ -111,6 +112,8 @@ function YardQueue({
   // Which mission the detail pane is showing. Replaces the accordion: the
   // code used to push every other mission off the screen to be read.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The open mission's own document, so it survives leaving a list. */
+  const [watched, setWatched] = useState<{ id: string; mission: QueueMission | null } | null>(null);
   /**
    * WHICH mission the runs belong to, not just the runs.
    *
@@ -211,6 +214,36 @@ function YardQueue({
     () => (SETTLED_FILTERS.includes(activeFilter) ? (done ?? []) : (missions ?? [])),
     [activeFilter, done, missions],
   );
+
+  /**
+   * The open mission, watched on its own document.
+   *
+   * Every list here is a window, and a mission leaves its window the moment
+   * its status changes. Marking one complete dropped it out of the queue while
+   * the operator was still looking at it and blanked the detail pane - right
+   * when their next job was attaching the recording, so they had to go and
+   * find it again under Done.
+   *
+   * Not read from the settled list instead: that list is capped and ordered by
+   * submission, so a mission submitted this morning and completed now can
+   * settle outside the newest 25 and be unreachable there too.
+   */
+  useEffect(() => {
+    // No clearing on the way out: `watched` is only ever read when its id
+    // matches the open mission, so a stale entry is already ignored. Clearing
+    // it here would be a setState inside an effect and a second render pass
+    // for a value nothing reads.
+    if (!selectedId) return;
+
+    const id = selectedId;
+    return subscribeToMission(
+      id,
+      (mission) => setWatched(mission ? { id, mission } : { id, mission: null }),
+      // A failed watch is not worth emptying the pane over: the lists still
+      // have the mission until it moves out of them.
+      () => setWatched(null),
+    );
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -336,7 +369,20 @@ function YardQueue({
     );
   }
 
-  if (missions.length === 0) {
+  /**
+   * The yard is empty AND nothing is open.
+   *
+   * Both halves matter. This used to be `missions.length === 0` alone, and it
+   * is an early return, so it threw away the detail pane along with the list:
+   * completing the last mission in the queue collapsed the whole console to
+   * "Nothing waiting" while the operator was still looking at that mission,
+   * right when their next job was attaching its recording.
+   *
+   * It also has to consider the settled list, or picking Done or Needs video
+   * at a yard whose queue happens to be empty would report the yard as empty
+   * while holding a list of finished missions to show.
+   */
+  if (missions.length === 0 && !selectedId && (done?.length ?? 0) === 0) {
     return (
       <>
         <MobileSearch />
@@ -355,7 +401,17 @@ function YardQueue({
 
   // Empty until this mission's own runs arrive, never the previous one's.
   const runs = runsFor?.id === selectedId ? runsFor.runs : [];
-  const selected = [...(missions ?? []), ...(done ?? [])].find((m) => m.id === selectedId) ?? null;
+  /**
+   * The live document first, then whichever list happens to hold it.
+   *
+   * The document is the only source that cannot lose the mission to a status
+   * change, so it wins. The lists are the fallback for the moment before the
+   * watch has delivered, which keeps the pane from flickering empty on open.
+   */
+  const selected =
+    (watched?.id === selectedId ? watched.mission : null) ??
+    [...(missions ?? []), ...(done ?? [])].find((m) => m.id === selectedId) ??
+    null;
 
   return (
     <>
