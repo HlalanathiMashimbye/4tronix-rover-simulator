@@ -198,11 +198,26 @@ def stop_recording(mission_id, yard_id, keep):
         writer = _writers.pop(key, None)
         path = _paths.pop(key, None)
 
-    if writer is not None:
-        try:
-            writer.release()
-        except Exception as e:
-            logger.warning('Error closing the recording writer for %s/%s: %s', mission_id, yard_id, e)
+        # RELEASED UNDER THE LOCK, with the pop, and this is not tidiness.
+        #
+        # release() frees the FFmpeg encoder context inside the cv2 object.
+        # The consumer thread writes frames to those same objects, and it used
+        # to take a snapshot of the table under the lock, drop the lock, and
+        # then write - so a stop landing in that gap released a writer the
+        # consumer was one line away from using, and the write dereferenced a
+        # freed context. That is a segfault inside libavcodec, not a Python
+        # exception: the whole satellite process dies mid-run, taking the
+        # camera stream and the web server with it.
+        #
+        # The table and the objects it holds are one piece of state, so one
+        # lock owns both.
+        if writer is not None:
+            try:
+                writer.release()
+            except Exception as e:
+                logger.warning(
+                    'Error closing the recording writer for %s/%s: %s',
+                    mission_id, yard_id, e)
 
     if path is None:
         return True, 'not recording'
@@ -247,32 +262,41 @@ def _decode_frame(message):
 
 
 def _write_frame_to_all(frame):
+    """Write one frame to every open recording.
+
+    THE WHOLE BODY HOLDS THE LOCK, deliberately. This used to snapshot the
+    table under the lock, release it, and then write to the writers in that
+    snapshot. A stop_recording landing in the gap released a writer that was
+    still in the snapshot, and the write that followed reached into a freed
+    FFmpeg context - a segmentation fault in libavcodec that kills the whole
+    satellite process, not an exception any caller could catch.
+
+    The cost is that a frame encode now blocks anything else touching this
+    module, which is is_ready() reading a timestamp and the status endpoint
+    behind it. That is a few milliseconds on a frame, against a crash that
+    takes the camera and the web server down mid-run.
+
+    Holding it throughout also removed the "still wanted?" re-check that used
+    to guard the writer being opened outside the lock. There is no longer a
+    gap for a stop to land in.
+    """
     import cv2
 
     height, width = frame.shape[:2]
     with _lock:
-        items = list(_writers.items())
-
-    for key, writer in items:
-        if writer is None:
-            path = _paths.get(key)
-            if not path:
-                continue
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            new_writer = cv2.VideoWriter(path, fourcc, FPS, (width, height))
-            with _lock:
-                # Still wanted? stop_recording may have removed it while the
-                # writer above was opening.
-                if key in _writers:
-                    _writers[key] = new_writer
-                    writer = new_writer
-                else:
-                    new_writer.release()
+        for key in list(_writers):
+            writer = _writers.get(key)
+            if writer is None:
+                path = _paths.get(key)
+                if not path:
                     continue
-        try:
-            writer.write(frame)
-        except Exception as e:
-            logger.warning('Failed writing a frame for %s: %s', key, e)
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                writer = cv2.VideoWriter(path, fourcc, FPS, (width, height))
+                _writers[key] = writer
+            try:
+                writer.write(frame)
+            except Exception as e:
+                logger.warning('Failed writing a frame for %s: %s', key, e)
 
 
 def _consumer_loop():
