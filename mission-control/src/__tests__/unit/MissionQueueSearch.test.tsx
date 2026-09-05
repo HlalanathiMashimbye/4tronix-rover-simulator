@@ -113,7 +113,10 @@ describe('filtering the queue', () => {
     renderQueue();
     await screen.findByText('Rock Lover');
 
-    for (const label of ['All in queue', 'Waiting', 'Running now', 'Needs review']) {
+    // 'Waiting' is deliberately absent: it counted queued missions, which is
+    // All in queue minus whatever is running, and one rover runs one mission.
+    // Its slot went to work an operator can actually act on.
+    for (const label of ['All in queue', 'Needs video', 'Running now', 'Needs review']) {
       expect(screen.getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     }
   });
@@ -122,8 +125,8 @@ describe('filtering the queue', () => {
     renderQueue();
     await screen.findByText('Rock Lover');
 
-    // Two waiting, one running, one flagged - visible before anything is tapped.
-    expect(screen.getByRole('button', { name: /waiting\s*2/i })).toBeInTheDocument();
+    // Three in the queue, one running, one flagged - before anything is tapped.
+    expect(screen.getByRole('button', { name: /all in queue\s*3/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /running now\s*1/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /needs review\s*1/i })).toBeInTheDocument();
   });
@@ -242,5 +245,77 @@ describe('the Done chip does not claim the yard has nothing finished', () => {
 
     expect(screen.getAllByRole('button', { name: /needs review/i })[0])
       .toHaveTextContent('0');
+  });
+});
+
+
+describe('the Needs video filter', () => {
+  /**
+   * "Waiting" used to hold this slot, counting queued missions. It was All in
+   * queue minus whatever was running, and one rover runs one mission, so the
+   * two chips showed the same number essentially always - on the live console
+   * both read 16. "Running now" already surfaces the difference.
+   *
+   * The slot now shows the operator's real outstanding work: runs that
+   * happened and whose recording nobody has attached. That was previously only
+   * reachable by opening Done and reading down it.
+   */
+  const SETTLED = [
+    { id: 'p', name: 'Has Video', code: '', status: 'completed' as const, youtubeUrl: 'https://youtu.be/abc' },
+    { id: 'q', name: 'Awaiting Upload', code: '', status: 'completed' as const },
+    { id: 'r', name: 'Never Ran', code: '', status: 'cancelled' as const },
+  ];
+
+  function chip(name: RegExp) {
+    return screen.getAllByRole('button', { name })[0];
+  }
+
+  it('replaces Waiting, which duplicated All in queue', () => {
+    renderQueue();
+
+    expect(screen.queryAllByRole('button', { name: /waiting/i })).toHaveLength(0);
+    expect(chip(/needs video/i)).toBeInTheDocument();
+  });
+
+  it('lists finished missions with no recording attached', () => {
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.click(chip(/needs video/i));
+
+    expect(screen.getByText('Awaiting Upload')).toBeInTheDocument();
+    expect(screen.queryByText('Has Video')).not.toBeInTheDocument();
+  });
+
+  it('leaves out cancelled missions, which never ran', () => {
+    // Listing one would send an operator hunting for a file that never existed.
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.click(chip(/needs video/i));
+
+    expect(screen.queryByText('Never Ran')).not.toBeInTheDocument();
+  });
+
+  it('leaves out missions still in the queue', () => {
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.click(chip(/needs video/i));
+
+    expect(screen.queryByText('Rock Lover')).not.toBeInTheDocument();
+  });
+
+  it('shows no count until the settled list has loaded', () => {
+    // Same rule as Done: an unfetched list has no number, and rendering it as
+    // 0 says "nothing needs a video" about a yard that has not been asked.
+    renderQueue(QUEUE, SETTLED);
+
+    expect(chip(/needs video/i).textContent).not.toMatch(/\d/);
+  });
+
+  it('counts once it is open', () => {
+    renderQueue(QUEUE, SETTLED);
+
+    fireEvent.click(chip(/needs video/i));
+
+    expect(chip(/needs video/i).textContent).toMatch(/1/);
   });
 });

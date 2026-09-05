@@ -1,21 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  Blocks,
-  Check,
-  Code2,
-  Copy,
-  Hourglass,
-  Loader2,
-  Play,
-  Radio,
-  Rocket,
-  SatelliteDish,
-  Layers,
-  CheckCircle2,
-} from 'lucide-react';
+import { AlertTriangle, Blocks, Check, CheckCircle2, Code2, Copy, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
 import {
   subscribeToMissionRuns,
@@ -29,9 +15,9 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
-import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
-import { useRegisterSort } from '@/contexts/SearchContext';
+import { useRegisterSearchFilters, useRegisterSort, useSearch } from '@/contexts/SearchContext';
 import { sortMissions } from '@/core/domain/services/missionSort';
+import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
 import { missionClipboardText } from '@/lib/missionClipboard';
 import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
@@ -81,6 +67,15 @@ const YOUTUBE_RED = '#E60000';
  * handle: a child says "mine is Rock Lover" and the operator finds that row.
  * That works without anyone knowing whose it is.
  */
+/**
+ * Filters that read the settled list rather than the live queue.
+ *
+ * At module scope because it never changes. Declared inside the component it
+ * was a fresh array every render, so any effect depending on it re-ran on
+ * every render - which is the dependency warning, not a false positive.
+ */
+const SETTLED_FILTERS = ['done', 'needs-video'];
+
 export function MissionQueue({
   role,
   yardId,
@@ -169,15 +164,28 @@ function YardQueue({
     const all = missions ?? [];
     return {
       all: all.length,
-      queued: all.filter((m) => m.status === 'queued').length,
       processing: all.filter((m) => m.status === 'processing').length,
       review: all.filter((m) => m.needsReview).length,
+      // null, not 0, until the settled list has been fetched: this count lives
+      // in a list that is only subscribed to on demand, and rendering the
+      // unfetched state as a zero is what made "Done 0" read as an empty yard.
+      needsVideo: done === null ? null : done.filter(stillNeedsVideo).length,
     };
-  }, [missions]);
+  }, [missions, done]);
 
   useRegisterSearchFilters([
     { key: 'all', label: 'All in queue', count: counts.all, icon: Layers },
-    { key: 'queued', label: 'Waiting', count: counts.queued, icon: Hourglass },
+    /**
+     * "Waiting" used to sit here, counting the queued missions. It was All in
+     * queue minus whatever was running, and one rover runs one mission, so the
+     * two chips showed the same number essentially always - and "Running now"
+     * already surfaces the difference on its own.
+     *
+     * The slot pays for itself as the operator's real outstanding work: runs
+     * that happened and whose recording nobody has attached yet. That was
+     * previously only reachable by opening Done and reading down it.
+     */
+    { key: 'needs-video', label: 'Needs video', count: counts.needsVideo, icon: Video },
     { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
     { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
     /**
@@ -200,7 +208,7 @@ function YardQueue({
   ]);
 
   const source = useMemo(
-    () => (activeFilter === 'done' ? (done ?? []) : (missions ?? [])),
+    () => (SETTLED_FILTERS.includes(activeFilter) ? (done ?? []) : (missions ?? [])),
     [activeFilter, done, missions],
   );
 
@@ -241,7 +249,7 @@ function YardQueue({
       // point of typing a name is to find it wherever it is.
       if (!searching) {
         if (activeFilter === 'review' && !m.needsReview) return false;
-        if (activeFilter === 'queued' && m.status !== 'queued') return false;
+        if (activeFilter === 'needs-video' && !stillNeedsVideo(m)) return false;
         if (activeFilter === 'processing' && m.status !== 'processing') return false;
         return true;
       }
@@ -261,7 +269,7 @@ function YardQueue({
   useEffect(() => {
     // Also while searching: the settled list is what makes a finished mission
     // findable by name, and it cannot be searched if it was never fetched.
-    if (activeFilter !== 'done' && !searching) return;
+    if (!SETTLED_FILTERS.includes(activeFilter) && !searching) return;
 
     const unsubscribe = subscribeToYardCompleted(
       yardId,
@@ -434,7 +442,13 @@ function YardQueue({
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
-          {searching ? 'Search' : activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
+          {searching
+            ? 'Search'
+            : activeFilter === 'needs-video'
+              ? 'Needs video'
+              : activeFilter === 'done'
+                ? 'Finished'
+                : 'Queue'}{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
             {/* While searching, "of 16" would be a lie: the pool is the queue
                 AND the settled list, and the match usually comes from outside
