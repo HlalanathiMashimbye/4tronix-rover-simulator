@@ -12,6 +12,37 @@ const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
 // Must match YARD_W/YARD_H in roverSimRender.ts, which explains the size.
 const YARD_HALF_W = 120 - ROVER_MARGIN; // 240 cm wide, origin at centre
 const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
+/**
+ * How far each wheel sits from the point the rover turns about.
+ *
+ * The four wheels are the corners of a VEHICLE_WIDTH x DISTANCE_BETWEEN_PAIRS
+ * rectangle, so this is the half-diagonal. It only matters for spinning on the
+ * spot, where it sets how fast a given wheel speed swings the body round.
+ */
+const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(VEHICLE_WIDTH_CM / 2, DISTANCE_BETWEEN_WHEEL_PAIRS_CM / 2);
+/**
+ * How much of the wheel speed becomes rotation when spinning on the spot.
+ *
+ * 1 is a perfect pivot: every wheel rolling exactly along the circle it traces
+ * about the centre. The real rover is not that. Its pivot servos put the
+ * wheels at 50 degrees, while the angle actually tangent to that circle is
+ * 26.6, so the tyres scrub sideways and some of the wheel speed is spent
+ * fighting the ground instead of turning the body.
+ *
+ * MEASURE THIS ON THE ROVER, it has never been measured. Spin at speed 60 for
+ * five seconds, count the degrees turned, and set this to
+ * (measured degrees per second) / 38.44.
+ *
+ * It stays at 1 until then, which is the safe direction to be wrong: this
+ * number decides the time.sleep() that spinSecondsForDegrees bakes into the
+ * learner's Python, and that sleep is what the hardware obeys. Overstating the
+ * turn rate makes the generated sleep too short, so a real 90 degree corner
+ * falls short rather than swinging past it, which is the better way to miss in
+ * a room with walls and children in it.
+ */
+export const SPIN_SCRUB_FACTOR = 1;
+/** The wheel angle a steer block uses when the caller does not name one. */
+export const DEFAULT_STEER_DEGREES = 30;
 const SERVO_FL = 9;
 const SERVO_FR = 15;
 const SERVO_RL = 11;
@@ -29,7 +60,17 @@ export class RoverPhysics {
         };
         this.lastUpdate = Date.now();
     }
-    setCommand(command, speed = 80) {
+    /**
+     * @param degrees  Wheel angle for steerLeft/steerRight, in degrees.
+     *
+     * This used to be missing, and steering was hardcoded to 30 degrees no
+     * matter what the learner asked for: a mission that steered 10 degrees and
+     * one that steered 45 drew the identical curve, because parseRoverCode read
+     * the angle off `setServo` and then nothing passed it on. It is optional
+     * only so manual control, which has no angle to give, keeps working.
+     */
+    setCommand(command, speed = 80, degrees) {
+        const steer = Math.abs(degrees ?? DEFAULT_STEER_DEGREES);
         switch (command) {
             case 'forward':
                 this.state.servos[SERVO_FL] = 0;
@@ -64,18 +105,18 @@ export class RoverPhysics {
                 this.state.speedR = -speed;
                 break;
             case 'steerLeft':
-                this.state.servos[SERVO_FL] = -30;
-                this.state.servos[SERVO_FR] = -30;
-                this.state.servos[SERVO_RL] = 30;
-                this.state.servos[SERVO_RR] = 30;
+                this.state.servos[SERVO_FL] = -steer;
+                this.state.servos[SERVO_FR] = -steer;
+                this.state.servos[SERVO_RL] = steer;
+                this.state.servos[SERVO_RR] = steer;
                 this.state.speedL = speed;
                 this.state.speedR = speed;
                 break;
             case 'steerRight':
-                this.state.servos[SERVO_FL] = 30;
-                this.state.servos[SERVO_FR] = 30;
-                this.state.servos[SERVO_RL] = -30;
-                this.state.servos[SERVO_RR] = -30;
+                this.state.servos[SERVO_FL] = steer;
+                this.state.servos[SERVO_FR] = steer;
+                this.state.servos[SERVO_RL] = -steer;
+                this.state.servos[SERVO_RR] = -steer;
                 this.state.speedL = speed;
                 this.state.speedR = speed;
                 break;
@@ -134,7 +175,30 @@ export class RoverPhysics {
                 return [updatedVehicleX, updatedVehicleY, this.state.heading + headingChangeDegrees];
             }
         };
-        // Calculate for all four wheels (using servo_FL bug like original)
+        // SPINNING IS NOT STEERING, so it does not go through the model above.
+        //
+        // That model is a steered-wheel model: it reads one wheel angle and one
+        // wheel speed and rolls the body along an arc. A spin is differential
+        // drive - the two sides turn in opposite directions - and there is no
+        // wheel angle that expresses it. Feeding a spin through it produced a
+        // tight arc instead of a pivot, sliding the rover 9.5cm across the yard
+        // while it turned 90 degrees. The real rover stays where it is.
+        //
+        // So a spin is its own motion: the body rotates about its centre and the
+        // position does not change. The rate falls out of the geometry - a wheel
+        // that far from the centre, dragged at that speed, swings the body round
+        // this fast - rather than being a number written down somewhere.
+        if (this.isSpinning()) {
+            const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
+            const radiansPerSecond = (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_SCRUB_FACTOR;
+            this.state.heading += (radiansPerSecond * dt * 180) / Math.PI;
+            // It cannot reach a wall without moving, and it did not move.
+            this.state.hitWall = false;
+            return { ...this.state };
+        }
+        // Every remaining command drives both sides at the same speed with the
+        // four wheels at one steering angle, so reading that angle and speed off
+        // the front left wheel describes all four.
         const [xFL, yFL, hFL] = calculateSteeredPosition(true, this.state.servos[SERVO_FL], this.state.speedL, dt);
         const [xFR, yFR, hFR] = calculateSteeredPosition(false, this.state.servos[SERVO_FL], this.state.speedL, dt);
         const [xBL, yBL, hBL] = calculateSteeredPosition(true, this.state.servos[SERVO_FL], this.state.speedL, dt);
@@ -150,6 +214,16 @@ export class RoverPhysics {
         this.state.x = clampedX;
         this.state.y = clampedY;
         return { ...this.state };
+    }
+    /**
+     * True when the two sides are driven against each other.
+     *
+     * Derived from the wheel speeds rather than remembering which command was
+     * last given, so manual control and a replayed mission cannot disagree about
+     * what the rover is doing.
+     */
+    isSpinning() {
+        return this.state.speedL !== 0 && this.state.speedL === -this.state.speedR;
     }
     getState() {
         return { ...this.state };

@@ -10,6 +10,13 @@
  *
  * Steer Left and Steer Right already took degrees. Turning on the spot was the
  * one motion that did not, and the one a square needs.
+ *
+ * The 32.9 above is history, not the current rate. It came from a model that
+ * ran a spin through the steered-wheel maths, which also slid the rover 9.5cm
+ * sideways while it turned - the real rover pivots and stays put. Spinning is
+ * modelled as a pivot now and the rate is 38.4 degrees per second at speed 60.
+ * Everything the bug report was about is unchanged: the argument holds at any
+ * rate, because no rate divides 90 into a whole number of tenths of a second.
  */
 
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
@@ -78,8 +85,18 @@ describe('driving a square', () => {
 describe('the turn rate', () => {
   it('is measured from the physics, not written down twice', () => {
     // If the wheelbase or full speed ever changes, this follows automatically.
-    expect(spinDegreesPerSecond(60)).toBeGreaterThan(30);
-    expect(spinDegreesPerSecond(60)).toBeLessThan(36);
+    // The band moved when spinning stopped being modelled as a tight arc and
+    // became a pivot: 32.9 degrees per second became 38.4. A band rather than
+    // an equality, because restating the exact figure here is the duplication
+    // the derivation exists to avoid.
+    expect(spinDegreesPerSecond(60)).toBeGreaterThan(36);
+    expect(spinDegreesPerSecond(60)).toBeLessThan(41);
+  });
+
+  it('is proportional to how fast the wheels are driven', () => {
+    // The property that has to survive any recalibration of the rate, and the
+    // one a band cannot check: half the speed, half the turn.
+    expect(spinDegreesPerSecond(30)).toBeCloseTo(spinDegreesPerSecond(60) / 2, 6);
   });
 
   it('scales with speed, so a slower spin takes longer', () => {
@@ -96,10 +113,16 @@ describe('missions saved before the change', () => {
     const migrated = JSON.parse(migrateSpinBlocks(saved));
     const block = migrated.blocks.blocks[0];
 
-    // 3 seconds was about 99 degrees, and that is what it should still show.
-    expect(block.fields.DEGREES).toBeGreaterThan(95);
-    expect(block.fields.DEGREES).toBeLessThan(103);
+    // What the number has to be is whatever 3 seconds of spinning actually
+    // turns, so that regenerating the block emits the same 3 second sleep the
+    // saved mission already ran on hardware. Asserting the round trip rather
+    // than the figure is what makes that true at any turn rate - the figure
+    // moved from 99 to 115 when spinning became a pivot, and the mission it
+    // describes did not change at all.
     expect(block.fields.TIME).toBeUndefined();
+    // Within a hair of 3, not exactly 3: the block field shows the learner a
+    // whole number of degrees, and one degree is 26ms of spinning.
+    expect(spinSecondsForDegrees(block.fields.DEGREES, 60)).toBeCloseTo(3, 1);
   });
 
   it('leaves a workspace that already uses degrees alone', () => {

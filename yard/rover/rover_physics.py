@@ -23,9 +23,12 @@ WHY IT IS DEPRECATED
 
 The header used to say "keep this in sync with rover-physics.ts - the two are
 line-for-line equivalent". Nothing enforced that: there is no test comparing
-the two, and no build step that would notice them diverging. They do currently
-agree (same constants, same seven commands), but treat rover-physics.ts as the
-source of truth if they ever disagree.
+the two, and no build step that would notice them diverging. They no longer agree, which is
+exactly what that missing test would have caught: rover-physics.ts now models
+spinning as a pivot about the rover's centre rather than as a tight arc, and
+takes the steering angle from the caller instead of hardcoding 30 degrees.
+The version below still does neither. Treat rover-physics.ts as the source of
+truth.
 
 If this is revived for real use, add a test that asserts the constants and the
 command->servo mapping match rover-physics.ts, so the claim above is checked
