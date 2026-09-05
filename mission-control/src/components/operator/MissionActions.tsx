@@ -247,7 +247,11 @@ function successMessage(action: Action, name?: string): string {
   const mission = name || 'the mission';
   switch (action) {
     case 'complete':
-      return `Marked ${mission} complete.`;
+      // Says where it went. Completing takes a mission out of the queue, and
+      // the next job is usually its recording, so naming the filter that now
+      // holds it saves hunting for it. It also stays open in the pane beside
+      // this message, which is where the video actually gets attached.
+      return `Marked ${mission} complete. It is under Needs video until you attach one.`;
     case 'cancel':
       return `Cancelled ${mission}. The record is kept.`;
     case 'resolve':

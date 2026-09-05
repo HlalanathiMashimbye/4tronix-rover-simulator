@@ -23,6 +23,28 @@ import type { MissionStatus } from '../entities/Mission';
 export type ResolveOutcome = 'completed' | 'requeue';
 
 /**
+ * A mission that ran and whose recording has not been attached yet.
+ *
+ * This is the operator's actual outstanding work at a desk: the run happened,
+ * the video is sitting on the satellite or in YouTube Studio, and nothing
+ * links the two until somebody pastes a URL. Without it the console could only
+ * offer "Done", which mixes the missions that still need attention in with the
+ * ones that are finished with.
+ *
+ * CANCELLED AND FAILED MISSIONS DO NOT NEED A VIDEO. A cancelled mission never
+ * ran, so there is no recording to attach and listing it as outstanding work
+ * would send an operator looking for a file that does not exist.
+ *
+ * Takes the two fields it reads rather than a Mission, so the operator
+ * console's narrower queue record satisfies it.
+ */
+export function stillNeedsVideo(
+  mission: { status: MissionStatus; youtubeUrl?: string | null },
+): boolean {
+  return mission.status === 'completed' && !mission.youtubeUrl;
+}
+
+/**
  * Statuses an operator may still act on. A mission that already settled is not
  * work waiting for anyone, and re-completing it would move timestamps around
  * for no reason.

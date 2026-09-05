@@ -1,25 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  Blocks,
-  Check,
-  Code2,
-  Copy,
-  Hourglass,
-  Loader2,
-  Play,
-  Radio,
-  Rocket,
-  SatelliteDish,
-  Layers,
-  CheckCircle2,
-} from 'lucide-react';
+import { AlertTriangle, Blocks, Check, CheckCircle2, Code2, Copy, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
 import {
   subscribeToMissionRuns,
   subscribeToYardCompleted,
+  subscribeToMission,
   subscribeToYardQueue,
   type QueueMission,
 } from '@/infrastructure/persistence/operatorQueueService';
@@ -29,7 +16,9 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
-import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
+import { useRegisterSearchFilters, useRegisterSort, useSearch } from '@/contexts/SearchContext';
+import { sortMissions } from '@/core/domain/services/missionSort';
+import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
 import { missionClipboardText } from '@/lib/missionClipboard';
 import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
@@ -79,6 +68,15 @@ const YOUTUBE_RED = '#E60000';
  * handle: a child says "mine is Rock Lover" and the operator finds that row.
  * That works without anyone knowing whose it is.
  */
+/**
+ * Filters that read the settled list rather than the live queue.
+ *
+ * At module scope because it never changes. Declared inside the component it
+ * was a fresh array every render, so any effect depending on it re-ran on
+ * every render - which is the dependency warning, not a false positive.
+ */
+const SETTLED_FILTERS = ['done', 'needs-video'];
+
 export function MissionQueue({
   role,
   yardId,
@@ -114,6 +112,8 @@ function YardQueue({
   // Which mission the detail pane is showing. Replaces the accordion: the
   // code used to push every other mission off the screen to be read.
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The open mission's own document, so it survives leaving a list. */
+  const [watched, setWatched] = useState<{ id: string; mission: QueueMission | null } | null>(null);
   /**
    * WHICH mission the runs belong to, not just the runs.
    *
@@ -156,7 +156,8 @@ function YardQueue({
     }
   }
 
-  const { query, activeFilter } = useSearch();
+  const { query, activeFilter, sort } = useSearch();
+  useRegisterSort();
 
   // The same control the learner feed uses, for the same reason: an operator
   // at a busy event is looking for one mission among a queue, and asking them
@@ -166,30 +167,83 @@ function YardQueue({
     const all = missions ?? [];
     return {
       all: all.length,
-      queued: all.filter((m) => m.status === 'queued').length,
       processing: all.filter((m) => m.status === 'processing').length,
       review: all.filter((m) => m.needsReview).length,
+      // null, not 0, until the settled list has been fetched: this count lives
+      // in a list that is only subscribed to on demand, and rendering the
+      // unfetched state as a zero is what made "Done 0" read as an empty yard.
+      needsVideo: done === null ? null : done.filter(stillNeedsVideo).length,
     };
-  }, [missions]);
+  }, [missions, done]);
 
   useRegisterSearchFilters([
     { key: 'all', label: 'All in queue', count: counts.all, icon: Layers },
-    { key: 'queued', label: 'Waiting', count: counts.queued, icon: Hourglass },
+    /**
+     * "Waiting" used to sit here, counting the queued missions. It was All in
+     * queue minus whatever was running, and one rover runs one mission, so the
+     * two chips showed the same number essentially always - and "Running now"
+     * already surfaces the difference on its own.
+     *
+     * The slot pays for itself as the operator's real outstanding work: runs
+     * that happened and whose recording nobody has attached yet. That was
+     * previously only reachable by opening Done and reading down it.
+     */
+    { key: 'needs-video', label: 'Needs video', count: counts.needsVideo, icon: Video },
     { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
     { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
-    // Where attaching a video happens. A mission leaves the queue the moment it
-    // is marked complete, which is exactly when the operator goes off to upload
-    // the recording, so without a way back to it the attach action would be
-    // unreachable. Count is what has loaded rather than what exists: this list
-    // is bounded, and a total would need a billed aggregate query for a number
-    // nobody acts on.
-    { key: 'done', label: 'Done', count: done?.length ?? 0, icon: CheckCircle2 },
+    /**
+     * Where attaching a video happens. A mission leaves the queue the moment
+     * it is marked complete, which is exactly when the operator goes off to
+     * upload the recording, so without a way back to it the attach action
+     * would be unreachable.
+     *
+     * NO COUNT UNTIL IT HAS LOADED. This list is only subscribed to when it is
+     * selected or searched, so before then there is nothing to count - and it
+     * used to render that as "Done 0", which does not read as "not loaded
+     * yet", it reads as "nothing has ever finished here". At a yard with 25
+     * finished missions sitting behind the chip, next to "All in queue 16",
+     * that is how a console convinces an operator the yard has 16 missions in
+     * total. Once loaded the count is still what loaded rather than what
+     * exists, because a true total would need a billed aggregate query for a
+     * number nobody acts on.
+     */
+    { key: 'done', label: 'Done', count: done?.length ?? null, icon: CheckCircle2 },
   ]);
 
   const source = useMemo(
-    () => (activeFilter === 'done' ? (done ?? []) : (missions ?? [])),
+    () => (SETTLED_FILTERS.includes(activeFilter) ? (done ?? []) : (missions ?? [])),
     [activeFilter, done, missions],
   );
+
+  /**
+   * The open mission, watched on its own document.
+   *
+   * Every list here is a window, and a mission leaves its window the moment
+   * its status changes. Marking one complete dropped it out of the queue while
+   * the operator was still looking at it and blanked the detail pane - right
+   * when their next job was attaching the recording, so they had to go and
+   * find it again under Done.
+   *
+   * Not read from the settled list instead: that list is capped and ordered by
+   * submission, so a mission submitted this morning and completed now can
+   * settle outside the newest 25 and be unreachable there too.
+   */
+  useEffect(() => {
+    // No clearing on the way out: `watched` is only ever read when its id
+    // matches the open mission, so a stale entry is already ignored. Clearing
+    // it here would be a setState inside an effect and a second render pass
+    // for a value nothing reads.
+    if (!selectedId) return;
+
+    const id = selectedId;
+    return subscribeToMission(
+      id,
+      (mission) => setWatched(mission ? { id, mission } : { id, mission: null }),
+      // A failed watch is not worth emptying the pane over: the lists still
+      // have the mission until it moves out of them.
+      () => setWatched(null),
+    );
+  }, [selectedId]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -206,22 +260,49 @@ function YardQueue({
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return source.filter((m) => {
-      if (activeFilter === 'review' && !m.needsReview) return false;
-      if (activeFilter === 'queued' && m.status !== 'queued') return false;
-      if (activeFilter === 'processing' && m.status !== 'processing') return false;
-      if (!q) return true;
+
+    /**
+     * A search looks at everything loaded, not just the selected filter.
+     *
+     * Searching used to run over `source` alone, so with the default "All in
+     * queue" filter selected there was no text that could find a mission which
+     * had already finished - it was not in that list to be matched. An
+     * operator looking for a mission by name got "no matches" for a mission
+     * that was right there under a different chip, which reads as the mission
+     * being gone.
+     *
+     * The two lists hold disjoint statuses, so concatenating them cannot
+     * produce a duplicate.
+     */
+    const searching = q.length > 0;
+    const pool = searching ? [...(missions ?? []), ...(done ?? [])] : source;
+
+    const matched = pool.filter((m) => {
+      // While searching, the status chips do not also narrow the result: the
+      // point of typing a name is to find it wherever it is.
+      if (!searching) {
+        if (activeFilter === 'review' && !m.needsReview) return false;
+        if (activeFilter === 'needs-video' && !stillNeedsVideo(m)) return false;
+        if (activeFilter === 'processing' && m.status !== 'processing') return false;
+        return true;
+      }
       // Name and code, the same two fields the learner feed searches. There is
       // deliberately nothing about the learner to search on - see above.
       return (m.name ?? '').toLowerCase().includes(q) || m.code.toLowerCase().includes(q);
     });
-  }, [source, query, activeFilter]);
+
+    return sortMissions(matched, sort);
+  }, [source, missions, done, query, activeFilter, sort]);
 
   // Only while the operator is looking at it. Completed missions accumulate
   // forever, so a listener on them is a read bill that grows with the life of
   // the project, and most console sessions never open this view.
+  const searching = query.trim().length > 0;
+
   useEffect(() => {
-    if (activeFilter !== 'done') return;
+    // Also while searching: the settled list is what makes a finished mission
+    // findable by name, and it cannot be searched if it was never fetched.
+    if (!SETTLED_FILTERS.includes(activeFilter) && !searching) return;
 
     const unsubscribe = subscribeToYardCompleted(
       yardId,
@@ -244,7 +325,7 @@ function YardQueue({
       unsubscribe();
       setDone(null);
     };
-  }, [yardId, activeFilter]);
+  }, [yardId, activeFilter, searching]);
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -288,7 +369,20 @@ function YardQueue({
     );
   }
 
-  if (missions.length === 0) {
+  /**
+   * The yard is empty AND nothing is open.
+   *
+   * Both halves matter. This used to be `missions.length === 0` alone, and it
+   * is an early return, so it threw away the detail pane along with the list:
+   * completing the last mission in the queue collapsed the whole console to
+   * "Nothing waiting" while the operator was still looking at that mission,
+   * right when their next job was attaching its recording.
+   *
+   * It also has to consider the settled list, or picking Done or Needs video
+   * at a yard whose queue happens to be empty would report the yard as empty
+   * while holding a list of finished missions to show.
+   */
+  if (missions.length === 0 && !selectedId && (done?.length ?? 0) === 0) {
     return (
       <>
         <MobileSearch />
@@ -307,7 +401,17 @@ function YardQueue({
 
   // Empty until this mission's own runs arrive, never the previous one's.
   const runs = runsFor?.id === selectedId ? runsFor.runs : [];
-  const selected = [...(missions ?? []), ...(done ?? [])].find((m) => m.id === selectedId) ?? null;
+  /**
+   * The live document first, then whichever list happens to hold it.
+   *
+   * The document is the only source that cannot lose the mission to a status
+   * change, so it wins. The lists are the fallback for the moment before the
+   * watch has delivered, which keeps the pane from flickering empty on open.
+   */
+  const selected =
+    (watched?.id === selectedId ? watched.mission : null) ??
+    [...(missions ?? []), ...(done ?? [])].find((m) => m.id === selectedId) ??
+    null;
 
   return (
     <>
@@ -394,11 +498,23 @@ function YardQueue({
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
-          {activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
+          {searching
+            ? 'Search'
+            : activeFilter === 'needs-video'
+              ? 'Needs video'
+              : activeFilter === 'done'
+                ? 'Finished'
+                : 'Queue'}{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
-            ({visible.length === source.length
-              ? `${source.length} at ${yardName}`
-              : `${visible.length} of ${source.length} at ${yardName}`})
+            {/* While searching, "of 16" would be a lie: the pool is the queue
+                AND the settled list, and the match usually comes from outside
+                whichever chip is selected. So a search reports what it found,
+                not a fraction of a list it did not search. */}
+            ({searching
+              ? `${visible.length} found at ${yardName}`
+              : visible.length === source.length
+                ? `${source.length} at ${yardName}`
+                : `${visible.length} of ${source.length} at ${yardName}`})
           </span>
         </h2>
       </div>

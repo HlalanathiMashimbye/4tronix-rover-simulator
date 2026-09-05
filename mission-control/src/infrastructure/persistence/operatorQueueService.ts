@@ -13,11 +13,13 @@
 
 import {
   collection,
+  doc,
   query,
   where,
   orderBy,
   limit,
   onSnapshot,
+  type DocumentData,
   type Query,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -33,6 +35,22 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  * what still needs them; completed work belongs to the bookkeeping views.
  */
 export const ACTIVE_STATUSES: MissionStatus[] = ['queued', 'processing'];
+
+/**
+ * Everything that has stopped, not just what succeeded.
+ *
+ * This used to be 'completed' alone, and a cancelled mission was then visible
+ * in no view the console has: not in the queue, because it is not active, and
+ * not here. Cancel exists precisely so a child's work is kept rather than
+ * deleted - the button's own comment says so and the toast tells the operator
+ * "the record is kept" - and the record was kept in Firestore and lost from
+ * the only interface that reads it.
+ *
+ * 'failed' is included for the same reason. Nothing writes it today, but the
+ * status exists and the notify endpoint accepts it, so a mission that arrives
+ * with it must not silently disappear.
+ */
+export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'cancelled'];
 
 /**
  * Upper bound on the listener.
@@ -68,6 +86,9 @@ export interface QueueMission {
   blocklyState?: string;
   status: MissionStatus;
   submittedAt?: string;
+  /** Set when the mission finished. Absent on anything still open, and on a
+   *  cancelled mission, which is why the query cannot order by it. */
+  completedAt?: string;
   needsReview?: boolean;
   reviewReason?: string | null;
   /** Present once an operator has attached the recording. */
@@ -115,6 +136,13 @@ export function subscribeToYardQueue(
  * coming back to. That ordering needs its own composite index; the queue's
  * ascending twin cannot be scanned backwards for it.
  *
+ * Ordered by SUBMISSION, which is deliberate and is not the order the list is
+ * displayed in. Ordering the query by completedAt would drop every mission
+ * that has no such field - Firestore excludes documents missing the ordered
+ * field - and a cancelled mission usually has none, which would undo the whole
+ * point of widening the statuses below. So the query picks the window and
+ * missionSort decides the order within it.
+ *
  * SUBSCRIBE ONLY WHEN THE OPERATOR ASKS FOR IT. A listener reads every matching
  * document when it attaches, and completed missions only ever accumulate, so
  * attaching this alongside the queue would add a growing read bill to every
@@ -130,7 +158,9 @@ export function subscribeToYardCompleted(
   const q = query(
     collection(db, 'missions'),
     where('yardId', '==', yardId),
-    where('status', '==', 'completed'),
+    // `in` rather than `==`, and it reuses the same composite index: Firestore
+    // serves an `in` as several equality queries against it.
+    where('status', 'in', SETTLED_STATUSES),
     orderBy('submittedAt', 'desc'),
     limit(DONE_LIMIT),
   );
@@ -138,7 +168,67 @@ export function subscribeToYardCompleted(
   return listen(q, onMissions, onError, 'completed');
 }
 
-/** Shared by both subscriptions: the same documents, read the same way. */
+/** One Firestore document as the console reads it. Shared by every listener
+ *  here so a field added in one view cannot go missing in another. */
+function toQueueMission(id: string, data: DocumentData): QueueMission {
+  return {
+    id,
+    name: data.name,
+    code: data.code ?? '',
+    blocklyState: data.blocklyState,
+    status: data.status,
+    submittedAt: data.submittedAt,
+    completedAt: data.completedAt,
+    needsReview: data.needsReview,
+    reviewReason: data.reviewReason ?? null,
+    youtubeUrl: data.youtubeUrl,
+  };
+}
+
+/**
+ * One mission, watched on its own.
+ *
+ * WHY A SINGLE-DOCUMENT LISTENER EXISTS AT ALL. Every other view here is a
+ * windowed list, and a mission moves between those windows the moment its
+ * status changes. Marking one complete dropped it out of the queue while the
+ * operator was still looking at it, and the detail pane went blank - at
+ * exactly the point their next job was attaching its recording. They then had
+ * to go and find it again under Done.
+ *
+ * Reading it from the settled list instead would not fix that: that list is
+ * capped and ordered by submission, so a mission submitted this morning and
+ * completed now can settle outside the newest 25 and still be unreachable.
+ * A listener on the document itself cannot miss it, costs one read, and keeps
+ * the pane live rather than showing a snapshot taken before the change.
+ *
+ * Calls back with null when the mission is gone or soft-deleted, so the caller
+ * can tell "not loaded yet" from "no longer there".
+ */
+export function subscribeToMission(
+  missionId: string,
+  onMission: (mission: QueueMission | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const db = getFirestoreClient();
+
+  return onSnapshot(
+    doc(db, 'missions', missionId),
+    (snapshot) => {
+      const data = snapshot.data();
+      if (!snapshot.exists() || !data || data.deleted) {
+        onMission(null);
+        return;
+      }
+      onMission(toQueueMission(snapshot.id, data));
+    },
+    (error) => {
+      console.error('[operator mission] listener failed:', error);
+      onError(error);
+    },
+  );
+}
+
+/** Shared by both list subscriptions: the same documents, read the same way. */
 function listen(
   q: Query,
   onMissions: (missions: QueueMission[]) => void,
@@ -150,25 +240,17 @@ function listen(
     (snapshot) => {
       const missions: QueueMission[] = [];
 
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
+      // Not named `doc`: that is now the imported Firestore helper, and
+      // shadowing it here would break the next person who reaches for it.
+      for (const snap of snapshot.docs) {
+        const data = snap.data();
 
         // Soft-deleted missions stay out of every view, operator included. An
         // operator removed it on purpose; showing it back to them as work
         // waiting would undo that decision by accident.
         if (data.deleted) continue;
 
-        missions.push({
-          id: doc.id,
-          name: data.name,
-          code: data.code ?? '',
-          blocklyState: data.blocklyState,
-          status: data.status,
-          submittedAt: data.submittedAt,
-          needsReview: data.needsReview,
-          reviewReason: data.reviewReason ?? null,
-          youtubeUrl: data.youtubeUrl,
-        });
+        missions.push(toQueueMission(snap.id, data));
       }
 
       onMissions(missions);

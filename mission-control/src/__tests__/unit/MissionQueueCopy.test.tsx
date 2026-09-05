@@ -23,6 +23,9 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   // Selecting a mission subscribes to its runs across yards. Not what these
   // tests are about, so it is a no-op unsubscribe.
   subscribeToMissionRuns: () => () => {},
+  // Selecting also watches the mission's own document, so it survives
+  // leaving the queue. These tests read the lists, so it stays quiet.
+  subscribeToMission: () => () => {},
 }));
 
 jest.mock('@/components/mission/BlocklyViewer', () => ({
