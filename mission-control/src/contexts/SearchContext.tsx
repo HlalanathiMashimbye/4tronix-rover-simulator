@@ -35,7 +35,15 @@ import {
 export interface SearchFilter {
   key: string;
   label: string;
-  count: number;
+  /**
+   * How many are behind this filter, or null when that is not yet known.
+   *
+   * null is not zero. The operator's Done list is only fetched when it is
+   * selected or searched, and rendering the unfetched state as 0 told an
+   * operator that nothing had ever finished at a yard holding 25 finished
+   * missions. A filter that cannot count itself yet shows no number.
+   */
+  count: number | null;
   icon: LucideIcon;
 }
 

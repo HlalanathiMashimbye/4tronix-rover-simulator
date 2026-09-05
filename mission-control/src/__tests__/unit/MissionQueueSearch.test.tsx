@@ -91,13 +91,20 @@ describe('searching the queue', () => {
     expect(screen.getByText(/no mission in this queue matches/i)).toBeInTheDocument();
   });
 
-  it('shows the filtered count against the total', async () => {
+  it('reports what the search found, not a fraction of one list', async () => {
+    /**
+     * This used to read "1 of 3", the 3 being the queue. Once a search began
+     * looking at the settled list too, that fraction became a lie: the pool is
+     * both lists, and a match usually comes from outside whichever chip is
+     * selected, so the denominator described a list the result was not in.
+     */
     renderQueue();
     await screen.findByText('Rock Lover');
 
     search('dune');
 
-    expect(screen.getByText(/1 of 3/)).toBeInTheDocument();
+    expect(screen.getByText(/1 found/)).toBeInTheDocument();
+    expect(screen.queryByText(/1 of 3/)).not.toBeInTheDocument();
   });
 });
 
@@ -185,5 +192,55 @@ describe('finding a mission that has already finished', () => {
 
     expect(screen.queryByText('Rocky Square Attempt')).not.toBeInTheDocument();
     expect(screen.getByText('Rock Lover')).toBeInTheDocument();
+  });
+});
+
+
+describe('the Done chip does not claim the yard has nothing finished', () => {
+  /**
+   * Seen on a live console: "All in queue 16" beside "Done 0", at a yard that
+   * had 25 finished missions sitting behind that chip. The settled list is
+   * only fetched when it is selected or searched, and the unfetched state was
+   * rendered as the number 0 - which does not read as "not loaded", it reads
+   * as "nothing has ever finished here". Together the two chips said the yard
+   * had 16 missions in total.
+   */
+  function doneChip() {
+    return screen.getAllByRole('button', { name: /done/i })[0];
+  }
+
+  it('shows no number before the list has been fetched', () => {
+    renderQueue(QUEUE, [
+      { id: 'z', name: 'Rocky Square Attempt', code: '', status: 'completed' as const },
+    ]);
+
+    // Asserted on the raw text, and against ANY digit.
+    //
+    // The first version of this checked /\b0\b/, which never matches: the chip
+    // renders as "Done0" with no word boundary between the "e" and the "0", so
+    // it passed against the very bug it was written for. Caught by putting the
+    // bug back and watching the test stay green.
+    expect(doneChip().textContent).not.toMatch(/\d/);
+  });
+
+  it('shows the real number once the list is open', () => {
+    renderQueue(QUEUE, [
+      { id: 'z', name: 'Rocky Square Attempt', code: '', status: 'completed' as const },
+      { id: 'y', name: 'Abandoned Run', code: '', status: 'cancelled' as const },
+    ]);
+
+    fireEvent.click(doneChip());
+
+    expect(doneChip().textContent).toMatch(/2/);
+  });
+
+  it('still shows a real zero for a filter that HAS counted itself', () => {
+    // "Needs review 0" is a fact the operator can act on, and hiding it would
+    // be the opposite bug. Only the queue's own missions are passed, none of
+    // which needs review, so the zero here is genuine rather than unfetched.
+    renderQueue([QUEUE[0]]);
+
+    expect(screen.getAllByRole('button', { name: /needs review/i })[0])
+      .toHaveTextContent('0');
   });
 });

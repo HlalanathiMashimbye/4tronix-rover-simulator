@@ -180,13 +180,23 @@ function YardQueue({
     { key: 'queued', label: 'Waiting', count: counts.queued, icon: Hourglass },
     { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
     { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
-    // Where attaching a video happens. A mission leaves the queue the moment it
-    // is marked complete, which is exactly when the operator goes off to upload
-    // the recording, so without a way back to it the attach action would be
-    // unreachable. Count is what has loaded rather than what exists: this list
-    // is bounded, and a total would need a billed aggregate query for a number
-    // nobody acts on.
-    { key: 'done', label: 'Done', count: done?.length ?? 0, icon: CheckCircle2 },
+    /**
+     * Where attaching a video happens. A mission leaves the queue the moment
+     * it is marked complete, which is exactly when the operator goes off to
+     * upload the recording, so without a way back to it the attach action
+     * would be unreachable.
+     *
+     * NO COUNT UNTIL IT HAS LOADED. This list is only subscribed to when it is
+     * selected or searched, so before then there is nothing to count - and it
+     * used to render that as "Done 0", which does not read as "not loaded
+     * yet", it reads as "nothing has ever finished here". At a yard with 25
+     * finished missions sitting behind the chip, next to "All in queue 16",
+     * that is how a console convinces an operator the yard has 16 missions in
+     * total. Once loaded the count is still what loaded rather than what
+     * exists, because a true total would need a billed aggregate query for a
+     * number nobody acts on.
+     */
+    { key: 'done', label: 'Done', count: done?.length ?? null, icon: CheckCircle2 },
   ]);
 
   const source = useMemo(
@@ -424,11 +434,17 @@ function YardQueue({
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
-          {activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
+          {searching ? 'Search' : activeFilter === 'done' ? 'Finished' : 'Queue'}{' '}
           <span className="font-sans text-xs font-medium text-muted-foreground">
-            ({visible.length === source.length
-              ? `${source.length} at ${yardName}`
-              : `${visible.length} of ${source.length} at ${yardName}`})
+            {/* While searching, "of 16" would be a lie: the pool is the queue
+                AND the settled list, and the match usually comes from outside
+                whichever chip is selected. So a search reports what it found,
+                not a fraction of a list it did not search. */}
+            ({searching
+              ? `${visible.length} found at ${yardName}`
+              : visible.length === source.length
+                ? `${source.length} at ${yardName}`
+                : `${visible.length} of ${source.length} at ${yardName}`})
           </span>
         </h2>
       </div>

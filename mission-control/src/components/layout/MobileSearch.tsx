@@ -106,9 +106,11 @@ export function MobileSearch() {
               <span className="relative z-10 inline-flex items-center gap-1.5">
                 <Icon className="h-3.5 w-3.5" />
                 {f.label}
-                <span className={active ? 'text-primary-foreground/75' : 'text-muted-foreground/70'}>
-                  {f.count}
-                </span>
+                {f.count !== null && (
+                  <span className={active ? 'text-primary-foreground/75' : 'text-muted-foreground/70'}>
+                    {f.count}
+                  </span>
+                )}
               </span>
             </button>
           );

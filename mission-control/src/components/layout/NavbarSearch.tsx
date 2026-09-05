@@ -85,7 +85,7 @@ export function NavbarSearch() {
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
               aria-pressed={active}
-              title={`${f.label} (${f.count})`}
+              title={f.count === null ? f.label : `${f.label} (${f.count})`}
               className={`relative isolate inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full transition-colors ${
                 active
                   ? 'text-primary-foreground'
@@ -104,7 +104,9 @@ export function NavbarSearch() {
               </span>
               {/* The icon alone is not a label, and the count is not rendered
                   anywhere visible - both only exist in the tooltip otherwise. */}
-              <span className="sr-only">{`${f.label}, ${f.count} missions`}</span>
+              <span className="sr-only">
+                {f.count === null ? f.label : `${f.label}, ${f.count} missions`}
+              </span>
             </button>
           );
         })}
