@@ -11,10 +11,12 @@
  * Steer Left and Steer Right already took degrees. Turning on the spot was the
  * one motion that did not, and the one a square needs.
  *
- * The 32.9 above is history, not the current rate. It came from a model that
- * ran a spin through the steered-wheel maths, which also slid the rover 9.5cm
- * sideways while it turned - the real rover pivots and stays put. Spinning is
- * modelled as a pivot now and the rate is 38.4 degrees per second at speed 60.
+ * The 32.9 above is history. It came from a model that ran a spin through the
+ * steered-wheel maths, which also slid the rover 9.5cm sideways while it
+ * turned. The real rover pivots and stays put, which was confirmed by watching
+ * it. Spinning is modelled as a pivot now, and the rate is 45.3 degrees per
+ * second at speed 60 - measured on the rover over six runs, not derived.
+ *
  * Everything the bug report was about is unchanged: the argument holds at any
  * rate, because no rate divides 90 into a whole number of tenths of a second.
  */
@@ -85,12 +87,13 @@ describe('driving a square', () => {
 describe('the turn rate', () => {
   it('is measured from the physics, not written down twice', () => {
     // If the wheelbase or full speed ever changes, this follows automatically.
-    // The band moved when spinning stopped being modelled as a tight arc and
-    // became a pivot: 32.9 degrees per second became 38.4. A band rather than
-    // an equality, because restating the exact figure here is the duplication
-    // the derivation exists to avoid.
-    expect(spinDegreesPerSecond(60)).toBeGreaterThan(36);
-    expect(spinDegreesPerSecond(60)).toBeLessThan(41);
+    // The band has moved twice: 32.9 when a spin was modelled as a tight arc,
+    // 38.4 once it became a pivot, and 45.3 once that pivot was calibrated
+    // against the rover itself. A band rather than an equality, because
+    // restating the exact figure here is the duplication the derivation and
+    // the calibration constant exist to avoid.
+    expect(spinDegreesPerSecond(60)).toBeGreaterThan(43);
+    expect(spinDegreesPerSecond(60)).toBeLessThan(48);
   });
 
   it('is proportional to how fast the wheels are driven', () => {

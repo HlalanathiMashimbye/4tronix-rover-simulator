@@ -21,26 +21,31 @@ const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
  */
 const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(VEHICLE_WIDTH_CM / 2, DISTANCE_BETWEEN_WHEEL_PAIRS_CM / 2);
 /**
- * How much of the wheel speed becomes rotation when spinning on the spot.
+ * Turns the geometric spin rate into the one the rover actually achieves.
  *
- * 1 is a perfect pivot: every wheel rolling exactly along the circle it traces
- * about the centre. The real rover is not that. Its pivot servos put the
- * wheels at 50 degrees, while the angle actually tangent to that circle is
- * 26.6, so the tyres scrub sideways and some of the wheel speed is spent
- * fighting the ground instead of turning the body.
+ * MEASURED ON THE ROVER, 5 September 2026, on a high-grip floor at speed 60.
+ * Six runs, 108 seconds of spinning in total:
  *
- * MEASURE THIS ON THE ROVER, it has never been measured. Spin at speed 60 for
- * five seconds, count the degrees turned, and set this to
+ *     4.7s ->  210 deg     18.7s ->  810 deg     25.0s -> 1110 deg
+ *     9.4s ->  435 deg      9.4s ->  440 deg     41.0s -> 1890 deg
+ *
+ * Pooled: 45.29 deg/s, against 38.44 from the geometry below. The rover turns
+ * FASTER than a perfect pivot, not slower, which is why this is a calibration
+ * and not the "scrub factor" it was first written as - scrub can only lose
+ * rotation. The wheels sit at 50 degrees where the angle tangent to the circle
+ * they trace is 26.6, so the rover pivots about a point 7.6cm from each wheel
+ * rather than the 8.9cm half-diagonal, and a smaller circle turns faster.
+ *
+ * Confirmed by prediction rather than by fitting: at this value a 90 degree
+ * turn sleeps 1.987s, and four of them brought the rover back to its starting
+ * heading. At the old value they overshot by 60 to 90 degrees.
+ *
+ * IT IS ONE SURFACE AND ONE BATTERY STATE. Grip changes how much the tyres
+ * slide, so a smooth floor will not give the same number. To recalibrate, spin
+ * at speed 60 for a known time, count the degrees turned, and set this to
  * (measured degrees per second) / 38.44.
- *
- * It stays at 1 until then, which is the safe direction to be wrong: this
- * number decides the time.sleep() that spinSecondsForDegrees bakes into the
- * learner's Python, and that sleep is what the hardware obeys. Overstating the
- * turn rate makes the generated sleep too short, so a real 90 degree corner
- * falls short rather than swinging past it, which is the better way to miss in
- * a room with walls and children in it.
  */
-export const SPIN_SCRUB_FACTOR = 1;
+export const SPIN_RATE_CALIBRATION = 1.178;
 /** The wheel angle a steer block uses when the caller does not name one. */
 export const DEFAULT_STEER_DEGREES = 30;
 const SERVO_FL = 9;
@@ -190,7 +195,7 @@ export class RoverPhysics {
         // this fast - rather than being a number written down somewhere.
         if (this.isSpinning()) {
             const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
-            const radiansPerSecond = (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_SCRUB_FACTOR;
+            const radiansPerSecond = (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_RATE_CALIBRATION;
             this.state.heading += (radiansPerSecond * dt * 180) / Math.PI;
             // It cannot reach a wall without moving, and it did not move.
             this.state.hitWall = false;
