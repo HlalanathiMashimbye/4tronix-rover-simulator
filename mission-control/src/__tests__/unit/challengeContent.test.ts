@@ -25,6 +25,7 @@ import {
   type ChallengeEvalContext,
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { parseRoverCode } from '@/lib/parseRoverCode';
+import { simulateCommands } from '@/lib/simulateCommands';
 
 /**
  * Pull the Python out of a step's prose.
@@ -115,6 +116,36 @@ describe('the Level 3 square teaches code that its own checks accept', () => {
     // Four sides and four corners, i.e. the loop really expanded.
     expect(forwards).toHaveLength(4);
     expect(spins).toHaveLength(4);
+  });
+
+  it('the corner sleep it teaches actually turns a quarter circle', () => {
+    /**
+     * THIS IS THE TEST THAT MATTERS. The step hands the learner a number of
+     * seconds to spin for, and how far that turns depends entirely on the
+     * simulator's spin calibration. When 5615faf recalibrated it against the
+     * real rover, the sleep this challenge taught silently became a 122-degree
+     * corner - the rover would have drawn a spiral while the step insisted the
+     * shape should close. Nothing else in the suite would have noticed, because
+     * every other check only asks WHETHER the rover spun, never how far.
+     *
+     * So this simulates the taught program and asks the shape itself.
+     */
+    const step = square.steps.find((s) => s.id === 'repeat-four-times');
+    if (!step) throw new Error('repeat-four-times step is gone');
+
+    const points = simulateCommands(parseRoverCode(codeFromInstructions(step.instructions)));
+    const start = points[0];
+    const end = points[points.length - 1];
+
+    // Four corners of a square is one full revolution, within the slack of a
+    // learner-facing whole number of seconds.
+    expect(Math.abs(end.heading - start.heading)).toBeGreaterThan(330);
+    expect(Math.abs(end.heading - start.heading)).toBeLessThan(390);
+
+    // And it comes back to roughly where it started, which a spiral does not.
+    const drift = Math.hypot(end.x - start.x, end.y - start.y);
+    const sideLength = Math.max(...points.map((p) => Math.hypot(p.x - start.x, p.y - start.y)));
+    expect(drift).toBeLessThan(sideLength * 0.5);
   });
 
   it('a straight line fails the loop step, so that check can actually fail', () => {

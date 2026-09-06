@@ -191,10 +191,10 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'turn-a-corner',
         title: 'Turn a corner',
         instructions:
-          'Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(2.7)\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust 2.7 up or down until the corner looks square.',
+          'Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(2)\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust 2 up or down until the corner looks square.',
         hints: [
           'Too long and the rover over-turns; too short and the corner is shallow. Change one number, Run, look.',
-          'A quarter turn at speed 60 takes a little under 3 seconds.',
+          'A quarter turn at speed 60 takes about 2 seconds - see spinSecondsForDegrees in lib/rover-physics.ts.',
         ],
         checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
       },
@@ -202,7 +202,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'repeat-four-times',
         title: 'Four sides, four corners',
         instructions:
-          'A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(2.7)\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.',
+          'A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(2)\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.',
         hints: [
           'This is the same Repeat block from Level 2, written out by hand.',
           'If the shape does not close, your corner sleep is off - tune it and Run again.',
