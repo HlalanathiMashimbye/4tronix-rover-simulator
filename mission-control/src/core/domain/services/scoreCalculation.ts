@@ -7,16 +7,21 @@
  * Scoring model (learning-focused):
  * - Base: Points per completed challenge (varies by challenge)
  * - Each challenge is counted once per learner (idempotent)
+ *
+ * Challenge point values are defined here as the source of truth.
+ * When you add a new challenge, register its points here.
  */
 
-export const CHALLENGE_POINTS: Record<string, number> = {
-  'platform-orientation': 100,
+const CHALLENGE_POINTS: Record<string, number> = {
+  'platform-orientation': 50,
+  'explore-the-platform': 75,
+  'first-mission': 100,
   'basic-movement': 150,
   'loop-structures': 200,
-  'sensor-operations': 250,
+  'draw-a-square': 250,
 };
 
-const DEFAULT_CHALLENGE_POINTS = 100;
+const DEFAULT_CHALLENGE_POINTS = 50;
 
 /**
  * Get points for a specific challenge

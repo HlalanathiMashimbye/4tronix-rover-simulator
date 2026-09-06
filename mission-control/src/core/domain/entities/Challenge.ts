@@ -90,6 +90,7 @@ export interface Challenge {
   title: string;
   summary: string;
   workspaceKind: ChallengeWorkspaceKind;
+  scorePoints: number;
   steps: ChallengeStep[];
 }
 

@@ -25,6 +25,11 @@
  * meant to type should look like code - and it is also what lets
  * __tests__/unit/challengeContent.test.ts lift the program back out and prove
  * the step's own checks accept what the step teaches.
+ *
+ * LEADERBOARD SCORING: scorePoints must match the values in
+ * core/domain/services/scoreCalculation.ts CHALLENGE_POINTS to ensure
+ * leaderboard scoring is consistent. These are registered once per platform
+ * and do not change per-learner.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -65,6 +70,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Find Your Way Around',
     summary: 'Search missions, filter by status, and browse the full feed.',
     workspaceKind: 'embedded-platform',
+    scorePoints: 50,
     steps: [
       {
         id: 'filter-pending',
@@ -111,6 +117,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Explore the Platform',
     summary: 'There is more here than the mission feed - go and find it.',
     workspaceKind: 'embedded-platform',
+    scorePoints: 75,
     steps: [
       {
         id: 'visit-history',
@@ -140,6 +147,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Create Your First Mission',
     summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
     workspaceKind: 'embedded-platform',
+    scorePoints: 100,
     steps: [
       {
         id: 'open-create-mission',
@@ -171,6 +179,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Basic Rover Movement',
     summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
+    scorePoints: 150,
     steps: [
       {
         id: 'drive-forward',
@@ -201,6 +210,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Loop Structures & Repeat Logic',
     summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
+    scorePoints: 200,
     steps: [
       {
         id: 'add-repeat',
@@ -248,6 +258,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Draw a Square',
     summary: 'Type real Python that drives the rover around a square - one side, one corner, four times.',
     workspaceKind: 'monaco-sim',
+    scorePoints: 250,
     steps: [
       {
         id: 'drive-one-side',
