@@ -32,9 +32,14 @@ import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/C
 export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 1,
-    title: 'Site Navigation',
-    description: 'Learn how to find missions on the platform.',
-    challengeIds: ['platform-orientation'],
+    title: 'Getting Started',
+    description: 'Find your way around, see what else is here, and send your first mission.',
+    // Three small challenges rather than one. A learner who finishes the feed
+    // tour has not seen History, the leaderboard, or Create Mission - the
+    // level used to declare the platform learnt on the strength of a search
+    // box - and a single long challenge pays out once, at the end, which is
+    // where people give up.
+    challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission'],
   },
   {
     id: 2,
@@ -57,7 +62,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
   'platform-orientation': {
     id: 'platform-orientation',
     levelId: 1,
-    title: 'Platform Orientation',
+    title: 'Find Your Way Around',
     summary: 'Search missions, filter by status, and browse the full feed.',
     workspaceKind: 'embedded-platform',
     steps: [
@@ -88,6 +93,74 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
           'The button is deliberately hidden while a search or filter is active, so you never see "load more" on a list that is already the whole result.',
         ],
         checks: [{ kind: 'load-more' }],
+      },
+    ],
+  },
+
+  /**
+   * Everything this challenge asks for happens on ANOTHER page, so its checks
+   * read platformMilestones rather than anything live in the workspace. A
+   * learner leaves, looks, and comes back to find the step already ticked -
+   * which is also why the steps are few and independent: returning remounts
+   * the workspace at step one, and a long sequence would be tedious to walk
+   * back through. See ChallengeWorkspace's milestone read.
+   */
+  'explore-the-platform': {
+    id: 'explore-the-platform',
+    levelId: 1,
+    title: 'Explore the Platform',
+    summary: 'There is more here than the mission feed - go and find it.',
+    workspaceKind: 'embedded-platform',
+    steps: [
+      {
+        id: 'visit-history',
+        title: 'Find your mission history',
+        instructions:
+          'Every mission you send is kept, with the video of your code driving the rover. Open History from the navigation bar to see yours, then come back here - this step ticks itself once you have been.',
+        hints: [
+          'On a phone the navigation lives in the bar along the bottom of the screen.',
+          'It will be empty if you have not sent a mission yet. That is the next challenge.',
+        ],
+        checks: [{ kind: 'route-visited', path: '/history' }],
+      },
+      {
+        id: 'visit-leaderboard',
+        title: 'Check the leaderboard',
+        instructions:
+          'The leaderboard shows how other people are doing on the challenges. Open Leaderboard from the navigation bar, then come back. Joining it is your choice - there is a setting on that page, and you are not on it unless you say so.',
+        hints: ['Nothing about you appears there until you opt in on that page.'],
+        checks: [{ kind: 'route-visited', path: '/leaderboard' }],
+      },
+    ],
+  },
+
+  'first-mission': {
+    id: 'first-mission',
+    levelId: 1,
+    title: 'Create Your First Mission',
+    summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
+    workspaceKind: 'embedded-platform',
+    steps: [
+      {
+        id: 'open-create-mission',
+        title: 'Open Create Mission',
+        instructions:
+          'Open Create Mission from the navigation bar. Your mission already has a name - something like "Jolly Crater Rover" - picked for you from a fixed list of words. You cannot type your own, and there is a button to roll a different one if you do not like it. Have a look, then come back.',
+        hints: [
+          'Names come from a word list rather than a text box so that nothing a stranger typed can appear on a page other children read.',
+        ],
+        checks: [{ kind: 'route-visited', path: '/mission' }],
+      },
+      {
+        id: 'send-a-mission',
+        title: 'Send it to the queue',
+        instructions:
+          'Now write a short mission - a couple of movement blocks is plenty - press Run to watch it in the simulator, then send it to the queue. Your work stays in the editor if you wander off and come back, so you cannot lose it by accident. After you send it you will be asked for an email address: that is optional, and it is how you get told when a real rover has run your code and the video is ready.',
+        hints: [
+          'The send button only wakes up once you have simulated the code you are about to send.',
+          'No email means no notification, not a rejected mission - you would just check History yourself.',
+        ],
+        checks: [{ kind: 'mission-created' }],
       },
     ],
   },

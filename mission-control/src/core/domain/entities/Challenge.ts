@@ -12,6 +12,8 @@ export type ChallengeLevelId = 1 | 2 | 3;
 
 export type ChallengeId =
   | 'platform-orientation'
+  | 'explore-the-platform'
+  | 'first-mission'
   | 'basic-movement'
   | 'loop-structures'
   | 'draw-a-square';
@@ -31,6 +33,22 @@ export type ChallengeCheckSpec =
     }
   | { kind: 'search-filter'; filterKey: string }
   | { kind: 'load-more' }
+  | {
+      /**
+       * The learner has opened this page at some point, e.g. '/history'.
+       *
+       * Unlike every other kind here, what this checks happened on a DIFFERENT
+       * page - the challenge workspace was not even mounted at the time. See
+       * infrastructure/browser/platformMilestones.ts for where the evidence
+       * survives the navigation.
+       */
+      kind: 'route-visited';
+      path: string;
+    }
+  | {
+      /** The learner has successfully sent a mission to the queue. */
+      kind: 'mission-created';
+    }
   | {
       kind: 'trajectory-outcome';
       outcome: 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';

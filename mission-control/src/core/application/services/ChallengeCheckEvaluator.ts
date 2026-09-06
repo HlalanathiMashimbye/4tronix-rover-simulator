@@ -38,6 +38,15 @@ export interface ChallengeEvalContext {
   trajectoryOutcomes?: TrajectoryOutcome[];
   /** The current Blockly editor's generated Python, for code-contains checks. */
   generatedCode?: string;
+  /**
+   * Pages the learner has opened, and whether they have sent a mission.
+   *
+   * Supplied by the workspace from platformMilestones rather than read here:
+   * this service stays framework- and browser-agnostic, so it can be tested
+   * without a DOM and reasoned about without knowing where the facts are kept.
+   */
+  visitedRoutes?: string[];
+  missionCreated?: boolean;
 }
 
 export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalContext): boolean {
@@ -56,6 +65,12 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
 
     case 'trajectory-outcome':
       return context.trajectoryOutcomes?.includes(spec.outcome) ?? false;
+
+    case 'route-visited':
+      return context.visitedRoutes?.includes(spec.path) ?? false;
+
+    case 'mission-created':
+      return context.missionCreated === true;
 
     case 'code-contains':
       return context.generatedCode?.includes(spec.pattern) ?? false;

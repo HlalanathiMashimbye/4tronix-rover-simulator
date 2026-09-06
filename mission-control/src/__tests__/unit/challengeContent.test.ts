@@ -25,6 +25,8 @@ import {
   type ChallengeEvalContext,
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { parseRoverCode } from '@/lib/parseRoverCode';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { simulateCommands } from '@/lib/simulateCommands';
 
 /**
@@ -84,6 +86,49 @@ describe('challenge content integrity', () => {
     expect(mentions.length).toBeGreaterThan(0);
     for (const text of mentions) {
       expect(text).toMatch(/Perseverance/);
+    }
+  });
+});
+
+describe('Level 1 covers the platform, not just the feed', () => {
+  const level1 = CHALLENGE_LEVELS.find((l) => l.id === 1);
+  if (!level1) throw new Error('Level 1 is gone');
+
+  it('is split into more than one challenge', () => {
+    /**
+     * It used to be a single challenge whose three steps all happened on the
+     * mission feed - a learner could finish "orientation" having never opened
+     * History, the leaderboard, or Create Mission, and got one payout at the
+     * very end for the whole platform.
+     */
+    expect(level1.challengeIds.length).toBeGreaterThan(1);
+  });
+
+  it('asks the learner to send a mission before Level 2 unlocks', () => {
+    const checks = level1.challengeIds.flatMap((id) => CHALLENGES[id].steps).flatMap((s) => s.checks);
+    expect(checks.some((c) => c.kind === 'mission-created')).toBe(true);
+  });
+
+  it('every page a challenge names actually exists', () => {
+    /**
+     * THE SILENT ONE. A 'route-visited' check is a string, and nothing else
+     * connects it to a real page. Point it at '/histories' and the step can
+     * never be completed - no error, no warning, just a tick that refuses to
+     * appear and a learner who cannot get past it. So the paths are resolved
+     * against the App Router directory that has to back them.
+     */
+    const routeChecks = Object.values(CHALLENGES)
+      .flatMap((c) => c.steps)
+      .flatMap((s) => s.checks)
+      .filter((c) => c.kind === 'route-visited');
+
+    expect(routeChecks.length).toBeGreaterThan(0);
+
+    const appDir = join(__dirname, '..', '..', 'app');
+    for (const check of routeChecks) {
+      const segment = (check as { path: string }).path.replace(/^\//, '');
+      expect({ path: check, exists: existsSync(join(appDir, segment)) })
+        .toEqual({ path: check, exists: true });
     }
   });
 });

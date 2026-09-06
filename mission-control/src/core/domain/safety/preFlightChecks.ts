@@ -37,7 +37,7 @@ export type PreFlightCheckId =
  * One rule and whether this mission meets it. No wording.
  *
  * The checklist's labels and hints live in PreFlightChecklist, next to the
- * markup that shows them, which is where ChallengeChecklistPanel already keeps
+ * markup that shows them, which is where ChallengeInstructionsPanel already keeps
  * the same kind of copy ("presentation only, not domain logic"). Wording them
  * here would mean a safety module changed whenever a sentence was reworded, and
  * would leave two houses for the same decision.
