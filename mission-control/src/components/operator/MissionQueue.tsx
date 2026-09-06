@@ -9,8 +9,10 @@ import {
   Copy,
   Hourglass,
   Loader2,
+  Play,
   Radio,
   Rocket,
+  SatelliteDish,
   Layers,
   CheckCircle2,
 } from 'lucide-react';
@@ -28,6 +30,31 @@ import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useSearch } from '@/contexts/SearchContext';
+import { missionClipboardText } from '@/lib/missionClipboard';
+import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
+
+/**
+ * Where the operator uploads the run video.
+ *
+ * Not configurable, unlike the yard console: Studio is the same address for
+ * everyone, and the channel it opens is whichever the operator is signed into.
+ * The run station links here too, at the end of its upload step - this is the
+ * same door from the other side, for an operator who is in Mission Control
+ * when they realise they still have a video to put up.
+ */
+const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+
+/**
+ * YouTube's red, one shade off the brand value.
+ *
+ * #FF0000 against white text is 4.0:1, under the 4.5:1 AA needs at this size.
+ * #E60000 is 4.8:1 and indistinguishable from it at a glance, so the button
+ * reads as YouTube without being unreadable to anyone who needs the contrast.
+ * A literal rather than a token on purpose: this is a third party's brand
+ * colour, not a semantic role in our palette, and it must not start meaning
+ * "danger" to the next person who reaches for a red.
+ */
+const YOUTUBE_RED = '#E60000';
 
 /**
  * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
@@ -104,12 +131,20 @@ function YardQueue({
    */
   const [mode, setMode] = useState<ConsoleMode>('manual');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Read in an effect, not in useState's initialiser: this component renders
+  // on the server too, where localStorage does not exist.
+  const [consoleUrl, setConsoleUrl] = useState<string>('');
+  const [editingConsole, setEditingConsole] = useState(false);
+  useEffect(() => setConsoleUrl(readConsoleUrl()), []);
   const [done, setDone] = useState<QueueMission[] | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   async function copyCode(mission: QueueMission) {
+    // Shared with the mission page, so both Copy buttons put the same thing on
+    // the clipboard and the run station gets the same paste either way.
+    const envelope = missionClipboardText(mission);
     try {
-      await navigator.clipboard.writeText(mission.code);
+      await navigator.clipboard.writeText(envelope);
       setCopiedId(mission.id);
       // Long enough to read, short enough that the next copy is unambiguous.
       window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
@@ -117,7 +152,7 @@ function YardQueue({
       // Clipboard access can be refused (insecure origin, denied permission).
       // Say so rather than showing "Copied" over an empty clipboard, which
       // would send an operator to paste nothing into the yard.
-      window.prompt('Copy this, then paste it into the yard code editor:', mission.code);
+      window.prompt('Copy this, then paste it into the yard code editor:', envelope);
     }
   }
 
@@ -292,6 +327,71 @@ function YardQueue({
           {flash}
         </p>
       )}
+
+      {/* The console runs on the satellite in the room, on a network this app
+          cannot reach, so the operator was expected to remember an address and
+          type it into a second tab. The button is the door; the address is
+          theirs and lives in their browser. */}
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        {editingConsole ? (
+          <>
+            <input
+              type="text"
+              defaultValue={consoleUrl}
+              aria-label="Yard console address"
+              placeholder="mro.local:3001/run/"
+              className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-xs"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  setConsoleUrl(writeConsoleUrl(e.currentTarget.value));
+                  setEditingConsole(false);
+                }
+                if (e.key === 'Escape') setEditingConsole(false);
+              }}
+            />
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingConsole(false)}
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <>
+            <a
+              href={consoleUrl || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-md bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
+            >
+              <SatelliteDish className="h-3.5 w-3.5" aria-hidden="true" />
+              Open operator console
+            </a>
+            <button
+              type="button"
+              className="rounded-md px-1.5 py-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+              onClick={() => setEditingConsole(true)}
+            >
+              Change
+            </button>
+            <span className="truncate font-mono text-[11px] text-muted-foreground">{consoleUrl}</span>
+          </>
+        )}
+
+        {/* Outside the branch above, so editing the console address does not
+            make the other door disappear. */}
+        <a
+          href={YOUTUBE_STUDIO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ backgroundColor: YOUTUBE_RED }}
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
+        >
+          <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+          YouTube Studio
+        </a>
+      </div>
 
       <div className="flex items-center gap-2">
         <Radio className="h-4 w-4 animate-pulse text-primary" />

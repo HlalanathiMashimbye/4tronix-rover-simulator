@@ -1,0 +1,33 @@
+[Unit]
+Description=4tronix M.A.R.S. Rover queue server, simulated
+After=network.target
+
+# The same server the rover runs, with the fake driver, on the satellite.
+#
+# It exists so the yard console has something to talk to when the rover is
+# flat, disassembled, or in somebody's bag. The run station, the queue, the
+# monitor and the recording path all behave exactly as they do with hardware,
+# because it is the same code with one object swapped underneath it.
+#
+# On localhost on purpose: this is the one rover address that never changes,
+# which is why Settings can offer it as a button rather than something to type.
+# It is also why it is safe to leave installed - nothing outside the satellite
+# can reach it, and the console only uses it when somebody switches to it.
+#
+# Install on the satellite:
+#   sudo cp rover-sim.service /etc/systemd/system/
+#   sudo systemctl enable --now rover-sim
+
+[Service]
+Type=simple
+User=mars
+WorkingDirectory=/home/mars/4tronix-rover-simulator/yard/rover
+# Forced, not detected. The satellite is a Pi and may well have I2C enabled,
+# and detection would then reach for hardware that is not attached to it.
+Environment=ROVER_DRIVER=fake
+ExecStart=/home/mars/rover-env/bin/python rover_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

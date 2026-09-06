@@ -15,6 +15,7 @@ import { SplitPane } from '@/components/ui/SplitPane';
 import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
+import { missionClipboardText } from '@/lib/missionClipboard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
@@ -87,7 +88,7 @@ export default function MissionVideoClient({
 
   if (loading) {
     return (
-      <main className="flex h-[calc(100vh-64px)] items-center justify-center">
+      <main className="flex h-[calc(100dvh-var(--app-chrome))] items-center justify-center">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
       </main>
     );
@@ -95,7 +96,7 @@ export default function MissionVideoClient({
 
   if (error || !mission) {
     return (
-      <main className="mx-auto flex h-[calc(100vh-64px)] max-w-md flex-col items-center justify-center px-6 text-center">
+      <main className="mx-auto flex h-[calc(100dvh-var(--app-chrome))] max-w-md flex-col items-center justify-center px-6 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
           <Rocket className="h-8 w-8 text-primary" />
         </div>
@@ -124,8 +125,11 @@ export default function MissionVideoClient({
   const showBlocks = hasBlocks && codeView === 'blocks';
 
   const copyCode = async () => {
+    // The same payload the operator queue copies. This button used to write
+    // bare mission.code, which pasted into the run station as an anonymous
+    // block of Python: no name, no id, and so no run id for the recording.
     try {
-      await navigator.clipboard.writeText(mission.code);
+      await navigator.clipboard.writeText(missionClipboardText(mission));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -139,7 +143,7 @@ export default function MissionVideoClient({
     // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
     // blocks and the code were rendered, just unreachable, with no scrollbar to
     // hint that anything was below.
-    <main className="px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
+    <main className="px-3 py-2 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -268,7 +272,7 @@ export default function MissionVideoClient({
                   onClick={copyCode}
                   className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  {copied ? 'Copied' : 'Copy Python'}
+                  {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
               {showBlocks ? (

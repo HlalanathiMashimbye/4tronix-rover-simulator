@@ -12,6 +12,13 @@
  * in the light block is inherited by omission from the dark one.
  */
 :root {
+  /* How much fixed chrome sits above the page: the navbar, plus the
+     environment banner in dev and staging. Measured and republished by
+     ChromeHeight; this default is the production case (navbar only), so a page
+     is correctly sized before the first measurement lands and stays correct if
+     JavaScript never runs at all. */
+  --app-chrome: 64px;
+
   /* 0.9rem came with the Paper & Ink palette. It lives here rather than in the
      light block because radius is not a colour-scheme concern, so this
      tightens the corners in BOTH themes by 1.6px at the base step. */
@@ -622,8 +629,22 @@
     max-height: none;
   }
 
-  .workspaceSplitGrid > * {
+  /* The 70vh floor is for Create Mission, where both stacked panels are things
+     you work inside - Blockly and the simulator - and neither is usable at
+     half a screen. The mission VIEW is the fixed variant, and its panels are a
+     16:9 player, a stats row and one line of feedback: about 300px of content
+     that the floor stretched to 568px, putting a screenful of empty page
+     between the operator's comment and the code. A floor that guarantees a
+     minimum is wrong on a panel that already knows its own height. */
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
     min-height: 70vh;
+  }
+
+  /* The code panel still needs a floor, just a smaller one: it is flex-1
+     inside an auto-height row, so a two-line mission would otherwise collapse
+     it to two lines. */
+  .workspaceSplitGrid--fixed > * + * {
+    min-height: 45vh;
   }
 }
 

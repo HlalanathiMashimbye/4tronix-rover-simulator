@@ -14,7 +14,6 @@ import {
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
-import { ChallengeChecklistPanel } from './ChallengeChecklistPanel';
 
 interface ChallengeWorkspaceProps {
   challenge: Challenge;
@@ -31,8 +30,8 @@ interface FinishResult {
 }
 
 /**
- * The 3-panel challenge workspace: instructions (left), the real platform,
- * Blockly canvas, or Monaco editor (center), and a live checklist (right).
+ * 2-panel challenge workspace below instructions: the real platform,
+ * Blockly canvas, or Monaco editor (left), and the simulator (right).
  * Owns step navigation and re-evaluates the current step's checks every
  * render from whatever's live - SearchContext for an embedded-platform
  * challenge, the editor's generated code and last simulated run for a
@@ -111,38 +110,36 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
+    <div className="relative flex min-h-0 flex-1 flex-col gap-2">
       <ChallengeInstructionsPanel
         step={step}
         stepIndex={stepIndex}
         totalSteps={challenge.steps.length}
         canGoBack={stepIndex > 0}
         canGoNext={allStepChecksPass}
-        onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
-        onNext={() => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1))}
-      />
-
-      <div className="min-h-0 flex-1">
-        <ChallengeCenterPanel
-          challenge={challenge}
-          onLoadMore={() => setLoadMoreCalled(true)}
-          onFeedState={({ hasMore }) => setFeedHasMore(hasMore)}
-          onCodeChange={setGeneratedCode}
-          onBlocklyStateChange={setBlocklyState}
-          onTrajectoryOutcomes={setTrajectoryOutcomes}
-        />
-      </div>
-
-      <ChallengeChecklistPanel
-        checks={step.checks}
-        results={results}
-        hints={step.hints}
         isFinalStep={isFinalStep}
         allStepChecksPass={allStepChecksPass}
+        checks={step.checks}
+        results={results}
         finishLabel={FINISH_LABEL[challenge.workspaceKind]}
+        onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
+        onNext={() => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1))}
         onFinish={handleFinish}
         finishing={finishing}
       />
+
+      <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
+        <div className="min-h-0 flex-1">
+          <ChallengeCenterPanel
+            challenge={challenge}
+            onLoadMore={() => setLoadMoreCalled(true)}
+            onFeedState={({ hasMore }) => setFeedHasMore(hasMore)}
+            onCodeChange={setGeneratedCode}
+            onBlocklyStateChange={setBlocklyState}
+            onTrajectoryOutcomes={setTrajectoryOutcomes}
+          />
+        </div>
+      </div>
 
       {/* Same plain-CSS mount/visible pattern as MissionSubmitBar's success
           banner (not motion's AnimatePresence - see that component for why:

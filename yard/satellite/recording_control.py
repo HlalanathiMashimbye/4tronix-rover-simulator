@@ -114,6 +114,39 @@ def is_ready(timeout=None):
         return False, f'readiness probe failed: {e}'
 
 
+def active_recordings():
+    """Mission ids currently being filmed at any yard.
+
+    For /api/status, so the run station can notice that the watcher stopped a
+    recording it started. Without it the page went on claiming to film after
+    the rover had finished and the file had been closed.
+    """
+    with _lock:
+        return sorted({mission_id for mission_id, _yard in _paths})
+
+
+def is_recording(mission_id, yard_id):
+    """Whether frames are being persisted for this key right now.
+
+    The run model answers this for a queued mission, via runs_mirror's
+    recording_status. A run pasted into /run/ has no row there - it never
+    touched Firestore, which is the point of that page - so the only record
+    that a recording is open is this module's own table.
+    """
+    with _lock:
+        return (mission_id, yard_id) in _paths
+
+
+def active_paths():
+    """Absolute paths of files currently being written.
+
+    For recording_cleanup: a file in this set must never be deleted, even
+    if it matches every other cleanup rule.
+    """
+    with _lock:
+        return set(_paths.values())
+
+
 def start_recording(mission_id, yard_id):
     """(bool, detail). Begin persisting frames for this run.
 
@@ -129,7 +162,14 @@ def start_recording(mission_id, yard_id):
         return False, f'could not create the recording directory: {e}'
 
     key = (mission_id, yard_id)
-    path = os.path.join(_recording_dir(), f'{mission_id}__{yard_id}.mp4')
+    # The run's own stamp, so a second run of the same mission does not land on
+    # the first one's file. It used to be <mission>__<yard>.mp4 and nothing
+    # else, which meant re-running a mission silently destroyed the footage of
+    # the previous attempt - and re-running is the normal case, not the odd
+    # one: the rover gets stuck, someone nudges it, they go again. UTC and
+    # zero-padded so the names sort chronologically as plain text.
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    path = os.path.join(_recording_dir(), f'{mission_id}__{yard_id}__{stamp}.mp4')
 
     with _lock:
         _writers[key] = None
@@ -142,18 +182,17 @@ def start_recording(mission_id, yard_id):
 def stop_recording(mission_id, yard_id, keep):
     """(bool, detail). Stop this run's recording, keeping or discarding it.
 
-    Idempotent, and handles two different shapes of "stop":
-      - An actively-writing recording: close the writer, then keep or delete
-        the file.
-      - An already-stopped, currently-'kept' recording (no writer open - the
-        post-hoc discard used when an operator resolves a review as
-        'cancelled' or 'requeue'): keep=False deletes the file directly.
-    A run with nothing to do returns (True, 'not recording') rather than
-    raising, so every call site (watcher, stop, resolve) can call this
-    unconditionally.
-    """
-    from mission_store import get_run, set_run_recording_state
+    Idempotent: a key with nothing open returns (True, 'not recording') rather
+    than raising, so every call site can call it unconditionally.
 
+    This used to also write the run's recording_status into the Firestore
+    mirror, and to fall back to that mirror for the file path when no writer
+    was open - which is how an operator resolving a review as 'cancelled'
+    discarded a file after the fact. The mirror is gone with the sync, so the
+    only record that a recording exists is this module's own table and the
+    file on disk. A post-hoc discard is now just deleting the file, which the
+    caller can do by name.
+    """
     key = (mission_id, yard_id)
     with _lock:
         writer = _writers.pop(key, None)
@@ -166,25 +205,16 @@ def stop_recording(mission_id, yard_id, keep):
             logger.warning('Error closing the recording writer for %s/%s: %s', mission_id, yard_id, e)
 
     if path is None:
-        run = get_run(mission_id, yard_id)
-        recording_status = (run or {}).get('recording_status') or 'none'
-        path = (run or {}).get('recording_path')
-        if recording_status in ('none', 'discarded'):
-            return True, 'not recording'
-
-    now = _now_iso()
+        return True, 'not recording'
 
     if keep:
-        set_run_recording_state(mission_id, yard_id, 'kept', stopped_at=now)
         return True, path
 
-    if path and os.path.exists(path):
+    if os.path.exists(path):
         try:
             os.remove(path)
         except OSError as e:
             logger.warning('Could not delete the recording for %s/%s: %s', mission_id, yard_id, e)
-
-    set_run_recording_state(mission_id, yard_id, 'discarded', stopped_at=now)
     return True, path
 
 
