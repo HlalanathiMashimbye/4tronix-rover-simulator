@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Progressive Challenges content.
  *
  * Developer-authored, not learner-editable or Firestore-backed - the same
@@ -8,11 +8,23 @@
  * FirestoreChallengeProgressRepository).
  *
  * Level 2 is Blockly (workspaceKind: 'blockly-sim'); Level 3 is real Python in
- * Monaco (workspaceKind: 'monaco-sim'), not Blockly - the rover's Blockly
- * toolbox (lib/roverBlockly.ts) has no comparison or conditional blocks, and
- * its distance reporter block has nowhere to plug in, so "read the sensor and
- * decide" cannot be built out of blocks on this platform. Real Python has
- * if/else, so that is what Level 3 teaches with.
+ * Monaco (workspaceKind: 'monaco-sim'). Level 3 deliberately asks for a shape
+ * the learner has already traced with blocks, so the new thing is the typing,
+ * not the task.
+ *
+ * WHY PLACE NAMES ARE EXPLAINED HERE AND STANDARDS CODES ARE NOT.
+ * Challenges used to carry CAPS/CSTA codes, rendered as pills on the learner's
+ * instruction panel. They came out because nobody on the team can vouch for the
+ * mapping, and a curriculum claim a teacher can check is only worth making if
+ * it survives being checked. "Jezero Crater" got the opposite treatment - it
+ * stayed, with a sentence saying what it is, because an unexplained proper noun
+ * is a question a learner cannot answer, while a real place is a hook.
+ *
+ * Step instructions carry their code as their own \n-separated lines rather
+ * than inline in a sentence. That is a learner-facing choice - code you are
+ * meant to type should look like code - and it is also what lets
+ * __tests__/unit/challengeContent.test.ts lift the program back out and prove
+ * the step's own checks accept what the step teaches.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -20,21 +32,29 @@ import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/C
 export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 1,
-    title: 'Site Navigation',
-    description: 'Learn how to find missions on the platform.',
-    challengeIds: ['platform-orientation'],
+    title: 'Getting Started',
+    description: 'Find your way around, see what else is here, and send your first mission.',
+    // Three small challenges rather than one. A learner who finishes the feed
+    // tour has not seen History, the leaderboard, or Create Mission - the
+    // level used to declare the platform learnt on the strength of a search
+    // box - and a single long challenge pays out once, at the end, which is
+    // where people give up.
+    challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission'],
   },
   {
     id: 2,
     title: 'Blockly Rover Commands',
-    description: 'Build a rover mission out of blocks: Jezero Crater waypoint navigation.',
+    // Jezero is explained here, once, rather than repeated into each challenge
+    // summary below - the level is the smallest place that covers both of them.
+    description:
+      "Build rover missions out of blocks at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
     challengeIds: ['basic-movement', 'loop-structures'],
   },
   {
     id: 3,
-    title: 'Autonomous Hazard Avoidance',
-    description: 'Write real Python that reads the distance sensor and decides what to do.',
-    challengeIds: ['sensor-operations'],
+    title: 'Python Rover Commands',
+    description: 'Leave the blocks behind and type the same missions out as real Python.',
+    challengeIds: ['draw-a-square'],
   },
 ];
 
@@ -42,7 +62,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
   'platform-orientation': {
     id: 'platform-orientation',
     levelId: 1,
-    title: 'Platform Orientation',
+    title: 'Find Your Way Around',
     summary: 'Search missions, filter by status, and browse the full feed.',
     workspaceKind: 'embedded-platform',
     steps: [
@@ -77,18 +97,80 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
+  /**
+   * Everything this challenge asks for happens on ANOTHER page, so its checks
+   * read platformMilestones rather than anything live in the workspace. A
+   * learner leaves, looks, and comes back to find the step already ticked -
+   * which is also why the steps are few and independent: returning remounts
+   * the workspace at step one, and a long sequence would be tedious to walk
+   * back through. See ChallengeWorkspace's milestone read.
+   */
+  'explore-the-platform': {
+    id: 'explore-the-platform',
+    levelId: 1,
+    title: 'Explore the Platform',
+    summary: 'There is more here than the mission feed - go and find it.',
+    workspaceKind: 'embedded-platform',
+    steps: [
+      {
+        id: 'visit-history',
+        title: 'Find your mission history',
+        instructions:
+          'Every mission you send is kept, with the video of your code driving the rover. Open History from the navigation bar to see yours, then come back here - this step ticks itself once you have been.',
+        hints: [
+          'On a phone the navigation lives in the bar along the bottom of the screen.',
+          'It will be empty if you have not sent a mission yet. That is the next challenge.',
+        ],
+        checks: [{ kind: 'route-visited', path: '/history' }],
+      },
+      {
+        id: 'visit-leaderboard',
+        title: 'Check the leaderboard',
+        instructions:
+          'The leaderboard shows how other people are doing on the challenges. Open Leaderboard from the navigation bar, then come back. Joining it is your choice - there is a setting on that page, and you are not on it unless you say so.',
+        hints: ['Nothing about you appears there until you opt in on that page.'],
+        checks: [{ kind: 'route-visited', path: '/leaderboard' }],
+      },
+    ],
+  },
+
+  'first-mission': {
+    id: 'first-mission',
+    levelId: 1,
+    title: 'Create Your First Mission',
+    summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
+    workspaceKind: 'embedded-platform',
+    steps: [
+      {
+        id: 'open-create-mission',
+        title: 'Open Create Mission',
+        instructions:
+          'Open Create Mission from the navigation bar. Your mission already has a name - something like "Jolly Crater Rover" - picked for you from a fixed list of words. You cannot type your own, and there is a button to roll a different one if you do not like it. Have a look, then come back.',
+        hints: [
+          'Names come from a word list rather than a text box so that nothing a stranger typed can appear on a page other children read.',
+        ],
+        checks: [{ kind: 'route-visited', path: '/mission' }],
+      },
+      {
+        id: 'send-a-mission',
+        title: 'Send it to the queue',
+        instructions:
+          'Now write a short mission - a couple of movement blocks is plenty - press Run to watch it in the simulator, then send it to the queue. Your work stays in the editor if you wander off and come back, so you cannot lose it by accident. After you send it you will be asked for an email address: that is optional, and it is how you get told when a real rover has run your code and the video is ready.',
+        hints: [
+          'The send button only wakes up once you have simulated the code you are about to send.',
+          'No email means no notification, not a rejected mission - you would just check History yourself.',
+        ],
+        checks: [{ kind: 'mission-created' }],
+      },
+    ],
+  },
+
   'basic-movement': {
     id: 'basic-movement',
     levelId: 2,
     title: 'Basic Rover Movement',
-    summary: 'Navigate a waypoint at Jezero Crater: drive forward and turn using blocks.',
+    summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
-    standards: {
-      capsPhase: 'GET',
-      capsSubject: 'Coding & Robotics: directional commands and speed variables',
-      csta: ['1B-AP-08'],
-      nasaJplContext: 'Jezero Crater Waypoint Navigation: drive the rover to a marked survey point.',
-    },
     steps: [
       {
         id: 'drive-forward',
@@ -117,14 +199,8 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'loop-structures',
     levelId: 2,
     title: 'Loop Structures & Repeat Logic',
-    summary: 'Survey a grid at Jezero Crater using a Repeat block instead of stacking blocks by hand.',
+    summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
-    standards: {
-      capsPhase: 'GET',
-      capsSubject: 'Coding & Robotics: loop controls and repeating structures',
-      csta: ['2-AP-12'],
-      nasaJplContext: 'Jezero Crater Grid Surface Survey: repeat one movement pattern to cover an area.',
-    },
     steps: [
       {
         id: 'add-repeat',
@@ -153,45 +229,67 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
-  'sensor-operations': {
-    id: 'sensor-operations',
+  /**
+   * Level 3 is a square rather than the autonomous hazard-avoidance challenge
+   * that used to sit here. That one asked a learner to read the distance sensor
+   * and branch on it, which the rover cannot yet do and the simulator does not
+   * model - it scored them on a promise the platform could not keep. A square
+   * is the shape Level 2 already traces with blocks, so the step up to Monaco
+   * is the typing and nothing else.
+   *
+   * The API is speed-then-duration (rover.forward(60) then time.sleep(2)), not
+   * degrees - see lib/parseRoverCode.ts. There is deliberately no "turn 90
+   * degrees" command to hand the learner, so the corner sleep is theirs to tune
+   * by running it and looking, which is the point.
+   */
+  'draw-a-square': {
+    id: 'draw-a-square',
     levelId: 3,
-    title: 'Autonomous Hazard Avoidance',
-    summary: "Read the rover's distance sensor and write an if/else that reacts to what it finds.",
+    title: 'Draw a Square',
+    summary: 'Type real Python that drives the rover around a square - one side, one corner, four times.',
     workspaceKind: 'monaco-sim',
-    standards: {
-      capsPhase: 'FET',
-      capsSubject: 'Information Technology: control structures and conditional decision-making',
-      csta: ['2-AP-10', '3A-AP-16'],
-      nasaJplContext: 'AutoNav: decide the next move from live sensor telemetry instead of a fixed script.',
-    },
     steps: [
       {
-        id: 'read-distance',
-        title: 'Read the distance sensor',
+        id: 'drive-one-side',
+        title: 'Drive one side',
         instructions:
-          'Call rover.getDistance() and store it in a variable, then print it so you can see what the sensor reports before you act on it.',
-        hints: ['Try: distance = rover.getDistance()  followed by  print(distance)'],
-        checks: [{ kind: 'code-contains', pattern: 'rover.getDistance()' }],
+          'The rover API is speed first, then how long to hold it. Type:\n\nrover.forward(60)\ntime.sleep(2)\nrover.stop()\n\nPress Run. That straight line is one side of your square.',
+        hints: [
+          'Speeds are a percentage of full power, so 0-100. The sleep is in seconds.',
+          'rover.stop() at the end matters - without it the rover keeps running its last command.',
+        ],
+        checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
       },
       {
-        id: 'decide',
-        title: 'Decide what to do about it',
+        id: 'turn-a-corner',
+        title: 'Turn a corner',
         instructions:
-          "Write an if/else: if the distance is small (something is close), turn away from it; otherwise, keep driving forward. This is the same shape as the rover's own AutoNav logic - read a sensor, then branch on what it says.",
+          'Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(2)\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust 2 up or down until the corner looks square.',
         hints: [
-          'An if needs a colon at the end of its line, and the lines under it must be indented.',
-          'Example shape: if distance < 20:\n    rover.spinRight(60)\nelse:\n    rover.forward(60)',
+          'Too long and the rover over-turns; too short and the corner is shallow. Change one number, Run, look.',
+          'A quarter turn at speed 60 takes about 2 seconds - see spinSecondsForDegrees in lib/rover-physics.ts.',
+        ],
+        checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
+      },
+      {
+        id: 'repeat-four-times',
+        title: 'Four sides, four corners',
+        instructions:
+          'A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(2)\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.',
+        hints: [
+          'This is the same Repeat block from Level 2, written out by hand.',
+          'If the shape does not close, your corner sleep is off - tune it and Run again.',
         ],
         checks: [
-          { kind: 'code-contains', pattern: 'if ' },
-          { kind: 'code-contains', pattern: 'else:' },
+          { kind: 'code-contains', pattern: 'for _ in range(' },
+          { kind: 'trajectory-outcome', outcome: 'moved-forward' },
+          { kind: 'trajectory-outcome', outcome: 'spun-right' },
         ],
       },
       {
         id: 'export',
         title: 'Send it to a real rover',
-        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        instructions: 'Happy with your square? Press "Finish & Export" to carry it into Create Mission.',
         checks: [],
       },
     ],

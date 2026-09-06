@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { recordMissionCreated } from '@/infrastructure/browser/platformMilestones';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
@@ -288,6 +289,11 @@ export function MissionWorkspace() {
       }
 
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
+      // Recorded here rather than inferred from the line above: 'the learner
+      // has sent a mission' is a fact the Level 1 challenge asks about, and it
+      // must stay true after the latest-mission id is overwritten by the next
+      // one. See infrastructure/browser/platformMilestones.ts.
+      recordMissionCreated();
 
       setSubmitSuccess(true);
       setMissionName(generateRandomMissionName());

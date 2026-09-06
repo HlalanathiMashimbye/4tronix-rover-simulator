@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
@@ -12,6 +12,7 @@ import {
   type TrajectoryOutcome,
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
+import { readMilestones } from '@/infrastructure/browser/platformMilestones';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
 
@@ -53,6 +54,17 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   // feedHasMore doc: undefined must NOT be treated as "nothing more to
   // load", only an explicit false may.
   const [feedHasMore, setFeedHasMore] = useState<boolean | undefined>(undefined);
+  /**
+   * Read once on mount, not on every render: the facts it holds are only
+   * changed by pages OTHER than this one, and getting back to those pages
+   * unmounts this component. A learner who opens History and returns gets a
+   * fresh read on the way back in, which is exactly when it matters.
+   */
+  const [milestones, setMilestones] = useState(() => ({ visitedRoutes: [] as string[], missionCreated: false }));
+  useEffect(() => {
+    setMilestones(readMilestones());
+  }, []);
+
   const [generatedCode, setGeneratedCode] = useState('');
   const [blocklyState, setBlocklyState] = useState('');
   const [trajectoryOutcomes, setTrajectoryOutcomes] = useState<TrajectoryOutcome[]>([]);
@@ -62,8 +74,16 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const step = challenge.steps[stepIndex];
 
   const evalContext: ChallengeEvalContext = useMemo(
-    () => ({ search: { query, activeFilter }, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes }),
-    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes],
+    () => ({
+      search: { query, activeFilter },
+      loadMoreCalled,
+      feedHasMore,
+      generatedCode,
+      trajectoryOutcomes,
+      visitedRoutes: milestones.visitedRoutes,
+      missionCreated: milestones.missionCreated,
+    }),
+    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes, milestones],
   );
 
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
@@ -113,7 +133,6 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     <div className="relative flex min-h-0 flex-1 flex-col gap-2">
       <ChallengeInstructionsPanel
         step={step}
-        standards={challenge.standards}
         stepIndex={stepIndex}
         totalSteps={challenge.steps.length}
         canGoBack={stepIndex > 0}

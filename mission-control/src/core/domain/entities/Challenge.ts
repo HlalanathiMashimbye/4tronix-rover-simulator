@@ -12,9 +12,11 @@ export type ChallengeLevelId = 1 | 2 | 3;
 
 export type ChallengeId =
   | 'platform-orientation'
+  | 'explore-the-platform'
+  | 'first-mission'
   | 'basic-movement'
   | 'loop-structures'
-  | 'sensor-operations';
+  | 'draw-a-square';
 
 /**
  * What one checklist item verifies, as plain data rather than a function.
@@ -32,18 +34,34 @@ export type ChallengeCheckSpec =
   | { kind: 'search-filter'; filterKey: string }
   | { kind: 'load-more' }
   | {
+      /**
+       * The learner has opened this page at some point, e.g. '/history'.
+       *
+       * Unlike every other kind here, what this checks happened on a DIFFERENT
+       * page - the challenge workspace was not even mounted at the time. See
+       * infrastructure/browser/platformMilestones.ts for where the evidence
+       * survives the navigation.
+       */
+      kind: 'route-visited';
+      path: string;
+    }
+  | {
+      /** The learner has successfully sent a mission to the queue. */
+      kind: 'mission-created';
+    }
+  | {
       kind: 'trajectory-outcome';
       outcome: 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
     }
   | {
       /**
        * The generated Python contains this substring. Structural validation
-       * for a Blockly challenge, over the code rather than the raw workspace:
-       * the toolbox has no comparison/conditional blocks and the sensor/mast
-       * blocks (unlike movement ones) produce no simulated trajectory at all,
-       * so text is the one signal common to every block this can check for -
-       * e.g. `for _ in range(` for a Repeat block, `rover.getDistance()` for
-       * Read Distance. See lib/roverBlockly.ts's workspaceToPython.
+       * over the code rather than the raw workspace: the Blockly toolbox has
+       * no comparison/conditional blocks and the sensor/mast blocks (unlike
+       * movement ones) produce no simulated trajectory at all, so text is the
+       * one signal common to every block this can check for - e.g.
+       * `for _ in range(` for a Repeat block. See lib/roverBlockly.ts's
+       * workspaceToPython, and lib/parseRoverCode.ts for the Monaco side.
        */
       kind: 'code-contains';
       pattern: string;
@@ -60,26 +78,11 @@ export interface ChallengeStep {
 /**
  * 'blockly-sim': the Blockly visual canvas + rover simulator (Level 2).
  * 'monaco-sim': the Monaco Python text editor + rover simulator (Level 3) -
- * text rather than blocks because real if/else and comparisons are what
- * Level 3 teaches, and the Blockly toolbox has neither (see roverBlockly.ts;
- * its lone comparison-shaped block, rover_distance, has nowhere to plug in).
+ * the same shapes Level 2 builds from blocks, written out by hand, so a
+ * learner crosses from blocks to text on a task whose outcome they already
+ * recognise rather than on new material.
  */
 export type ChallengeWorkspaceKind = 'embedded-platform' | 'blockly-sim' | 'monaco-sim';
-
-/**
- * Curriculum alignment shown as pills on the challenge's instructions panel.
- * Content only - purely descriptive metadata, no behaviour hangs off it.
- */
-export interface ChallengeStandards {
-  /** CAPS schooling phase this challenge targets. */
-  capsPhase: 'GET' | 'FET';
-  /** The CAPS subject/strand this challenge draws its content from. */
-  capsSubject: string;
-  /** CSTA K-12 standard codes this challenge practises. */
-  csta: string[];
-  /** The NASA JPL mission scenario this challenge is framed around. */
-  nasaJplContext: string;
-}
 
 export interface Challenge {
   id: ChallengeId;
@@ -88,8 +91,6 @@ export interface Challenge {
   summary: string;
   workspaceKind: ChallengeWorkspaceKind;
   steps: ChallengeStep[];
-  /** Absent for Level 1, which has no curriculum mapping defined yet. */
-  standards?: ChallengeStandards;
 }
 
 export interface ChallengeLevel {

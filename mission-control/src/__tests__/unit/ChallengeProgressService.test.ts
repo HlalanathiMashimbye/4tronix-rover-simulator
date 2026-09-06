@@ -16,7 +16,7 @@ import { ChallengeProgress, isLevelUnlocked } from '@/core/domain/entities/Chall
 const LEVELS: ChallengeLevel[] = [
   { id: 1, title: 'Level 1', description: '', challengeIds: ['platform-orientation'] },
   { id: 2, title: 'Level 2', description: '', challengeIds: ['basic-movement', 'loop-structures'] },
-  { id: 3, title: 'Level 3', description: '', challengeIds: ['sensor-operations'] },
+  { id: 3, title: 'Level 3', description: '', challengeIds: ['draw-a-square'] },
 ];
 
 function progressWith(...challengeIds: ChallengeId[]): ChallengeProgress {

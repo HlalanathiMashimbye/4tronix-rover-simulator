@@ -75,3 +75,38 @@ describe('stepChecksPass', () => {
     expect(stepChecksPass([], {})).toBe(true);
   });
 });
+
+describe('checks about what happened on another page', () => {
+  /**
+   * These two are unlike every other kind: the thing they ask about happened
+   * while the challenge workspace was unmounted. The workspace supplies the
+   * facts from platformMilestones; this service must stay able to answer
+   * without a browser, which is what these fixtures prove.
+   */
+  it('passes once the learner has opened the page', () => {
+    const spec = { kind: 'route-visited', path: '/history' } as const;
+
+    expect(evaluateCheck(spec, { visitedRoutes: ['/history', '/leaderboard'] })).toBe(true);
+    expect(evaluateCheck(spec, { visitedRoutes: ['/leaderboard'] })).toBe(false);
+  });
+
+  it('fails when nothing has been recorded at all', () => {
+    expect(evaluateCheck({ kind: 'route-visited', path: '/history' }, {})).toBe(false);
+    expect(evaluateCheck({ kind: 'mission-created' }, {})).toBe(false);
+  });
+
+  it('wants the exact page, not one that merely starts the same way', () => {
+    /**
+     * '/missions' is the feed and '/mission' is Create Mission - two different
+     * pages one character apart. A substring match here would tick the
+     * "open Create Mission" step for a learner who only browsed the feed.
+     */
+    expect(evaluateCheck({ kind: 'route-visited', path: '/mission' }, { visitedRoutes: ['/missions'] })).toBe(false);
+    expect(evaluateCheck({ kind: 'route-visited', path: '/mission' }, { visitedRoutes: ['/mission'] })).toBe(true);
+  });
+
+  it('passes mission-created only once a mission has actually been sent', () => {
+    expect(evaluateCheck({ kind: 'mission-created' }, { missionCreated: true })).toBe(true);
+    expect(evaluateCheck({ kind: 'mission-created' }, { missionCreated: false })).toBe(false);
+  });
+});

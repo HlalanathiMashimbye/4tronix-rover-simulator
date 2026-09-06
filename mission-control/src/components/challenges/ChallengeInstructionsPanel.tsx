@@ -1,12 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper, Rocket } from 'lucide-react';
-import type { ChallengeCheckSpec, ChallengeStandards, ChallengeStep } from '@/core/domain/entities/Challenge';
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
+import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
 
 interface ChallengeInstructionsPanelProps {
   step: ChallengeStep;
-  standards?: ChallengeStandards;
   stepIndex: number;
   totalSteps: number;
   canGoBack: boolean;
@@ -22,9 +21,6 @@ interface ChallengeInstructionsPanelProps {
   finishing?: boolean;
 }
 
-const PILL_CLASS =
-  'rounded-full border border-border/60 bg-secondary/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground';
-
 function describeCheck(spec: ChallengeCheckSpec): string {
   switch (spec.kind) {
     case 'search-query':
@@ -33,28 +29,52 @@ function describeCheck(spec: ChallengeCheckSpec): string {
       return `Set the filter to "${spec.filterKey}"`;
     case 'load-more':
       return 'Load another page of missions';
+    case 'route-visited':
+      return ROUTE_LABELS[spec.path] ?? `Open ${spec.path}`;
+    case 'mission-created':
+      return 'Send a mission to the queue';
     case 'trajectory-outcome':
       return `Rover ${spec.outcome.replace('-', ' ')}`;
     case 'code-contains':
-      return CODE_CONTAINS_LABELS[spec.pattern] ?? 'Use the right block';
+      return CODE_CONTAINS_LABELS[spec.pattern] ?? 'Use the right command';
   }
 }
 
-const CODE_CONTAINS_LABELS: Record<string, string> = {
-  'for _ in range(': 'Use a Repeat block',
-  'rover.setServo(0,': 'Use the Point Mast block',
-  'rover.getDistance()': 'Use the Read Distance block',
+/**
+ * A route check reads as the page's NAME in the navigation bar, not its path.
+ * '/history' is an implementation detail; "Open History" is the thing the
+ * learner is being asked to click. Unknown paths fall back to the raw path so
+ * a new check is merely ugly rather than silently mislabelled.
+ */
+const ROUTE_LABELS: Record<string, string> = {
+  '/history': 'Open History',
+  '/leaderboard': 'Open Leaderboard',
+  '/mission': 'Open Create Mission',
 };
 
 /**
- * Top banner: the current step's title and instructions, curriculum-alignment pills,
- * a bulb icon for hints/checks (mobile-friendly popover), and Back/Next buttons.
- * Next is gated on the step's own checks having passed - a learner cannot
- * skip ahead of a step they have not actually completed.
+ * Blockly and Monaco challenges share these check patterns, so the wording has
+ * to fit both - Level 2 drags a Repeat block, Level 3 types the loop out.
+ */
+const CODE_CONTAINS_LABELS: Record<string, string> = {
+  'for _ in range(': 'Repeat the movement in a loop',
+  'rover.setServo(0,': 'Point the mast',
+};
+
+/**
+ * Top banner: the current step's title and instructions, a bulb icon for
+ * hints/checks (mobile-friendly popover), and Back/Next buttons. Next is gated
+ * on the step's own checks having passed - a learner cannot skip ahead of a
+ * step they have not actually completed.
+ *
+ * This banner used to carry CAPS/CSTA curriculum pills. They are gone because
+ * nobody on the team can vouch for the mapping, and the readable half of it
+ * (capsSubject) sat in a `title` tooltip, which does not exist on touch - so
+ * the only part a learner ever saw was a code like "CSTA 2-AP-12". See
+ * infrastructure/config/challenges.ts for the fuller reasoning.
  */
 export function ChallengeInstructionsPanel({
   step,
-  standards,
   stepIndex,
   totalSteps,
   canGoBack,
@@ -93,27 +113,7 @@ export function ChallengeInstructionsPanel({
           </p>
           <h2 className="font-display text-lg font-bold text-foreground">{step.title}</h2>
 
-          {standards && (
-            <div className="mt-3 space-y-1.5 border-b border-border/60 pb-3">
-              <div className="flex flex-wrap gap-1.5">
-                <span className={PILL_CLASS} title={standards.capsSubject}>
-                  CAPS: {standards.capsPhase}
-                </span>
-                {standards.csta.map((code) => (
-                  <span key={code} className={PILL_CLASS} title="CSTA K-12 Computer Science Standard">
-                    CSTA {code}
-                  </span>
-                ))}
-                <span className="flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
-                  <Rocket className="h-2.5 w-2.5" />
-                  NASA JPL
-                </span>
-              </div>
-              <p className="text-xs italic leading-relaxed text-muted-foreground">{standards.nasaJplContext}</p>
-            </div>
-          )}
-
-          <p className="text-sm leading-relaxed text-muted-foreground">{step.instructions}</p>
+          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{step.instructions}</p>
         </div>
 
         <div className="flex gap-2 md:flex-col md:shrink-0">
