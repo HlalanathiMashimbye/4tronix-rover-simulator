@@ -10,19 +10,10 @@ import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { SimulationCommand } from '@/lib/roverBlockly';
-import type { TrajectoryOutcome } from '@/core/application/services/ChallengeCheckEvaluator';
-
-/** What the last simulated Run produced, read off the command list itself. */
-function deriveOutcomes(commands: SimulationCommand[]): TrajectoryOutcome[] {
-  const outcomes = new Set<TrajectoryOutcome>();
-  for (const command of commands) {
-    if (command.command === 'forward') outcomes.add('moved-forward');
-    if (command.command === 'reverse') outcomes.add('moved-backward');
-    if (command.command === 'spinLeft') outcomes.add('spun-left');
-    if (command.command === 'spinRight') outcomes.add('spun-right');
-  }
-  return [...outcomes];
-}
+import {
+  deriveTrajectoryOutcomes,
+  type TrajectoryOutcome,
+} from '@/core/application/services/ChallengeCheckEvaluator';
 
 interface ChallengeCenterPanelProps {
   challenge: Challenge;
@@ -48,7 +39,8 @@ interface ChallengeCenterPanelProps {
  * generate without leaving the challenge (the "Show as Python" action tab).
  *
  * 'monaco-sim' reuses MonacoCodeEditor + SimulationPanel - real Python, for
- * Level 3's if/else logic, which the Blockly toolbox has no blocks for.
+ * Level 3, where a learner types out by hand a shape they built from blocks
+ * in Level 2.
  *
  * Both code-based branches report the generated Python live (for
  * code-contains checks and the Create Mission handoff) and, on Run, which
@@ -82,7 +74,7 @@ export function ChallengeCenterPanel({
   const handleRun = (commands: SimulationCommand[]) => {
     setTrajectory(simulateCommands(commands));
     setIsPlaying(true);
-    onTrajectoryOutcomes(deriveOutcomes(commands));
+    onTrajectoryOutcomes(deriveTrajectoryOutcomes(commands));
   };
 
   const handleReset = () => {

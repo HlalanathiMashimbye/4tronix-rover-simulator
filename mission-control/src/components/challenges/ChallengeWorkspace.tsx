@@ -114,7 +114,6 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
       <ChallengeInstructionsPanel
         step={step}
-        standards={challenge.standards}
         stepIndex={stepIndex}
         totalSteps={challenge.steps.length}
         canGoBack={stepIndex > 0}

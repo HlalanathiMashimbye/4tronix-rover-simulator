@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Progressive Challenges content.
  *
  * Developer-authored, not learner-editable or Firestore-backed - the same
@@ -8,11 +8,23 @@
  * FirestoreChallengeProgressRepository).
  *
  * Level 2 is Blockly (workspaceKind: 'blockly-sim'); Level 3 is real Python in
- * Monaco (workspaceKind: 'monaco-sim'), not Blockly - the rover's Blockly
- * toolbox (lib/roverBlockly.ts) has no comparison or conditional blocks, and
- * its distance reporter block has nowhere to plug in, so "read the sensor and
- * decide" cannot be built out of blocks on this platform. Real Python has
- * if/else, so that is what Level 3 teaches with.
+ * Monaco (workspaceKind: 'monaco-sim'). Level 3 deliberately asks for a shape
+ * the learner has already traced with blocks, so the new thing is the typing,
+ * not the task.
+ *
+ * WHY PLACE NAMES ARE EXPLAINED HERE AND STANDARDS CODES ARE NOT.
+ * Challenges used to carry CAPS/CSTA codes, rendered as pills on the learner's
+ * instruction panel. They came out because nobody on the team can vouch for the
+ * mapping, and a curriculum claim a teacher can check is only worth making if
+ * it survives being checked. "Jezero Crater" got the opposite treatment - it
+ * stayed, with a sentence saying what it is, because an unexplained proper noun
+ * is a question a learner cannot answer, while a real place is a hook.
+ *
+ * Step instructions carry their code as their own \n-separated lines rather
+ * than inline in a sentence. That is a learner-facing choice - code you are
+ * meant to type should look like code - and it is also what lets
+ * __tests__/unit/challengeContent.test.ts lift the program back out and prove
+ * the step's own checks accept what the step teaches.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -27,14 +39,17 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 2,
     title: 'Blockly Rover Commands',
-    description: 'Build a rover mission out of blocks: Jezero Crater waypoint navigation.',
+    // Jezero is explained here, once, rather than repeated into each challenge
+    // summary below - the level is the smallest place that covers both of them.
+    description:
+      "Build rover missions out of blocks at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
     challengeIds: ['basic-movement', 'loop-structures'],
   },
   {
     id: 3,
-    title: 'Autonomous Hazard Avoidance',
-    description: 'Write real Python that reads the distance sensor and decides what to do.',
-    challengeIds: ['sensor-operations'],
+    title: 'Python Rover Commands',
+    description: 'Leave the blocks behind and type the same missions out as real Python.',
+    challengeIds: ['draw-a-square'],
   },
 ];
 
@@ -81,14 +96,8 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'basic-movement',
     levelId: 2,
     title: 'Basic Rover Movement',
-    summary: 'Navigate a waypoint at Jezero Crater: drive forward and turn using blocks.',
+    summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
-    standards: {
-      capsPhase: 'GET',
-      capsSubject: 'Coding & Robotics: directional commands and speed variables',
-      csta: ['1B-AP-08'],
-      nasaJplContext: 'Jezero Crater Waypoint Navigation: drive the rover to a marked survey point.',
-    },
     steps: [
       {
         id: 'drive-forward',
@@ -117,14 +126,8 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     id: 'loop-structures',
     levelId: 2,
     title: 'Loop Structures & Repeat Logic',
-    summary: 'Survey a grid at Jezero Crater using a Repeat block instead of stacking blocks by hand.',
+    summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
-    standards: {
-      capsPhase: 'GET',
-      capsSubject: 'Coding & Robotics: loop controls and repeating structures',
-      csta: ['2-AP-12'],
-      nasaJplContext: 'Jezero Crater Grid Surface Survey: repeat one movement pattern to cover an area.',
-    },
     steps: [
       {
         id: 'add-repeat',
@@ -153,45 +156,67 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
-  'sensor-operations': {
-    id: 'sensor-operations',
+  /**
+   * Level 3 is a square rather than the autonomous hazard-avoidance challenge
+   * that used to sit here. That one asked a learner to read the distance sensor
+   * and branch on it, which the rover cannot yet do and the simulator does not
+   * model - it scored them on a promise the platform could not keep. A square
+   * is the shape Level 2 already traces with blocks, so the step up to Monaco
+   * is the typing and nothing else.
+   *
+   * The API is speed-then-duration (rover.forward(60) then time.sleep(2)), not
+   * degrees - see lib/parseRoverCode.ts. There is deliberately no "turn 90
+   * degrees" command to hand the learner, so the corner sleep is theirs to tune
+   * by running it and looking, which is the point.
+   */
+  'draw-a-square': {
+    id: 'draw-a-square',
     levelId: 3,
-    title: 'Autonomous Hazard Avoidance',
-    summary: "Read the rover's distance sensor and write an if/else that reacts to what it finds.",
+    title: 'Draw a Square',
+    summary: 'Type real Python that drives the rover around a square - one side, one corner, four times.',
     workspaceKind: 'monaco-sim',
-    standards: {
-      capsPhase: 'FET',
-      capsSubject: 'Information Technology: control structures and conditional decision-making',
-      csta: ['2-AP-10', '3A-AP-16'],
-      nasaJplContext: 'AutoNav: decide the next move from live sensor telemetry instead of a fixed script.',
-    },
     steps: [
       {
-        id: 'read-distance',
-        title: 'Read the distance sensor',
+        id: 'drive-one-side',
+        title: 'Drive one side',
         instructions:
-          'Call rover.getDistance() and store it in a variable, then print it so you can see what the sensor reports before you act on it.',
-        hints: ['Try: distance = rover.getDistance()  followed by  print(distance)'],
-        checks: [{ kind: 'code-contains', pattern: 'rover.getDistance()' }],
+          'The rover API is speed first, then how long to hold it. Type:\n\nrover.forward(60)\ntime.sleep(2)\nrover.stop()\n\nPress Run. That straight line is one side of your square.',
+        hints: [
+          'Speeds are a percentage of full power, so 0-100. The sleep is in seconds.',
+          'rover.stop() at the end matters - without it the rover keeps running its last command.',
+        ],
+        checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
       },
       {
-        id: 'decide',
-        title: 'Decide what to do about it',
+        id: 'turn-a-corner',
+        title: 'Turn a corner',
         instructions:
-          "Write an if/else: if the distance is small (something is close), turn away from it; otherwise, keep driving forward. This is the same shape as the rover's own AutoNav logic - read a sensor, then branch on what it says.",
+          'Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(2.7)\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust 2.7 up or down until the corner looks square.',
         hints: [
-          'An if needs a colon at the end of its line, and the lines under it must be indented.',
-          'Example shape: if distance < 20:\n    rover.spinRight(60)\nelse:\n    rover.forward(60)',
+          'Too long and the rover over-turns; too short and the corner is shallow. Change one number, Run, look.',
+          'A quarter turn at speed 60 takes a little under 3 seconds.',
+        ],
+        checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
+      },
+      {
+        id: 'repeat-four-times',
+        title: 'Four sides, four corners',
+        instructions:
+          'A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(2.7)\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.',
+        hints: [
+          'This is the same Repeat block from Level 2, written out by hand.',
+          'If the shape does not close, your corner sleep is off - tune it and Run again.',
         ],
         checks: [
-          { kind: 'code-contains', pattern: 'if ' },
-          { kind: 'code-contains', pattern: 'else:' },
+          { kind: 'code-contains', pattern: 'for _ in range(' },
+          { kind: 'trajectory-outcome', outcome: 'moved-forward' },
+          { kind: 'trajectory-outcome', outcome: 'spun-right' },
         ],
       },
       {
         id: 'export',
         title: 'Send it to a real rover',
-        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        instructions: 'Happy with your square? Press "Finish & Export" to carry it into Create Mission.',
         checks: [],
       },
     ],

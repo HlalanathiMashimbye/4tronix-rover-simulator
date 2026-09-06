@@ -13,6 +13,7 @@
  */
 
 import { ChallengeCheckSpec } from '@/core/domain/entities/Challenge';
+import type { SimulationCommand } from '@/lib/roverBlockly';
 
 export type TrajectoryOutcome = 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
 
@@ -69,4 +70,29 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
 /** Every check in a step passes. */
 export function stepChecksPass(checks: ChallengeCheckSpec[], context: ChallengeEvalContext): boolean {
   return checks.every((check) => evaluateCheck(check, context));
+}
+
+/**
+ * What a simulated run actually did, read off the command list itself.
+ *
+ * Lives here rather than in the workspace component that calls it because it
+ * is the other half of a 'trajectory-outcome' check: this decides what counts
+ * as "the rover moved forward", evaluateCheck only asks whether it happened.
+ * Splitting those across a React component and a service meant the mapping
+ * could not be tested without rendering an editor, and the two halves of one
+ * rule could drift without anything noticing.
+ *
+ * Commands, not trajectory points: a zero-duration or immediately-stopped
+ * move still counts as having been commanded, which is what a challenge step
+ * is asking the learner to demonstrate.
+ */
+export function deriveTrajectoryOutcomes(commands: SimulationCommand[]): TrajectoryOutcome[] {
+  const outcomes = new Set<TrajectoryOutcome>();
+  for (const command of commands) {
+    if (command.command === 'forward') outcomes.add('moved-forward');
+    if (command.command === 'reverse') outcomes.add('moved-backward');
+    if (command.command === 'spinLeft') outcomes.add('spun-left');
+    if (command.command === 'spinRight') outcomes.add('spun-right');
+  }
+  return [...outcomes];
 }
