@@ -195,3 +195,46 @@ describe('which yard a video belongs to', () => {
     expect(claims).toEqual([{ missionId: 'm1', yardId: 'curiosity', videoId: 'new' }]);
   });
 });
+
+describe('a mission run more than once at the same yard', () => {
+  const run = (over: Partial<MissionRun> & { runId: string }): MissionRun => ({
+    yardId: 'curiosity',
+    status: 'completed',
+    ...over,
+  });
+
+  it('gives the second upload the second run, not nothing', () => {
+    /**
+     * The regression this closes. Before "log another run" existed there was
+     * only ever one run per yard, so once its video was attached runToLink
+     * returned null and every later upload was dropped on the floor - which is
+     * exactly what happens to a re-run's footage that the yard kept.
+     */
+    const runs = [
+      run({ runId: 'r1', completedAt: '2026-09-03T10:00:00Z', youtubeUrl: 'https://youtu.be/first' }),
+      run({ runId: 'r2', completedAt: '2026-09-03T11:00:00Z' }),
+    ];
+
+    expect(runToLink(runs)?.runId).toBe('r2');
+  });
+
+  it('takes the newest run without a video when several are waiting', () => {
+    const runs = [
+      run({ runId: 'r1', completedAt: '2026-09-03T10:00:00Z' }),
+      run({ runId: 'r3', completedAt: '2026-09-03T12:00:00Z' }),
+      run({ runId: 'r2', completedAt: '2026-09-03T11:00:00Z' }),
+    ];
+
+    expect(runToLink(runs)?.runId).toBe('r3');
+  });
+
+  it('still stops once every run has its own video', () => {
+    // Otherwise each poll would re-attach and re-notify for ever.
+    const runs = [
+      run({ runId: 'r1', completedAt: '2026-09-03T10:00:00Z', youtubeUrl: 'https://youtu.be/a' }),
+      run({ runId: 'r2', completedAt: '2026-09-03T11:00:00Z', youtubeUrl: 'https://youtu.be/b' }),
+    ];
+
+    expect(runToLink(runs)).toBeNull();
+  });
+});

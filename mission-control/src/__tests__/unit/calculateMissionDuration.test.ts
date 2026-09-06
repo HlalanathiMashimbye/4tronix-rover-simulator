@@ -108,6 +108,22 @@ describe('calculatePythonDuration', () => {
     expect(calculatePythonDuration(code)).toBe(5);
   });
 
+  it('counts rover.wait as a pause, not only time.sleep', () => {
+    // rover.wait is on the allowlist and is what a learner writing Python by
+    // hand reaches for, but only time.sleep was ever matched - so a mission
+    // built from rover.wait measured as zero and had no ceiling at all.
+    expect(calculatePythonDuration('rover.forward(60)\nrover.wait(3)')).toBe(3);
+  });
+
+  it('does not let a rover.wait loop slip under the ceiling', () => {
+    const code = `for _ in range(100):\n    rover.wait(${MISSION_TIME_LIMIT_SECONDS})`;
+    expect(calculatePythonDuration(code)).toBeGreaterThan(MISSION_TIME_LIMIT_SECONDS);
+  });
+
+  it('adds both kinds of pause together', () => {
+    expect(calculatePythonDuration('time.sleep(1)\nrover.wait(2)')).toBe(3);
+  });
+
   it('ignores comments and blank lines between loop and body', () => {
     const code = '# a square\nfor _ in range(4):\n\n    # drive\n    time.sleep(5)\n';
     expect(calculatePythonDuration(code)).toBe(20);

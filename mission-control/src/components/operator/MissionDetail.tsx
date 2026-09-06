@@ -3,6 +3,7 @@
 import { ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
+import { MissionRuns } from '@/components/operator/MissionRuns';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
@@ -76,36 +77,14 @@ export function MissionDetail({
         onResult={onResult}
       />
 
-      {/* Every yard that has attempted this, not just the one this operator
-          signed in at. A mission is not yard-scoped even though the queue is,
-          and knowing Durban already ran it is the difference between running
-          it again and leaving it alone. Only this operator's own run is
-          actionable, which the API enforces. */}
-      {runs.length > 0 && (
-        <section className="shrink-0 rounded-2xl border border-border/50 bg-background/40 p-3">
-          <h3 className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
-            {runs.length === 1 ? 'One run' : `${runs.length} runs`}
-          </h3>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            {runs.map((run) => {
-              const yard = findYardIn(yards, run.yardId);
-              const mine = run.yardId === yardId;
-              return (
-                <li key={run.runId} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="min-w-0 truncate">
-                    <span className={mine ? 'font-semibold text-foreground' : 'text-muted-foreground'}>
-                      {yard ? yardLabelOf(yard) : run.yardId}
-                    </span>
-                    {mine && <span className="ml-1.5 text-[11px] text-primary">yours</span>}
-                  </span>
-                  <span className="shrink-0 text-muted-foreground">{run.status}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      <MissionRuns
+        missionId={mission.id}
+        runs={runs}
+        yards={yards}
+        yardId={yardId}
+        mode={mode}
+        onResult={onResult}
+      />
 
       {mission.youtubeUrl && (
         <a

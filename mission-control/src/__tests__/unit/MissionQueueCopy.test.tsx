@@ -23,6 +23,9 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   // Selecting a mission subscribes to its runs across yards. Not what these
   // tests are about, so it is a no-op unsubscribe.
   subscribeToMissionRuns: () => () => {},
+  // Selecting also watches the mission's own document, so it survives
+  // leaving the queue. These tests read the lists, so it stays quiet.
+  subscribeToMission: () => () => {},
 }));
 
 jest.mock('@/components/mission/BlocklyViewer', () => ({
@@ -190,5 +193,36 @@ describe('the door to YouTube Studio', () => {
     expect(await screen.findByRole('link', { name: /youtube studio/i })).toBeInTheDocument();
     // And the console link really is the thing that went away.
     expect(screen.queryByRole('link', { name: /operator console/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('the operator console gives the mission pane its height', () => {
+  it('keeps the console address off the toolbar until there is room for it', async () => {
+    /**
+     * The queue column is narrower than the mission pane on purpose, so this
+     * toolbar has to stay on one line - a second line here comes straight out
+     * of the queue below it. The address is the informational part and the
+     * first thing to drop; the button works without anyone reading it.
+     *
+     * 2xl, not xl: at exactly 1280 the address reappears while the column is
+     * still too narrow, which is the width that actually wrapped.
+     */
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const link = await screen.findByRole('link', { name: /operator console/i });
+    const address = link.parentElement!.querySelector('span.font-mono')!;
+
+    expect(address.className).toContain('hidden');
+    expect(address.className).toContain('2xl:inline');
+  });
+
+  it('gives the mission pane more width than the queue', async () => {
+    // The queue is a list of short rows; the pane holds the code and blocks.
+    const { container } = render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+    await screen.findByRole('link', { name: /operator console/i });
+
+    const grid = container.querySelector('[class*="lg:grid-cols-"]')!;
+    expect(grid.className).toContain('0.85fr');
+    expect(grid.className).toContain('1.15fr');
   });
 });

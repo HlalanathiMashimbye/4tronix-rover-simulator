@@ -23,6 +23,28 @@ import type { MissionStatus } from '../entities/Mission';
 export type ResolveOutcome = 'completed' | 'requeue';
 
 /**
+ * A mission that ran and whose recording has not been attached yet.
+ *
+ * This is the operator's actual outstanding work at a desk: the run happened,
+ * the video is sitting on the satellite or in YouTube Studio, and nothing
+ * links the two until somebody pastes a URL. Without it the console could only
+ * offer "Done", which mixes the missions that still need attention in with the
+ * ones that are finished with.
+ *
+ * CANCELLED AND FAILED MISSIONS DO NOT NEED A VIDEO. A cancelled mission never
+ * ran, so there is no recording to attach and listing it as outstanding work
+ * would send an operator looking for a file that does not exist.
+ *
+ * Takes the two fields it reads rather than a Mission, so the operator
+ * console's narrower queue record satisfies it.
+ */
+export function stillNeedsVideo(
+  mission: { status: MissionStatus; youtubeUrl?: string | null },
+): boolean {
+  return mission.status === 'completed' && !mission.youtubeUrl;
+}
+
+/**
  * Statuses an operator may still act on. A mission that already settled is not
  * work waiting for anyone, and re-completing it would move timestamps around
  * for no reason.
@@ -109,6 +131,40 @@ export function decideCancel(snapshot: RunSnapshot): Decision {
 }
 
 /**
+ * Record a second attempt at a mission that has already settled.
+ *
+ * THE GAP THIS CLOSES. The yard keeps every run's video - recordings are named
+ * <mission>__<yard>__<stamp>.mp4 precisely so a re-run cannot overwrite the
+ * first attempt's footage. Mission Control could not keep pace: a run document
+ * was only ever created when an operator marked a mission complete, and
+ * decideComplete refuses once it is settled, so a mission had exactly one run
+ * per yard forever. The second video had no run to attach to, and runToLink
+ * dropped it silently because every completed run already had one.
+ *
+ * Re-running is the ordinary case rather than the exception - the rover gets
+ * stuck, somebody nudges it, they go again - so the attempt that is most worth
+ * keeping was the one the platform could not represent.
+ *
+ * It is an explicit action, not something inferred from a second upload. The
+ * operator is the only party that knows a second run happened: the satellite
+ * no longer writes to Firestore, and a video appearing is evidence of an
+ * upload, not of a run. Creating runs from uploads would also mean a
+ * mis-pasted link inventing an attempt that never took place.
+ *
+ * The new run is completed, because an operator logs it after watching it
+ * finish. A run that did not finish produces no video and needs no record.
+ */
+export function decideAnotherRun(snapshot: RunSnapshot): Decision {
+  if (isOpen(snapshot)) {
+    return {
+      ok: false,
+      error: `This mission is still ${effectiveStatus(snapshot)}. Settle the current run before logging another.`,
+    };
+  }
+  return { ok: true, change: { status: 'completed', clearsReview: true } };
+}
+
+/**
  * Attach the video of a finished run.
  *
  * Completed only, matching the order the work actually happens in: the operator
@@ -126,6 +182,29 @@ export function decideAttachVideo(snapshot: RunSnapshot): Decision {
   }
   // Status untouched: the run is already completed and attaching a link is not
   // a state change.
+  return { ok: true, change: { status: null, clearsReview: false } };
+}
+
+/**
+ * Take the video off a run, leaving the run itself.
+ *
+ * Separate from replacing it, because they answer different questions. An
+ * operator who pasted the wrong link replaces it; one who uploaded the wrong
+ * recording and has taken it down needs the run to go back to having none, and
+ * pasting an empty string is not an answer the attach path accepts.
+ *
+ * Allowed on a settled run only, matching where a video can be attached in the
+ * first place.
+ */
+export function decideRemoveVideo(snapshot: RunSnapshot): Decision {
+  if (isOpen(snapshot)) {
+    return {
+      ok: false,
+      error: 'This run has not finished, so it has no video to remove.',
+    };
+  }
+  // Status untouched: taking a link off is not a state change, exactly as
+  // putting one on is not.
   return { ok: true, change: { status: null, clearsReview: false } };
 }
 

@@ -213,17 +213,28 @@ def brake():
     lDir = 0
     rDir = 0
 
+# LOCAL PATCH: forward() and reverse() do NOT recentre the steering servos.
+#
+# They used to (added Sep 2025 to make spin behave), and it silently made
+# steering impossible: the documented idiom is setServo() to angle the wheels
+# and THEN forward() to drive, so recentring on entry threw away the steer the
+# caller had just asked for one line earlier. Every steering mission drove
+# straight on hardware while the simulator drew a curve.
+#
+# Throttle and steering are separate axes. forward() owns the throttle; the
+# wheel angle belongs to whoever set it. Callers that want to drive straight
+# say so - the Blockly generator emits four setServo(..., 0) lines ahead of
+# forward(), and RealRoverDriver.forward() centres the wheels itself.
+#
+# spinLeft/spinRight below keep setting their pivot angles, because without
+# them a spin is not a spin: that geometry IS the command, not an override of
+# the caller's intent.
 # forward(speed): Sets both motors to move forward at speed. 0 <= speed <= 100
 def forward(speed):
     global lDir, rDir
     if (lDir == -1 or rDir == -1):
         brake()
         time.sleep(0.2)
-    # Reset servos to 0 degrees
-    setServo(9, 0)   # servo_FL
-    setServo(15, 0)  # servo_FR
-    setServo(11, 0)  # servo_RL
-    setServo(13, 0)  # servo_RR
     p.ChangeDutyCycle(speed)
     q.ChangeDutyCycle(0)
     a.ChangeDutyCycle(speed)
@@ -239,11 +250,6 @@ def reverse(speed):
     if (lDir == 1 or rDir == 1):
         brake()
         time.sleep(0.2)
-    # Reset servos to 0 degrees
-    setServo(9, 0)   # servo_FL
-    setServo(15, 0)  # servo_FR
-    setServo(11, 0)  # servo_RL
-    setServo(13, 0)  # servo_RR
     p.ChangeDutyCycle(0)
     q.ChangeDutyCycle(speed)
     a.ChangeDutyCycle(0)
