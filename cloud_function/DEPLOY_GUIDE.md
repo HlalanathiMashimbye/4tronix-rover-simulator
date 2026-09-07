@@ -128,3 +128,64 @@ other files in the Drive account.
 
 No new service accounts are created. This uses the project's existing default
 App Engine service account.
+
+---
+
+## Restore script (for emergencies only)
+
+A separate restore script (`firestore_restore.py` in the repo root) can write
+a backup zip back into Firestore. It is **not automated** — an operator runs
+it manually during a real incident.
+
+### What the operator needs to run a restore
+
+1. **Download the backup zip** from Google Drive (just click download in the
+   browser — no API credentials needed for this part).
+
+2. **Firestore write access** on their own Google account. They need one of:
+   - `Cloud Datastore User` role (read + write Firestore, nothing else), OR
+   - `Firebase Admin` role (broader, if they already have it)
+
+   Grant this to the specific person(s) who would run a restore:
+
+   ```bash
+   gcloud projects add-iam-policy-binding REPLACE_PROJECT_ID \
+     --member="user:OPERATOR_EMAIL@example.com" \
+     --role="roles/datastore.user"
+   ```
+
+3. **Run the restore** (always do a dry run first):
+
+   ```bash
+   gcloud auth application-default login
+
+   # Preview what would be written (no changes made):
+   python firestore_restore.py --project REPLACE_PROJECT_ID \
+       --zip ./backup_2026-09-07_030000.zip --dry-run
+
+   # Actually restore:
+   python firestore_restore.py --project REPLACE_PROJECT_ID \
+       --zip ./backup_2026-09-07_030000.zip
+   ```
+
+   The script requires confirmation — the operator must type the project ID
+   before it writes anything.
+
+---
+
+## Potential gotchas
+
+- **App Engine app required:** Cloud Scheduler needs an App Engine app to exist
+  in the project (even if unused). If step 4 fails with "App Engine app does
+  not exist", create one: `gcloud app create --region=us-central1`
+
+- **Billing:** Cloud Functions and Cloud Scheduler require billing to be enabled
+  on the project.
+
+- **Default service account Firestore access:** The App Engine default service
+  account (`REPLACE_PROJECT_ID@appspot.gserviceaccount.com`) usually has
+  Editor role, which includes Firestore read access. If your project has
+  restricted IAM, verify it has at least `Cloud Datastore Viewer` role.
+
+- **Region consistency:** The Cloud Function, Cloud Scheduler, and App Engine
+  app should all use the same region (this guide uses `us-central1`).
