@@ -5,6 +5,11 @@
 **Status:** unsolved. Everything below is what is known, what is ruled out, and
 the one technique that makes the problem observable at all.
 
+**Updated 7 September, by Konke.** The rover has been reflashed since this was
+written and its wifi was rebuilt by hand afterwards, so some of what follows
+describes an install that no longer exists. Read "Update, 7 September" before
+trusting the ruled-out table. The problem itself is still open.
+
 ---
 
 ## The problem in one paragraph
@@ -74,6 +79,143 @@ That is the core technique. Everything below is what to look for in step 4.
 
 ---
 
+## Update, 7 September
+
+### A BSSID pin had been re-added
+
+The rover had **two** profiles for `marsyard`, not one:
+
+```
+yard-satellite   bssid 88:A2:9E:05:50:21   autoconnect-priority 20
+preconfigured    bssid --                  autoconnect-priority 0
+```
+
+Nothing in this repository creates `yard-satellite`. It was added by hand after
+the reflash - the pin this document tells you not to re-add, back again,
+because whoever rebuilt the rover had no reason to know that.
+
+It is worth recognising how it fails, because it does not look like a pin
+problem. With the satellite not beaconing, NetworkManager still auto-activates
+the pinned profile first - it has the higher priority - and spends 25 seconds
+failing to associate with a BSSID that is not on the air before falling back:
+
+```
+policy: auto-activating connection 'yard-satellite'
+device (wlan0): supplicant interface state: associating -> disconnected     (x5)
+device (wlan0): Activation: (wifi) association took too long
+device (wlan0): Activation: failed for connection 'yard-satellite'
+device (wlan0): supplicant interface state: associating -> 4way_handshake
+device (wlan0): Connected to wireless network "marsyard"
+```
+
+The last two lines are `preconfigured` succeeding, two seconds after the pinned
+profile gave up. So the rover worked - it just went deaf for half a minute
+first, every time NetworkManager re-evaluated. That is a better account of the
+"connects to the laptop then drops" report in section 2 than power save, which
+is off. Note also what is *absent*: no `status_code=16`, so this is not the PMF
+fault, however much it resembles it.
+
+Removed with `nmcli connection delete yard-satellite`. Check for it again after
+any reflash.
+
+### The two access points are indistinguishable by address
+
+Both the satellite and a Windows ICS hotspot serve the yard on
+**192.168.137.1** - the satellite took that address deliberately, so that
+nothing needed reconfiguring when the yard moved off the laptop. The
+consequence is that the gateway tells you nothing about which one you are on,
+and most of a session went into debugging "the satellite" that was a laptop
+hotspot throughout.
+
+BSSID and channel are what separate them:
+
+| | BSSID | Channel |
+|---|---|---|
+| Satellite | `88:a2:9e:05:50:21` | 6 |
+| Windows ICS hotspot | locally administered, varies per session | whatever Windows picks |
+
+```bash
+iw dev wlan0 link                # on the rover
+netsh wlan show interfaces       # on Windows
+```
+
+A `marsyard` on any channel but 6 is not the satellite. Check this before
+concluding anything at all, including that the bug reproduced.
+
+### The satellite can quietly stop being an access point
+
+`satellite-as-access-point.sh` arms a check that reverts to client mode if the
+access point never came up. That revert is **permanent** - it sets
+`connection.autoconnect no` on `yard-ap` and nothing re-arms it - so a single
+transient failure leaves the satellite booting as a client from then on,
+silently, until somebody re-runs the script by hand. If `marsyard` is simply
+not on the air, look here first:
+
+```bash
+journalctl -t yard-ap-check
+nmcli -t -f NAME,TYPE,AUTOCONNECT,AUTOCONNECT-PRIORITY connection show
+```
+
+### Anything ruled out before the reflash needs re-checking
+
+The table below was written against an install that no longer exists. The
+entries resting on rover-side configuration are the ones to distrust. Host keys
+are generated on first boot, so they date the reflash:
+
+```bash
+ls -l --time-style=long-iso /etc/ssh/ssh_host_ed25519_key
+```
+
+### Where it stands
+
+With the pin removed and the satellite serving `marsyard` correctly on
+`88:a2:9e:05:50:21` channel 6, two other devices joined it and the rover did
+not appear on it at all. So the pin was a real fault masking the original one,
+and removing it puts you back at exactly the problem this handover describes -
+with several suspects now properly eliminated rather than assumed.
+
+The rover's own software survived the reflash: `/health` reports
+`RealRoverDriver`, `hardware: true`, `processor_alive: true`. The camera did
+not - it reports `detected: false`, which is almost certainly the reflash and
+is a separate job.
+
+### What to do next
+
+In this order. The first is a process point rather than a test, and skipping it
+costs a whole session:
+
+1. **Install the flight recorder before switching networks.** The rover is only
+   reachable with the hotspot on, and turning it on ends the test. Plan the
+   session backwards: get in, install, switch, wait, switch back, read. Check
+   whether it is already there rather than assuming - nobody recorded whether
+   it survived the reflash.
+2. **Confirm which access point is serving `marsyard`,** by BSSID and channel.
+3. **Ask the satellite whether the rover is knocking at all,** with the
+   `journalctl` grep in section 1. This splits the problem in half and nothing
+   else does. A MAC that appears is a negotiation fault the logs will name; a
+   MAC that appears nowhere is range or power, and no amount of reconfiguring
+   will help.
+4. **Fresh batteries, and the rover 30cm from the satellite.** Minutes to do,
+   nothing to undo, and it addresses the two most likely remaining causes.
+5. **Then the beacon diff in section 4,** which is still the highest-value
+   experiment in this document and has still never been run.
+
+### Do not reflash the rover to fix this
+
+It is a tempting move and it does not follow. On 7 September the rover
+completed a full WPA2 four-way handshake against a laptop hotspot in two
+seconds: the `brcmfmac` driver, the firmware, wpa_supplicant and NetworkManager
+all demonstrably work, and a fresh image ships the same driver and the same
+firmware. Reflashing replaces software that is not broken.
+
+What it does do is destroy a working `rover-server`, the I2C and SPI setup and
+the power-save fix, and leave somebody rebuilding the wifi by hand under time
+pressure. That is how the BSSID pin came back, and most likely why the camera
+is no longer detected. The remaining suspects are range, power, and whatever is
+in the satellite's beacon - a reflash touches none of them.
+
+---
+
 ## What is already ruled out
 
 Do not spend time re-testing these. Each cost hours.
@@ -85,7 +227,9 @@ Do not spend time re-testing these. Each cost hours.
 | **5GHz / wrong band** | The Pi Zero W is 2.4GHz only. The AP is pinned to band `bg`, channel 6. |
 | **WPA3 / SAE** | AP is forced WPA2-only: `proto rsn`, `pairwise ccmp`, `group ccmp`. |
 | **The AP being broken generally** | An iPhone, a Samsung and a MacBook have all associated with it and completed the four-way handshake. It works for other clients. |
-| **A BSSID pin on the rover** | Was added, then deliberately removed. The rover's profile is unpinned. Do not re-add it. |
+| **A BSSID pin on the rover** | Was added, then deliberately removed. Re-added by hand after the reflash and removed again on 7 Sep - see the update above. The rover's profile is unpinned. Do not re-add it. |
+| **Wifi power save** | Ruled out 7 Sep: `10-no-wifi-powersave.conf` is present and `iw dev wlan0 get power_save` reports off. Section 2 below is answered, not open. |
+| **A wrong or mismatched PSK** | `preconfigured` stores a 64-hex raw PMK rather than a passphrase, which looks wrong and is not - it equals `PBKDF2-HMAC-SHA1("curiousinternet", "marsyard", 4096, 32)`. The PMK is a function of passphrase and SSID only, so it authenticates against the satellite and a laptop identically. |
 
 ## What is NOT ruled out, in the order I would check
 
@@ -112,6 +256,12 @@ journalctl -b --no-pager | grep -oE "AP-STA-CONNECTED [0-9a-f:]+" | sort -u
 ```
 
 ### 2. Is it associating and then being dropped?
+
+**Answered on 7 September, and the answer was no.** Power save was off and the
+conf file below was in place. The section is kept because the reasoning is
+still how you would check it after the next reflash - but the symptom it was
+written to explain turned out to be the BSSID pin taking the radio down for 25
+seconds at a time. Read the update above before spending time here.
 
 Reported symptom, not yet confirmed against the satellite: *"connects to the
 laptop then drops after a certain time."*
@@ -155,6 +305,17 @@ nmcli -t -f NAME,TYPE,AUTOCONNECT connection show
 
 There should be exactly one wifi profile. Extra saved networks are how a rover
 ends up on somebody's phone hotspot instead.
+
+Do not skip that second command, and do not trust the first one on its own.
+On 7 September the pin was not on `preconfigured` at all - it was on a second
+profile for the same SSID, at a higher priority, and inspecting
+`preconfigured` showed exactly what this section says to expect while the rover
+was still being broken by the profile next to it. Read every profile:
+
+```bash
+sudo grep -H -iE "^\[|ssid|bssid|autoconnect|priority|key-mgmt|pmf" \
+  /etc/NetworkManager/system-connections/*
+```
 
 ### 4. Compare the two access points directly
 
@@ -217,10 +378,10 @@ ip neigh show dev wlan0                # who is actually on the network
 | Network name | `marsyard` |
 | Password | `curiousinternet` |
 | Satellite | Raspberry Pi 5, hostname `mro`, user `mars` |
-| Satellite AP address | `192.168.137.1`, console at `http://mro.local:3001/` |
+| Satellite AP address | `192.168.137.1`, console at `http://mro.local:3001/`. A Windows ICS hotspot uses the same address - it does not identify the AP |
 | Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6, 2.4GHz, WPA2, PMF off |
 | Rover | Raspberry Pi Zero W, hostname `curiosity`, user `mars` |
-| Rover MAC prefix | `b8:27:eb:` |
+| Rover MAC prefix | `b8:27:eb:`, in full `b8:27:eb:ef:4e:c7` as of 7 Sep |
 | Rover service | port 8523, `curl http://curiosity.local:8523/health` |
 | Rover wifi profile | `preconfigured`, unpinned, autoconnect |
 
@@ -277,7 +438,12 @@ Paste this at the start of a session, with the repo open:
 > - The satellite is reachable over ethernet while it serves wifi, so its logs
 >   are live-observable. Prefer evidence from there over guessing.
 > - Do not pin the rover to a BSSID or a specific device. That breaks the
->   design on purpose and was already reverted once.
+>   design on purpose and has now been reverted twice.
+> - Confirm which access point is actually serving `marsyard` before drawing
+>   any conclusion from a test. Both the satellite and a Windows hotspot answer
+>   on `192.168.137.1`; only BSSID and channel tell them apart.
+> - The rover was reflashed after this handover was written, so treat
+>   rover-side entries in the ruled-out table as needing confirmation.
 >
 > Do not re-test what the handover lists as ruled out. Start by establishing
 > whether the rover is even attempting to associate, since the last capture
