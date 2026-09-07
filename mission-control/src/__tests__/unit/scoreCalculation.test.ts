@@ -5,20 +5,20 @@
 import {
   calculateScore,
   getChallengePoints,
-  CHALLENGE_POINTS,
 } from '@/core/domain/services/scoreCalculation';
 
 describe('scoreCalculation', () => {
   describe('getChallengePoints', () => {
     it('returns correct points for known challenges', () => {
-      expect(getChallengePoints('platform-orientation')).toBe(100);
+      expect(getChallengePoints('platform-orientation')).toBe(50);
+      expect(getChallengePoints('first-mission')).toBe(100);
       expect(getChallengePoints('basic-movement')).toBe(150);
       expect(getChallengePoints('loop-structures')).toBe(200);
-      expect(getChallengePoints('sensor-operations')).toBe(250);
+      expect(getChallengePoints('draw-a-square')).toBe(250);
     });
 
     it('returns default points for unknown challenges', () => {
-      expect(getChallengePoints('unknown-challenge')).toBe(100);
+      expect(getChallengePoints('unknown-challenge')).toBe(50);
     });
   });
 
@@ -28,27 +28,35 @@ describe('scoreCalculation', () => {
     });
 
     it('calculates score from single challenge', () => {
-      expect(calculateScore(['platform-orientation'])).toBe(100);
+      expect(calculateScore(['platform-orientation'])).toBe(50);
+      expect(calculateScore(['first-mission'])).toBe(100);
       expect(calculateScore(['basic-movement'])).toBe(150);
       expect(calculateScore(['loop-structures'])).toBe(200);
-      expect(calculateScore(['sensor-operations'])).toBe(250);
+      expect(calculateScore(['draw-a-square'])).toBe(250);
     });
 
     it('sums points from multiple challenges', () => {
       const challenges = ['platform-orientation', 'basic-movement'];
-      const expected = 100 + 150;
+      const expected = 50 + 150;
       expect(calculateScore(challenges)).toBe(expected);
     });
 
-    it('handles all challenges combined', () => {
-      const allChallenges = Object.keys(CHALLENGE_POINTS);
-      const expected = 100 + 150 + 200 + 250;
+    it('handles all defined challenges combined', () => {
+      const allChallenges = [
+        'platform-orientation',
+        'explore-the-platform',
+        'first-mission',
+        'basic-movement',
+        'loop-structures',
+        'draw-a-square',
+      ];
+      const expected = 50 + 75 + 100 + 150 + 200 + 250;
       expect(calculateScore(allChallenges)).toBe(expected);
     });
 
     it('handles unknown challenges in mix', () => {
       const challenges = ['platform-orientation', 'unknown', 'basic-movement'];
-      const expected = 100 + 100 + 150; // unknown defaults to 100
+      const expected = 50 + 50 + 150; // unknown defaults to 50
       expect(calculateScore(challenges)).toBe(expected);
     });
   });
@@ -70,8 +78,8 @@ describe('scoreCalculation', () => {
 
       // Note: if same challenge appears twice, both are counted
       // Real idempotency is enforced at the service level (no duplicates in array)
-      expect(completedOnce).toBe(100);
-      expect(completedTwice).toBe(200);
+      expect(completedOnce).toBe(50);
+      expect(completedTwice).toBe(100);
     });
 
     it('verified list prevents duplicates at service layer', () => {
@@ -80,7 +88,7 @@ describe('scoreCalculation', () => {
         new Set(['platform-orientation', 'basic-movement', 'platform-orientation'])
       );
 
-      expect(calculateScore(deduplicatedIds)).toBe(100 + 150);
+      expect(calculateScore(deduplicatedIds)).toBe(50 + 150);
     });
   });
 });

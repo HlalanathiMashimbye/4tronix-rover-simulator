@@ -61,12 +61,26 @@ export function useChallengeProgress() {
 
   /** Returns the level id that just unlocked, if this completion caused one to. */
   const completeChallenge = useCallback(async (challengeId: ChallengeId): Promise<ChallengeLevelId | null> => {
+    const learnerId = getLearnerID();
     const result = await challengeProgressService().completeChallenge(
-      getLearnerID(),
+      learnerId,
       challengeId,
       CHALLENGE_LEVELS,
     );
     setProgress(result.progress);
+
+    // Record the challenge completion on the leaderboard (idempotent)
+    try {
+      await fetch(`/api/leaderboard/challenges/${challengeId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ learnerId }),
+      });
+    } catch (error) {
+      console.warn('Failed to record challenge completion on leaderboard:', error);
+      // Non-fatal: challenges tab works even if leaderboard update fails
+    }
+
     return result.justUnlockedLevelId;
   }, []);
 
