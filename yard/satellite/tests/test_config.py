@@ -35,7 +35,7 @@ def client(tmp_path, monkeypatch):
 
 
 def test_set_rover_url(client):
-    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523'})
+    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523', 'force': True})
     data = resp.get_json()
 
     assert resp.status_code == 200
@@ -45,20 +45,20 @@ def test_set_rover_url(client):
 
 
 def test_set_rover_url_strips_trailing_slash(client):
-    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523/'})
+    resp = client.post('/api/config/rover_url', json={'url': 'http://curiosity.local:8523/', 'force': True})
 
     assert resp.get_json()['rover_url'] == 'http://curiosity.local:8523'
 
 
 def test_set_rover_url_persists_to_config_file(client):
-    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523'})
+    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523', 'force': True})
 
     with open(web_server.CONFIG_FILE) as f:
         assert json.load(f)['rover_url'] == 'http://10.0.0.7:8523'
 
 
 def test_saved_url_used_by_api_status(client, monkeypatch):
-    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523'})
+    client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523', 'force': True})
 
     captured = {}
 
@@ -73,12 +73,69 @@ def test_saved_url_used_by_api_status(client, monkeypatch):
     assert data['rover']['url'] == 'http://10.0.0.7:8523'
 
 
-@pytest.mark.parametrize('bad', ['', 'curiosity.local:8523', 'ftp://x', 'http://', None])
-def test_invalid_url_rejected(client, bad):
-    resp = client.post('/api/config/rover_url', json={'url': bad})
+@pytest.mark.parametrize('bad', ['', '   ', 'ftp://x', 'http://', '://', None])
+def test_malformed_url_rejected(client, bad):
+    """Malformed, which is different from unreachable - see below.
+
+    'curiosity.local:8523' used to be in this list. It is accepted now: a bare
+    host, with or without a port, is what an operator actually types, and
+    requiring them to remember `http://` and `:8523` under pressure is what
+    this whole change is about.
+    """
+    resp = client.post('/api/config/rover_url', json={'url': bad, 'force': True})
 
     assert resp.status_code == 400
     assert 'error' in resp.get_json()
+
+
+@pytest.mark.parametrize('typed,stored', [
+    ('curiosity.local',      'http://curiosity.local:8523'),
+    ('curiosity.local:8523', 'http://curiosity.local:8523'),
+    ('10.0.0.7',             'http://10.0.0.7:8523'),
+    ('http://10.0.0.7:8523', 'http://10.0.0.7:8523'),
+])
+def test_what_an_operator_types_is_accepted(client, typed, stored):
+    """The scheme and the port are filled in rather than demanded."""
+    resp = client.post('/api/config/rover_url', json={'url': typed, 'force': True})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['rover_url'] == stored
+
+
+def test_an_address_with_no_rover_is_refused_rather_than_saved(client, monkeypatch):
+    """The actual bug. Validation checked only that it started with http, so a
+    wrong-but-well-formed address saved happily and the yard looked broken with
+    nothing on the page saying why. That is what happened at a demo."""
+    import web_server
+    before = web_server.ROVER_URL
+
+    resp = client.post('/api/config/rover_url', json={'url': '192.168.1.99'})
+
+    assert resp.status_code == 409
+    body = resp.get_json()
+    assert body['unreachable'] is True
+    assert '192.168.1.99' in body['error']
+    assert web_server.ROVER_URL == before, 'a refused address must not be saved'
+
+
+def test_force_saves_an_address_that_is_not_answering_yet(client):
+    """Legitimate: setting the address before the rover is switched on. It
+    just should not be the accident."""
+    resp = client.post('/api/config/rover_url',
+                       json={'url': 'curiosity.local', 'force': True})
+
+    assert resp.status_code == 200
+
+
+def test_a_reachable_rover_saves_without_force(client, monkeypatch):
+    import rover_discovery
+    monkeypatch.setattr(rover_discovery, '_health',
+                        lambda url, timeout=None: {'driver': 'RealRoverDriver'})
+
+    resp = client.post('/api/config/rover_url', json={'url': 'curiosity.local', 'force': True})
+
+    assert resp.status_code == 200
+    assert resp.get_json()['rover_url'] == 'http://curiosity.local:8523'
 
 
 def test_load_config_precedence(tmp_path, monkeypatch):
@@ -106,7 +163,7 @@ def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
-        resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523'})
+        resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523', 'force': True})
 
     assert resp.status_code == 200
     assert web_server.ROVER_URL == 'http://newrover.local:8523'
@@ -122,7 +179,7 @@ def test_rover_url_is_still_validated_without_a_login(tmp_path, monkeypatch):
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
-        resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)'})
+        resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)', 'force': True})
 
     assert resp.status_code == 400
     assert web_server.ROVER_URL == original_url, 'the URL must not have changed'
@@ -253,12 +310,19 @@ class TestConsoleDesignSystem:
     def test_health_reads_across_the_top_of_settings(self, client):
         """It was a narrow left column of three stacked cards, given a third of
         the width it never needed, with the bottom half empty while the middle
-        column scrolled."""
+        column scrolled. Then it was three cards across the top, which carried
+        very different amounts and sat at wildly different heights. It is one
+        module with a row per subsystem now, the same shape the run station
+        uses for readiness."""
         page = client.get('/settings').get_data(as_text=True)
 
-        assert 'class="health-strip"' in page
-        head = page.index('class="health-strip"')
-        assert head < page.index('class="settings-grid"'), 'health comes first'
+        assert 'class="health"' in page
+        assert page.count('class="hrow"') == 3
+        # It is the first thing in the grid now rather than a band above it: as
+        # a full-width strip every row ran the width of the page for a line of
+        # text needing a third of it.
+        assert page.index('class="settings-grid"') < page.index('class="health"')
+        assert page.index('class="health"') < page.index('id="tunablesSection"')
 
     def test_touch_targets_are_raised_for_a_finger(self, client):
         """The yard is operated from a tablet and these were tuned by eye on a
@@ -283,6 +347,78 @@ class TestConsoleDesignSystem:
             body = page.replace("(value ?? '—')", '')   # the no-value placeholder
             assert '—' not in body, path
             assert '&mdash;' not in body, path
+
+
+class TestCameraHostIsNotAnOperatorSetting:
+    """It has one correct value on a yard - the camera and the web server are
+    the same Pi - and one obscure other use, pointing a laptop's web_server at
+    the Pi's camera while developing. A control whose reachable settings are
+    "correct" and "broken" does not belong on a page used under pressure.
+
+    It stays a real setting, readable by code and overridable by CAMERA_HOST.
+    """
+
+    def test_it_is_not_on_the_settings_page(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'tunCameraHost' not in page
+        assert 'Camera host' not in page
+
+    def test_the_endpoint_does_not_offer_it(self, client):
+        body = client.get('/operator/api/config/tunables').get_json()
+
+        assert 'cameraHost' not in body['values']
+        assert 'cameraReadyTimeout' in body['values']
+        assert 'cameraResolution' in body['values']
+
+    def test_writing_it_through_the_endpoint_is_refused(self, client):
+        """Not on the page means a request carrying it did not come from the
+        page. The endpoint is not a side door onto what the page withholds."""
+        resp = client.post('/operator/api/config/tunables',
+                           json={'cameraHost': 'attacker.local'})
+
+        assert resp.status_code == 400
+        import tunables
+        assert tunables.get('cameraHost') == 'localhost', 'must be unchanged'
+
+    def test_code_can_still_read_it(self, client):
+        import tunables, recording_control
+
+        assert 'cameraHost' in tunables.all_values()
+        assert 'localhost' in recording_control._camera_uri()
+
+
+class TestSettingsHasNoOrphanedControls:
+    """Removing a setting has to remove its input, not just its label.
+
+    The session tunables were cut by deleting the label lines, which left two
+    unlabelled "seconds" boxes and their stray </label> tags on the page. The
+    test written at the time asserted the label TEXT was gone - which it was -
+    so it passed against a page with two dead controls on it.
+    """
+
+    def test_the_session_inputs_are_gone_with_their_settings(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'tunSessionMaxAge' not in page
+        assert 'tunSessionRecheck' not in page
+
+    def test_every_input_on_the_page_has_a_label(self, client):
+        """The general form of the same bug: an input nobody can name."""
+        import re
+        page = client.get('/settings').get_data(as_text=True)
+        body = page[page.index('<body'):]
+        ids = set(re.findall(r'<input[^>]*\bid="([^"]+)"', body))
+        labelled = set(re.findall(r'\bfor="([^"]+)"', body))
+        # Controls inside a wrapping <label>, or given an aria-label, are named
+        # without a for= attribute.
+        for m in re.finditer(r'<label\b[^>]*>(.*?)</label>', body, re.S):
+            labelled |= set(re.findall(r'<input[^>]*\bid="([^"]+)"', m.group(1)))
+        labelled |= set(re.findall(r'<input[^>]*aria-label="[^"]*"[^>]*\bid="([^"]+)"', body))
+        labelled |= set(re.findall(r'<input[^>]*\bid="([^"]+)"[^>]*aria-label="[^"]*"', body))
+
+        orphans = sorted(ids - labelled)
+        assert not orphans, f'inputs with no label: {orphans}'
 
 
 class TestMonitorBacklog:
@@ -366,3 +502,191 @@ class TestMonitorSimFeed:
 
         assert 'let seenAnything = false;' in js
         assert 'if (!seenAnything) {' in js
+
+
+class TestFooterSpeaksOnlyOnTrouble:
+    """It reported "Last checked: 16:13:05" on a healthy page - a timestamp
+    nobody reads, saying nothing is the matter. Worse than useless: it trains
+    the eye to skip the one line that carries the failures."""
+
+    def test_it_starts_hidden(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert '<div class="footer" id="footer" hidden></div>' in page
+
+    def test_a_healthy_poll_clears_it(self, client):
+        """Asserts the assignment, not the words.
+
+        The first version failed on the comment written to explain the change,
+        which mentions the old "Last checked" text - the same trap as asserting
+        a removed field by its label. Look at what the code does.
+        """
+        page = client.get('/settings').get_data(as_text=True)
+        script = page[page.index('<script>'):]
+
+        assert "setFooter('')" in script
+        assert "textContent =\n                    'Last checked" not in script
+        assert "setFooter('Last checked" not in script
+
+    def test_failures_and_staleness_still_show(self, client):
+        """Quieting it must not silence it. These are the states worth a line."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'Showing cached status' in page
+        assert 'Fetch failed' in page
+
+
+class TestOneCameraTruth:
+    """There were three answers to "is the camera working" and pages mixed
+    them: /api/status said the port was open, /api/camera/ready said frames
+    were arriving, /operator/api/camera said what camera_control believed. So
+    Settings could insist the camera was fine while the run station refused to
+    record, both truthfully reporting their own poll.
+    """
+
+    def test_every_endpoint_serves_the_same_snapshot(self, client, monkeypatch):
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+
+        status = client.get('/api/status').get_json()['camera']
+        ready = client.get('/api/camera/ready').get_json()
+        operator = client.get('/operator/api/camera').get_json()
+
+        assert status['ready'] == ready['ready'] == operator['ready'] is True
+        assert status['listening'] == operator['listening'] is True
+
+    def test_they_cannot_disagree_when_frames_stop(self, client, monkeypatch):
+        """The state that matters: listening, but producing nothing."""
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: (False, 'no frame received'))
+
+        status = client.get('/api/status').get_json()['camera']
+        operator = client.get('/operator/api/camera').get_json()
+
+        assert status['listening'] is True and status['ready'] is False
+        assert operator['listening'] is True and operator['ready'] is False
+
+    def test_the_probe_is_shared_not_repeated_per_caller(self, client, monkeypatch):
+        """Three pages polling every five seconds must not mean three competing
+        camera clients per cycle."""
+        import camera_state, recording_control
+        monkeypatch.setattr(camera_state, '_listening', lambda host, port: True)
+        calls = []
+        monkeypatch.setattr(recording_control, 'is_ready',
+                            lambda timeout=None: calls.append(1) or (True, None))
+
+        client.get('/api/status')
+        client.get('/api/camera/ready')
+        client.get('/operator/api/camera')
+
+        assert len(calls) == 1, f'probed {len(calls)} times for three callers'
+
+    def test_starting_the_camera_drops_the_cached_answer(self, client, monkeypatch):
+        """Otherwise the next poll reports the state from before the button."""
+        import camera_state, camera_control
+        monkeypatch.setattr(camera_control, 'start', lambda camera_index=None: (True, 'started'))
+        client.get('/api/status')
+
+        client.post('/operator/api/camera/start')
+
+        assert camera_state._cache['snapshot'] is None
+
+    def test_no_page_polls_the_camera_on_its_own(self, client):
+        page = client.get('/run/').get_data(as_text=True)
+        script = page[page.index('<script>'):]
+        # The only remaining mention is the comment explaining why it stopped.
+        assert "fetch('/api/camera/ready')" not in script
+
+        settings = client.get('/settings').get_data(as_text=True)
+        assert 'setInterval(loadCamera' not in settings
+
+
+class TestSettingsIsQuietWhenNothingIsWrong:
+    """Every line on this page should be earning its place. A page an operator
+    scans under pressure is one where anything permanent and uninformative
+    trains the eye to skip the region that carries the real message."""
+
+    def test_the_camera_message_strip_is_hidden_until_there_is_a_message(self, client):
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'id="camera-msg-panel" hidden' in page
+        assert 'panel.hidden = !text' in page
+
+    def test_who_manages_the_camera_sits_with_the_camera_controls(self, client):
+        """It was adrift in its own strip under the whole module, describing a
+        row two rows above it."""
+        page = client.get('/settings').get_data(as_text=True)
+        row = page[page.index('id="card-camera"'):page.index('id="camera-msg-panel"')]
+
+        assert 'id="camera-managed"' in row
+
+    def test_the_quality_buttons_carry_their_own_dimensions(self, client):
+        """The 4:3 was a line of grey prose repeating what 640 x 480 and
+        1280 x 960 already say on the buttons themselves."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert '4:3 like the camera' in page          # on the button, as a title
+        assert 'The camera is 4:3 at every setting' not in page
+
+
+class TestSettingsSpeaksTheConsoleLanguage:
+    """Settings had invented its own vocabulary and stopped looking like the
+    console it belongs to: no eyebrow, a page-local title class, and section
+    headings styled as small faint uppercase labels rather than titles. The
+    result read as a form dump bolted onto the side of the app.
+    """
+
+    def _page(self, path):
+        import web_server
+        web_server.app.config['TESTING'] = True
+        with web_server.app.test_client() as client:
+            return client.get(path).get_data(as_text=True)
+
+    def test_it_has_the_same_page_header_as_every_other_page(self):
+        page = self._page('/settings')
+        assert 'class="eyebrow"' in page
+        assert 'class="page-title"' in page
+        assert 'class="page-sub"' in page
+
+    def test_the_header_classes_are_the_shared_ones(self):
+        """Not a page-local h-page that only looks similar."""
+        page = self._page('/settings')
+        assert 'h-page' not in page
+        assert 'headrow' not in page
+
+    def test_section_headings_use_the_shared_card_title(self):
+        page = self._page('/settings')
+        assert page.count('class="card-title') >= 3
+        # The faint uppercase label this replaced.
+        assert 'h-card' not in page
+
+    def test_run_and_settings_name_a_heading_the_same_way(self):
+        """One definition, not two that happen to agree today."""
+        import re
+        run, settings = self._page('/run/'), self._page('/settings')
+        assert 'card-title' in run and 'card-title' in settings
+        # A bare redefinition is the drift. A scoped override like
+        # `.card-head .card-title { margin-bottom: 0 }` is a page adapting the
+        # shared rule to its own layout, which is the point of having one.
+        for name, page in (('run', run), ('settings', settings)):
+            assert not re.search(r'^\s*\.card-title\s*\{', page, re.M), \
+                f'{name} redefines card-title; it belongs in yard-base.css'
+
+        # And the shared sheet must actually define it. Without this the rule
+        # above is satisfied by nobody defining it anywhere, which is how both
+        # pages would quietly lose the styling they are asserting they share.
+        import web_server
+        web_server.app.config['TESTING'] = True
+        with web_server.app.test_client() as client:
+            css = client.get('/static/yard-base.css').get_data(as_text=True)
+        assert re.search(r'\.console\s+\.card-title\s*\{', css), \
+            'yard-base.css no longer defines the shared card-title'
+
+    def test_heading_levels_do_not_skip(self):
+        """h1 straight to h3 announces a missing level to a screen reader."""
+        import re
+        levels = sorted({int(m) for m in re.findall(r'<h([1-6])[ >]', self._page('/settings'))})
+        assert levels == list(range(1, len(levels) + 1)), f'levels present: {levels}'

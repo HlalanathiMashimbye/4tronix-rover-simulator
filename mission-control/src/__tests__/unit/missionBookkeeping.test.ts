@@ -14,6 +14,7 @@ import {
   decideResolve,
   effectiveStatus,
   type RunSnapshot,
+  decideAnotherRun,
 } from '@/core/domain/services/missionBookkeeping';
 
 function snapshot(over: Partial<RunSnapshot> = {}): RunSnapshot {
@@ -164,5 +165,60 @@ describe('leaving a note for the learner', () => {
       expect(decision.change.status).toBeNull();
       expect(decision.change.clearsReview).toBe(false);
     }
+  });
+});
+
+describe('logging another run', () => {
+  /**
+   * The yard keeps every attempt's video - recordings are named
+   * <mission>__<yard>__<stamp>.mp4 so a re-run cannot overwrite the first.
+   * Mission Control could not keep pace: a run was only created when an
+   * operator marked a mission complete, and decideComplete refuses once it is
+   * settled, so a mission had exactly one run per yard forever and the second
+   * video had nothing to attach to.
+   */
+  it('is allowed once the current run has settled', () => {
+    for (const status of ['completed', 'cancelled', 'failed'] as const) {
+      const decision = decideAnotherRun({
+        runStatus: status, missionStatus: status, needsReview: false,
+      });
+      expect(decision).toEqual({
+        ok: true,
+        change: { status: 'completed', clearsReview: true },
+      });
+    }
+  });
+
+  it('is refused while the current run is still open', () => {
+    // Two live runs of one mission at one yard is not a thing that happens,
+    // and recording it would put the queue into a state nobody can read.
+    for (const status of ['queued', 'processing'] as const) {
+      const decision = decideAnotherRun({
+        runStatus: status, missionStatus: status, needsReview: false,
+      });
+      expect(decision.ok).toBe(false);
+      if (!decision.ok) expect(decision.error).toContain(status);
+    }
+  });
+
+  it('records the new run as completed, not queued', () => {
+    // An operator logs it after watching it finish; a run that did not finish
+    // produces no video and needs no record. It also has to carry a
+    // completedAt, which the repository only stamps for 'completed', because
+    // that is what runToLink orders candidates by.
+    const decision = decideAnotherRun({
+      runStatus: 'completed', missionStatus: 'completed', needsReview: false,
+    });
+
+    expect(decision.ok && decision.change.status).toBe('completed');
+  });
+
+  it('falls back to the mission when the yard never wrote a run', () => {
+    // The offline-yard case the rest of this file exists for.
+    const decision = decideAnotherRun({
+      runStatus: null, missionStatus: 'completed', needsReview: false,
+    });
+
+    expect(decision.ok).toBe(true);
   });
 });

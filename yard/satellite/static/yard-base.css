@@ -362,9 +362,16 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 .console h1, .console h2, .console h3 { font-family: var(--font-sans); letter-spacing: normal; }
 .console .h-page { font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; color: var(--heading); letter-spacing: -0.01em; }
 .console .h-panel { font-family: var(--font-display); font-size: 1rem; font-weight: 700; color: var(--heading); }
-.console .h-card {
-  font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.07em; color: var(--text-faint); margin-bottom: 0.7rem;
+/* A card's heading, shared by the run station and settings so the two cannot
+   drift apart. Sentence case at reading size, not a small faint uppercase
+   label: these name sections of a page, and a label-sized heading made
+   settings read as a form dump rather than a set of titled things. */
+.console .card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+}
+.console .card-title {
+  color: var(--heading); font-size: var(--fs-md); font-weight: 700;
+  letter-spacing: -0.01em; margin-bottom: 0.7rem;
 }
 /* A small leading icon on a card heading, shared by the queue's and the
    mission page's rail cards - one rule rather than a copy living in each

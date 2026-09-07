@@ -39,7 +39,7 @@ export function simulateCommands(commands) {
             }
             continue;
         }
-        physics.setCommand(cmd.command, cmd.speed ?? 60);
+        physics.setCommand(cmd.command, cmd.speed ?? 60, cmd.degrees);
         const durationSeconds = cmd.duration ?? (cmd.command === 'stop' ? 0 : 1);
         /**
          * Whole steps, then whatever is left over.

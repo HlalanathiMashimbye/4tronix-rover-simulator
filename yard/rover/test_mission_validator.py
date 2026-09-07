@@ -55,6 +55,21 @@ class TestCalculatePythonDuration:
         code = '# a square\nfor _ in range(4):\n\n    # drive\n    time.sleep(5)\n'
         assert calculate_python_duration(code) == 20
 
+    def test_rover_wait_counts_as_a_pause(self):
+        # rover.wait is on the allowlist and is the pause a learner writing
+        # Python by hand reaches for, but only time.sleep was ever matched, so
+        # this measured 0 and had no ceiling on either side of the LAN.
+        code = 'rover.forward(60)\nrover.wait(3)\nrover.stop()'
+        assert calculate_python_duration(code) == 3
+
+    def test_rover_wait_in_a_loop_cannot_clear_the_ceiling(self):
+        code = f'for _ in range(100):\n    rover.wait({MISSION_TIME_LIMIT_SECONDS})'
+        assert calculate_python_duration(code) > MISSION_TIME_LIMIT_SECONDS
+
+    def test_both_kinds_of_pause_add_up(self):
+        code = 'time.sleep(1)\nrover.wait(2)'
+        assert calculate_python_duration(code) == 3
+
 
 class TestFindMaxSpeedInPython:
     def test_no_speed_calls(self):

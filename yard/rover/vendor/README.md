@@ -51,9 +51,35 @@ directory ahead of the `pca9685`-only install:
   `ROVER_LIB_PATH`, so nothing in Python hardcodes an absolute path to this
   directory. It does not, and cannot, remove the need for `pca9685.py`.
 
+## The one local patch
+
+`forward()` and `reverse()` no longer recentre the four steering servos.
+
+That recentring was added here in September 2025 (`eed6222`) to stop a spin
+leaving the wheels pivoted, and it had a consequence nobody noticed for months:
+the documented way to steer is `setServo()` to angle the wheels and then
+`forward()` to drive, so recentring on entry threw the steer away one line
+later. Every steering mission drove in a straight line on hardware while the
+browser simulator drew a curve. Both call paths were affected - learner Python,
+which imports this module directly, and manual control through
+`RealRoverDriver.steer_left`.
+
+Straightening is now the caller's to say, and both callers say it: the Blockly
+generator emits four `setServo(..., 0)` lines ahead of `forward()`, and
+`RealRoverDriver.forward()` calls `_straighten()`. `spinLeft`/`spinRight` keep
+setting their pivot angles, because that geometry is what the command means
+rather than an override of what the caller asked for.
+
+`yard/rover/test_steering_reaches_the_wheels.py` imports this file for real and
+fails if the recentring comes back.
+`yard/satellite/tests/test_simulator_matches_rover.py` runs the same program
+through this library and through the compiled browser simulator and fails if
+the two disagree about where the wheels are pointing.
+
 ## Updating
 
-This is a plain copy, not a submodule. To pick up a newer 4tronix release,
+This is a plain copy, not a submodule, apart from the patch above - reapply it
+after any upgrade, or the two tests named there will tell you that you did not. To pick up a newer 4tronix release,
 replace `rover.py` with the new version and verify `drivers.py`'s calls
 (`init`, `forward`, `reverse`, `spinLeft`, `spinRight`, `setServo`, `stop`,
 `cleanup`, `setPixel`, `show`, `fromRGB`) are all still present with the same

@@ -169,9 +169,12 @@ def status():
 
 @app.route('/api/status', methods=['GET'])
 def api_status():
+    from recording_cleanup import disk_stats
+
     satellite = {
         'hostname': socket.gethostname(),
         'ip': _local_ip(),
+        'disk': disk_stats(),
     }
 
     rover = {'reachable': False, 'driver': None, 'queue_size': None, 'url': ROVER_URL}
@@ -189,28 +192,43 @@ def api_status():
     except Exception:
         pass
 
-    # Only that the camera process is accepting connections. Whether frames
-    # are actually flowing costs a websocket probe, which is too much to spend
-    # every 5 seconds on every open page - the recording start pays for that
-    # answer at the one moment it changes the outcome.
-    from camera_control import is_listening
-    camera = {
-        'reachable': is_listening(port=CAMERA_PORT),
-        'port': CAMERA_PORT,
-    }
-
-    # What is filming right now. The station starts a recording and the
-    # watcher ends it, so without this the page had no way to learn that the
-    # run it started had finished: it kept saying "Stop recording" over a file
-    # that was already closed, and never showed the operator the video.
-    from recording_control import active_recordings
+    # The one camera answer, shared with every other endpoint and page. It
+    # carries whether the port is open AND whether frames are arriving, which
+    # used to be two separate endpoints that pages mixed and matched until
+    # they contradicted each other.
+    from camera_state import snapshot
+    camera = snapshot()
 
     return jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
-        'recording': {'active': active_recordings()},
+        # Same list, kept at the top level because the run station reads it
+        # there. It is the camera's business, so it lives in the snapshot too.
+        'recording': {'active': camera['recording']},
     })
+
+
+@app.route('/api/rover/discover', methods=['GET'])
+def api_rover_discover():
+    """Rovers answering on this network.
+
+    So the normal way to set the address is picking one that demonstrably
+    works, rather than typing three things correctly from memory.
+    """
+    from rover_discovery import discover
+
+    found = discover(current_url=ROVER_URL)
+    return jsonify({'rovers': [
+        {
+            'url': f['url'],
+            'driver': f['health'].get('driver'),
+            'hardware': f['health'].get('hardware'),
+            'queueSize': f['health'].get('queue_size'),
+            'current': f['url'].rstrip('/') == ROVER_URL.rstrip('/'),
+        }
+        for f in found
+    ]})
 
 
 @app.route('/api/config/rover_url', methods=['POST'])
@@ -234,10 +252,30 @@ def api_set_rover_url():
     which still rejects anything that is not an http(s) URL.
     """
     global ROVER_URL
+    from rover_discovery import normalise, probe
+
     data = request.get_json(silent=True) or {}
-    url = (data.get('url') or '').strip().rstrip('/')
-    if not url.startswith(('http://', 'https://')) or len(url.split('//', 1)[1]) == 0:
-        return jsonify({'error': 'URL must start with http:// or https://'}), 400
+    url = normalise(data.get('url'))
+    if not url:
+        return jsonify({'error': 'Give the rover an address, like curiosity.local'}), 400
+
+    # Check something is actually there before saving it.
+    #
+    # This used to accept anything beginning with http, so a mistyped address
+    # saved happily and the yard looked broken with nothing on the page saying
+    # why. That is exactly what happened at a demo. A wrong address is the
+    # likely mistake here, not a malformed one.
+    #
+    # `force` exists for setting an address before the rover is switched on,
+    # which is legitimate - it just should not be the accident.
+    if not data.get('force'):
+        ok, detail = probe(url)
+        if not ok:
+            return jsonify({
+                'error': f'{url} did not answer as a rover: {detail}.',
+                'url': url,
+                'unreachable': True,
+            }), 409
 
     ROVER_URL = url
     persisted = True
@@ -385,15 +423,14 @@ def api_photo():
 def api_camera_ready():
     """Whether frames are actually arriving, not just whether the port is open.
 
-    /api/status answers the cheap question because it is polled every five
-    seconds by every open page. This is the expensive one, asked on demand by
-    the run station, because "primed" on an operator's screen has to mean the
-    thing that decides whether a recording contains anything.
+    Now a thin view of the same snapshot /api/status serves, so the two cannot
+    disagree. It stays because it is the honest name for the question and the
+    run station's gate reads it, but it is no longer a second source of truth.
     """
-    from recording_control import is_ready
+    from camera_state import snapshot
 
-    ready, detail = is_ready()
-    return jsonify({'ready': ready, 'detail': detail})
+    state = snapshot()
+    return jsonify({'ready': state['ready'], 'detail': state['detail']})
 
 
 @app.route('/api/recording/start', methods=['POST'])
@@ -432,7 +469,12 @@ def api_recording_start():
     ok, detail = start_recording(name, yard_id())
     if not ok:
         return jsonify({'error': detail}), 503
-    return jsonify({'status': 'recording', 'name': name})
+    # `name` is the key the caller stops with; `file` is what the run actually
+    # wrote, which now carries a per-run timestamp so a re-run cannot land on
+    # the previous attempt's video. The operator needs the second one to find
+    # the file, so it is returned rather than left to be guessed.
+    return jsonify({'status': 'recording', 'name': name,
+                    'file': os.path.basename(detail)})
 
 
 @app.route('/api/recording/stop', methods=['POST'])
@@ -466,30 +508,34 @@ def api_recordings():
     by being able to read a video of it.
     """
     from recording_control import RECORDINGS_DIR
+    from recording_cleanup import is_downloaded, disk_stats
 
     try:
         names = os.listdir(RECORDINGS_DIR)
     except OSError:
-        # No directory yet simply means nothing has been recorded.
-        return jsonify({'recordings': []})
+        return jsonify({'recordings': [], 'disk': disk_stats()})
 
     files = []
     for name in names:
         if not name.endswith('.mp4'):
             continue
+        path = os.path.join(RECORDINGS_DIR, name)
         try:
-            stat = os.stat(os.path.join(RECORDINGS_DIR, name))
+            stat = os.stat(path)
         except OSError:
             continue
+        dl, dl_at = is_downloaded(path)
         files.append({
             'name': name,
             'bytes': stat.st_size,
             'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
                 .isoformat().replace('+00:00', 'Z'),
+            'downloaded': dl,
+            'downloadedAt': dl_at.isoformat().replace('+00:00', 'Z') if dl_at else None,
         })
 
     files.sort(key=lambda f: f['modified'], reverse=True)
-    return jsonify({'recordings': files})
+    return jsonify({'recordings': files, 'disk': disk_stats()})
 
 
 @app.route('/api/recordings/<path:name>', methods=['GET'])
@@ -509,6 +555,9 @@ def api_recording_download(name):
         return jsonify({'error': 'No such recording'}), 404
     if not os.path.isfile(target):
         return jsonify({'error': 'No such recording'}), 404
+
+    from recording_cleanup import mark_downloaded
+    mark_downloaded(target)
 
     return send_file(target, mimetype='video/mp4', as_attachment=True,
                      download_name=os.path.basename(target))

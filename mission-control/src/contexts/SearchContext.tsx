@@ -23,12 +23,27 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { usePathname } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
+
+import {
+  DEFAULT_MISSION_SORT,
+  isMissionSort,
+  type MissionSort,
+} from '@/core/domain/services/missionSort';
 
 export interface SearchFilter {
   key: string;
   label: string;
-  count: number;
+  /**
+   * How many are behind this filter, or null when that is not yet known.
+   *
+   * null is not zero. The operator's Done list is only fetched when it is
+   * selected or searched, and rendering the unfetched state as 0 told an
+   * operator that nothing had ever finished at a yard holding 25 finished
+   * missions. A filter that cannot count itself yet shows no number.
+   */
+  count: number | null;
   icon: LucideIcon;
 }
 
@@ -48,6 +63,12 @@ interface SearchContextValue {
   filters: SearchFilter[];
   setFilters: (f: SearchFilter[]) => void;
   lastChange: LastChange;
+  /** How the current page's list is ordered. */
+  sort: MissionSort;
+  setSort: (s: MissionSort) => void;
+  /** Whether this page sorts at all, so the navbar knows to offer it. */
+  sortable: boolean;
+  setSortable: (on: boolean) => void;
 }
 
 const SearchContext = createContext<SearchContextValue | undefined>(undefined);
@@ -57,6 +78,9 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const [activeFilter, setActiveFilterState] = useState('all');
   const [filters, setFilters] = useState<SearchFilter[]>([]);
   const [lastChange, setLastChange] = useState<LastChange>(null);
+  const [sort, setSortState] = useState<MissionSort>(DEFAULT_MISSION_SORT);
+  const [sortable, setSortable] = useState(false);
+  const pathname = usePathname();
 
   const setQuery = useCallback((q: string) => {
     setLastChange('query');
@@ -68,9 +92,45 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     setActiveFilterState(k);
   }, []);
 
+  const setSort = useCallback((next: MissionSort) => {
+    setLastChange('filter');
+    setSortState(isMissionSort(next) ? next : DEFAULT_MISSION_SORT);
+  }, []);
+
+  /**
+   * Start every page with a clean search.
+   *
+   * This state is app-wide because the controls live in the navbar, and it
+   * used to survive navigation: going from the operator console to the site
+   * carried the typed query AND the selected filter with it. The filter keys
+   * are not shared between pages, so arriving at the feed still holding the
+   * console's "Done" or "Needs review" left it filtering on a key the feed has
+   * never heard of, and the learner saw an empty page with no explanation and
+   * no visible filter to clear.
+   *
+   * Reset on the pathname rather than on unmount of any one page, because the
+   * provider outlives every page and no page can know what comes after it.
+   */
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    // Adjusted during render, not in an effect. An effect runs AFTER the new
+    // page has rendered, so the feed would paint one frame filtered by the
+    // console's stale key - an empty list that then fills in. Resetting here
+    // means the new page's first render already sees a clean search. This is
+    // React's documented pattern for resetting state when a prop changes.
+    setLastPath(pathname);
+    setQueryState('');
+    setActiveFilterState('all');
+    setSortState(DEFAULT_MISSION_SORT);
+    setLastChange(null);
+  }
+
   const value = useMemo(
-    () => ({ query, setQuery, activeFilter, setActiveFilter, filters, setFilters, lastChange }),
-    [query, setQuery, activeFilter, setActiveFilter, filters, lastChange],
+    () => ({
+      query, setQuery, activeFilter, setActiveFilter, filters, setFilters,
+      lastChange, sort, setSort, sortable, setSortable,
+    }),
+    [query, setQuery, activeFilter, setActiveFilter, filters, lastChange, sort, setSort, sortable],
   );
 
   return <SearchContext.Provider value={value}>{children}</SearchContext.Provider>;
@@ -99,4 +159,18 @@ export function useRegisterSearchFilters(filters: SearchFilter[]) {
     return () => setFilters([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- see the note above: identity would loop, the signature is the real dependency
   }, [signature, setFilters]);
+}
+
+/**
+ * Declare that this page's list can be reordered, so the navbar offers the
+ * control. Withdrawn on unmount for the same reason the filters are: a page
+ * that does not sort must not show a sort control that does nothing.
+ */
+export function useRegisterSort() {
+  const { setSortable } = useSearch();
+
+  useEffect(() => {
+    setSortable(true);
+    return () => setSortable(false);
+  }, [setSortable]);
 }

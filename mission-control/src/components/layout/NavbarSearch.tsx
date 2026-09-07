@@ -26,6 +26,7 @@ import { useReducedMotion } from 'motion/react';
 import { Search, X } from 'lucide-react';
 import { useSearch } from '@/contexts/SearchContext';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { SortSelect } from './SortSelect';
 
 export function NavbarSearch() {
   const { query, setQuery, activeFilter, setActiveFilter, filters } = useSearch();
@@ -54,7 +55,7 @@ export function NavbarSearch() {
         // Right padding clears the chips, which are absolutely positioned over
         // the field so the whole thing reads as one control rather than an
         // input with a toolbar bolted on.
-        className="h-10 w-full min-w-[20rem] rounded-full border border-border/60 bg-card/60 pl-10 pr-40 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary lg:pr-44"
+        className="h-10 w-full min-w-[20rem] rounded-full border border-border/60 bg-card/60 pl-10 pr-44 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary lg:pr-48"
       />
 
       <div
@@ -72,6 +73,8 @@ export function NavbarSearch() {
           </button>
         )}
 
+        <SortSelect />
+
         <span className="h-6 w-px bg-border/70" aria-hidden />
 
         {filters.map((f) => {
@@ -82,7 +85,7 @@ export function NavbarSearch() {
               key={f.key}
               onClick={() => setActiveFilter(f.key)}
               aria-pressed={active}
-              title={`${f.label} (${f.count})`}
+              title={f.count === null ? f.label : `${f.label} (${f.count})`}
               className={`relative isolate inline-flex h-7 w-7 items-center justify-center overflow-hidden rounded-full transition-colors ${
                 active
                   ? 'text-primary-foreground'
@@ -101,7 +104,9 @@ export function NavbarSearch() {
               </span>
               {/* The icon alone is not a label, and the count is not rendered
                   anywhere visible - both only exist in the tooltip otherwise. */}
-              <span className="sr-only">{`${f.label}, ${f.count} missions`}</span>
+              <span className="sr-only">
+                {f.count === null ? f.label : `${f.label}, ${f.count} missions`}
+              </span>
             </button>
           );
         })}

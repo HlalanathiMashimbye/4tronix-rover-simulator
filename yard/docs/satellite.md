@@ -74,6 +74,50 @@ python web_server.py
 
 Use these steps if you can't SSH to the satellite and need to update the code by hand (e.g. the Pi is on a different network, or SSH is unavailable).
 
+### First: what is it actually running?
+
+Ask before you debug anything. A satellite serving stale code produces faults
+that exist nowhere in the repository, and you can lose an evening to them.
+
+```bash
+ssh mars@mro.local 'cd ~/4tronix-rover-simulator && git log --oneline -1 && git status --porcelain'
+```
+
+Two things to look for. The commit should be one you recognise. `git status`
+should be **empty** - anything listed there is a file that differs from every
+commit in the repository, so the machine matches no known state.
+
+### Do not copy single files onto it
+
+`scp`-ing one file to fix one thing is the fastest way to create that state. It
+is tempting mid-debug and it costs more than it saves: the tree ends up part
+one commit, part another, part something that was never committed at all, and
+the next person to look - including you, an hour later - has no way to know
+which. It happened on 3 Sep: six files had been copied over by hand and a
+seventh was a stale copy from mid-edit, so the console was missing a feature
+that was demonstrably working in the repository and in local testing.
+
+Push the branch and check it out instead. It takes the same thirty seconds and
+the machine is then a state you can name:
+
+```bash
+ssh mars@mro.local
+cd ~/4tronix-rover-simulator
+git fetch origin && git checkout -f -B <branch> origin/<branch>
+sudo systemctl restart satellite-web
+sudo systemctl restart satellite-camera
+```
+
+Two commands, not one. The `mars` user's passwordless sudo is granted per unit
+(`systemctl restart satellite-web`, `systemctl restart satellite-camera`), and
+sudo matches the whole argument list, so restarting both in a single command
+matches no rule and silently asks for a password you cannot type over a script.
+
+`git checkout -f` discards local edits to tracked files, which is the point.
+`satellite_config.json` and `recordings/` are gitignored, so the yard's own
+settings and its videos survive it. Do not reach for `git clean` - that is what
+would delete the recordings.
+
 ### What you need
 - A laptop on the same WiFi network as the satellite (`marsyard` or `mars-relay-network`)
 - USB keyboard + HDMI monitor, **or** physical access to connect one
@@ -112,7 +156,8 @@ git pull
 
 **If running under systemd** (auto-start on boot):
 ```bash
-sudo systemctl restart satellite-web satellite-camera
+sudo systemctl restart satellite-web
+sudo systemctl restart satellite-camera
 sudo systemctl status satellite-web       # check it started ok
 ```
 
@@ -186,6 +231,51 @@ button next to the URL). Edits are persisted to `satellite_config.json` and
 **take precedence over `ROVER_URL`** on the next start, so a field fix
 survives systemd restarts and reboots. Delete the file to fall back to the
 environment value.
+
+## The simulator (port 8523)
+
+The same rover server the rover runs, with the fake driver, so the console has
+something to talk to when the rover is flat, apart, or in somebody's bag. The
+queue, the run station, the monitor and the recording path all behave exactly
+as they do with hardware, because it is the same code with one object swapped
+underneath it.
+
+Its address is the point: it runs on the satellite, so it is always
+`http://localhost:8523` and never has to be found. That is why **Settings ->
+Rover -> Change** offers it as a button ("Switch to the simulator") while a
+real rover is something you go looking for. Switching back is one press too -
+the console remembers the rover address it was on.
+
+Install it on the satellite:
+
+```
+sudo cp yard/deploy/rover-sim.service /etc/systemd/system/
+sudo systemctl enable --now rover-sim
+```
+
+Leaving it installed is safe. It listens on localhost only, so nothing off the
+satellite can reach it, and the console uses it only when somebody switches.
+
+You can tell at a glance which one you are on: the Rover row reads **fake
+driver (no hardware)** in amber rather than **ok** in green, because
+`/api/status` reports the driver the server actually built.
+
+### The whole yard on one laptop
+
+The satellite and the simulator both run anywhere Python does, which is the
+fastest way to work on the console with no hardware and no network at all:
+
+```
+ROVER_DRIVER=fake python3 yard/rover/rover_server.py       # simulated rover, :8523
+ROVER_URL=http://localhost:8523 python3 yard/satellite/web_server.py   # console, :3001
+```
+
+`ROVER_DRIVER` is what makes that deterministic. Without it the driver is
+chosen by whether `/dev/i2c-1` exists, which is right on a rover and wrong
+everywhere else: a simulator on a Pi with I2C enabled would reach for motors
+that are not attached, and a rover whose library failed to import would quietly
+become a simulator and look healthy while nothing moved. `ROVER_DRIVER=real`
+refuses to fall back for that reason.
 
 ## Camera Server (port 8890)
 

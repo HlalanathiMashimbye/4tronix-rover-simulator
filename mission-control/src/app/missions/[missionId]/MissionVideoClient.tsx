@@ -15,6 +15,7 @@ import { SplitPane } from '@/components/ui/SplitPane';
 import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
+import { missionClipboardText } from '@/lib/missionClipboard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
@@ -124,8 +125,11 @@ export default function MissionVideoClient({
   const showBlocks = hasBlocks && codeView === 'blocks';
 
   const copyCode = async () => {
+    // The same payload the operator queue copies. This button used to write
+    // bare mission.code, which pasted into the run station as an anonymous
+    // block of Python: no name, no id, and so no run id for the recording.
     try {
-      await navigator.clipboard.writeText(mission.code);
+      await navigator.clipboard.writeText(missionClipboardText(mission));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -268,7 +272,7 @@ export default function MissionVideoClient({
                   onClick={copyCode}
                   className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
                 >
-                  {copied ? 'Copied' : 'Copy Python'}
+                  {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
               {showBlocks ? (

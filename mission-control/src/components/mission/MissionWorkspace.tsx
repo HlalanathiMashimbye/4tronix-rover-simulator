@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { recordMissionCreated } from '@/infrastructure/browser/platformMilestones';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
@@ -13,6 +14,9 @@ import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { simulateCommands } from '@/lib/simulateCommands';
 import { resolveYardId } from '@/infrastructure/config/yard';
+import { consumeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
+import { ROVER_WORKSPACE_STORAGE_KEY } from '@/components/mission/BlocklyEditor';
+import { Sparkles } from 'lucide-react';
 
 interface TrajectoryPoint {
   x: number;
@@ -50,6 +54,17 @@ export function MissionWorkspace() {
   const [editorMode, setEditorMode] = useState<EditorMode>(initialMode);
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [blocklyState, setBlocklyState] = useState<string | null>(null);
+  /**
+   * The exact code the simulator last ran, or null if it has not run.
+   *
+   * The code itself rather than a boolean, because the useful question is not
+   * "has anything been simulated" but "has THIS been simulated". A learner who
+   * runs a mission, sees it work, then adds four more blocks has not watched
+   * what they are about to submit - and a boolean would happily tell them they
+   * had. Compared against currentCode at render time, so any edit takes the
+   * tick away on the next keystroke and putting it back restores it.
+   */
+  const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [missionSentOpen, setMissionSentOpen] = useState(false);
@@ -72,8 +87,18 @@ export function MissionWorkspace() {
   const [missionName, setMissionName] = useState('');
 
   useEffect(() => {
-    setMissionName(generateRandomMissionName());
+    const timer = window.setTimeout(() => {
+      setMissionName(generateRandomMissionName());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
+
+  /** Set when this session arrived via "Finish & Export" from a challenge. */
+  const [importedFromChallenge, setImportedFromChallenge] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
   /**
@@ -87,6 +112,39 @@ export function MissionWorkspace() {
    */
   const [blocklyCode, setBlocklyCode] = useState('');
 
+  /**
+   * Consume a Progressive Challenges handoff, if one is waiting.
+   *
+   * Neither editor accepts an "initial state" prop - each loads whatever is
+   * under its own localStorage key the moment it mounts, and that is the
+   * only way to seed either of them. So this writes the handoff's code under
+   * the RIGHT key for its editorMode BEFORE switching editorMode itself,
+   * which is what causes that editor to mount in the first place - by
+   * construction, the seed lands before there is anything to race.
+   */
+  useEffect(() => {
+    const handoff = consumeChallengeHandoff();
+    if (!handoff) return;
+
+    try {
+      if (handoff.editorMode === 'blockly' && handoff.blocklyState) {
+        localStorage.setItem(ROVER_WORKSPACE_STORAGE_KEY, handoff.blocklyState);
+      } else {
+        localStorage.setItem('rover_monaco_code', handoff.code);
+      }
+    } catch {
+      // localStorage unavailable - the editor falls back to its own default,
+      // but the code/name still make it into the submission below.
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from a sessionStorage handoff; not readable during SSR render, same pattern as the missionName effect above
+    setCurrentCode(handoff.code);
+    setBlocklyCode(handoff.code);
+    if (handoff.blocklyState) setBlocklyState(handoff.blocklyState);
+    setEditorMode(handoff.editorMode);
+    setImportedFromChallenge({ id: handoff.challengeId, title: handoff.challengeTitle });
+  }, []);
+
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
   const runSimulation = (commands: SimulationCommand[]) => {
@@ -94,6 +152,7 @@ export function MissionWorkspace() {
     const simulated = simulateCommands(commands);
     setTrajectory(simulated);
     setIsPlaying(true);
+    setSimulatedCode(currentCode);
   };
 
   // Switching editor mode starts a clean simulator: clear the previous run's
@@ -103,6 +162,9 @@ export function MissionWorkspace() {
     setTrajectory([]);
     setIsPlaying(false);
     setError(null);
+    // The cleared canvas is no longer a run of anything, so the submit gate
+    // closes with it.
+    setSimulatedCode(null);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -174,6 +236,7 @@ export function MissionWorkspace() {
     }
     setTrajectory([]);
     setIsPlaying(false);
+    setSimulatedCode(null);
   }, [editorMode]);
 
   const handleSubmitToQueue = async () => {
@@ -203,6 +266,9 @@ export function MissionWorkspace() {
         // shows up in their cross-device history.
         ...(learnerEmail ? { learnerEmail } : {}),
         ...(editorMode === 'blockly' && blocklyState ? { blocklyState } : {}),
+        ...(importedFromChallenge
+          ? { origin: 'challenge' as const, challengeId: importedFromChallenge.id }
+          : {}),
         name: missionName,
       });
 
@@ -223,6 +289,11 @@ export function MissionWorkspace() {
       }
 
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
+      // Recorded here rather than inferred from the line above: 'the learner
+      // has sent a mission' is a fact the Level 1 challenge asks about, and it
+      // must stay true after the latest-mission id is overwritten by the next
+      // one. See infrastructure/browser/platformMilestones.ts.
+      recordMissionCreated();
 
       setSubmitSuccess(true);
       setMissionName(generateRandomMissionName());
@@ -258,6 +329,13 @@ export function MissionWorkspace() {
 
   return (
     <div className="space-y-1.5">
+      {importedFromChallenge && (
+        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          Imported from Challenge: {importedFromChallenge.title}
+        </div>
+      )}
+
       <SplitPane
         ariaLabel="Resize build and simulator panels"
         defaultSplit={SPLIT_DEFAULT}
@@ -299,6 +377,10 @@ export function MissionWorkspace() {
                   submitting={submitting}
                   submitSuccess={submitSuccess}
                   currentCode={currentCode}
+                  // Not "has a run happened" but "has THIS been run" - see
+                  // simulatedCode. An empty program is excluded so that
+                  // clearing the editor cannot leave a stale tick behind.
+                  hasRunSimulation={simulatedCode !== null && simulatedCode === currentCode}
                 />
               )
             }

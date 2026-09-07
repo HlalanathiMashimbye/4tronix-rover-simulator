@@ -1,5 +1,15 @@
 # Bookworm Upgrade Plan
 
+> **Outcome: Bookworm works.** Tested on a Pi Zero W Rev 1.1, kernel 6.12 -
+> the 4tronix library initialises, the PCA9685 answers on I2C, and
+> `rpi_ws281x` drives the LEDs. The one rough edge is `rover.cleanup()`
+> raising inside `RPi.GPIO`'s PWM destructor, which is Bookworm's `lgpio`
+> shim and is ignored by Python.
+>
+> **The Trixie warning below held exactly as written.** A card flashed with
+> Trixie had no PWM chips, no `/dev/i2c-1` and no SPI. Worth keeping, because
+> the app's default option is Trixie.
+
 This document outlines the changes required to support Raspberry Pi OS Bookworm instead of Bullseye Legacy.
 
 > **Why not Trixie?** Trixie (Debian 13, released Oct 2025) has breaking changes that affect rpi_ws281x:

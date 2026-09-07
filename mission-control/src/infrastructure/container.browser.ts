@@ -13,9 +13,21 @@
 
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { IChallengeProgressRepository } from '@/core/domain/repositories/IChallengeProgressRepository';
+import { FirestoreChallengeProgressRepository } from '@/infrastructure/persistence/FirestoreChallengeProgressRepository';
+import { ChallengeProgressService } from '@/core/application/services/ChallengeProgressService';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 
 /** Unprivileged. Firestore rules apply. */
 export function browserMissionRepository(): IMissionRepository {
   return new FirestoreMissionRepository(getFirestoreClient());
+}
+
+/** Unprivileged. Firestore rules apply. */
+export function browserChallengeProgressRepository(): IChallengeProgressRepository {
+  return new FirestoreChallengeProgressRepository(getFirestoreClient());
+}
+
+export function challengeProgressService(): ChallengeProgressService {
+  return new ChallengeProgressService(browserChallengeProgressRepository());
 }

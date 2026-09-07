@@ -60,7 +60,7 @@ export function simulateCommands(commands: SimulationCommand[]): TrajectoryPoint
       continue;
     }
 
-    physics.setCommand(cmd.command, cmd.speed ?? 60);
+    physics.setCommand(cmd.command, cmd.speed ?? 60, cmd.degrees);
     const durationSeconds = cmd.duration ?? (cmd.command === 'stop' ? 0 : 1);
 
     /**

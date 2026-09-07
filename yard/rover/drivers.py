@@ -147,10 +147,17 @@ class RealRoverDriver(RoverDriver):
 
     def forward(self, speed: int) -> None:
         self._set_leds_forward()
+        # Straighten first, explicitly. rover.forward() used to do this itself
+        # and that is exactly what made steering impossible, so the library no
+        # longer touches the wheels - which means "drive straight" is now this
+        # method's job to say. Without it, a forward straight after a spin
+        # would drive off with the wheels still pivoted.
+        self._straighten()
         self.rover.forward(speed)
 
     def reverse(self, speed: int) -> None:
         self._set_leds_reverse()
+        self._straighten()
         self.rover.reverse(speed)
 
     def spin_left(self, speed: int) -> None:
@@ -186,9 +193,7 @@ class RealRoverDriver(RoverDriver):
     def stop(self) -> None:
         self._stop_spin_animation()
         self.rover.stop()
-        # Reset servos to center
-        for servo in [9, 11, 13, 15]:
-            self.rover.setServo(servo, 0)
+        self._straighten()
         self._set_all_leds_white()
 
     def set_leds(self, pattern: str) -> None:
@@ -205,6 +210,11 @@ class RealRoverDriver(RoverDriver):
         self.rover.stop()
         self._set_all_leds_white()
         self.rover.cleanup()
+
+    def _straighten(self) -> None:
+        """Point all four wheels along the body, for driving in a line."""
+        for servo in [9, 11, 13, 15]:
+            self.rover.setServo(servo, 0)
 
     def _pivot(self) -> None:
         """Set wheel servos to pivot position for spinning"""
@@ -282,7 +292,30 @@ class RealRoverDriver(RoverDriver):
 
 
 def create_driver() -> RoverDriver:
-    """Factory function to create appropriate driver based on environment"""
+    """Factory function to create appropriate driver based on environment.
+
+    ROVER_DRIVER overrides the detection: "fake" runs the simulator, "real"
+    insists on hardware and fails loudly if it is not there. Without it the
+    driver is chosen by whether an I2C device exists, which is right for a
+    rover and wrong everywhere else - a simulator on a Pi that happens to have
+    I2C enabled would otherwise try to drive motors that are not attached, and
+    a rover whose library failed to import would quietly become a simulator
+    and look like it was working.
+    """
+    requested = os.environ.get('ROVER_DRIVER', '').strip().lower()
+
+    if requested == 'fake':
+        return FakeRoverDriver()
+
+    if requested == 'real':
+        # No fallback on purpose. Asking for hardware and silently getting a
+        # stand-in is how a rover that never moves looks healthy.
+        return RealRoverDriver()
+
+    if requested:
+        raise ValueError(
+            f"ROVER_DRIVER must be 'fake' or 'real', not {requested!r}")
+
     # Check if running on Pi by looking for I2C device
     if os.path.exists('/dev/i2c-1'):
         try:

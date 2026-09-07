@@ -26,6 +26,8 @@ jest.mock('@/infrastructure/persistence/firebase-client', () => ({ getFirestoreC
 import {
   subscribeToYardQueue,
   ACTIVE_STATUSES,
+  SETTLED_STATUSES,
+  subscribeToYardCompleted,
   QUEUE_LIMIT,
 } from '@/infrastructure/persistence/operatorQueueService';
 
@@ -77,6 +79,56 @@ describe('the query', () => {
     const unsub = jest.fn();
     onSnapshot.mockReturnValue(unsub);
     expect(subscribeToYardQueue('curiosity', () => {}, () => {})).toBe(unsub);
+  });
+});
+
+describe('the settled list, which is the only way back to a finished mission', () => {
+  it('includes cancelled and failed, not just completed', () => {
+    /**
+     * Cancel exists so a child's work is KEPT rather than deleted - the button
+     * says "the record is kept". With this query asking for 'completed' alone,
+     * a cancelled mission was in no view the console has: not the queue, which
+     * is active work only, and not here. The record survived in Firestore and
+     * vanished from the only interface that reads it.
+     */
+    subscribeToYardCompleted('curiosity', () => {}, () => {});
+
+    expect(where).toHaveBeenCalledWith('status', 'in', SETTLED_STATUSES);
+    expect(SETTLED_STATUSES).toContain('cancelled');
+    expect(SETTLED_STATUSES).toContain('failed');
+    expect(SETTLED_STATUSES).toContain('completed');
+  });
+
+  it('does not include anything still open', () => {
+    // Otherwise a mission would appear in the queue and in Done at once, and
+    // the console concatenates the two when searching.
+    for (const status of ACTIVE_STATUSES) {
+      expect(SETTLED_STATUSES).not.toContain(status);
+    }
+  });
+
+  it('orders by submission, because a cancelled mission has no completedAt', () => {
+    /**
+     * Firestore excludes documents that lack the ordered field, so ordering
+     * this query by completedAt would drop every cancelled mission and undo
+     * the fix above. The window is chosen by submission; missionSort decides
+     * the order shown.
+     */
+    subscribeToYardCompleted('curiosity', () => {}, () => {});
+
+    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'desc');
+    expect(orderBy).not.toHaveBeenCalledWith('completedAt', 'desc');
+  });
+
+  it('carries completedAt through, so the list can be ordered by it', () => {
+    const seen: { id: string; completedAt?: string }[] = [];
+    subscribeToYardCompleted('curiosity', (m) => seen.push(...m), () => {});
+
+    emit([
+      doc('m1', { code: '', status: 'completed', submittedAt: 'a', completedAt: 'z' }),
+    ]);
+
+    expect(seen[0].completedAt).toBe('z');
   });
 });
 

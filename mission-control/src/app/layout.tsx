@@ -5,6 +5,7 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
+import { MilestoneTracker } from "@/components/layout/MilestoneTracker";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
@@ -91,7 +92,13 @@ export default function RootLayout({
       // build time), so the mismatch is expected rather than a real bug.
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col relative">
+      {/* Browser extensions (Grammarly, password managers, etc.) inject their
+          own attributes onto body before React hydrates - data-gr-ext-installed
+          and data-new-gr-c-s-check-loaded are Grammarly's. React sees those as
+          a mismatch on every load for anyone running the extension, even
+          though nothing is actually wrong. Same suppression as html above, for
+          the same reason: the diff is real but not a bug to fix. */}
+      <body className="min-h-full flex flex-col relative" suppressHydrationWarning>
         {/* Per next/script's own docs: beforeInteractive scripts are placed
             in the component tree (body is the documented location for the
             App Router - Next hoists it into <head> at build time regardless
@@ -159,6 +166,9 @@ export default function RootLayout({
               {/* Measures the id above and publishes it as --app-chrome, which
                   is what the full-height pages subtract from the viewport. */}
               <ChromeHeight />
+              {/* Renders nothing; records which pages have been opened so the
+                  Level 1 challenges can ask a learner to go and look at one. */}
+              <MilestoneTracker />
               </SearchProvider>
             </LearnerProvider>
           </ThemeProvider>
