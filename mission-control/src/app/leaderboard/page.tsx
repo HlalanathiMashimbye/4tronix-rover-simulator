@@ -167,47 +167,58 @@ export default function LeaderboardPage() {
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-border bg-card clay flex flex-col min-h-0">
-              <table className="w-full text-xs sm:text-sm flex-1">
-                <thead className="sticky top-0 bg-muted/50 shrink-0">
-                  <tr>
-                    <th className="text-left px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Rank</th>
-                    <th className="text-left px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Name</th>
-                    <th className="text-right px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Challs</th>
-                    <th className="text-right px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Score</th>
-                  </tr>
-                </thead>
-                <tbody className="overflow-y-auto block w-full max-h-[calc(100vh-var(--app-chrome)-200px)]">
-                  {entries.map((entry, index) => (
-                    <tr
-                      key={index}
-                      className={`border-t border-border hover:bg-muted/30 transition-colors flex w-full ${
-                        status?.optedIn && entry.displayName === status.displayName
-                          ? 'bg-gradient-mars/10'
-                          : ''
-                      }`}
-                    >
-                      <td className="flex-shrink-0 w-16 sm:w-20 px-3 sm:px-4 py-2 font-bold text-gradient-mars">
-                        {index === 0 && '🏆 '} {index === 1 && '🥈 '} {index === 2 && '🥉 '}
-                        #{index + 1}
-                      </td>
-                      <td className="flex-1 px-3 sm:px-4 py-2 font-semibold text-foreground truncate">
-                        {entry.displayName}
-                        {status?.optedIn && entry.displayName === status.displayName && (
-                          <span className="ml-1 text-xs bg-gradient-mars text-primary-foreground px-1.5 py-0.5 rounded">
-                            You
-                          </span>
-                        )}
-                      </td>
-                      <td className="flex-shrink-0 w-12 sm:w-16 text-right px-3 sm:px-4 py-2 text-foreground">
-                        {entry.completedChallenges}
-                      </td>
-                      <td className="flex-shrink-0 w-16 sm:w-20 text-right px-3 sm:px-4 py-2 font-bold text-gradient-mars">
-                        {entry.score}
-                      </td>
+              <div className="overflow-y-auto flex-1">
+                <table className="w-full text-xs sm:text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-20 sm:w-24" />
+                    <col className="flex-1" />
+                    <col className="w-16 sm:w-20" />
+                    <col className="w-16 sm:w-20" />
+                  </colgroup>
+                  <thead className="sticky top-0 bg-muted/50">
+                    <tr>
+                      <th className="text-left px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Rank</th>
+                      <th className="text-left px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Name</th>
+                      <th className="text-center px-3 sm:px-4 py-2 font-semibold text-muted-foreground text-xs sm:text-sm">
+                        <span className="hidden sm:inline">Challenges</span>
+                        <span className="sm:hidden">Challs</span>
+                      </th>
+                      <th className="text-right px-3 sm:px-4 py-2 font-semibold text-muted-foreground">Score</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {entries.map((entry, index) => (
+                      <tr
+                        key={index}
+                        className={`border-t border-border hover:bg-muted/30 transition-colors ${
+                          status?.optedIn && entry.displayName === status.displayName
+                            ? 'bg-gradient-mars/10'
+                            : ''
+                        }`}
+                      >
+                        <td className="px-3 sm:px-4 py-2 font-bold text-gradient-mars whitespace-nowrap">
+                          {index === 0 && '🏆 '} {index === 1 && '🥈 '} {index === 2 && '🥉 '}
+                          #{index + 1}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2 font-semibold text-foreground truncate">
+                          {entry.displayName}
+                          {status?.optedIn && entry.displayName === status.displayName && (
+                            <span className="ml-1 text-xs bg-gradient-mars text-primary-foreground px-1.5 py-0.5 rounded">
+                              You
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2 text-center text-foreground font-medium">
+                          {entry.completedChallenges}
+                        </td>
+                        <td className="px-3 sm:px-4 py-2 text-right font-bold text-gradient-mars">
+                          {entry.score}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
