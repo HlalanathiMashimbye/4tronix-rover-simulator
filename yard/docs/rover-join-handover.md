@@ -126,13 +126,29 @@ Do not spend time re-testing these. Each cost hours.
 | **Wrong password** | Failure was at *association*, which happens before the password is exchanged. A wrong key fails later, at the four-way handshake, and says so. |
 | **Protected Management Frames** | Was a real cause and disabling it was correct: the AP sets `pmf 1`. NOT the whole story. The identical `status_code=16` returned with PMF already off, and everyone reasonably assumed that box was ticked. Treat "we fixed that before" as a hypothesis. |
 | **Wrong password** (again, properly) | The rover's stored key is a 64-hex PMK equal to `PBKDF2("curiousinternet", "marsyard")`, verified by hash. And status 16 happens before the key is used. |
-| **Range** | Tested at five centimetres. |
 | **5GHz / wrong band** | The Pi Zero W is 2.4GHz only. The AP is pinned to band `bg`, channel 6. |
 | **WPA3 / SAE** | AP is forced WPA2-only: `proto rsn`, `pairwise ccmp`, `group ccmp`. |
 | **The AP being broken generally** | An iPhone, a Samsung and a MacBook have all associated with it and completed the four-way handshake. It works for other clients. |
 | **A BSSID pin on the rover** | Was added, then deliberately removed. The rover's profile is unpinned. Do not re-add it. |
 
 ## What is NOT ruled out, in the order I would check
+
+### 0. Range, which this document wrongly claimed was ruled out
+
+The row said "tested at five centimetres". That test is worthless: the rover
+was powered off for it, which its own journal shows - no disconnect was ever
+recorded, because there was nothing to disconnect. It was retracted verbally
+and the row was left standing, which is the worse of the two mistakes.
+
+So range is open. The Pi 5's internal antenna has a small footprint, no MIMO
+and no beam steering, and Raspberry Pi's own forums describe the onboard radio
+as a "mini-AP" suited to a handful of nearby devices. A phone with a far better
+antenna and far more aggressive retry behaviour joining happily says less about
+the link budget than it appears to.
+
+Re-test it properly: rover powered ON, confirmed drawing power, within a metre
+of the satellite, with the laptop hotspot OFF so there is nothing else to join.
+
 
 ### 1. Is the rover even trying?
 
