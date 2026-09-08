@@ -65,14 +65,30 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
+# Undo the NetworkManager change if this exits non-zero part way through.
+#
+# Learned the hard way: the first run died before starting hostapd, having
+# already written the unmanaged file. NetworkManager would have released wlan0
+# on its next reload with nothing to take over, so a reboot would have left the
+# yard with no access point and no obvious reason why.
+cleanup_on_failure() {
+    local rc=$?
+    [[ ${rc} -eq 0 ]] && return 0
+    echo
+    echo "!! failed (exit ${rc}). Undoing, so a reboot cannot strand the yard." >&2
+    rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
+    nmcli con modify "${NM_AP_CON}" connection.autoconnect yes 2>/dev/null || true
+    systemctl reload NetworkManager 2>/dev/null || true
+    echo "!! NetworkManager's access point is left in charge." >&2
+}
+trap cleanup_on_failure EXIT
+
 # ---------------------------------------------------------------------------
 # Revert
 # ---------------------------------------------------------------------------
 if [[ "${1:-}" == "--revert" ]]; then
     echo "== reverting to NetworkManager's access point =="
-    systemctl disable --now hostapd yard-ap-ip 2>/dev/null || true
-    rm -f /etc/dnsmasq.d/yard-ap.conf
-    systemctl restart dnsmasq 2>/dev/null || true
+    systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
     rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
     systemctl reload NetworkManager
     sleep 3
@@ -100,7 +116,29 @@ else
     USE_RAW_PSK=0
 fi
 
-echo "== plan =="
+# ---------------------------------------------------------------------------
+# 0. The clock, before anything that needs apt
+# ---------------------------------------------------------------------------
+# Non-fatal, but not cosmetic. This satellite runs five days behind, and Debian
+# 13 verifies repository signatures with sqv, which refuses a signature that is
+# "not live until" a date in its future. So apt fails to update on a machine
+# with perfectly good internet, which is how installing hostapd first went.
+#
+# It also costs debugging time: with the rover, the satellite and a laptop all
+# holding different dates, no log on one machine can be lined up against
+# another, and this fault was chased for weeks across exactly those three logs.
+if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != "yes" ]]; then
+    echo "== clock is not NTP-synced ($(date '+%F %T')), enabling timesyncd =="
+    timedatectl set-ntp true 2>/dev/null || true
+    systemctl restart systemd-timesyncd 2>/dev/null || true
+    for _ in $(seq 1 10); do
+        [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" == "yes" ]] && break
+        sleep 2
+    done
+    echo "   now: $(date '+%F %T')  synced: $(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
+fi
+
+echo "== plan ==
 echo "  device   : ${WIFI_DEV}"
 echo "  serving  : ${SSID}, 802.11g only, channel ${CHANNEL}, WPA2-PSK/CCMP"
 echo "  address  : ${AP_ADDR}/${AP_CIDR}, DHCP ${DHCP_FROM}-${DHCP_TO}"
@@ -195,25 +233,50 @@ ExecStart=/sbin/ip addr replace ${AP_ADDR}/${AP_CIDR} dev ${WIFI_DEV}
 WantedBy=multi-user.target
 UNIT
 
-# bind-interfaces so this instance cannot answer on eth0. Without it dnsmasq
+# Our own dnsmasq, driven entirely by flags.
+#
+# This machine has dnsmasq-base, which ships the binary and nothing else: no
+# dnsmasq.service, no /etc/dnsmasq.d. The first version of this script wrote a
+# file into that directory and died because it does not exist. The shape below
+# is copied from how NetworkManager itself runs dnsmasq here, flags only and
+# --conf-file=/dev/null, so it depends on the binary and nothing more.
+#
+# --bind-interfaces so this instance cannot answer on eth0. Without it dnsmasq
 # binds the wildcard and a second DHCP server appears on whatever network the
 # satellite is plugged into, which is somebody else's very bad afternoon.
-cat > /etc/dnsmasq.d/yard-ap.conf <<DNS
-interface=${WIFI_DEV}
-bind-interfaces
-dhcp-range=${DHCP_FROM},${DHCP_TO},12h
-dhcp-option=option:router,${AP_ADDR}
-dhcp-option=option:dns-server,${AP_ADDR}
-DNS
+mkdir -p /var/lib/misc
+cat > /etc/systemd/system/yard-ap-dhcp.service <<DHCP
+[Unit]
+Description=DHCP for the yard access point
+Requires=yard-ap-ip.service
+After=yard-ap-ip.service hostapd.service
 
+[Service]
+ExecStart=/usr/sbin/dnsmasq --conf-file=/dev/null --no-hosts --keep-in-foreground \
+  --bind-interfaces --except-interface=lo --interface=${WIFI_DEV} \
+  --listen-address=${AP_ADDR} \
+  --dhcp-range=${DHCP_FROM},${DHCP_TO},12h \
+  --dhcp-option=option:router,${AP_ADDR} \
+  --dhcp-option=option:dns-server,${AP_ADDR} \
+  --dhcp-leasefile=/var/lib/misc/yard-ap.leases \
+  --pid-file=/run/yard-ap-dnsmasq.pid
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+DHCP
+
+# The hostapd package ships its unit masked (symlinked to /dev/null), so the
+# unmask has to happen before anything tries to start it.
 systemctl daemon-reload
 systemctl unmask hostapd 2>/dev/null || true
-systemctl enable yard-ap-ip hostapd >/dev/null
+systemctl enable yard-ap-ip hostapd yard-ap-dhcp >/dev/null
 systemctl reload NetworkManager
 sleep 2
 systemctl restart yard-ap-ip
 systemctl restart hostapd
-systemctl restart dnsmasq
+systemctl restart yard-ap-dhcp
 
 # ---------------------------------------------------------------------------
 # 4. Revert only on real failure
@@ -236,9 +299,8 @@ bash /usr/local/sbin/yard-hostapd-revert
 CHECK
 cat > /usr/local/sbin/yard-hostapd-revert <<REVERT
 #!/usr/bin/env bash
-systemctl disable --now hostapd yard-ap-ip 2>/dev/null || true
-rm -f /etc/dnsmasq.d/yard-ap.conf /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
-systemctl restart dnsmasq 2>/dev/null || true
+systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
+rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
 systemctl reload NetworkManager
 sleep 3
 nmcli con modify "${NM_AP_CON}" connection.autoconnect yes || true
@@ -251,7 +313,7 @@ systemd-run --on-active="${CHECK_MIN}m" --unit=yard-hostapd-check \
 echo
 echo "== status =="
 systemctl is-active hostapd  | sed 's/^/  hostapd : /'
-systemctl is-active dnsmasq  | sed 's/^/  dnsmasq : /'
+systemctl is-active yard-ap-dhcp | sed 's/^/  dhcp    : /'
 ip -brief addr show "${WIFI_DEV}" | sed 's/^/  addr    : /'
 echo
 echo "The beacon is now plain 802.11g, WPA2-PSK/CCMP, no HT, no PMF, no FT."
