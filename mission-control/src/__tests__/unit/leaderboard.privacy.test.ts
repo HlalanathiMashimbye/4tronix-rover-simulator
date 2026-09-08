@@ -1,197 +1,169 @@
 /**
- * Leaderboard Privacy and Security Tests
+ * What the leaderboard is allowed to know about a child, and to publish.
  *
- * Verifies that:
- * - Raw learner IDs are never exposed
- * - Email hashes are not on leaderboard
- * - Only opted-in learners appear publicly
- * - Opt-out removes from public view
- * - No PII is leaked in any operation
+ * THIS FILE WAS REWRITTEN, and the reason matters more than the tests.
+ *
+ * It used to assert that fields named `email`, `ip`, `deviceFingerprint` and a
+ * dozen others were `undefined` on a LeaderboardEntry. Those assertions cannot
+ * fail: the entity is a fixed TypeScript interface, so it was re-testing the
+ * compiler. Proved by embedding a literal 'child@school.example' in every entry
+ * the factory returned - all sixteen tests still passed.
+ *
+ * It was also aimed at createLeaderboardEntry, which at the time had no
+ * production callers at all. The repository built its entries by hand, so the
+ * tested constructor was not the one that ran.
+ *
+ * A file called leaderboard.privacy.test.ts gets read as assurance. That one
+ * was credited as coverage and delivered none, on a feature about children.
+ *
+ * These assert two things a denylist cannot:
+ *
+ *   1. The document actually written to Firestore carries ONLY approved keys.
+ *      An allowlist fails on a field nobody anticipated, which is the whole
+ *      point - a denylist only catches leaks somebody already thought of.
+ *   2. What leaves the public endpoint is narrower still, because the entry
+ *      is keyed by a learner hash and that hash must never be published.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 import { createLeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
+import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
 
-describe('Leaderboard Privacy', () => {
-  describe('Entry structure', () => {
-    it('never stores raw learner ID', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Test User');
+/**
+ * Every key a leaderboard document may carry, and nothing else.
+ *
+ * Adding a field to the entity fails this until it is added here on purpose.
+ * That deliberate step is the control: it forces someone to look at a new
+ * field and decide whether a child's record should hold it.
+ */
+const PERMITTED_STORED_KEYS = [
+  'id',
+  'leaderboardId',
+  'displayName',
+  'score',
+  'completedChallenges',
+  'completedChallengeIds',
+  'optedIn',
+  'optedInAt',
+  'createdAt',
+  'updatedAt',
+].sort();
 
-      // Check that no raw learner ID field exists
-      expect((entry as unknown as Record<string, unknown>).learnerId).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).rawLearnerId).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).sessionId).toBeUndefined();
-    });
+/** What a stranger may see. Narrower than what is stored: no id, no hash. */
+const PERMITTED_PUBLIC_KEYS = ['displayName', 'score', 'completedChallenges'].sort();
 
-    it('never stores email or email hash', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Test User');
+/** A Firestore stand-in that records the document actually written. */
+function fakeDb() {
+  const written: Record<string, unknown>[] = [];
+  const db = {
+    collection: () => ({
+      doc: () => ({
+        get: async () => ({ exists: false }),
+        set: async (data: Record<string, unknown>) => {
+          written.push(data);
+        },
+        update: async () => {},
+      }),
+    }),
+  };
+  // Typed off the constructor rather than importing Firestore: this file is
+  // parsed without the TypeScript plugin, so `import type` does not survive.
+  type Db = ConstructorParameters<typeof FirestoreLeaderboardRepository>[0];
+  return { db: db as unknown as Db, written };
+}
 
-      // Check that no email-related fields exist
-      expect((entry as unknown as Record<string, unknown>).email).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).emailHash).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).learnerEmail).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).learnerEmailHash).toBeUndefined();
-    });
+describe('what gets stored about a child', () => {
+  it('writes only approved keys, so an unanticipated field fails', async () => {
+    const { db, written } = fakeDb();
+    const repository = new FirestoreLeaderboardRepository(db);
 
-    it('never stores device fingerprint', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Test User');
+    await repository.getOrCreate('a'.repeat(64), 'Brave Rover');
 
-      expect((entry as unknown as Record<string, unknown>).deviceFingerprint).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).fingerprint).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).browserSignature).toBeUndefined();
-    });
+    expect(written).toHaveLength(1);
 
-    it('never stores IP address or location data', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Test User');
+    // Subset, not equality: optedInAt is optional and absent until a learner
+    // opts in. What matters is that nothing UNAPPROVED appears, which a
+    // subset check still catches - an unanticipated field is not in the list.
+    const unapproved = Object.keys(written[0]).filter(
+      (k) => !PERMITTED_STORED_KEYS.includes(k),
+    );
+    expect(unapproved).toEqual([]);
 
-      expect((entry as unknown as Record<string, unknown>).ip).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).location).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).country).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).userAgent).toBeUndefined();
-    });
-
-    it('never stores mission details', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Test User');
-
-      expect((entry as unknown as Record<string, unknown>).missions).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).missionIds).toBeUndefined();
-      expect((entry as unknown as Record<string, unknown>).missionCodes).toBeUndefined();
-    });
-
-    it('stores only essential public fields', () => {
-      const entry = createLeaderboardEntry('learner-ref-hash-sha256', 'Brave Rover');
-
-      const essentialFields = {
-        id: entry.id,
-        displayName: entry.displayName,
-        score: entry.score,
-        completedChallenges: entry.completedChallenges,
-        optedIn: entry.optedIn,
-      };
-
-      expect(essentialFields).toEqual({
-        id: 'learner-ref-hash-sha256',
-        displayName: 'Brave Rover',
-        score: 0,
-        completedChallenges: 0,
-        optedIn: false,
-      });
-    });
+    // And the record is not hollow: the fields the leaderboard needs are there.
+    expect(Object.keys(written[0])).toEqual(
+      expect.arrayContaining(['id', 'displayName', 'score', 'optedIn']),
+    );
   });
 
-  describe('Opt-in/opt-out privacy', () => {
-    it('starts opted out by default', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-      expect(entry.optedIn).toBe(false);
-    });
+  it('stores no value that looks like an email address, anywhere', async () => {
+    // Belt and braces on the allowlist, and it reads on VALUES not keys, so a
+    // leak smuggled through an approved field is caught too.
+    const { db, written } = fakeDb();
+    const repository = new FirestoreLeaderboardRepository(db);
 
-    it('can be opted in', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-      entry.optedIn = true;
-      expect(entry.optedIn).toBe(true);
-    });
+    await repository.getOrCreate('a'.repeat(64), 'Brave Rover');
 
-    it('can be opted out after being in', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-      entry.optedIn = true;
-      entry.optedIn = false;
-      expect(entry.optedIn).toBe(false);
-    });
+    expect(JSON.stringify(written[0])).not.toMatch(/[^\s@]+@[^\s@]+\.[^\s@]+/);
   });
 
-  describe('Nickname anonymization', () => {
-    it('uses generated nickname, not real name', () => {
-      const entry = createLeaderboardEntry('hash1', 'Clever Comet');
+  it('is keyed by something that cannot be reversed to a learner', async () => {
+    // The id IS a learner hash, which is why it must never be published. Here
+    // it only has to be a hash rather than the raw 21-character nanoid.
+    const { db, written } = fakeDb();
+    const repository = new FirestoreLeaderboardRepository(db);
 
-      // Nickname should be from generated list, not user-provided
-      expect(entry.displayName).toBe('Clever Comet');
-      // No way to reverse-engineer learner ID from nickname
-      expect(entry.displayName.length).toBeLessThan(30);
-    });
+    await repository.getOrCreate('b'.repeat(64), 'Brave Rover');
 
-    it('same learner can have different nicknames on regeneration', () => {
-      const entry1 = createLeaderboardEntry('hash1', 'Brave Rover');
-      const entry2 = createLeaderboardEntry('hash1', 'Clever Comet');
-
-      // Same learner ref, different nickname
-      expect(entry1.id).toEqual(entry2.id);
-      expect(entry1.displayName).not.toEqual(entry2.displayName);
-    });
+    expect(written[0].id).toMatch(/^[0-9a-f]{64}$/i);
   });
 
-  describe('Private vs Public visibility', () => {
-    it('opted-out entry should not be visible publicly', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-      entry.optedIn = false;
+  it('starts opted out, so appearing publicly is always a choice', async () => {
+    const { db, written } = fakeDb();
+    const repository = new FirestoreLeaderboardRepository(db);
 
-      // This entry should be filtered out of public queries
-      const isPublic = entry.optedIn;
-      expect(isPublic).toBe(false);
-    });
+    await repository.getOrCreate('a'.repeat(64), 'Brave Rover');
 
-    it('opted-in entry has rank/visibility data', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-      entry.optedIn = true;
-      entry.score = 300;
-      entry.completedChallenges = 3;
-
-      expect(entry.optedIn).toBe(true);
-      expect(entry.score).toBeGreaterThan(0);
-      expect(entry.completedChallenges).toBeGreaterThan(0);
-    });
-
-    it('opted-in status change does not expose PII', () => {
-      const entry = createLeaderboardEntry('hash1', 'User');
-
-      // Opt in multiple times
-      entry.optedIn = true;
-      entry.optedIn = false;
-      entry.optedIn = true;
-
-      // No new fields appear that could leak data
-      const publicFields = Object.keys(entry).filter((k) =>
-        ['displayName', 'score', 'completedChallenges', 'optedIn'].includes(k)
-      );
-
-      expect(publicFields.length).toBeGreaterThan(0);
-    });
+    expect(written[0].optedIn).toBe(false);
   });
 
-  describe('No aggregate data leakage', () => {
-    it('score alone does not identify learner', () => {
-      // Multiple learners could have same score
-      const entries = [
-        createLeaderboardEntry('hash1', 'Brave Rover'),
-        createLeaderboardEntry('hash2', 'Clever Comet'),
-        createLeaderboardEntry('hash3', 'Bold Explorer'),
-      ];
+  it('builds the stored document with the domain factory, not a second copy', async () => {
+    // The repository used to hand-roll this object, so the entity and the
+    // document could drift and only one of them was ever tested.
+    const { db, written } = fakeDb();
+    const repository = new FirestoreLeaderboardRepository(db);
 
-      entries.forEach((e) => {
-        e.score = 300;
-        e.completedChallenges = 3;
-      });
+    await repository.getOrCreate('a'.repeat(64), 'Brave Rover');
+    const fromFactory = createLeaderboardEntry('a'.repeat(64), 'Brave Rover');
 
-      // All have same score, but different IDs
-      const uniqueScores = new Set(entries.map((e) => e.score));
-      const uniqueIds = new Set(entries.map((e) => e.id));
+    expect(Object.keys(written[0]).sort()).toEqual(Object.keys(fromFactory).sort());
+  });
+});
 
-      expect(uniqueScores.size).toBe(1);
-      expect(uniqueIds.size).toBe(3);
-    });
+describe('what the public endpoint may publish', () => {
+  it('is narrower than what is stored, and excludes the learner hash', () => {
+    // The stored id is a hash OF a learner. Publishing it would turn the
+    // leaderboard into a confirmation oracle for anyone holding a guess.
+    expect(PERMITTED_PUBLIC_KEYS).not.toContain('id');
+    expect(PERMITTED_PUBLIC_KEYS.every((k) => PERMITTED_STORED_KEYS.includes(k))).toBe(true);
+    expect(PERMITTED_PUBLIC_KEYS.length).toBeLessThan(PERMITTED_STORED_KEYS.length);
+  });
 
-    it('completed challenges count alone does not identify learner', () => {
-      const entries = [
-        createLeaderboardEntry('hash1', 'User 1'),
-        createLeaderboardEntry('hash2', 'User 2'),
-        createLeaderboardEntry('hash3', 'User 3'),
-      ];
+  it('matches what GET /api/leaderboard actually projects', () => {
+    /**
+     * Read out of the route source rather than restated, so the allowlist
+     * above cannot quietly drift from the code that serves the data. A test
+     * that keeps its own copy of the answer stops being a check.
+     */
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/api/leaderboard/route.ts'),
+      'utf8',
+    );
+    const projection = source.match(/entries:\s*page\.entries\.map\(\(e\)\s*=>\s*\(\{([\s\S]*?)\}\)\)/);
 
-      entries.forEach((e) => {
-        e.completedChallenges = 5;
-      });
-
-      // Multiple learners with same count
-      const uniqueCounts = new Set(entries.map((e) => e.completedChallenges));
-      expect(uniqueCounts.size).toBe(1);
-    });
+    expect(projection).not.toBeNull();
+    const projected = [...projection![1].matchAll(/(\w+)\s*:/g)].map((m) => m[1]).sort();
+    expect(projected).toEqual(PERMITTED_PUBLIC_KEYS);
   });
 });

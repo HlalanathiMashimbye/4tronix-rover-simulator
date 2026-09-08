@@ -6,7 +6,7 @@
  */
 
 import { Firestore, Query } from 'firebase-admin/firestore';
-import { LeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
+import { LeaderboardEntry, createLeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
 import {
   ILeaderboardRepository,
   LeaderboardPage,
@@ -30,18 +30,12 @@ export class FirestoreLeaderboardRepository implements ILeaderboardRepository {
       return snap.data() as LeaderboardEntry;
     }
 
-    const now = new Date().toISOString();
-    const entry: LeaderboardEntry = {
-      id: learnerRefHash,
-      leaderboardId: 'default',
-      displayName: nickname,
-      score: 0,
-      completedChallenges: 0,
-      completedChallengeIds: [],
-      optedIn: false,
-      createdAt: now,
-      updatedAt: now,
-    };
+    // The domain factory, not a second copy of it. This block used to build
+    // the entry by hand, which meant the shape of a leaderboard entry was
+    // declared in two places - and the privacy test was pointed at the one
+    // that never ran. A field added to the entity would have appeared here
+    // only if someone remembered.
+    const entry = createLeaderboardEntry(learnerRefHash, nickname);
 
     await ref.set(entry);
     return entry;
