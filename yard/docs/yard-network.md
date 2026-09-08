@@ -99,7 +99,9 @@ tells you to run:
   the firmware refused. An empty satellite log is not evidence that nothing
   arrived. Measure at the rover.
 
-## Why the rover could not join at first
+## Why the rover could not join at first, and still cannot
+
+**Read this whole section. The last paragraph retracts the first.**
 
 The access point came up correctly and the rover was still refused. It is worth
 recording exactly what that looked like, because it reads like a wrong password
@@ -117,13 +119,21 @@ wrong PSK fails later, at the four-way handshake, and says so. The all-zero
 BSSID means wpa_supplicant generated the failure locally rather than receiving
 a reject frame from the access point.
 
-The cause is Protected Management Frames. NetworkManager offers PMF by default
-and the Pi Zero W's `brcmfmac` firmware cannot negotiate it. Windows ICS does
-not offer it, which is why the rover joined the laptop hotspot instantly and
-made this look like a satellite-only fault.
+Protected Management Frames were **a** cause. NetworkManager offers PMF by
+default and the Pi Zero W's `brcmfmac` firmware cannot negotiate it, Windows ICS
+does not offer it, and `802-11-wireless-security.pmf 1` (1 means disabled) on
+the access point profile is correct and set by the setup script.
 
-`802-11-wireless-security.pmf 1` (1 means disabled) on the access point profile
-is the fix, and the setup script sets it.
+**It was not the whole cause, and this page said it was for weeks.** The
+identical `status_code=16` came back with PMF already disabled. Everyone who
+read this then reasonably ticked that box and looked elsewhere, which is the
+damage a half-true fix does in a document people trust.
+
+Status 16 is a timeout, raised by the rover when the access point never answers
+its authentication frame, and authentication happens before any of PMF, the
+cipher, the key or fast transition are negotiated. So none of them can be the
+explanation on their own. What is actually known, and what to do next, is in
+[rover-join-handover.md](rover-join-handover.md).
 
 ## Making the switch
 
