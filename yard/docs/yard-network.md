@@ -86,6 +86,19 @@ flight-recorder technique for observing a rover you cannot SSH into, and the
 discipline for switching between the two access points without confusing
 yourself.
 
+Two things from that document belong here, because they change what this page
+tells you to run:
+
+- **`setup-scripts/satellite-hostapd-ap.sh` supersedes the NetworkManager
+  script below** for debugging this. NM's AP mode is `wpa_supplicant` in AP
+  mode and gives almost no control over the beacon. The hostapd version serves
+  plain 802.11g with no HT and no WMM. It is verified working for a MacBook, an
+  iPhone and a Samsung, and is still untested against the rover.
+- **The satellite cannot diagnose this.** Its radio is `brcmfmac`, which is
+  FullMAC: association happens in chip firmware, so hostapd never sees a client
+  the firmware refused. An empty satellite log is not evidence that nothing
+  arrived. Measure at the rover.
+
 ## Why the rover could not join at first
 
 The access point came up correctly and the rover was still refused. It is worth

@@ -3,6 +3,35 @@
  * Based on legacy/simulator/roversimui.py Rover class
  */
 
+/**
+ * PROVENANCE, and one of these is known to be a guess.
+ *
+ * All three come from David's SteeringAngleCalculations.ipynb in the upstream
+ * repo, which is the derivation this whole file is a port of. His first cell:
+ *
+ *     fullSpeedCmPerSecond = 10 # a guess
+ *     vehicleWidthCm = 16.0
+ *     distanceBetweenWheelPairsCm = 8.0
+ *
+ * The comment is his. Nobody has ever measured the rover's actual full speed,
+ * and it has never been checked against hardware.
+ *
+ * WHY THAT MATTERS FOR STEER_RATE_CALIBRATION. Heading change per second works
+ * out proportional to wheelSpeedCmPerSecond x STEER_RATE_CALIBRATION, so
+ * dividing the turning radius by 0.75 is arithmetically identical to leaving
+ * the geometry alone and setting full speed to 7.5 cm/s. The calibration
+ * constant fitted below may therefore not be a steering correction at all: it
+ * may be this guess being 33% high, applied to turning only.
+ *
+ * If that is what it is, straight-line distances here are also 33% too long
+ * and nothing corrects them, which would look exactly like a mission whose
+ * corners are right and whose sides are wrong.
+ *
+ * TO SETTLE IT, one run with a tape measure. forward(60) for 3 seconds: this
+ * model predicts 18 cm, and 7.5 cm/s predicts 13.5 cm. Near 18 means 0.75 is
+ * real steering geometry and straight lines are fine. Near 13.5 means the
+ * constant below is wrong at the source and both are fixed by one number.
+ */
 const FULL_SPEED_CM_PER_SECOND = 10;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
@@ -80,6 +109,11 @@ export const SPIN_RATE_CALIBRATION = 1.178;
  * ONE SURFACE, ONE BATTERY, and read by eye at two angles. Recalibrate the
  * same way: steer a known angle for a known time, measure the degrees turned,
  * and set this to (measured) / (what the simulator draws uncalibrated).
+ *
+ * BEFORE RECALIBRATING, read the provenance note on FULL_SPEED_CM_PER_SECOND.
+ * This constant and that one are not independent, and if the speed guess is
+ * the real error then fitting this one hides it in the turns while leaving
+ * every straight line wrong.
  */
 export const STEER_RATE_CALIBRATION = 0.75;
 

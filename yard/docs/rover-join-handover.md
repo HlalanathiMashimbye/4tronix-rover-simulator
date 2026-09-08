@@ -7,46 +7,129 @@ the one technique that makes the problem observable at all.
 
 ---
 
-## RESOLVED, 8 September 2026. Read this first.
+## Status, 8 September 2026
 
-The rover was never at fault and neither was the configuration. With the rover
-**five centimetres** from the satellite, seeing it at signal 100, five
-consecutive attempts produced:
+**Not resolved.** An earlier version of this section was headed "RESOLVED" and
+was wrong. What it got right is kept below, because the reasoning is still
+sound and only the evidence under it was bad.
+
+### The retracted claim
+
+That section rested on five consecutive attempts with the rover "five
+centimetres from the satellite, seeing it at signal 100". **The rover was
+powered off for that test.** Its own journal recorded no disconnect, because
+there was nothing connected to disconnect. The measurement was void, and so was
+the conclusion drawn from it.
+
+What survives: the `status_code=16` captures are real, they came from earlier
+runs, and the reading of them holds.
 
 ```
 wlan0: Trying to associate with 88:a2:9e:05:50:21 (SSID='marsyard' freq=2437 MHz)
-wlan0: CTRL-EVENT-ASSOC-REJECT ... status_code=16
+wlan0: CTRL-EVENT-ASSOC-REJECT bssid=00:00:00:00:00:00 status_code=16
 ```
 
 Status 16 is "timeout waiting for the next frame in sequence", raised by the
-ROVER when the access point never answers its authentication frame.
-Authentication happens before any WPA2 negotiation, so the key, the cipher,
-PMF and fast transition are all irrelevant to it. The satellite's own logs
-contain no record of the rover's MAC at all.
+ROVER when the access point never answers its authentication frame. The
+all-zero BSSID means wpa_supplicant generated the failure locally rather than
+receiving a reject frame. Authentication precedes all WPA2 negotiation, so the
+key, the cipher, PMF and fast transition cannot be the cause. `freq=2437` is
+also proof the rover heard the satellite's beacon at that moment: a client
+cannot report a frequency for a network it cannot hear.
 
-In the same period a MacBook, a Samsung A05s and an iPhone each associated,
-completed the four-way handshake and took a lease in about one second. The
-rover meanwhile joins a Windows laptop hotspot and two different Android phone
-hotspots, including one deliberately moved to channel 6.
+### Why the satellite cannot diagnose this on its own
 
-So the incompatibility is specifically between the Pi Zero W's 2016 radio and
-NetworkManager's `wpa_supplicant` AP mode on a Pi 5 running Debian 13 and
-kernel 6.18. The fix is to serve the network with hostapd and a beacon pinned
-to plain 802.11g with no HT: `setup-scripts/satellite-hostapd-ap.sh`.
-
-### A second thing that fell out of this
-
-Every failed attempt at the satellite makes wpa_supplicant blacklist the
-**laptop's** BSSID, not the satellite's:
+This is the most useful thing learned, and it invalidates most of the method
+used before it.
 
 ```
-BSSID ba:d5:7a:6d:20:ab ignore list count incremented to 5, ignoring for 600 seconds
+$ readlink -f /sys/class/net/wlan0/device/driver
+/sys/bus/sdio/drivers/brcmfmac
 ```
 
-Both access points share one SSID, and the failure is recorded against the
-wrong one. That is almost certainly the old "connects to the laptop then drops
-after a certain time" report: reaching for the satellite poisons the working
-network for up to ten minutes.
+**brcmfmac is FullMAC.** Authentication and association are handled inside the
+chip firmware, not by hostapd. With `driver=nl80211` on a FullMAC part, hostapd
+only hears about a client after the firmware has already accepted it. So "the
+satellite's logs contain no record of the rover's MAC" does **not** mean the
+rover's frames never arrived. The firmware can drop them and nothing on the
+satellite will ever say so.
+
+Nearly every experiment in this document was a satellite-side change judged by
+a satellite-side test that is structurally incapable of seeing the fault. That
+is why so many came back inconclusive. **Measure at the rover.**
+
+### What is built and working
+
+`setup-scripts/satellite-hostapd-ap.sh` replaces NetworkManager's AP mode with
+hostapd, on a beacon pinned to plain 802.11g: no HT, no WMM, WPA2/CCMP only,
+`wpa_key_mgmt=WPA-PSK WPA-PSK-SHA256`. It works, for other clients, verified in
+the satellite's own journal:
+
+```
+09:17:31  STA e6:2e:aa:76:e5:7a  WPA: pairwise key handshake completed (RSN)
+09:18:01  STA 4e:08:7f:77:8c:96  WPA: pairwise key handshake completed (RSN)
+```
+
+Both took DHCP leases. A MacBook, an iPhone and a Samsung A05s have all
+associated with it.
+
+**The rover has never been observed attempting to join it.** Every rover
+observation in this document was taken against NetworkManager's AP mode. The
+hostapd work may well be the fix; it is untested against the one client it was
+written for. That is the gap.
+
+---
+
+## Next actions, in order
+
+**1. Run the flight recorder.** Nothing else should happen first. It answers
+three open questions in one pass: does the rover see the satellite's beacon,
+at what signal, and what does wpa_supplicant say when it tries.
+
+```bash
+# rover on the laptop hotspot
+scp yard/docs/setup-scripts/rover-wifi-blackbox.sh mars@curiosity.local:/tmp/
+ssh mars@curiosity.local 'sudo bash /tmp/rover-wifi-blackbox.sh install'
+# laptop hotspot OFF, hostapd up, a phone joined so the check keeps it alive
+# rover powered ON within a metre of the satellite, left 5 minutes
+# laptop hotspot ON again, wait for the rover
+ssh mars@curiosity.local 'sudo bash /tmp/rover-wifi-blackbox.sh read 200'
+```
+
+Then branch on what it shows:
+
+| Reading | Conclusion |
+|---|---|
+| `88:a2:9e:05:50:21` never appears in any scan | The beacon does not reach the rover. Radio or range, not configuration. Stop editing `hostapd.conf`. |
+| Appears, weak (worse than about -75 dBm at a metre) | Link budget. The Pi 5's internal antenna is the suspect, and an external adapter becomes the honest answer. |
+| Appears strong, association still fails | The association path. wpa_supplicant's tail in the same log names the reason, and it is the first time we will have that under hostapd. |
+
+**2. Take `ieee80211n=0` back out** once the rover joins. It is the most
+conservative beacon setting and it has a cost: wpa_supplicant ranks candidate
+BSSIDs for one SSID by estimated throughput once signal is adequate, so an
+802.11g-only satellite loses to any HT-capable laptop hotspot **regardless of
+which is closer**. That is why the rover walked past the satellite to the
+laptop with both up. It is a confound in every side-by-side test taken while it
+was set, and it must not ship.
+
+**3. Open the PR** for `fix/satellite-hostapd-ap` once there is a rover
+observation to put in it.
+
+---
+
+## Dead ends, confirmed so we stop revisiting them
+
+| Checked | Result |
+|---|---|
+| **David's original repo** (`4tronix-rover-simulator-main`) | Contains **no access point configuration at all**. Zero matches for hostapd, dnsmasq, `802-11-wireless.mode`, `nmcli con add`, `ipv4.method shared`. `mars-relay-network` appears four times and every one is "make sure everything is on the same wifi", never a thing the repo builds. If the satellite ever served that SSID, the config was made by hand and died with the reflash. **We are not restoring a known-good setup, we are the first to build one.** |
+| **Regulatory domain** | Global domain is `ZA` and `raspi-config` agrees, but `phy#0` is self-managed and reports `country 99`, Broadcom's internal world table (the giveaway is the `2474 - 2494` row, which is channel 14 and exists only in Japan). Non-blocking: that table permits 2402-2482 with no `NO-IR` flag, so channel 6 beacons legally. It does explain the nonsense `txpower 31.00 dBm` reading, which is above the table's own 20 dBm cap. |
+| **`nmcli device wifi hotspot`** | This is NetworkManager AP mode, which is what `satellite-as-access-point.sh` already builds, in a more careful form (band and channel pinned, `proto rsn`, `pairwise ccmp`, `pmf 1`). It is the configuration the `status_code=16` failures were recorded against. Running the one-liner is a step backwards. |
+| **The official Raspberry Pi networking docs** | Cover joining networks, not serving one. No AP guidance in them. |
+
+One live difference from the working laptop hotspot, parked rather than
+dismissed: `ieee80211d=1` puts a Country IE in our beacon and Windows ICS does
+not send one. NetworkManager's AP mode does not send one either and also
+failed, so it cannot be the whole story, but it is untried.
 
 ---
 
@@ -219,8 +302,8 @@ ends up on somebody's phone hotspot instead.
 
 ### 4. Compare the two access points directly
 
-This is the highest-value experiment and nobody has run it yet. The rover joins
-one and not the other, so **diff them**. From any laptop, with each one serving
+Still unrun on the rover side, which is the half that matters. The rover joins
+one access point and not the other, so **diff them** as the rover sees them. From any laptop, with each one serving
 in turn:
 
 ```bash
@@ -290,7 +373,8 @@ ip neigh show dev wlan0                # who is actually on the network
 | Satellite | Raspberry Pi 5, hostname `mro`, user `mars` |
 | Satellite AP address | `192.168.137.1`, console at `http://mro.local:3001/` |
 | **Address collision, read this** | `192.168.137.1` is ALSO the fixed gateway Windows Internet Connection Sharing uses. The satellite picks it deliberately so nothing else has to change, but it means pinging `192.168.137.1` does not tell you which machine answered. Check the gateway's MAC instead: `88:a2:9e:...` is the satellite, a locally-administered address like `ba:d5:...` is a laptop or phone hotspot. |
-| Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6, 2.4GHz, WPA2, PMF off |
+| Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6 (2437 MHz), 20 MHz, 2.4GHz, WPA2, PMF off. The OUI is a Raspberry Pi allocation, checked: this is the onboard radio, not a dongle. |
+| Satellite wifi driver | `brcmfmac` on SDIO. **FullMAC**, so association happens in firmware and hostapd cannot see a client the firmware rejected. |
 | Rover | Raspberry Pi Zero W, hostname `curiosity`, user `mars` |
 | Rover MAC prefix | `b8:27:eb:` |
 | Rover service | port 8523, `curl http://curiosity.local:8523/health` |
