@@ -58,7 +58,9 @@ CHANNEL="${CHANNEL:-6}"
 COUNTRY="${COUNTRY:-ZA}"
 WIFI_DEV="${WIFI_DEV:-wlan0}"
 NM_AP_CON="${NM_AP_CON:-yard-ap}"
-CHECK_MIN="${CHECK_MIN:-3}"
+# Long enough that somebody has actually tried to join in the meantime,
+# because that attempt is what the check now looks for.
+CHECK_MIN="${CHECK_MIN:-4}"
 
 if [[ $EUID -ne 0 ]]; then
     echo "Run this with sudo: sudo bash $0 ${1:-}" >&2
@@ -103,17 +105,39 @@ fi
 # Read rather than asked for or hardcoded. Two copies of a wifi password is how
 # the rover ends up holding one the access point does not use, and that failure
 # looks identical to this one from the outside.
-PSK="$(nmcli -s -g 802-11-wireless-security.psk con show "${NM_AP_CON}" 2>/dev/null || true)"
+# Explicit wins, then NetworkManager. Reading it from the access point that
+# already works is still right - two copies of a wifi password is how the rover
+# ends up holding one the AP does not use - but the value has to be CHECKED.
+#
+# The first attempt trusted it blindly. hostapd started, announced AP-ENABLED,
+# and every client associated and then fell straight back out: 0
+# AP-STA-CONNECTED across the whole run. Association needs no key, so a bad one
+# fails only at the four-way handshake, which looks like "incorrect password" on
+# a phone and "connection timeout" on a Mac, and looks like a perfectly healthy
+# service from the machine's own side.
+PSK="${PSK:-}"
 if [[ -z "${PSK}" ]]; then
-    echo "Could not read the passphrase from the '${NM_AP_CON}' connection." >&2
-    echo "Set it explicitly:  sudo PSK=... bash $0" >&2
-    exit 1
+    PSK="$(nmcli -s -g 802-11-wireless-security.psk con show "${NM_AP_CON}" 2>/dev/null || true)"
 fi
-if [[ ${#PSK} -eq 64 ]]; then
-    echo "The stored key is a 64-hex PMK, which hostapd needs as wpa_psk." >&2
-    USE_RAW_PSK=1
+
+reject_psk() {
+    echo "Refusing to write a key that cannot work: $1" >&2
+    echo "Pass it explicitly instead:  sudo PSK='<the passphrase>' bash $0" >&2
+    exit 1
+}
+
+[[ -z "${PSK}" ]] && reject_psk "nothing came back from '${NM_AP_CON}'"
+# nmcli prints a placeholder rather than the secret when the connection stores
+# it agent-owned. Eight characters long, so it is a VALID passphrase as far as
+# hostapd is concerned, and it would be accepted silently.
+[[ "${PSK}" == *"<"* ]] && reject_psk "it looks like a placeholder, not a secret"
+
+if [[ ${#PSK} -eq 64 && "${PSK}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    USE_RAW_PSK=1          # already a PMK, hand it over as wpa_psk
+elif [[ ${#PSK} -ge 8 && ${#PSK} -le 63 ]]; then
+    USE_RAW_PSK=0          # a passphrase, hostapd derives the PMK itself
 else
-    USE_RAW_PSK=0
+    reject_psk "length ${#PSK} is neither a passphrase (8-63) nor a PMK (64 hex)"
 fi
 
 # ---------------------------------------------------------------------------
@@ -142,7 +166,7 @@ echo "== plan =="
 echo "  device   : ${WIFI_DEV}"
 echo "  serving  : ${SSID}, 802.11g only, channel ${CHANNEL}, WPA2-PSK/CCMP"
 echo "  address  : ${AP_ADDR}/${AP_CIDR}, DHCP ${DHCP_FROM}-${DHCP_TO}"
-echo "  reverts  : automatically after ${CHECK_MIN} min if hostapd is not up"
+echo "  reverts  : automatically after ${CHECK_MIN} min unless a client has joined"
 echo
 
 # ---------------------------------------------------------------------------
@@ -290,11 +314,29 @@ systemctl restart yard-ap-dhcp
 # later re-run the installer instead of the revert.
 cat > /usr/local/sbin/yard-hostapd-check <<'CHECK'
 #!/usr/bin/env bash
-if systemctl is-active --quiet hostapd; then
-    logger -t yard-hostapd-check "hostapd is up, leaving it alone"
+#
+# RUNNING IS NOT JOINABLE, and that distinction is the whole reason this file
+# was rewritten. The first version asked systemctl whether hostapd was active,
+# it truthfully said yes, and the check left in place an access point that had
+# completed zero four-way handshakes and was turning every device away.
+#
+# satellite-as-access-point.sh warned about exactly this in its own comments.
+# It was read, quoted, and then not applied. So this asks the only question
+# that matters: has any station actually got in?
+if ! systemctl is-active --quiet hostapd; then
+    logger -t yard-hostapd-check "hostapd is not running, reverting"
+    bash /usr/local/sbin/yard-hostapd-revert
     exit 0
 fi
-logger -t yard-hostapd-check "hostapd is NOT up, reverting to NetworkManager"
+
+SINCE="$(systemctl show hostapd -p ActiveEnterTimestamp --value)"
+if journalctl -u hostapd --since "${SINCE:--10m}" --no-pager 2>/dev/null \
+     | grep -q "AP-STA-CONNECTED"; then
+    logger -t yard-hostapd-check "a station completed the handshake, keeping hostapd"
+    exit 0
+fi
+
+logger -t yard-hostapd-check "hostapd is up but NOBODY has completed a handshake, reverting"
 bash /usr/local/sbin/yard-hostapd-revert
 CHECK
 cat > /usr/local/sbin/yard-hostapd-revert <<REVERT
@@ -317,5 +359,6 @@ systemctl is-active yard-ap-dhcp | sed 's/^/  dhcp    : /'
 ip -brief addr show "${WIFI_DEV}" | sed 's/^/  addr    : /'
 echo
 echo "The beacon is now plain 802.11g, WPA2-PSK/CCMP, no HT, no PMF, no FT."
-echo "Power-cycle the rover next to the satellite and watch:"
+echo "JOIN IT FROM A PHONE NOW. If nothing completes a handshake within"
+echo "${CHECK_MIN} minutes this reverts itself. Then power-cycle the rover and watch:"
 echo "  sudo journalctl -fu hostapd | grep -i b8:27:eb"
