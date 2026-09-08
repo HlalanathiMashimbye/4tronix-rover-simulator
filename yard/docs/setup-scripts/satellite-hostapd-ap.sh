@@ -79,8 +79,6 @@ cleanup_on_failure() {
     echo
     echo "!! failed (exit ${rc}). Undoing, so a reboot cannot strand the yard." >&2
     rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
-    systemctl unmask wpa_supplicant.service 2>/dev/null || true
-    systemctl enable --now wpa_supplicant.service 2>/dev/null || true
     nmcli con modify "${NM_AP_CON}" connection.autoconnect yes 2>/dev/null || true
     systemctl reload NetworkManager 2>/dev/null || true
     echo "!! NetworkManager's access point is left in charge." >&2
@@ -93,13 +91,7 @@ trap cleanup_on_failure EXIT
 if [[ "${1:-}" == "--revert" ]]; then
     echo "== reverting to NetworkManager's access point =="
     systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
-    rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf
     systemctl daemon-reload
-    # NetworkManager's AP mode IS wpa_supplicant. Without this there is no
-    # access point to go back to, and `enable` alone is not enough: the
-    # install masks it, and a masked unit cannot be enabled or started.
-    systemctl unmask wpa_supplicant.service 2>/dev/null || true
-    systemctl enable --now wpa_supplicant.service 2>/dev/null || true
     rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
     systemctl reload NetworkManager
     sleep 3
@@ -260,62 +252,25 @@ UNMANAGED
 
 nmcli con modify "${NM_AP_CON}" connection.autoconnect no 2>/dev/null || true
 
-# AND MAKE wpa_supplicant LET GO OF THE RADIO.
+# wpa_supplicant IS LEFT ALONE, deliberately, and this used to do the opposite.
 #
-# Unmanaged stops NetworkManager configuring the device. It does NOT make
-# wpa_supplicant drop it, and the socket stays:
-#
-#   $ ls /run/wpa_supplicant/
-#   p2p-dev-wlan0
-#   wlan0            <- still registered, while hostapd owns the interface
-#
-# Two processes then handle EAPOL on one radio and the four-way handshake never
-# converges. Every client associates, the handshake dies, the client drops, and
-# it loops - which is what two whole runs of this script looked like, with the
-# passphrase verified correct by hash on both sides:
-#
-#   STA ... IEEE 802.11: associated
-#   STA ... IEEE 802.11: disassociated       (AP-STA-CONNECTED total: 0)
-#
-# NetworkManager's own AP mode is wpa_supplicant, so the revert has to start it
-# again or there is no way back.
-cat > /etc/systemd/system/hostapd.service.d/10-yard.conf.tmp 2>/dev/null || true
-mkdir -p /etc/systemd/system/hostapd.service.d
-cat > /etc/systemd/system/hostapd.service.d/10-yard.conf <<DROPIN
-[Unit]
-# If anything starts wpa_supplicant again, it and hostapd cannot share wlan0.
-Conflicts=wpa_supplicant.service
-After=wpa_supplicant.service
-DROPIN
-rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf.tmp
-# MASK, not disable. This is the difference between the third attempt and the
-# fourth.
-#
-# wpa_supplicant is D-Bus activated: NetworkManager asks for
-# fi.w1.wpa_supplicant1 and systemd starts the service on demand. `disable`
-# only stops it starting at boot, so after `systemctl disable` plus `stop` the
-# socket came straight back:
+# The theory was that wpa_supplicant keeping wlan0 registered gave the radio
+# two EAPOL handlers and broke the four-way handshake. The socket does persist
+# after the device is set unmanaged:
 #
 #   $ ls /run/wpa_supplicant/
 #   p2p-dev-wlan0
-#   wlan0            <- back again, with hostapd already running
+#   wlan0
 #
-# Masking makes the activation fail, which is the only thing that keeps the
-# radio to hostapd alone.
-systemctl mask --now wpa_supplicant.service 2>/dev/null || true
-
-# Then CHECK it, rather than assuming. Three attempts were spent on a
-# precondition that was never verified after being set.
-for _ in $(seq 1 10); do
-    [[ -e /run/wpa_supplicant/${WIFI_DEV} ]] || break
-    sleep 1
-done
-if [[ -e /run/wpa_supplicant/${WIFI_DEV} ]]; then
-    echo "wpa_supplicant still holds ${WIFI_DEV} after masking it." >&2
-    echo "hostapd cannot complete a handshake while it does." >&2
-    exit 1
-fi
-echo "== wpa_supplicant has released ${WIFI_DEV} =="
+# But hostapd -dd disproved it. hostapd ran with wpa_supplicant active and
+# clients associated normally; the handshake failed for an entirely different
+# reason, an AKM this file refused to offer. Stopping, disabling and finally
+# masking wpa_supplicant achieved nothing except taking NetworkManager's own
+# access point down with it, since NM's AP mode IS wpa_supplicant - and the
+# hard abort added to enforce it then blocked three further attempts from ever
+# reaching the fix.
+#
+# Left here as a warning: the socket looks like a smoking gun and is not one.
 
 # ---------------------------------------------------------------------------
 # 3. The address, and DHCP
@@ -424,10 +379,7 @@ CHECK
 cat > /usr/local/sbin/yard-hostapd-revert <<REVERT
 #!/usr/bin/env bash
 systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
-rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf
 systemctl daemon-reload
-systemctl unmask wpa_supplicant.service 2>/dev/null || true
-systemctl enable --now wpa_supplicant.service 2>/dev/null || true
 rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
 systemctl reload NetworkManager
 sleep 3
