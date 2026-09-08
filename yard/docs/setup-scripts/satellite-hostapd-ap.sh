@@ -201,6 +201,22 @@ fi
 #
 # No ieee80211w line at all: absent means PMF disabled, which is what the rover
 # needs and what NetworkManager's pmf 1 was already doing.
+#
+# wpa_key_mgmt LISTS BOTH, and being minimal here was a mistake that cost four
+# attempts. WPA-PSK alone looked like the conservative choice. hostapd then
+# refused every modern client outright:
+#
+#   Invalid WPA key mgmt (0x100) from 4e:08:7f:77:8c:96
+#
+# 0x100 is WPA_KEY_MGMT_PSK_SHA256. An iPhone and a MacBook both ask for
+# PSK-SHA256, and an access point that does not offer it turns them away after
+# association, which surfaces as "incorrect password" on a phone and a timeout
+# on a Mac. Offering both costs nothing: each client picks what it can do, so
+# the rover still gets plain WPA-PSK.
+#
+# The lesson is narrower than "be conservative". Restrict what the BEACON
+# advertises, since that is what the old radio has to parse. Do not restrict
+# which clients may authenticate.
 cat > /etc/hostapd/hostapd.conf <<CONF
 interface=${WIFI_DEV}
 driver=nl80211
@@ -215,7 +231,7 @@ auth_algs=1
 ignore_broadcast_ssid=0
 macaddr_acl=0
 wpa=2
-wpa_key_mgmt=WPA-PSK
+wpa_key_mgmt=WPA-PSK WPA-PSK-SHA256
 wpa_pairwise=CCMP
 rsn_pairwise=CCMP
 CONF
