@@ -79,6 +79,7 @@ cleanup_on_failure() {
     echo
     echo "!! failed (exit ${rc}). Undoing, so a reboot cannot strand the yard." >&2
     rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
+    systemctl enable --now wpa_supplicant.service 2>/dev/null || true
     nmcli con modify "${NM_AP_CON}" connection.autoconnect yes 2>/dev/null || true
     systemctl reload NetworkManager 2>/dev/null || true
     echo "!! NetworkManager's access point is left in charge." >&2
@@ -91,6 +92,11 @@ trap cleanup_on_failure EXIT
 if [[ "${1:-}" == "--revert" ]]; then
     echo "== reverting to NetworkManager's access point =="
     systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
+    rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf
+    systemctl daemon-reload
+    # NetworkManager's AP mode IS wpa_supplicant. Without this there is no
+    # access point to go back to.
+    systemctl enable --now wpa_supplicant.service 2>/dev/null || true
     rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
     systemctl reload NetworkManager
     sleep 3
@@ -235,6 +241,37 @@ UNMANAGED
 
 nmcli con modify "${NM_AP_CON}" connection.autoconnect no 2>/dev/null || true
 
+# AND MAKE wpa_supplicant LET GO OF THE RADIO.
+#
+# Unmanaged stops NetworkManager configuring the device. It does NOT make
+# wpa_supplicant drop it, and the socket stays:
+#
+#   $ ls /run/wpa_supplicant/
+#   p2p-dev-wlan0
+#   wlan0            <- still registered, while hostapd owns the interface
+#
+# Two processes then handle EAPOL on one radio and the four-way handshake never
+# converges. Every client associates, the handshake dies, the client drops, and
+# it loops - which is what two whole runs of this script looked like, with the
+# passphrase verified correct by hash on both sides:
+#
+#   STA ... IEEE 802.11: associated
+#   STA ... IEEE 802.11: disassociated       (AP-STA-CONNECTED total: 0)
+#
+# NetworkManager's own AP mode is wpa_supplicant, so the revert has to start it
+# again or there is no way back.
+cat > /etc/systemd/system/hostapd.service.d/10-yard.conf.tmp 2>/dev/null || true
+mkdir -p /etc/systemd/system/hostapd.service.d
+cat > /etc/systemd/system/hostapd.service.d/10-yard.conf <<DROPIN
+[Unit]
+# If anything starts wpa_supplicant again, it and hostapd cannot share wlan0.
+Conflicts=wpa_supplicant.service
+After=wpa_supplicant.service
+DROPIN
+rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf.tmp
+systemctl stop wpa_supplicant.service 2>/dev/null || true
+systemctl disable wpa_supplicant.service 2>/dev/null || true
+
 # ---------------------------------------------------------------------------
 # 3. The address, and DHCP
 # ---------------------------------------------------------------------------
@@ -342,6 +379,9 @@ CHECK
 cat > /usr/local/sbin/yard-hostapd-revert <<REVERT
 #!/usr/bin/env bash
 systemctl disable --now hostapd yard-ap-ip yard-ap-dhcp 2>/dev/null || true
+rm -f /etc/systemd/system/hostapd.service.d/10-yard.conf
+systemctl daemon-reload
+systemctl enable --now wpa_supplicant.service 2>/dev/null || true
 rm -f /etc/NetworkManager/conf.d/99-yard-unmanaged.conf
 systemctl reload NetworkManager
 sleep 3
