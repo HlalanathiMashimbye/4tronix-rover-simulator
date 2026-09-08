@@ -138,7 +138,7 @@ if [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" != "yes" ]]; 
     echo "   now: $(date '+%F %T')  synced: $(timedatectl show -p NTPSynchronized --value 2>/dev/null)"
 fi
 
-echo "== plan ==
+echo "== plan =="
 echo "  device   : ${WIFI_DEV}"
 echo "  serving  : ${SSID}, 802.11g only, channel ${CHANNEL}, WPA2-PSK/CCMP"
 echo "  address  : ${AP_ADDR}/${AP_CIDR}, DHCP ${DHCP_FROM}-${DHCP_TO}"
