@@ -352,28 +352,32 @@ systemctl restart yard-ap-dhcp
 cat > /usr/local/sbin/yard-hostapd-check <<'CHECK'
 #!/usr/bin/env bash
 #
-# RUNNING IS NOT JOINABLE, and that distinction is the whole reason this file
-# was rewritten. The first version asked systemctl whether hostapd was active,
-# it truthfully said yes, and the check left in place an access point that had
-# completed zero four-way handshakes and was turning every device away.
+# A DHCP LEASE IS THE PROOF, and getting this right took three goes.
 #
-# satellite-as-access-point.sh warned about exactly this in its own comments.
-# It was read, quoted, and then not applied. So this asks the only question
-# that matters: has any station actually got in?
+#   v1 asked systemctl whether hostapd was running. It truthfully said yes,
+#      so the check preserved an access point that had admitted nobody.
+#   v2 grepped the journal for AP-STA-CONNECTED. That is a control-interface
+#      event, not a syslog line, so it never appears at default verbosity and
+#      the check reverted an access point that was working perfectly - an
+#      iPhone had a lease at the time.
+#
+# A lease cannot be faked by a half-working AP. On WPA2 a client only reaches
+# DHCP after association AND the four-way handshake, so a non-empty lease file
+# means somebody genuinely got all the way in.
+LEASES=/var/lib/misc/yard-ap.leases
+
 if ! systemctl is-active --quiet hostapd; then
     logger -t yard-hostapd-check "hostapd is not running, reverting"
     bash /usr/local/sbin/yard-hostapd-revert
     exit 0
 fi
 
-SINCE="$(systemctl show hostapd -p ActiveEnterTimestamp --value)"
-if journalctl -u hostapd --since "${SINCE:--10m}" --no-pager 2>/dev/null \
-     | grep -q "AP-STA-CONNECTED"; then
-    logger -t yard-hostapd-check "a station completed the handshake, keeping hostapd"
+if [[ -s "${LEASES}" ]]; then
+    logger -t yard-hostapd-check "a client holds a DHCP lease, keeping hostapd"
     exit 0
 fi
 
-logger -t yard-hostapd-check "hostapd is up but NOBODY has completed a handshake, reverting"
+logger -t yard-hostapd-check "hostapd is up but nobody has taken a lease, reverting"
 bash /usr/local/sbin/yard-hostapd-revert
 CHECK
 cat > /usr/local/sbin/yard-hostapd-revert <<REVERT
