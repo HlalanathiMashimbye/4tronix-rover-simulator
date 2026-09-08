@@ -306,6 +306,10 @@ UNIT
 # binds the wildcard and a second DHCP server appears on whatever network the
 # satellite is plugged into, which is somebody else's very bad afternoon.
 mkdir -p /var/lib/misc
+# Emptied on every install, or the check below reads leases from a PREVIOUS
+# run and keeps an access point nobody has actually joined this time. A signal
+# that cannot go negative is not a check.
+: > /var/lib/misc/yard-ap.leases
 cat > /etc/systemd/system/yard-ap-dhcp.service <<DHCP
 [Unit]
 Description=DHCP for the yard access point
@@ -374,6 +378,17 @@ fi
 
 if [[ -s "${LEASES}" ]]; then
     logger -t yard-hostapd-check "a client holds a DHCP lease, keeping hostapd"
+    exit 0
+fi
+
+# Belt and braces. hostapd DOES record a completed handshake in the journal,
+# under "pairwise key handshake completed" - which is what should have been
+# grepped for instead of AP-STA-CONNECTED. A client that joined but took no
+# lease still counts as proof the access point is usable.
+SINCE="$(systemctl show hostapd -p ActiveEnterTimestamp --value)"
+if journalctl -u hostapd --since "${SINCE:--10m}" --no-pager 2>/dev/null \
+     | grep -q "pairwise key handshake completed"; then
+    logger -t yard-hostapd-check "a client completed the handshake, keeping hostapd"
     exit 0
 fi
 
