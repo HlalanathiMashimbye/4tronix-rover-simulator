@@ -7,6 +7,49 @@ the one technique that makes the problem observable at all.
 
 ---
 
+## RESOLVED, 8 September 2026. Read this first.
+
+The rover was never at fault and neither was the configuration. With the rover
+**five centimetres** from the satellite, seeing it at signal 100, five
+consecutive attempts produced:
+
+```
+wlan0: Trying to associate with 88:a2:9e:05:50:21 (SSID='marsyard' freq=2437 MHz)
+wlan0: CTRL-EVENT-ASSOC-REJECT ... status_code=16
+```
+
+Status 16 is "timeout waiting for the next frame in sequence", raised by the
+ROVER when the access point never answers its authentication frame.
+Authentication happens before any WPA2 negotiation, so the key, the cipher,
+PMF and fast transition are all irrelevant to it. The satellite's own logs
+contain no record of the rover's MAC at all.
+
+In the same period a MacBook, a Samsung A05s and an iPhone each associated,
+completed the four-way handshake and took a lease in about one second. The
+rover meanwhile joins a Windows laptop hotspot and two different Android phone
+hotspots, including one deliberately moved to channel 6.
+
+So the incompatibility is specifically between the Pi Zero W's 2016 radio and
+NetworkManager's `wpa_supplicant` AP mode on a Pi 5 running Debian 13 and
+kernel 6.18. The fix is to serve the network with hostapd and a beacon pinned
+to plain 802.11g with no HT: `setup-scripts/satellite-hostapd-ap.sh`.
+
+### A second thing that fell out of this
+
+Every failed attempt at the satellite makes wpa_supplicant blacklist the
+**laptop's** BSSID, not the satellite's:
+
+```
+BSSID ba:d5:7a:6d:20:ab ignore list count incremented to 5, ignoring for 600 seconds
+```
+
+Both access points share one SSID, and the failure is recorded against the
+wrong one. That is almost certainly the old "connects to the laptop then drops
+after a certain time" report: reaching for the satellite poisons the working
+network for up to ten minutes.
+
+---
+
 ## The problem in one paragraph
 
 The rover joins `marsyard` when a Windows laptop is serving it, reliably. The
@@ -81,7 +124,9 @@ Do not spend time re-testing these. Each cost hours.
 | Ruled out | Evidence |
 |---|---|
 | **Wrong password** | Failure was at *association*, which happens before the password is exchanged. A wrong key fails later, at the four-way handshake, and says so. |
-| **Protected Management Frames** | Was a real cause, now fixed. The satellite's AP sets `pmf 1` (disabled). Before that fix: `CTRL-EVENT-ASSOC-REJECT ... status_code=16`. |
+| **Protected Management Frames** | Was a real cause and disabling it was correct: the AP sets `pmf 1`. NOT the whole story. The identical `status_code=16` returned with PMF already off, and everyone reasonably assumed that box was ticked. Treat "we fixed that before" as a hypothesis. |
+| **Wrong password** (again, properly) | The rover's stored key is a 64-hex PMK equal to `PBKDF2("curiousinternet", "marsyard")`, verified by hash. And status 16 happens before the key is used. |
+| **Range** | Tested at five centimetres. |
 | **5GHz / wrong band** | The Pi Zero W is 2.4GHz only. The AP is pinned to band `bg`, channel 6. |
 | **WPA3 / SAE** | AP is forced WPA2-only: `proto rsn`, `pairwise ccmp`, `group ccmp`. |
 | **The AP being broken generally** | An iPhone, a Samsung and a MacBook have all associated with it and completed the four-way handshake. It works for other clients. |
@@ -194,8 +239,18 @@ Getting this wrong wastes a whole session, so be strict about it.
 **To test the satellite** (reproduce the bug):
 1. Laptop hotspot **off**. Confirm it is off - not just disconnected.
 2. Satellite serves `marsyard` on its own.
-3. Wait a full 10 minutes before concluding anything. NetworkManager backs off
-   after failed attempts, so an immediate check tells you nothing.
+3. Do NOT "wait 10 minutes and see". That advice was here for a year and it
+   made this unfalsifiable. Each failure doubles wpa_supplicant's backoff and
+   blacklists a BSSID for up to 600 seconds, so after a few minutes the rover
+   is sitting silent and you conclude it will not join. Force ONE attempt and
+   read the supplicant log, which says exactly what happened:
+
+   ```bash
+   sudo nmcli con modify preconfigured 802-11-wireless.bssid <ap-bssid>
+   sudo nmcli con up preconfigured
+   sudo journalctl -u wpa_supplicant -n 30 --no-pager
+   sudo nmcli con modify preconfigured 802-11-wireless.bssid ""
+   ```
 
 **The satellite is observable throughout**, which the rover is not. Plug the
 satellite into ethernet and it keeps serving `marsyard` on wifi while being
@@ -218,6 +273,7 @@ ip neigh show dev wlan0                # who is actually on the network
 | Password | `curiousinternet` |
 | Satellite | Raspberry Pi 5, hostname `mro`, user `mars` |
 | Satellite AP address | `192.168.137.1`, console at `http://mro.local:3001/` |
+| **Address collision, read this** | `192.168.137.1` is ALSO the fixed gateway Windows Internet Connection Sharing uses. The satellite picks it deliberately so nothing else has to change, but it means pinging `192.168.137.1` does not tell you which machine answered. Check the gateway's MAC instead: `88:a2:9e:...` is the satellite, a locally-administered address like `ba:d5:...` is a laptop or phone hotspot. |
 | Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6, 2.4GHz, WPA2, PMF off |
 | Rover | Raspberry Pi Zero W, hostname `curiosity`, user `mars` |
 | Rover MAC prefix | `b8:27:eb:` |
