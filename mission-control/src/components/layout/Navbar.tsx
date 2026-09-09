@@ -188,14 +188,15 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar: flat, equal-weight destinations only.
-          Create Mission is deliberately NOT one of them. It used to sit inline
+      {/* Mobile bottom tab bar: three flat, equal-weight slots. Two are
+          destinations (Home, History) and the third opens the notifications
+          panel in place, which is why Alerts is a button and not a Link.
+          Create Mission is deliberately NOT in this row. It used to sit inline
           here as an elevated slot, competing with the wayfinding links for
-          attention while not being wayfinding at all, and it is a floating
-          button below instead. That separation is the point and survives the
-          row being short: an action and a destination should not look alike.
-          See docs/challenges-branch.md - feat/challenges adds a Challenges
-          tab back into this row. */}
+          attention while not being wayfinding at all, and it is the floating
+          button below instead: an action and a destination should not look
+          alike. feat/challenges adds a fourth slot back here, a Challenges
+          tab - see docs/challenges-branch.md. */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
