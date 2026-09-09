@@ -6,9 +6,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feat/challenges]
   push:
-    branches: [main]
+    branches: [main, feat/challenges]
 
 # Public Firebase web config is required at build time. These are placeholders
 # so `next build` is deterministic in CI; they are NOT secrets (real values live

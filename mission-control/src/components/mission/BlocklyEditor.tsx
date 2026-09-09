@@ -27,13 +27,10 @@ interface BlocklyEditorProps {
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
 // so the key name need not match - but the JSON format does (Blockly.serialization).
 //
-// Exported so a Progressive Challenges handoff can seed this same key before
-// this component mounts (see infrastructure/browser/challengeHandoff.ts +
-// MissionWorkspace's consumeChallengeHandoff effect) - there is no incoming
-// "initial state" prop here, this key IS the editor's only source of truth
-// for what to load.
-export const ROVER_WORKSPACE_STORAGE_KEY = 'roverWorkspace';
-const STORAGE_KEY = ROVER_WORKSPACE_STORAGE_KEY;
+// There is no incoming "initial state" prop here: this key IS the editor's only
+// source of truth for what to load, so anything wanting to seed the editor has
+// to write this key before the component mounts.
+const STORAGE_KEY = 'roverWorkspace';
 
 export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange , onShowAsPython }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
