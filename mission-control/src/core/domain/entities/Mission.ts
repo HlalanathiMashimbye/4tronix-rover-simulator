@@ -60,11 +60,9 @@ export interface Mission {
   code: string;                      // Python code submitted by learner
   blocklyState?: string;             // Serialized Blockly workspace JSON (block-built missions only)
 
-  // Provenance, carried but never set on this branch. The Progressive
-  // Challenges feature that writes it lives on feat/challenges (see
-  // docs/challenges-branch.md); these two fields deliberately stay here so a
-  // mission written by that branch round-trips through this one unchanged,
-  // and so Mission.ts is not a merge conflict every time the branch rebases.
+  // Progressive Challenges provenance. Set only when this mission arrived via
+  // the "Finish & Export" handoff from a completed challenge - drives the
+  // [CHALLENGE SOLUTION] badge in History (MissionCard).
   origin?: 'challenge';
 
   status: MissionStatus;

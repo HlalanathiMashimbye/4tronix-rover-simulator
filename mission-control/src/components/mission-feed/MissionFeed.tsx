@@ -48,14 +48,34 @@ function matchesQuery(missions: Mission[], query: string): Mission[] {
   );
 }
 
+interface MissionFeedProps {
+  /**
+   * Fired once a "Show more missions" click has actually loaded a further
+   * page. Only the Progressive Challenges workspace supplies this - it is
+   * how Challenge 1's "browse further" step observes the real load-more
+   * button being used, without SearchContext needing to know that page-2
+   * checklist exists.
+   */
+  onLoadMore?: () => void;
+  /**
+   * Reports whether a further page exists, every time that becomes known
+   * (initial load, and after each load-more). Only the Progressive
+   * Challenges workspace supplies this - it is how Challenge 1's "browse
+   * further" step can also complete on a database with 24 or fewer
+   * missions, where the "Show more missions" button never renders at all
+   * because there is nothing further to fetch.
+   */
+  onFeedState?: (state: { hasMore: boolean }) => void;
+}
+
 /**
  * The mission discovery feed: search, status filters, and a page of cards.
  *
- * Extracted from app/page.tsx so the feed is a component in its own right
- * rather than markup welded into a route, and can be rendered wherever the
- * real platform is wanted rather than a lookalike of it.
+ * Extracted from app/page.tsx so the SAME component renders both the real
+ * home page and Challenge 1's embedded-platform workspace panel - the
+ * Progressive Challenges brief asks for the real platform, not a lookalike.
  */
-export function MissionFeed() {
+export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
   const [missions, setMissions] = useState<Mission[]>([]);
   const [cursor, setCursor] = useState<MissionCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -108,6 +128,7 @@ export function MissionFeed() {
         setMissions(page.missions);
         setCursor(page.nextCursor);
         setError(null);
+        onFeedState?.({ hasMore: page.nextCursor !== null });
       } catch (err) {
         console.error('[MissionFeed] Failed to load missions:', err);
         let errorMessage = 'Failed to load missions. ';
@@ -133,7 +154,7 @@ export function MissionFeed() {
     };
 
     loadMissions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; onFeedState is only ever called through its stable setState closure, so an older reference behaves identically to a newer one
   }, []);
 
   const loadMore = async () => {
@@ -151,6 +172,8 @@ export function MissionFeed() {
         return [...current, ...page.missions.filter((m) => !seen.has(m.id))];
       });
       setCursor(page.nextCursor);
+      onFeedState?.({ hasMore: page.nextCursor !== null });
+      onLoadMore?.();
     } catch (err) {
       console.error('[MissionFeed] Failed to load more missions:', err);
       setError('Could not load more missions. Check your connection and try again.');
