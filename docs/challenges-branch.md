@@ -55,6 +55,28 @@ git checkout main                # neither
 deploys from `main` only, on purpose: `deploy-staging.yml` is not to be given a
 second branch, or the thing David asked for stops holding.
 
+## The shape of the branch, and why it matters
+
+`feat/challenges` is **`main` plus exactly one commit**, and that commit is a
+revert of the removal. Check it before trusting a rebase:
+
+```bash
+git log --oneline feat/challenges ^main   # must print exactly one line
+```
+
+If that prints nothing, the branch is a bare pointer at some commit `main` has
+already absorbed, and **`git rebase main` will fast-forward it straight to
+`main` and delete the feature** - no conflict, no warning, nothing to notice.
+That is how the branch was first cut, and it was corrected rather than
+discovered the hard way. Rebuild it the same way if it ever happens again:
+
+```bash
+git checkout feat/challenges
+git reset --hard origin/main
+git revert --no-edit <the commit that removed the feature>
+git push --force-with-lease
+```
+
 ## Keeping the branch alive
 
 Rebase it on `main` whenever `main` moves:
@@ -62,6 +84,10 @@ Rebase it on `main` whenever `main` moves:
 ```bash
 git checkout feat/challenges && git rebase main && git push --force-with-lease
 ```
+
+`git log --oneline feat/challenges ^main` should still print one line
+afterwards. The branch is green on its own: 86 suites and 804 tests, against
+`main`'s 76 and 727.
 
 Nearly all of it is files that exist only on the branch, so they cannot
 conflict. Six files are edits to code `main` also owns, and those are where a
