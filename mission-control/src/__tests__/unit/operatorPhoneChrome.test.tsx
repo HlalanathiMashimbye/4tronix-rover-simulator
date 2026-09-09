@@ -61,6 +61,12 @@ jest.mock('@/components/learner/EmailPrompt', () => ({
   EmailPrompt: () => null,
 }));
 
+// The Challenges tab reads progress through the browser container, which
+// pulls in the Firebase client, and jsdom has no fetch for it to load against.
+jest.mock('@/hooks/useChallengeProgress', () => ({
+  useChallengeProgress: () => ({ completedCount: 0, totalCount: 0, loading: false }),
+}));
+
 import { MissionQueue } from '@/components/operator/MissionQueue';
 import { OperatorMobileBar } from '@/components/operator/OperatorMobileBar';
 import { Navbar } from '@/components/layout/Navbar';
