@@ -68,14 +68,26 @@ If that prints nothing, the branch is a bare pointer at some commit `main` has
 already absorbed, and **`git rebase main` will fast-forward it straight to
 `main` and delete the feature** - no conflict, no warning, nothing to notice.
 That is how the branch was first cut, and it was corrected rather than
-discovered the hard way. Rebuild it the same way if it ever happens again:
+discovered the hard way. Rebuild it like this:
 
 ```bash
-git checkout feat/challenges
-git reset --hard origin/main
-git revert --no-edit <the commit that removed the feature>
+git checkout -B feat/challenges origin/main
+git revert --no-commit <the commit that removed the feature>
+# three files belong on BOTH branches - keep main's copies, not the revert's
+git checkout origin/main -- .github/workflows/ci.yml docs/challenges-branch.md firestore.rules
+git add -A && git commit
 git push --force-with-lease
 ```
+
+**That third line is not optional**, and a plain `git revert` without it is
+wrong in a way that bites later. The revert drags back three files that are not
+part of the feature:
+
+| File | What a plain revert does to it |
+|---|---|
+| `.github/workflows/ci.yml` | removes `feat/challenges` from the triggers, so the commit meant to keep the branch alive is the one that stops it being tested |
+| `docs/challenges-branch.md` | deletes this document, which is what made the first rebase conflict |
+| `firestore.rules` | reverts a comment on a block that is byte-identical on both branches, buying a permanent conflict for nothing |
 
 ## Keeping the branch alive
 
