@@ -19,7 +19,6 @@ import {
   Plus,
   Sun,
   Moon,
-  Trophy,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { NotificationModal } from './NotificationModal';
@@ -27,16 +26,9 @@ import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
-import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
-  {
-    href: '/challenges',
-    label: 'Challenges',
-    mobileLabel: 'Challenges',
-    icon: Trophy,
-  },
   {
     href: '/history',
     label: 'My History',
@@ -44,12 +36,6 @@ const NAV_ITEMS = [
     // Not a plain Clock: the Pending filter chip sits a few pixels away in the
     // same bar and was using the same clock face.
     icon: HistoryIcon,
-  },
-  {
-    href: '/leaderboard',
-    label: 'Leaderboard',
-    mobileLabel: 'Leaderboard',
-    icon: Trophy,
   },
 ];
 
@@ -59,7 +45,6 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme();
 
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
-  const { completedCount, totalCount, loading: challengesLoading } = useChallengeProgress();
 
   // What the open panel shows is captured when it opens, not read live.
   // Opening marks everything seen, so a live list would empty itself in front
@@ -151,14 +136,6 @@ export function Navbar() {
                 <Link key={href} href={href} className={desktopLinkClass(href)}>
                   <Icon className="h-4 w-4" />
                   {label}
-                  {/* Progress pill: only Challenges carries one, and only once
-                      a count has actually loaded - a "0/0" flash before the
-                      hook resolves would read as broken, not empty. */}
-                  {href === '/challenges' && !challengesLoading && totalCount > 0 && (
-                    <span className="rounded-full bg-background/50 px-1.5 py-0.5 text-[9px] font-bold tabular-nums">
-                      {completedCount}/{totalCount}
-                    </span>
-                  )}
                 </Link>
               ))}
 
@@ -211,12 +188,14 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar: 4 flat, equal-weight destinations.
-          Create Mission used to sit inline here as a 5th, elevated slot. Adding
-          Challenges as a genuine destination meant a real 5th icon, which the
-          old inline treatment was deliberately built to avoid - so Create
-          Mission moves to a true floating button below instead, decoupled
-          from this row entirely rather than competing with it for a slot. */}
+      {/* Mobile bottom tab bar: flat, equal-weight destinations only.
+          Create Mission is deliberately NOT one of them. It used to sit inline
+          here as an elevated slot, competing with the wayfinding links for
+          attention while not being wayfinding at all, and it is a floating
+          button below instead. That separation is the point and survives the
+          row being short: an action and a destination should not look alike.
+          See docs/challenges-branch.md - feat/challenges adds a Challenges
+          tab back into this row. */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
@@ -227,19 +206,6 @@ export function Navbar() {
           >
             <Home className="h-5 w-5" />
             Home
-          </Link>
-
-          <Link
-            href="/challenges"
-            className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
-              isActive('/challenges') ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            <Trophy className="h-5 w-5" />
-            Challenges
-            {!challengesLoading && totalCount > 0 && completedCount < totalCount && (
-              <span className="absolute right-1 top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-            )}
           </Link>
 
           <Link
