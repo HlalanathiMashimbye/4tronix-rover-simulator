@@ -29,8 +29,9 @@ role names.
   Secret Manager secrets with their `CHANGE_ME` seed versions, and both
   runtime service accounts (staging + prod).
 
-Skipping straight to `terraform apply` is correct. Running the old bucket
-create or `gcloud services enable` will just error as already-existing.
+Skipping straight to `terraform apply -var-file=impact.tfvars` is correct.
+Running the old bucket create or `gcloud services enable` will just error as
+already-existing.
 
 ### What is left
 
@@ -50,28 +51,25 @@ gcloud config set project bt-impact-academy
 
 cd infra
 terraform init
-terraform plan
-terraform apply
+terraform plan  -var-file=impact.tfvars
+terraform apply -var-file=impact.tfvars
 ```
+
+`-var-file=impact.tfvars` is not optional for Impact. That file holds the live
+hostnames, the Resend from-address seed, and `cron_environment`. CI plans with
+the same file (see `.github/workflows/terraform-plan.yml`). A bare plan falls
+back to empty `domains` and proposes destroying both managed certs and the
+HTTPS listeners.
+
+Do not pass `demo.tfvars` against Impact state. That file targets the personal
+demo project only.
 
 **Expected plan:** Cloud Run ×2, LB invoker ×2, compute API (if not yet in
 state), plus per-env LB resources (address, NEG, backend, url map, HTTP proxy
-+ forwarding rule; HTTPS pieces only when `var.domains` is set). If you see a
-**destroy** of the Artifact Registry repo, stop — `var.region` has drifted
-from `africa-south1`.
-
-Optional hostnames (Google-managed cert + HTTPS):
-
-```bash
-# terraform.tfvars (not committed if personal), or -var / TF_VAR_domains
-domains = {
-  staging = "mission-control-staging.example.com"
-  prod    = "mission-control.example.com"
-}
-```
-
-Without `domains`, each env is HTTP on the reserved LB IP — fine for a short
-demo; point DNS and re-apply with `domains` before real mail links.
++ forwarding rule, plus HTTPS when `impact.tfvars` sets `domains`). If you see
+a **destroy** of the Artifact Registry repo, stop — `var.region` has drifted
+from `africa-south1`. If you see HTTPS cert / target-https-proxy destroys,
+you forgot `-var-file=impact.tfvars`.
 
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
@@ -95,9 +93,9 @@ terraform output
 # var is too late. Do NOT use the Cloud Run *.run.app URI: without allUsers
 # that URL returns 403 by design.
 #
-# If using var.domains: point each hostname's DNS A record at
-# `terraform output lb_ip_addresses`, then wait until the managed cert is
-# ACTIVE before relying on HTTPS smoke checks.
+# If using domains from impact.tfvars: DNS A records should already point at
+# `terraform output lb_ip_addresses`. Wait until the managed cert is ACTIVE
+# before relying on HTTPS smoke checks.
 ```
 
 **`NEXT_PUBLIC_APP_URL` / `STAGING_URL` must be the load balancer URL.** It is
@@ -156,7 +154,7 @@ out-of-band (it is a personal address, so it is not committed):
 # The sandbox redirect is no longer a Terraform variable: it sends every
 # learner email to one inbox and the sending domain is verified now. Set
 # RESEND_SANDBOX_RECIPIENT in a local .env if you need it while testing.
-terraform apply
+terraform apply -var-file=impact.tfvars
 ```
 
 Every mission email then goes to that one inbox with the intended recipient
