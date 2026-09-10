@@ -29,10 +29,10 @@
 resource "google_storage_bucket" "exports" {
   name = "${var.project_id}-firestore-backup"
 
-  # NOT var.region. A managed export requires a bucket near the database, and
-  # the database is immutably in europe-west1 (see the region note in
-  # infra/variables.tf). This is the one bucket that does not get to follow the
-  # rest of the deployment to africa-south1.
+  # NOT the deployment's region. A managed export requires a bucket near the
+  # database, and the database is immutably in europe-west1 (see the region
+  # note in infra/variables.tf). This is the one bucket that does not get to
+  # follow the rest of the deployment to africa-south1.
   location = var.firestore_location
 
   # Export and import operations reject Requester Pays and Rapid buckets, so
@@ -100,10 +100,12 @@ resource "google_storage_bucket_iam_member" "exporter_bucket" {
 resource "google_cloud_scheduler_job" "export" {
   name        = "firestore-export-weekly"
   description = "Managed Firestore export to gs://${google_storage_bucket.exports.name}, retained ${var.retention_days} days."
-  # NOT var.region, for the same reason the bucket above is not: Cloud Scheduler
-  # does not exist in africa-south1. The API rejects it outright and
-  # ListLocations returns 30 regions, none of them in Africa, so an apply fails
-  # here while the bucket, the service account and the IAM all succeed.
+  # Also not the deployment's region, for a different reason than the bucket:
+  # Cloud Scheduler does not exist in africa-south1. The API rejects it
+  # outright and ListLocations returns 30 regions, none of them in Africa, so
+  # an apply fails here while the bucket, the service account and the IAM all
+  # succeed. Two resources in this module, two regions, neither of them the
+  # one the app runs in.
   region    = var.cron_region
   schedule  = var.schedule
   time_zone = var.time_zone
