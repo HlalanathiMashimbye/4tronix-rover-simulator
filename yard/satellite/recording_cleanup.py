@@ -80,7 +80,7 @@ def _recording_files():
     ]
 
 
-def _delete(path, reason):
+def delete_recording(path, reason):
     """Delete the .mp4 and its .downloaded marker if present. Log both."""
     name = os.path.basename(path)
     try:
@@ -139,13 +139,13 @@ def _sweep():
         if downloaded and dl_at is not None:
             dl_age = now - dl_at.timestamp()
             if dl_age >= grace_seconds:
-                if _delete(path, 'downloaded %d hours ago' % int(dl_age / 3600)):
+                if delete_recording(path, 'downloaded %d hours ago' % int(dl_age / 3600)):
                     deleted.append(os.path.basename(path))
                 continue
 
         # Rule 2: older than max age regardless
         if file_age >= max_seconds:
-            if _delete(path, '%d days old' % int(file_age / 86400)):
+            if delete_recording(path, '%d days old' % int(file_age / 86400)):
                 deleted.append(os.path.basename(path))
             continue
 
@@ -171,7 +171,7 @@ def _sweep():
         for path, _mt in batch:
             if disk_stats()['free_bytes'] >= min_free_bytes:
                 return deleted
-            if _delete(path, batch_label):
+            if delete_recording(path, batch_label):
                 deleted.append(os.path.basename(path))
 
     return deleted

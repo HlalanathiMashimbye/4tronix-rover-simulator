@@ -226,6 +226,102 @@ class TestRunStation:
         assert 'Yard: ${YARD_ID}' in page
 
 
+class TestDelete:
+    """Operator-initiated deletion of recordings from the SD card."""
+
+    def test_deletes_a_single_recording(self, client, tmp_path):
+        _write(tmp_path, 'run.mp4', b'video-bytes')
+
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['run.mp4']})
+
+        assert resp.status_code == 200
+        body = resp.get_json()
+        assert body['deleted'] == ['run.mp4']
+        assert body['skipped'] == []
+        assert not (tmp_path / 'recordings' / 'run.mp4').exists()
+
+    def test_deletes_the_downloaded_marker_too(self, client, tmp_path):
+        _write(tmp_path, 'run.mp4')
+        (tmp_path / 'recordings' / 'run.mp4.downloaded').write_bytes(b'')
+
+        client.post('/api/recordings/delete', json={'names': ['run.mp4']})
+
+        assert not (tmp_path / 'recordings' / 'run.mp4.downloaded').exists()
+
+    def test_bulk_delete(self, client, tmp_path):
+        _write(tmp_path, 'a.mp4')
+        _write(tmp_path, 'b.mp4')
+        _write(tmp_path, 'c.mp4')
+
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['a.mp4', 'b.mp4', 'c.mp4']})
+
+        body = resp.get_json()
+        assert sorted(body['deleted']) == ['a.mp4', 'b.mp4', 'c.mp4']
+        assert body['skipped'] == []
+
+    def test_refuses_to_delete_an_active_recording(self, client, tmp_path, monkeypatch):
+        path = _write(tmp_path, 'active.mp4')
+        monkeypatch.setattr(recording_control, 'active_paths',
+                            lambda: {str(path)})
+
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['active.mp4']})
+
+        body = resp.get_json()
+        assert body['deleted'] == []
+        assert body['skipped'][0]['reason'] == 'currently recording'
+        assert (tmp_path / 'recordings' / 'active.mp4').exists()
+
+    @pytest.mark.parametrize('attack', [
+        '../../../etc/passwd',
+        '..%2f..%2fetc%2fpasswd',
+    ])
+    def test_path_traversal_is_rejected(self, client, attack):
+        resp = client.post('/api/recordings/delete',
+                           json={'names': [attack]})
+
+        body = resp.get_json()
+        assert body['deleted'] == []
+        assert body['skipped'][0]['reason'] == 'not found'
+
+    def test_nonexistent_file_is_skipped(self, client):
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['ghost.mp4']})
+
+        body = resp.get_json()
+        assert body['deleted'] == []
+        assert body['skipped'][0]['reason'] == 'not found'
+
+    def test_rejects_a_missing_names_list(self, client):
+        assert client.post('/api/recordings/delete', json={}).status_code == 400
+
+    def test_partial_success_reports_both(self, client, tmp_path, monkeypatch):
+        _write(tmp_path, 'good.mp4')
+        active_path = _write(tmp_path, 'active.mp4')
+        monkeypatch.setattr(recording_control, 'active_paths',
+                            lambda: {str(active_path)})
+
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['good.mp4', 'active.mp4']})
+
+        body = resp.get_json()
+        assert body['deleted'] == ['good.mp4']
+        assert len(body['skipped']) == 1
+        assert body['skipped'][0]['name'] == 'active.mp4'
+
+    def test_refuses_a_non_mp4_file(self, client, tmp_path):
+        (tmp_path / 'recordings' / 'secrets.env').write_bytes(b'SECRET=x')
+
+        resp = client.post('/api/recordings/delete',
+                           json={'names': ['secrets.env']})
+
+        body = resp.get_json()
+        assert body['deleted'] == []
+        assert (tmp_path / 'recordings' / 'secrets.env').exists()
+
+
 class TestCameraReadiness:
     """"Primed" on an operator's screen has to mean frames are arriving.
 

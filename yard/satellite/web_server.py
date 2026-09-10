@@ -563,6 +563,50 @@ def api_recording_download(name):
                      download_name=os.path.basename(target))
 
 
+@app.route('/api/recordings/delete', methods=['POST'])
+def api_recordings_delete():
+    """Delete one or more recordings from the SD card.
+
+    Accepts {"names": ["file1.mp4", "file2.mp4"]}. Each name gets the same
+    path-traversal and active-recording checks the download endpoint applies.
+    Returns which files were deleted and which were skipped, so the UI can
+    report partial success rather than all-or-nothing.
+    """
+    from recording_control import RECORDINGS_DIR, active_paths
+    from recording_cleanup import delete_recording
+
+    data = request.get_json(silent=True) or {}
+    names = data.get('names')
+    if not names or not isinstance(names, list):
+        return jsonify({'error': 'Provide a list of recording names'}), 400
+
+    root = os.path.realpath(RECORDINGS_DIR)
+    protected = active_paths()
+    deleted = []
+    skipped = []
+
+    for name in names:
+        if not isinstance(name, str):
+            skipped.append({'name': str(name), 'reason': 'invalid name'})
+            continue
+        target = os.path.realpath(os.path.join(root, name))
+        if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
+            skipped.append({'name': name, 'reason': 'not found'})
+            continue
+        if not os.path.isfile(target):
+            skipped.append({'name': name, 'reason': 'not found'})
+            continue
+        if target in protected:
+            skipped.append({'name': name, 'reason': 'currently recording'})
+            continue
+        if delete_recording(target, 'operator'):
+            deleted.append(name)
+        else:
+            skipped.append({'name': name, 'reason': 'delete failed'})
+
+    return jsonify({'deleted': deleted, 'skipped': skipped})
+
+
 @app.route('/api/health', methods=['GET'])
 def api_health():
     """Health check - also checks rover connectivity"""
