@@ -44,11 +44,11 @@ gcloud functions deploy firestore-backup \
   --no-allow-unauthenticated \
   --timeout=540 \
   --memory=512MB \
-  --set-env-vars="GCP_PROJECT=REPLACE_PROJECT_ID,DRIVE_FOLDER_ID=REPLACE_DRIVE_FOLDER_ID"
+  --set-env-vars="GCP_PROJECT=bt-impact-academy,DRIVE_FOLDER_ID=REPLACE_DRIVE_FOLDER_ID"
 ```
 
 **Replace before running:**
-- `REPLACE_PROJECT_ID` → your GCP project ID
+- `bt-impact-academy` → your GCP project ID
 - `REPLACE_DRIVE_FOLDER_ID` → the Google Drive folder ID (the long string in
   the folder URL: `https://drive.google.com/drive/folders/THIS_PART`)
 
@@ -64,7 +64,7 @@ Cloud Scheduler can trigger the function:
 ```bash
 gcloud functions add-invoker-policy-binding firestore-backup \
   --region=us-central1 \
-  --member="serviceAccount:REPLACE_PROJECT_ID@appspot.gserviceaccount.com"
+  --member="serviceAccount:bt-impact-academy@appspot.gserviceaccount.com"
 ```
 
 ---
@@ -78,12 +78,12 @@ gcloud scheduler jobs create http firestore-weekly-backup \
   --time-zone="Africa/Johannesburg" \
   --uri="REPLACE_FUNCTION_URL" \
   --http-method=POST \
-  --oidc-service-account-email="REPLACE_PROJECT_ID@appspot.gserviceaccount.com"
+  --oidc-service-account-email="bt-impact-academy@appspot.gserviceaccount.com"
 ```
 
 **Replace before running:**
 - `REPLACE_FUNCTION_URL` → the URL printed in step 2
-- `REPLACE_PROJECT_ID` → your GCP project ID
+
 
 ---
 
@@ -94,7 +94,7 @@ human user. The service account needs Editor access to the target Drive folder.
 
 1. Open the Drive folder in a browser
 2. Click **Share**
-3. Paste: `REPLACE_PROJECT_ID@appspot.gserviceaccount.com`
+3. Paste: `bt-impact-academy@appspot.gserviceaccount.com`
 4. Set permission to **Editor**
 5. Click Send
 
@@ -149,7 +149,7 @@ it manually during a real incident.
    Grant this to the specific person(s) who would run a restore:
 
    ```bash
-   gcloud projects add-iam-policy-binding REPLACE_PROJECT_ID \
+   gcloud projects add-iam-policy-binding bt-impact-academy \
      --member="user:OPERATOR_EMAIL@example.com" \
      --role="roles/datastore.user"
    ```
@@ -160,11 +160,11 @@ it manually during a real incident.
    gcloud auth application-default login
 
    # Preview what would be written (no changes made):
-   python firestore_restore.py --project REPLACE_PROJECT_ID \
+   python firestore_restore.py --project bt-impact-academy \
        --zip ./backup_2026-09-07_030000.zip --dry-run
 
    # Actually restore:
-   python firestore_restore.py --project REPLACE_PROJECT_ID \
+   python firestore_restore.py --project bt-impact-academy \
        --zip ./backup_2026-09-07_030000.zip
    ```
 
@@ -183,7 +183,7 @@ it manually during a real incident.
   on the project.
 
 - **Default service account Firestore access:** The App Engine default service
-  account (`REPLACE_PROJECT_ID@appspot.gserviceaccount.com`) usually has
+  account (`bt-impact-academy@appspot.gserviceaccount.com`) usually has
   Editor role, which includes Firestore read access. If your project has
   restricted IAM, verify it has at least `Cloud Datastore Viewer` role.
 
