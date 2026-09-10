@@ -6,6 +6,11 @@ variable "region" {
   type = string
 }
 
+variable "cron_region" {
+  description = "Region for the Cloud Scheduler job. Not var.region: Cloud Scheduler does not exist in every Cloud Run region, africa-south1 included."
+  type        = string
+}
+
 variable "environments" {
   type = map(object({
     min_instances = number
