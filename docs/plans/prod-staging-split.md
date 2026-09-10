@@ -77,14 +77,17 @@ students are blocked, and say out loud that it is not isolation.
 
 ## Phase 0: protect what is live, before touching environments
 
-1. Finish the managed Firestore export. #183 is merged (weekly Cloud Scheduler
-   job calling the export API, bucket in europe-west1, 90 day lifecycle, PITR
-   and delete protection). #187 is still open with the region follow-ups, and
-   the apply has not run yet, so no bucket and no job exist in the project
-   today. Phase 0 is not done until the first export lands.
-2. Take one export and import it into a throwaway database. An untested backup
-   is not a restore point, and nobody has ever run an import back on this
-   project.
+1. Managed Firestore export: done. #183 merged and applied on 2026-09-10. The
+   bucket is live in europe-west1 with a 90 day delete rule, uniform
+   bucket-level access and public access prevention. `firestore-export-weekly`
+   is enabled in europe-west1, runs as a dedicated service account against the
+   `:exportDocuments` API, and first fires Sunday 03:00 SAST. PITR and delete
+   protection are on the database. #187 is still open with the runbook
+   follow-ups from the region move.
+2. Take one export and import it into a throwaway database. Still open, and it
+   is what gates the rest of the plan: no export has landed yet, and nobody
+   has ever run an import back on this project. An untested backup is not a
+   restore point.
 3. Create the GitHub `production` environment with required reviewers before
    any prod deploy.
 4. Freeze DNS moves and `cron_environment` changes until 1 to 3 are done.
