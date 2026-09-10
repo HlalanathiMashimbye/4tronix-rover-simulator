@@ -77,12 +77,14 @@ students are blocked, and say out loud that it is not isolation.
 
 ## Phase 0: protect what is live, before touching environments
 
-1. Land the managed Firestore export work: scheduled `gcloud firestore export`
-   into a GCS bucket with a lifecycle policy. Retire the custom JSON walker; it
-   loses type fidelity (timestamps become strings, references become maps) and
-   writes into a personal Drive with no retention.
-2. Take one manual export and import it into a throwaway database. An untested
-   backup is not a restore point.
+1. Finish the managed Firestore export. #183 is merged (weekly Cloud Scheduler
+   job calling the export API, bucket in europe-west1, 90 day lifecycle, PITR
+   and delete protection). #187 is still open with the region follow-ups, and
+   the apply has not run yet, so no bucket and no job exist in the project
+   today. Phase 0 is not done until the first export lands.
+2. Take one export and import it into a throwaway database. An untested backup
+   is not a restore point, and nobody has ever run an import back on this
+   project.
 3. Create the GitHub `production` environment with required reviewers before
    any prod deploy.
 4. Freeze DNS moves and `cron_environment` changes until 1 to 3 are done.
@@ -117,7 +119,9 @@ alongside staging on the same data and be verified before traffic moves.
    (`impact.tfvars`, `impact-stage.tfvars`) and separate state prefixes. Do not
    copy the module.
 3. Stand up its own Firestore, Auth (Email/Password plus operator accounts),
-   Artifact Registry, secrets, and an LB with a staging hostname.
+   Artifact Registry, and secrets. No load balancer: staging answers on its
+   `*.run.app` URL, on request-based CPU. See "How staging should be
+   configured" below.
 4. Deploy `firestore.rules` and `firestore.indexes.json` to the new database
    from the repo, not the console.
 5. Point the staging CD workflow at the new project. Push to `main` deploys
@@ -197,21 +201,48 @@ Nothing pins it up deliberately. Internet background scanning against the bare
 IP arrives often enough that the idle window never closes, and the placeholder
 answers all of it.
 
-Projections:
+### Projections
 
-| Scenario | USD/mo | vs today |
-|---|---|---|
-| Today | 86.65 | |
-| Option 1, config cloned into the new project | 106.44 | +19.79 |
-| Option 1, staging on request-based CPU | 73.56 | -13.08 |
-| Option 2, named database in this project | 54.69 | -31.95 |
+After the split, prod is the live yard as it runs today: $53.27/mo, of which
+$18.25 is the load balancer serving marsyard.sapient.rocks. Staging is the
+variable.
 
-Cost is not a reason to prefer Option 2. Take Option 1; the billing-account
-association is the open dependency, not the money.
+| Scenario | Staging | Total/mo | vs today |
+|---|---|---|---|
+| Today | | 86.65 | |
+| Option 1, config cloned into the new project | 53.16 | 106.43 | +19.79 |
+| Option 1, staging keeps a custom hostname | 19.01 | 72.28 | -14.36 |
+| Option 1, staging on its run.app URL | 0.76 | 54.03 | -32.61 |
+| Option 2, named database in this project | 0.14 | 53.41 | -33.23 |
 
-Worth doing whether or not we split: put non-prod on request-based CPU, and
-reject requests that do not carry a known Host header so scanners stop holding
-an instance up. Those two overlap, so do not add the savings together.
+Hard isolation costs $0.62/mo more than soft, which is a second Artifact
+Registry and a second set of secrets. There is no cost argument for Option 2.
+Take Option 1; the billing-account association is the open dependency, not the
+money.
+
+### How staging should be configured
+
+This is an open-source project. Even with people on it full time now, staging
+will sit dormant most of the month, and that fact decides two settings.
+
+Request-based CPU, not always-allocated. A dormant service on always-allocated
+CPU bills for wall-clock time whether or not anyone is using it, which is how
+the prod placeholder reaches $33/mo while serving nothing. At 2k requests/mo
+staging costs $0.14 in compute; at ten times that it is $1.42. The billing mode
+matters, the traffic does not.
+
+No load balancer, unless someone wants a hostname enough to pay $18.25/mo for
+it. Staging can answer on its default `*.run.app` URL: the folder's
+`run.allowedIngress` allow-list includes `all` (verified 2026-09-10), so direct
+ingress is permitted. Skipping the LB is most of the difference between the
+$19.01 and $0.76 rows, and it also keeps staging off the public IP ranges that
+scanners sweep. A public, idle, always-on staging is the worst of the
+combinations: we would be paying to keep it warm for bots.
+
+Worth doing on the existing project whether or not we split: put non-prod on
+request-based CPU, and reject requests that do not carry a known Host header so
+scanners stop holding an instance up. Those two overlap, so do not add the
+savings together.
 
 Assumptions worth challenging: list prices only, so any org-level committed-use
 discount pulls the real figure down. Cloud Run free tier ignored, because it is
@@ -225,8 +256,10 @@ scanned the way prod is, it drifts back toward the cloned-config row.
 - Gavin: the billing association for a new project in the academy folder, plus
   the automated provisioning function he offered. Project creation and the
   ingress policy are already ours.
-- David: `sapient.rocks` ownership for operator Google Sign-in, and whether
-  `marsyard.labs.ws` becomes staging's hostname or is retired.
+- David: `sapient.rocks` ownership for operator Google Sign-in. Also whether
+  `marsyard.labs.ws` is retired, which the cost work now argues for: pointing
+  it at staging means a load balancer in the new project at $18.25/mo, against
+  $0 for the `*.run.app` URL.
 - Scope: do we need a personal sandbox each, or is one shared staging enough?
 
 ## Not a cost issue, but it fell out of the same data
