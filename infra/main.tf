@@ -54,12 +54,12 @@ module "mission_control" {
   depends_on = [google_project_service.apis]
 }
 
-# Weekly Firestore export to GCS. Separate module because it is the only thing
-# here that has to follow the database's region rather than the deployment's.
+# Weekly Firestore export to GCS. Separate module because nothing in it sits
+# in the deployment's region: the bucket follows the database, and the
+# scheduler goes wherever Cloud Scheduler is actually offered.
 module "firestore_backup" {
   source             = "./modules/firestore-backup"
   project_id         = var.project_id
-  region             = var.region
   cron_region        = var.cron_region
   firestore_location = var.firestore_location
 

@@ -3,11 +3,6 @@ variable "project_id" {
   type        = string
 }
 
-variable "region" {
-  description = "Region the Cloud Scheduler job lives in. Only the API call originates here, so it stays with the rest of our regional resources (africa-south1) rather than following the database."
-  type        = string
-}
-
 variable "firestore_location" {
   description = "Location of the Firestore database. The export bucket has to sit here too: a managed export refuses a bucket that is not near the database."
   type        = string
@@ -20,7 +15,7 @@ variable "database_id" {
 }
 
 variable "cron_region" {
-  description = "Region for the Cloud Scheduler job. NOT var.region: Cloud Scheduler is not offered in africa-south1. Owned by the root cron_region."
+  description = "Region the Cloud Scheduler job lives in. Owned by the root cron_region, and deliberately not var.region: Cloud Scheduler is not offered in africa-south1. Nothing else in this module is regional, which is why there is no var.region here at all."
   type        = string
 }
 
