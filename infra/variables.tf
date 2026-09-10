@@ -66,6 +66,27 @@ variable "domains" {
   default     = {}
 }
 
+variable "cron_region" {
+  description = <<-EOT
+    Where the Cloud Scheduler job runs. SEPARATE FROM var.region ON PURPOSE.
+
+    Cloud Scheduler is not offered in every Cloud Run region, and africa-south1
+    is one of the places it does not exist - the API returns "Location
+    'africa-south1' is not a valid location" and lists 30 supported locations,
+    none of them in Africa. Passing var.region here makes every apply fail on
+    that one resource while everything else succeeds, which reads as a broken
+    apply rather than an unavailable service.
+
+    The job only issues an HTTPS POST to the load balancer, so its region has
+    no bearing on latency or on where learner data lives. Confirm the current
+    list before changing this:
+
+      gcloud scheduler locations list --project=<project>
+  EOT
+  type        = string
+  default     = "europe-west1"
+}
+
 variable "cron_environment" {
   description = "Which environment runs the YouTube auto-link schedule, or \"\" for none. Only one may: the environments share a Firestore."
   type        = string

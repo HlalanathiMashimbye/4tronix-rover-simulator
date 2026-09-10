@@ -376,9 +376,12 @@ resource "google_cloud_scheduler_job" "youtube_link" {
 
   name        = "youtube-link-${each.key}"
   description = "Attach uploaded videos to the runs they show, by MissionID in the description."
-  region      = var.region
-  schedule    = var.cron_schedule
-  time_zone   = "Africa/Johannesburg"
+
+  # NOT var.region. Cloud Scheduler does not exist in africa-south1, so this
+  # resource is the one thing in the module that cannot live beside the rest.
+  region    = var.cron_region
+  schedule  = var.cron_schedule
+  time_zone = "Africa/Johannesburg"
 
   # A poll that finds nothing costs one YouTube quota unit and no Firestore
   # reads, so frequency is about how long a child waits, not about cost.
