@@ -100,9 +100,13 @@ resource "google_storage_bucket_iam_member" "exporter_bucket" {
 resource "google_cloud_scheduler_job" "export" {
   name        = "firestore-export-weekly"
   description = "Managed Firestore export to gs://${google_storage_bucket.exports.name}, retained ${var.retention_days} days."
-  region      = var.region
-  schedule    = var.schedule
-  time_zone   = var.time_zone
+  # NOT var.region, for the same reason the bucket above is not: Cloud Scheduler
+  # does not exist in africa-south1. The API rejects it outright and
+  # ListLocations returns 30 regions, none of them in Africa, so an apply fails
+  # here while the bucket, the service account and the IAM all succeed.
+  region    = var.cron_region
+  schedule  = var.schedule
+  time_zone = var.time_zone
 
   http_target {
     http_method = "POST"

@@ -19,6 +19,11 @@ variable "database_id" {
   default     = "(default)"
 }
 
+variable "cron_region" {
+  description = "Region for the Cloud Scheduler job. NOT var.region: Cloud Scheduler is not offered in africa-south1. Owned by the root cron_region."
+  type        = string
+}
+
 variable "schedule" {
   description = "Cron schedule for the export, in var.time_zone."
   type        = string

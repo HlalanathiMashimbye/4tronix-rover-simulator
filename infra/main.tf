@@ -60,6 +60,7 @@ module "firestore_backup" {
   source             = "./modules/firestore-backup"
   project_id         = var.project_id
   region             = var.region
+  cron_region        = var.cron_region
   firestore_location = var.firestore_location
 
   schedule       = var.firestore_backup_schedule
