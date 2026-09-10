@@ -30,6 +30,24 @@ variable "region" {
 # vars wanted to destroy and recreate the registry (location is immutable on
 # that resource). Keep these three in agreement.
 
+variable "firestore_location" {
+  description = "Where the Firestore database actually is. Immutable on the database, so this is a statement of fact, not a choice: changing it here only moves the export bucket, which then fails the export."
+  type        = string
+  default     = "europe-west1"
+}
+
+variable "firestore_backup_schedule" {
+  description = "Cron for the weekly Firestore export, Africa/Johannesburg. Sunday 03:00 by default: the yard is idle, so the copy is as close to quiescent as a live export gets."
+  type        = string
+  default     = "0 3 * * 0"
+}
+
+variable "firestore_backup_retention_days" {
+  description = "How long an export is kept before the bucket lifecycle deletes it."
+  type        = number
+  default     = 90
+}
+
 variable "resend_from_email" {
   description = "From address for learner mission emails."
   type        = string

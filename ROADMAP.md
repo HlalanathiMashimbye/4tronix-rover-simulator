@@ -79,8 +79,10 @@ Concretely, the highest-value remaining items:
   config. Adding one is the single biggest handover investment available: it
   would let someone run the whole system with no GCP project and no service
   account key.
-- **Backups.** No mission data is exported anywhere off Firestore. Nothing
-  destructive should be attempted until that exists.
+- **Backups.** A weekly managed export now lands in GCS, and the database has
+  point-in-time recovery and delete protection on. The gap left is the restore
+  path: it is documented and has never been run, so nothing destructive should
+  be attempted until someone has imported a copy back and looked at it.
 - **The runbook kept honest** as the system changes.
 
 ### Next: one interface

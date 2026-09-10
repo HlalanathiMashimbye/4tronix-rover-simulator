@@ -236,7 +236,90 @@ What has to move, beyond the data:
 
 ---
 
-## 8. Known open items
+## 8. Backups and restore
+
+*Restore is **unverified**: the export side runs, the import side has not been
+done end-to-end on this project.*
+
+Three separate things protect the data, and they cover different accidents:
+
+| Mechanism | Covers | Window |
+|---|---|---|
+| Point-in-time recovery | "someone deleted a collection an hour ago" | last 7 days, second granularity |
+| Weekly managed export to GCS | "the project is gone", "this was already wrong last month" | 90 days of weekly copies |
+| Delete protection on the database | someone runs a delete on the wrong project | permanent, until deliberately lifted |
+
+The export is a Cloud Scheduler job calling the Firestore admin API, defined in
+[`infra/modules/firestore-backup`](../infra/modules/firestore-backup). It runs
+Sunday 03:00 SAST and writes to `gs://bt-impact-academy-firestore-backup`,
+which is in `europe-west1` because a managed export will not write to a bucket
+away from its database. PITR and delete protection are set on the database
+itself, which is provisioned outside Terraform like the rest of Firebase.
+
+An export is a copy of a live database. It is not transactionally consistent
+across collections and may miss writes from the seconds around it. That is
+fine for what it is for and is why PITR exists alongside it.
+
+### Take a copy before doing something destructive
+
+```bash
+gcloud scheduler jobs run firestore-export-weekly --location=africa-south1
+```
+
+Or directly, if you want your own prefix:
+
+```bash
+gcloud firestore export gs://bt-impact-academy-firestore-backup/pre-migration-$(date +%F)
+```
+
+Both return immediately with a long-running operation. Watch it with
+`gcloud firestore operations list`.
+
+### Restore
+
+Import **merges**: a document in the export overwrites the one at the same
+path, and anything created since the export is left alone. There is no "reset
+to this point" mode, so a restore does not undo creates.
+
+Restore into a scratch database first and look at it, rather than importing
+straight over live data:
+
+```bash
+gcloud firestore databases create --database=restore-check --location=europe-west1
+gcloud firestore import gs://bt-impact-academy-firestore-backup/<PREFIX> \
+    --database=restore-check
+```
+
+`<PREFIX>` is the timestamped folder Firestore generated for that run, and the
+import path is the folder that holds the `.overall_export_metadata` file. When
+it looks right:
+
+```bash
+gcloud firestore import gs://bt-impact-academy-firestore-backup/<PREFIX>
+```
+
+### Recovering to a point in time inside the last 7 days
+
+PITR is read-only history, so recovery is an export of the past followed by an
+import:
+
+```bash
+gcloud firestore export gs://bt-impact-academy-firestore-backup/pitr-recovery \
+    --snapshot-time=2026-09-10T08:00:00Z
+gcloud firestore import gs://bt-impact-academy-firestore-backup/pitr-recovery
+```
+
+Snapshot times are limited to whole minutes within the retention window.
+
+### Who can do this
+
+Owner (Werner or Gavin), or `roles/datastore.importExportAdmin` plus write on
+the bucket. Nobody on the student team holds either, deliberately: an import
+is the one operation here that can overwrite every document in the project.
+
+---
+
+## 9. Known open items
 
 | Item | Blocked on |
 |---|---|
@@ -250,7 +333,8 @@ What has to move, beyond the data:
 
 *Honest gaps, so nobody assumes they are documented:*
 
-- Restoring from backup — **there are no backups yet** (Werner's item).
+- Restoring from backup — the procedure is written up in §8, but the import
+  half has never been run on this project.
 - Deploying prod. It is deliberately undeployed; the promotion workflow exists
   but has never been run.
 - Rebuilding the satellite Pi from a bare flash — see `yard/MANUAL.md` §3,
