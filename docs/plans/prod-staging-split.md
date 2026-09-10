@@ -162,15 +162,35 @@ multiplication, not an invoice.
 | Firestore | 1,465 reads/day, 83 writes/day | 0.00 (free tier) |
 | **Total** | | **86.65** (~R1,560) |
 
-That is ~14x the $1-6/mo we estimated in July. Two causes:
+The estimate we have been working off since July is the "full setup (LB + VPC
+connector + DNS + builds)" scenario at $25-35/mo, so call it ~$30. We are at
+$86.65, about 2.9x that. Line by line:
 
-1. We built the HTTPS load balancer that estimate assumed we would skip. It is
-   $18.25/mo, and the SKU is `Forwarding Rule Minimum Global`, one charge per
-   project covering the first five rules. So rules 2 to 5 are free, but a
-   second project starts its own clock.
-2. Both services run `cpu-throttling: false`, so Cloud Run bills wall-clock
-   instance time rather than request time. Monitoring shows a mean of 0.68
-   instances up continuously per service, about 490 billed hours out of 730.
+| Line | Estimated Jul | Actual Sep | Delta |
+|---|---|---|---|
+| Cloud Run, both services | 4.00 | 67.66 | +63.66 |
+| Load balancer | 19.00 | 18.36 | -0.64 |
+| VPC connector | 8.50 | 0.00 | -8.50 |
+| Cloud DNS | 0.60 | 0.00 | -0.60 |
+| Registry, secrets, Firestore | 0.50 | 0.62 | +0.12 |
+| **Total** | **32.60** | **86.65** | **+54.05** |
+
+The estimate was good. The load balancer landed within 4% of the guess, and we
+never built the VPC connector or the Cloud DNS zone that were budgeted for, so
+we run less infrastructure than was priced and still cost nearly three times as
+much.
+
+All of the gap is on one line. Both services run `cpu-throttling: false`, so
+Cloud Run bills wall-clock instance time rather than request time. Monitoring
+shows a mean of 0.68 instances up continuously per service, about 490 billed
+hours out of 730. Cloud Run alone overshoots by $63.66, which is more than the
+entire $54.05 gap; the infrastructure we never built is quietly refunding about
+$9/mo against it.
+
+One detail that matters for the split: the LB charge is the SKU
+`Forwarding Rule Minimum Global`, one charge per project covering the first
+five forwarding rules. Rules 2 to 5 are free, but a second project starts its
+own $18.25 clock.
 
 `mission-control-prod` costs $33.37/mo, 39% of the bill, to serve hello-world.
 Nothing pins it up deliberately. Internet background scanning against the bare
