@@ -11,9 +11,10 @@ project_id = "bt-impact-academy"
 region     = "africa-south1"
 
 # HTTPS. Without these, each environment is HTTP on a bare load-balancer IP,
-# which is what it is today - and the app collects learner email addresses, so
-# those cross the network in clear text. Setting a hostname makes Terraform
-# provision a Google-managed certificate and an HTTPS forwarding rule.
+# and learner email addresses would cross the network in clear text. Setting a
+# hostname makes Terraform provision a Google-managed certificate and an HTTPS
+# forwarding rule. These domains are live; omitting them on apply proposes
+# destroying the certs and HTTPS listeners.
 #
 # ORDER MATTERS. Point the DNS A records at the LB IPs BEFORE applying:
 #
@@ -55,14 +56,6 @@ cron_environment = "staging"
 # owns it afterwards.
 resend_from_email = "missions@marsyard.sapient.rocks"
 
-# Authenticate to Firestore as the Cloud Run runtime service account rather
-# than a mounted key. Firestore lives in this same project and the runtime SA
-# already holds roles/datastore.user, so no key needs to exist: nothing to
-# store in Secret Manager, nothing to rotate, nothing to leak.
-#
-# The module default is still "service-account" so an existing deployment does
-# not change identity underneath itself on an unrelated apply. Impact's never
-# had a real key seeded - FIREBASE_PRIVATE_KEY was still the CHANGE_ME
-# placeholder, so every server-side Firestore call failed with
-# "Failed to parse private key: DECODER routines::unsupported" and no mission
-# could be submitted at all.
+# Firestore auth is ADC via the Cloud Run runtime service account (no mounted
+# key, no firebase_credential_source var). That SA already holds
+# roles/datastore.user in this project.
