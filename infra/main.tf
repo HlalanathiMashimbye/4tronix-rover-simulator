@@ -46,6 +46,7 @@ module "mission_control" {
   domains      = var.domains
 
   cron_environment  = var.cron_environment
+  cron_region       = var.cron_region
   resend_from_email = var.resend_from_email
 
   deploy_service_account_email = module.github_wif.deploy_service_account_email
