@@ -9,6 +9,24 @@ which is often longer than the diff.
 
 ---
 
+## Unreleased
+
+- **Firestore backups, in Terraform** (`infra/modules/firestore-backup`). A
+  weekly Cloud Scheduler job calls the managed `:exportDocuments` API and
+  writes to `gs://bt-impact-academy-firestore-backup`, kept 90 days. The
+  bucket sits in `europe-west1` with the database, not in `africa-south1`
+  with everything else, because an export will not write away from its
+  database. Point-in-time recovery and delete protection are on the database
+  as well, set out of Terraform alongside the rest of the Firebase config.
+
+  This replaces a proposed Cloud Function that walked collections to JSON and
+  uploaded a zip to a personal Google Drive folder. That version turned
+  timestamps into strings and references into maps, and its restore wrote them
+  back that way, so a restore would have reported success and reshaped the
+  schema. Restore procedure is in `docs/RUNBOOK.md` §8 and is still unproven.
+
+---
+
 ## 2026-08-30 — Code quality overhaul
 
 Response to the iteration 2 coding marksheet (32.3/56), which said the

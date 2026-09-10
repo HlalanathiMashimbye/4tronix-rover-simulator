@@ -123,9 +123,12 @@ once they are. Start here.
       `WorkingDirectory`, so this is load-bearing, not cosmetic.
 - [ ] **Firebase data migration to Impact.** Do it in the same pass as the run
       model below so learner data reshapes once, not twice.
-- [ ] **Database backups and disaster recovery.** Werner's ask. No backups exist
-      while we are adding write paths. Nothing in Group 4 should touch real event
-      data until mission data is exported somewhere off Firestore.
+- [ ] **Database backups and disaster recovery.** Werner's ask. The export side
+      is in Terraform now (`infra/modules/firestore-backup`, weekly to GCS,
+      plus PITR and delete protection on the database). What is still open is
+      the restore half: nobody has imported a copy back, so the procedure in
+      `docs/RUNBOOK.md` §8 is written and unproven. Do that before Group 4
+      touches real event data.
 - [ ] **`ROADMAP.md` and a changelog** at the repo root, plus restoring previous
       sprint markdown into `docs/`. "Context as code" from the standup.
 

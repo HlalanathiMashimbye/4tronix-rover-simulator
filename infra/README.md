@@ -65,7 +65,9 @@ Do not pass `demo.tfvars` against Impact state. That file targets the personal
 demo project only.
 
 **Expected plan:** Cloud Run ×2, LB invoker ×2, compute API (if not yet in
-state), plus per-env LB resources (address, NEG, backend, url map, HTTP proxy
+state), the Firestore backup set (bucket, service account, two IAM bindings,
+one Cloud Scheduler job, plus the `firestore` and `cloudscheduler` APIs), plus
+per-env LB resources (address, NEG, backend, url map, HTTP proxy
 + forwarding rule, plus HTTPS when `impact.tfvars` sets `domains`). If you see
 a **destroy** of the Artifact Registry repo, stop — `var.region` has drifted
 from `africa-south1`. If you see HTTPS cert / target-https-proxy destroys,
@@ -261,6 +263,31 @@ The app moves to Impact's Firebase world. In the Firebase console
 
   Changing `var.region` after the first apply is painful (registry and
   services are regional, and location is force-new), so settle it first.
+
+  **The one exception is the Firestore backup bucket**, which is in
+  `europe-west1`. A managed export refuses a bucket that is not near its
+  database, so this bucket follows the data rather than the deployment.
+- **Firestore backups are the managed export, not a script.** `modules/`
+  `firestore-backup` is a Cloud Scheduler job that calls
+  `:exportDocuments` weekly, a bucket with a 90-day lifecycle, and a
+  `firestore-backup` service account holding `datastore.importExportAdmin`
+  plus Storage Admin on that one bucket. No function, no code, no key.
+
+  A hand-rolled version was written first (a Cloud Function walking every
+  collection to JSON and uploading a zip to Google Drive). It was declined on
+  three counts: it serialised Firestore timestamps to strings and references
+  to maps, and the matching restore wrote those back, so a restore would have
+  succeeded while changing the schema; it held the export and the zip in a
+  function's `/tmp`, which is memory on Cloud Run; and the destination was a
+  personal Drive folder, outside the project and outside anyone's retention or
+  offboarding.
+
+  Two settings this depends on are **not** in Terraform, for the same reason
+  the database itself is not: point-in-time recovery and delete protection are
+  set on the `(default)` database with
+  `gcloud firestore databases update --database='(default)' --enable-pitr
+  --delete-protection`. Check them with `gcloud firestore databases list`
+  before assuming the last 7 days are recoverable.
 - Terraform deliberately does NOT manage the serving image (lifecycle
   ignore_changes): CD owns which digest runs, Terraform owns everything else.
 - Naming: current names are simple (`mission-control-staging` etc.). Werner
