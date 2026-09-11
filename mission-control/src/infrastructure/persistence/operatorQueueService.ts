@@ -2,8 +2,10 @@
  * The live queue for one yard (AB#376).
  *
  * A Firestore listener rather than a poll, so an operator sees a mission arrive
- * as a learner submits it. The satellite still owns execution; this is a window
- * onto the same documents it reads.
+ * as a learner submits it. The satellite reads none of this now: execution is
+ * manual, an operator copies a mission's code across by hand (see
+ * yard/docs/what-the-yard-no-longer-does.md), so this view exists purely to
+ * tell them what needs doing.
  *
  * SCOPED BY THE YARD THE OPERATOR CHOSE, not by anything on their account. The
  * card for this task says "scoped by the operator's yardIds", which is out of

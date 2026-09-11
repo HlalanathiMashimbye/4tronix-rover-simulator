@@ -168,8 +168,8 @@ run in parallel.
 - [ ] **Extend `scripts/firestore-rules-test.mjs`** to cover authed requests and
       wire it into CI. It exists, tests rules against the emulator, and is not in
       CI at all.
-- [ ] **AB#341**: operator console routes protected. The lock, with no key yet.
-- [ ] **AB#342**: operator signs in to Mission Control. The key.
+- [x] **AB#341**: operator console routes protected. The lock, with no key yet. PR #87
+- [x] **AB#342**: operator signs in to Mission Control. The key. PR #89
 
 ---
 
@@ -177,17 +177,18 @@ run in parallel.
 
 Needs Group 2. This is the visible iteration-3 deliverable.
 
-- [ ] **Read-only queue** at `/operator`, live via `onSnapshot`, scoped by the
-      operator's `yardIds`. Shows **who submitted** each mission and the blocks
-      they actually built, neither of which the Flask console can do.
-- [ ] **Hidden route**: no nav entry (the navbar renders twice, desktop and
+- [x] **Read-only queue** at `/operator`, live via `onSnapshot`, scoped by the
+      yard chosen at sign-in (David rejected per-account `yardIds` on
+      2026-08-27). Shows **who submitted** each mission and the blocks they
+      actually built, neither of which the Flask console can do. PR #95, #97
+- [x] **Hidden route**: no nav entry (the navbar renders twice, desktop and
       mobile), `robots.ts`, no `<Link>` to it. Write down that hidden is not
-      secure; the session cookie is the control.
-- [ ] **Learner mission page gains the yard selector**, built from runs with
-      video.
-- [ ] **Bookkeeping actions**: complete, cancel, attach video, resolve review,
-      delete (admin only). All against a run. Nothing here moves a robot.
-- [ ] **Resolve-review control.** The endpoint has existed all along with no UI.
+      secure; the session cookie is the control. PR #87
+- [x] **Learner mission page gains the yard selector**, built from runs with
+      video. PR #105
+- [x] **Bookkeeping actions**: complete, cancel, attach video, resolve review,
+      delete (admin only). All against a run. Nothing here moves a robot. PR #108
+- [x] **Resolve-review control.** The endpoint has existed all along with no UI. PR #108
 
 ---
 
@@ -204,11 +205,13 @@ before cloud dispatch.
       a dispatch unless the yard is armed, the camera is up and the rover is
       reachable. Countdown on the TV so the room can see the rover is live.
       Auto-disarm on STOP.
-      **`ARM_PIN` must not honour `OPERATOR_AUTH=off`.** That is the event-day
-      mode, so otherwise anyone on venue wifi can arm the yard on exactly the day
-      it matters. Highest-severity item in this document.
+      **`ARM_PIN` must not have an event-day bypass.** The satellite's login is
+      gone entirely now, `OPERATOR_AUTH` included, so this is not about that
+      flag - it is a warning for whoever builds Arming: a "for event day"
+      exception is exactly how something is left open on the day it matters.
+      Highest-severity item in this document.
 - [ ] **`satellites/{yardId}` heartbeat**: last seen, armed, camera up, rover
-      reachable, outbox depth. Without it the cloud Send button is a black box,
+      reachable, queue depth. Without it the cloud Send button is a black box,
       and it is the building block for Werner's outage monitoring.
 
 ### 4b. Recording
