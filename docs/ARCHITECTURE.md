@@ -273,11 +273,15 @@ rather than by surprise:
 - **The satellite declares no abstraction of its own.** `ports.py` went with
   the Firestore client it described. What is left talks to the rover over HTTP
   and to the camera over a WebSocket, directly.
-- **The auto-link cadence is set in two places that disagree.** The app
-  assumes Cloud Scheduler fires every 5 minutes (the interval setting's floor
-  is 5); Terraform schedules it every 15. With the default interval also 15
-  and no slack in `isDue`, a call that lands a moment early is skipped, and
-  the next check comes 30 minutes after the last.
+- **The auto-link cadence is set in two places that must agree.** The app's
+  interval floor (`runtimeSettings.ts`) and Terraform's `cron_schedule`
+  (`infra/modules/mission-control/variables.tf`) both hardcode 15 minutes;
+  neither can read the other, so `cronScheduleAgreement.test.ts` parses both
+  out of their real source and fails if they drift apart, the way
+  `test_mission_import.py` does for the yard's regexes. `isDue` also carries a
+  small tolerance now, so a call that lands a moment early because the
+  previous one took a few seconds to read YouTube is not skipped, which used
+  to double the wait between checks.
 
 ## Where to start reading
 

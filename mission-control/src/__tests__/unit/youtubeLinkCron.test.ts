@@ -233,4 +233,18 @@ describe('the admin-set interval', () => {
     expect(isDue(twentyMinutesAgo, 15, now)).toBe(true);
   });
 
+  it('is due when the last check landed a few seconds inside the interval', () => {
+    /**
+     * recordChecked() stamps the clock after YouTube answers, not when the
+     * scheduler invoked the route. So a check recorded 15 minutes ago at a
+     * 15-minute interval has really only had ~14:57 of silence, and a strict
+     * boundary would call that not due, wait another full interval, and
+     * settle into checking at half the configured rate.
+     */
+    const now = new Date('2026-08-31T12:00:00Z');
+    const almostFifteenMinutesAgo = new Date('2026-08-31T11:45:03Z');
+
+    expect(isDue(almostFifteenMinutesAgo, 15, now)).toBe(true);
+  });
+
 });

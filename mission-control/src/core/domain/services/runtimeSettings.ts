@@ -65,17 +65,17 @@ export const SETTINGS: Record<string, SettingSpec> = {
     secretId: 'youtube-link-interval-minutes',
     envVar: 'YOUTUBE_LINK_INTERVAL_MINUTES',
     label: 'Check for uploads every',
-    // The scheduler fires every 5 minutes and this decides how often that
-    // actually does anything, so the floor is 5 and the knob only ever slows
+    // The scheduler fires every 15 minutes and this decides how often that
+    // actually does anything, so the floor is 15 and the knob only ever slows
     // it down. Changing the Cloud Scheduler job itself would mean the app
     // editing infrastructure Terraform owns, and the two would then fight
     // over it on every apply.
-    help: 'Minutes between checks for new YouTube uploads. Minimum 5. A check that finds nothing is essentially free, so lower is fine.',
+    help: 'Minutes between checks for new YouTube uploads. Minimum 15. A check that finds nothing is essentially free, so lower is fine.',
     secret: false,
     validate: (v) => {
       const n = Number(v);
       if (!Number.isInteger(n)) return 'Give a whole number of minutes.';
-      if (n < 5) return 'The scheduler only runs every 5 minutes, so 5 is the floor.';
+      if (n < 15) return 'The scheduler only runs every 15 minutes, so 15 is the floor.';
       if (n > 1440) return 'More than a day between checks is the same as off.';
       return null;
     },

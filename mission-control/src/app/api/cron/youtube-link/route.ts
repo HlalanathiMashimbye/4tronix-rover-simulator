@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Scheduler fires every 5 minutes; the admin decides how often that does
+  // Scheduler fires every 15 minutes; the admin decides how often that does
   // anything. Checked before YouTube is touched so a throttled call costs
   // nothing at all.
   const interval = Number(await readSetting('youtubeLinkIntervalMinutes')) || 15;
