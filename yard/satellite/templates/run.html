@@ -414,6 +414,8 @@
     const $ = (id) => document.getElementById(id);
     const missionId = $('missionId'), missionName = $('missionName'), runId = $('runId'), code = $('code');
     let recordingName = null;
+    let automaticRunRequested = false;
+    let automaticRunStarted = false;
 
     function flash(el, text, tone) {
         el.dataset.tone = tone || '';
@@ -539,6 +541,22 @@
     // same mission on the same evening, and then it silently swaps their
     // footage. Naming the yard is what removes the guess.
     const YARD_ID = {{ yard_id | tojson }};
+
+    // Automatic Route hands off through the application URL, never through the
+    // clipboard. The yard identity is checked again here so a console opened
+    // for the wrong yard cannot run a mission against this rover.
+    const handoff = new URLSearchParams(window.location.search);
+    if (handoff.get('handoff') === 'automatic') {
+        if (handoff.get('yardId') !== YARD_ID) {
+            flash($('runMsg'), 'This mission belongs to a different yard.', 'bad');
+        } else if (handoff.get('code')) {
+            missionId.value = handoff.get('missionId') || '';
+            missionName.value = handoff.get('missionName') || '';
+            code.value = handoff.get('code') || '';
+            updateRunIdentity();
+            automaticRunRequested = true;
+        }
+    }
 
     function paintYouTube() {
         const id = metaValue(missionId);
@@ -670,6 +688,7 @@
                 loadRecordings();
             }
             paintGate();
+            maybeAutoRun();
         });
         YardStatus.onError(() => {
             roverOk = false;
@@ -798,6 +817,12 @@
             paintGate();
         }
     });
+
+    function maybeAutoRun() {
+        if (!automaticRunRequested || automaticRunStarted || !cameraPrimed || !roverOk) return;
+        automaticRunStarted = true;
+        $('runBtn').click();
+    }
 
     $('stopBtn').addEventListener('click', async () => {
         try {

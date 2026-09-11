@@ -170,6 +170,7 @@ def status():
 @app.route('/api/status', methods=['GET'])
 def api_status():
     from recording_cleanup import disk_stats
+    from recording_control import readiness
 
     satellite = {
         'hostname': socket.gethostname(),
@@ -199,14 +200,21 @@ def api_status():
     from camera_state import snapshot
     camera = snapshot()
 
-    return jsonify({
+    recording_ready, recording_detail = readiness()
+    response = jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
         # Same list, kept at the top level because the run station reads it
         # there. It is the camera's business, so it lives in the snapshot too.
-        'recording': {'active': camera['recording']},
+        'recording': {
+            'active': camera['recording'],
+            'ready': recording_ready,
+            'detail': recording_detail,
+        },
     })
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 
 @app.route('/api/rover/discover', methods=['GET'])

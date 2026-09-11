@@ -3,6 +3,7 @@
 import { ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
+import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -76,6 +77,8 @@ export function MissionDetail({
         mode={mode}
         onResult={onResult}
       />
+
+      {mode === 'auto' && <AutomaticDispatch mission={mission} yardId={yardId} />}
 
       <MissionRuns
         missionId={mission.id}
