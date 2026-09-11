@@ -270,8 +270,13 @@ fine for what it is for and is why PITR exists alongside it.
 ### Take a copy before doing something destructive
 
 ```bash
-gcloud scheduler jobs run firestore-export-weekly --location=africa-south1
+gcloud scheduler jobs run firestore-export-weekly --location=europe-west1
 ```
+
+`europe-west1` is the scheduler's own region (`var.cron_region`), not the
+deployment's. Cloud Scheduler does not exist in `africa-south1`, so a
+`--location=africa-south1` here comes back as an invalid location rather than
+a missing job.
 
 Or directly, if you want your own prefix:
 
