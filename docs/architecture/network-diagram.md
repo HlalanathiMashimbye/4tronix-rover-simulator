@@ -2,6 +2,16 @@
 
 Companion writeup for `Mission Control: Network Diagram` (August 2026).
 
+> **Out of date on the yard.** Zone A still holds. Zone B describes the
+> satellite's Firestore mirror, its sync worker, recovery and lease, and its
+> own operator console with `OPERATOR_AUTH=off`, none of which exists any
+> more; in zone C it is the run station, not a console, that sends a mission
+> to the rover. The satellite now holds no cloud credential and has no
+> sign-in, and an operator carries each mission across from Mission Control,
+> which is the only operator surface. See
+> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and
+> [`yard/docs/what-the-yard-no-longer-does.md`](../../yard/docs/what-the-yard-no-longer-does.md).
+
 Where the architecture diagram shows how the software is structured, this one
 shows where the network boundaries fall, what protocol crosses each one, and
 which connections the system can survive losing. Three zones, split by a trust

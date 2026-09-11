@@ -8,9 +8,14 @@ The system has three deployable parts:
 
 | Service | Where it runs | What it is |
 |---|---|---|
-| **Mission Control** (`mission-control/`) | Cloud Run | The learner-facing Next.js app: write a mission, watch it run, browse history |
-| **Yard satellite** (`yard/satellite`) | A Raspberry Pi in the yard | Operator console, camera control, offline-first sync to Firestore |
+| **Mission Control** (`mission-control/`) | Cloud Run | The Next.js app. Learners write a mission, watch it run and browse history; operators sign in at `/operator` to work their yard's queue and settle each run |
+| **Yard satellite** (`yard/satellite`) | A Raspberry Pi in the yard | The yard's control panel: run station, tablet editor, TV monitor, camera and recordings. No sign-in and no cloud credential, so it works with no internet |
 | **Rover server** (`yard/rover`) | A Raspberry Pi on the rover | Runs the mission's Python against the rover's motors, servos and LEDs |
+
+Nothing connects the cloud to the yard over the network. An operator copies a
+mission out of Mission Control and pastes it into the satellite's run station,
+the satellite records the run, and the operator uploads the video to YouTube,
+where Mission Control finds it and attaches it to the run.
 
 Cloud infrastructure (Firebase, Cloud Run, DNS) is defined in `infra/`
 (Terraform). [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) covers how the
@@ -32,9 +37,11 @@ npm run dev      # start hub + satellite + rover, then open 3000 and 3001
 
 Run a single service with `npm run dev:control`, `npm run dev:satellite`, or
 `npm run dev:yard`. The satellite port can be overridden with the
-`SATELLITE_PORT` env var. `FakeRoverDriver` is selected automatically when no
-real rover is reachable, so the full loop (submit, dispatch, run, video) works
-on a laptop with no hardware.
+`SATELLITE_PORT` env var. `FakeRoverDriver` is selected automatically when
+there is no rover hardware, and the camera server falls back to a webcam, so
+the whole loop runs on a laptop: submit a mission on :3000, copy it from its
+mission page, paste it into the run station at :3001/run/, start the camera
+and press Send.
 
 ## Documentation
 
@@ -58,7 +65,9 @@ Then:
   [`yard/README.md`](yard/README.md), [`infra/README.md`](infra/README.md) -
   setup and structure for each part
 - [`docs/INF4027W_Team06_Iteration2_ReadMe2026.md`](docs/INF4027W_Team06_Iteration2_ReadMe2026.md) -
-  the iteration 2 submission readme for markers
+  the iteration 2 submission readme for markers, kept as submitted. It
+  describes the yard as it was then, with a Firestore mirror and its own
+  operator console; both have since gone (see the changelog)
 
 ## Legacy upstream simulator
 

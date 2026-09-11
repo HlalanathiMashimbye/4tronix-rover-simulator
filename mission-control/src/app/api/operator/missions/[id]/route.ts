@@ -8,10 +8,10 @@
  * whenever the yard lost network, the record could not be settled from
  * anywhere. That is the failure this route exists to remove.
  *
- * The satellite keeps everything physical: send, rerun, stop, camera, arming.
- * Stop especially. A cloud stop button would take up to a sync interval and do
- * nothing whatsoever when offline, which is the one thing a stop control must
- * never do.
+ * The satellite keeps everything physical: send, rerun, stop, camera. Stop
+ * especially. A cloud stop button would have nothing to reach - the satellite
+ * does not poll or sync with Mission Control at all now - so it would do
+ * nothing whatsoever, which is the one thing a stop control must never do.
  *
  * NOTHING IN THIS FILE CAN MOVE A ROVER. There is no dispatch here and no HTTP
  * call to the rover, and a test asserts it stays that way. Resolving a review

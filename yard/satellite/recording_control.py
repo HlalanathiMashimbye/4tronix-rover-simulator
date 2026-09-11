@@ -10,15 +10,15 @@ extra broadcast subscriber, however many runs are being recorded.
 
 One shared consumer thread feeds every run's file. A dict keyed by
 (mission_id, yard_id) - matching how the run model itself is keyed
-(runs_mirror's primary key) - not a single "current recording" variable, is
-what makes that safe: nothing stops a second "Send to rover" while an earlier
-run is still 'processing' at a different yard, so two recordings can be
-genuinely simultaneous.
+(`missions/{missionId}/runs/{yardId}` in Mission Control's Firestore) - not a
+single "current recording" variable, is what makes that safe: nothing stops a
+second "Send to rover" while an earlier run is still 'processing' at a
+different yard, so two recordings can be genuinely simultaneous.
 
 cv2/numpy are imported lazily inside functions, never at module top:
 requirements-test.txt deliberately excludes opencv-python/numpy to keep CI
-light, and this module is imported from operator_console.py and
-mission_watcher.py, both covered by that suite.
+light, and this module is imported from web_server.py and mission_watcher.py,
+both covered by that suite.
 """
 
 import asyncio
@@ -128,10 +128,9 @@ def active_recordings():
 def is_recording(mission_id, yard_id):
     """Whether frames are being persisted for this key right now.
 
-    The run model answers this for a queued mission, via runs_mirror's
-    recording_status. A run pasted into /run/ has no row there - it never
-    touched Firestore, which is the point of that page - so the only record
-    that a recording is open is this module's own table.
+    This module's own table is the only record. /run/ never touches
+    Firestore, which is the point of that page, so there is no run status
+    anywhere else to check against.
     """
     with _lock:
         return (mission_id, yard_id) in _paths
