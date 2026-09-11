@@ -5,10 +5,11 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  *
  * There are two ways a video says which mission it shows, and this reads
  * both. The run station generates a `MissionID: <id>` line to paste into the
- * description, and the satellite already names the file `<missionId>__<yardId>.mp4`,
- * which YouTube turns into the title when it is uploaded unrenamed. The second
- * costs the operator nothing at all, which makes it the one that will actually
- * happen at the end of a long event day.
+ * description, and the satellite already names the file
+ * `<missionId>__<yardId>__<stamp>.mp4`, which YouTube turns into the title
+ * when it is uploaded unrenamed. The second costs the operator nothing at
+ * all, which makes it the one that will actually happen at the end of a long
+ * event day.
  *
  * DIRECTION MATTERS. The satellite's poller asked "which of my missions have
  * no video?" and then fetched YouTube, because a yard only knows its own
@@ -30,10 +31,13 @@ const MISSION_ID_PATTERN = /MissionID:\s*([A-Za-z0-9_-]+)/;
 /**
  * The satellite's own filename, which YouTube turns into the title for free.
  *
- * Recordings are written as `<missionId>__<yardId>.mp4`, and YouTube Studio
- * prefills a video's title from the filename it was uploaded with. So an
- * operator who uploads the file exactly as they downloaded it has already
- * labelled it, without typing anything or knowing that they did.
+ * Recordings are written as `<missionId>__<yardId>__<stamp>.mp4`, and YouTube
+ * Studio prefills a video's title from the filename it was uploaded with. So
+ * an operator who uploads the file exactly as they downloaded it has already
+ * labelled it, without typing anything or knowing that they did. The stamp
+ * (`recording_control.start_recording`'s UTC `%Y%m%dT%H%M%SZ`) is matched
+ * literally rather than as a generic third segment, so a title that merely
+ * happens to have two underscores in it still does not qualify.
  *
  * The `__<yardId>` tail is what makes this safe to match on. A bare id in a
  * title would claim half the channel; this shape does not occur by accident.
@@ -41,7 +45,7 @@ const MISSION_ID_PATTERN = /MissionID:\s*([A-Za-z0-9_-]+)/;
  * failure mode is a wasted lookup rather than a video attached to the wrong
  * child's work.
  */
-const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__([A-Za-z0-9-]+)$/;
+const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__([A-Za-z0-9-]+)(?:__\d{8}T\d{6}Z)?$/;
 
 /** The yard, when the uploader said it explicitly rather than in a filename. */
 const YARD_PATTERN = /Yard:\s*([A-Za-z0-9-]+)/;

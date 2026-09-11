@@ -553,9 +553,10 @@
     }
 
     // One run per yard, so the mission and the yard together identify the run
-    // exactly - and that pair is already what recording_control names the file
-    // <mission>__<yard>.mp4. Showing it here is not a second identifier, it is
-    // the one the operator will see again on the video they download.
+    // exactly - and that pair is the start of what recording_control names the
+    // file, <mission>__<yard>__<UTC stamp>.mp4. Showing it here is not a
+    // second identifier, it is the one the operator will recognise on the
+    // video they download.
     function updateRunIdentity() {
         const id = metaValue(missionId);
         runId.textContent = id ? `${id}__${YARD_ID}` : 'Waiting for the mission ID';
