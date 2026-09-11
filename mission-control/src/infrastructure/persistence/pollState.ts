@@ -5,7 +5,7 @@ import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admi
 /**
  * When the YouTube linker last actually ran.
  *
- * Cloud Scheduler fires on a fixed 5-minute cadence and the admin-set interval
+ * Cloud Scheduler fires on a fixed 15-minute cadence and the admin-set interval
  * decides how often that does any work. The alternative was letting the
  * settings page rewrite the Cloud Scheduler job itself, which means the app
  * editing infrastructure Terraform owns, and the two then fight over it on

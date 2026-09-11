@@ -50,7 +50,7 @@ variable "cron_environment" {
 }
 
 variable "cron_schedule" {
-  description = "Cron expression for the YouTube auto-link job. Must stay */5: the app's admin-set interval floor (runtimeSettings.ts) and its code comments both assume Cloud Scheduler fires every 5 minutes, and cronScheduleAgreement.test.ts checks the two still agree. A poll that finds nothing is essentially free, so this is about how long a learner waits."
+  description = "Cron expression for the YouTube auto-link job. The app's admin-set interval floor (runtimeSettings.ts) and its code comments both assume this stays */15; cronScheduleAgreement.test.ts checks the two still agree. A poll that finds nothing is essentially free, so this is about how long a learner waits."
   type        = string
-  default     = "*/5 * * * *"
+  default     = "*/15 * * * *"
 }

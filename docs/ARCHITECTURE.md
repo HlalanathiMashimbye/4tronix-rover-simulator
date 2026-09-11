@@ -195,12 +195,12 @@ rather than by surprise:
   `api/operator/missions/[id]/route.ts` does auth, parsing, repository
   construction, a four-case dispatch, and sends an email.
 - **The YouTube auto-link cadence is set in two places that must agree.**
-  Cloud Scheduler's cron expression (`infra/modules/mission-control/variables.tf`)
-  and the admin-set interval's floor (`runtimeSettings.ts`) both assume a
-  5-minute tick; Terraform cannot read the app's assumption or the reverse, so
-  `cronScheduleAgreement.test.ts` parses both out of their real source and
-  fails if they drift apart, the way `test_mission_import.py` does for the
-  yard's regexes.
+  Cloud Scheduler's cron expression (`infra/modules/mission-control/variables.tf`,
+  `*/15` by design) and the admin-set interval's floor (`runtimeSettings.ts`)
+  both assume the same tick; Terraform cannot read the app's assumption or the
+  reverse, so `cronScheduleAgreement.test.ts` parses both out of their real
+  source and fails if they drift apart, the way `test_mission_import.py` does
+  for the yard's regexes.
 
 ## Where to start reading
 
