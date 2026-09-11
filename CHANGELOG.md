@@ -27,7 +27,55 @@ which is often longer than the diff.
 
 ---
 
-## 2026-08-30 — Code quality overhaul
+## 2026-08-31 to 2026-09-03 - The yard hands its console to Mission Control
+
+Mission Control had grown an operator console the week before (see
+2026-08-26 below), which left the satellite running a second one, and a
+Firestore mirror to feed it, for a yard that had moved to copy and paste. Both
+went. `yard/docs/what-the-yard-no-longer-does.md` records what the mirror did,
+and the cheaper shape a way back should take.
+
+- **The satellite's mission queue page went** (#138). It needed a Firebase
+  sign-in, and so an internet connection, before an operator could do the one
+  thing a yard has to be able to do offline.
+- **YouTube auto-linking moved from the satellite to Mission Control** (#140).
+  On the satellite the poll only caught up when that yard next ran an event,
+  and it put a YouTube key on a Pi on venue wifi. It is now
+  `POST /api/cron/youtube-link`, called by Cloud Scheduler whether or not any
+  yard is switched on. The same PR added `/operator/settings`, an admin page
+  for the email and YouTube config that used to need a Terraform run.
+- **Yards became data** (#141). An admin adds, edits and retires them, and an
+  operator's yard is bound to their sign-in.
+- **The operator console became a mission centre** (#142), and the linker
+  learned to take the yard from the video instead of guessing which run it
+  belongs to.
+- **A run station at `/run/`, and a station hub at `/`** (#143). Paste a
+  mission copied from Mission Control, send it, record it, and take the video
+  away over the LAN: the whole of the yard's manual loop.
+- **The satellite stopped asking for a sign-in** it cannot do offline, or does
+  not need (#145).
+- **Send starts the recording, and the rover's own completion stops it**
+  (#146). The dispatch carries `mission_id`, the rover echoes it back in its
+  history, and `mission_watcher` closes the recording when it sees the run
+  end.
+- **The Firestore mirror taken out of the satellite** (#146, 2026-09-02).
+  Gone: `sync_worker.py`, the SQLite mirror and outbox (`store/` and its
+  `mission_store.py` facade), `recovery.py`, `ports.py`, the satellite's
+  YouTube poll, the console's `auth`, `deps`, `missions`, `review`, `mirror`,
+  `notify` and `health` modules, and the mission and login pages: thirty
+  files and about 9,900 lines, tests included. The satellite now holds no
+  cloud credential. `mission_watcher` stayed, cut down to releasing the
+  camera, and the camera and tunables endpoints kept their `/operator/`
+  prefix so the pages and tablet bookmarks that call them still work.
+- **Every run keeps its own video** (#153). Recordings are named
+  `<mission>__<yard>__<UTC stamp>.mp4`, because re-running a mission used to
+  overwrite the footage of the attempt before. The same PR made Mission
+  Control's Copy one payload everywhere, with the mission's name and id in
+  Python header comments that the run station reads.
+- **A YouTube Studio link from the operator queue** (#157), the same door the
+  run station ends on.
+
+## 2026-08-30 - Code quality overhaul
 
 Response to the iteration 2 coding marksheet (32.3/56), which said the
 organisation "does not reflect a clear or coherent approach to dividing
@@ -53,7 +101,9 @@ needed strengthening, and that the code was difficult to follow.
   Firestore shape the satellite depends on as `typing.Protocol`. Until then
   the satellite declared no abstraction of any kind, and the evidence was 22
   `Fake*` classes across its tests, most of them the same class twice. One
-  shared implementation now lives in `yard/satellite/tests/firestore_fakes.py`.
+  shared implementation replaced them in
+  `yard/satellite/tests/firestore_fakes.py`. Both files went with the mirror
+  on 2026-09-02.
 - **The operator console split, 1399 lines to 75** (#125). Its 23 routes moved
   into six route modules under `yard/satellite/console/`, one concern each,
   beside four more for shared concerns (`deps`, `mirror`, `notify`,
@@ -76,7 +126,7 @@ needed strengthening, and that the code was difficult to follow.
   `container.server.ts` (with `import 'server-only'`) and
   `container.browser.ts`.
 
-## 2026-08-30 — Learner safety and the editor
+## 2026-08-30 - Learner safety and the editor
 
 - **Time and speed ceilings** (#119, #120). A mission cannot exceed 120
   seconds, and speeds are capped at 0-100. The marksheet noted a comment
@@ -92,21 +142,26 @@ needed strengthening, and that the code was difficult to follow.
   drive in (#113).
 - **Nested corner radii made concentric** (#121).
 
-## 2026-08-26 to 2026-08-29 — Runs, roles, and the operator console
+## 2026-08-26 to 2026-08-29 - Runs, roles, and the operator console
 
-- **A mission is a program; a run is one yard's attempt at it** (#99). Any
-  yard may run any mission, each attempt keeps its own status and video, and
-  the mission-level lease was deleted because the contention it arbitrated no
-  longer exists.
+- **A mission is a program; a run is one yard's attempt at it** (#91, #99).
+  Any yard may run any mission, each attempt keeps its own status and video,
+  and the mission-level lease was deleted because the contention it
+  arbitrated no longer exists.
 - **Operator auth in Mission Control** (#87, #89). Protected routes and
-  sign-in, closing AB#341 and AB#342.
+  sign-in, closing AB#341 and AB#342. The staging smoke check then asserted
+  the operator boundary instead of its absence (#93).
 - **Roles moved onto the token claim, scoped by yard** (#90), and operators
   choose a yard at sign-in (#92).
-- **Live operator queue** (#95, #97) and **operator bookkeeping from a desk**
-  (#108): complete, cancel, attach a video, resolve a review.
+- **Operator access managed in the app** (#94, AB#435). `/operator/team`,
+  where an admin grants, promotes, steps down or removes an operator without
+  a shell.
+- **Live operator queue** (#95, #97), closing AB#376, and **operator
+  bookkeeping from a desk** (#108), closing AB#379: complete, cancel, attach a
+  video, resolve a review.
 - **PostHog analytics and session replay** (#98, #100, #101).
 
-## 2026-08-11 to 2026-08-20 — Deployment
+## 2026-08-11 to 2026-08-20 - Deployment
 
 - **Mission Control behind an external load balancer** (#69), then pointed at
   the real domains (#73): `marsyard.sapient.rocks` for production,
@@ -114,10 +169,11 @@ needed strengthening, and that the code was difficult to follow.
 - **Firestore access via the runtime service account** rather than a mounted
   key (#75), and the Firebase Auth grant operator login needs (#96).
 
-## 2026-07-26 to 2026-07-30 — Offline-first, and the yard
+## 2026-07-26 to 2026-07-30 - Offline-first, and the yard
 
 The satellite stopped depending on the network to do its job. This is the
-period that produced most of the architecture the project still runs on.
+period that produced the satellite's Firestore mirror, which carried the yard
+until it was removed on 2026-09-02 (see above).
 
 - **SQLite mirror and outbox**: the console reads and writes local storage,
   and a sync worker reconciles with Firestore later.
@@ -129,18 +185,18 @@ period that produced most of the architecture the project still runs on.
   camera is present.
 - **Learner email stored only as a hash** on the mission document.
 
-## 2026-07-17 and 2026-07-18 — Mandela Day pilot
+## 2026-07-17 and 2026-07-18 - Mandela Day pilot
 
 The first time children drove the rover. Forty-five missions ran against a
 goal of twenty.
 
-## 2026-06-20 — The UCT project begins
+## 2026-06-20 - The UCT project begins
 
 `mission-control` imported onto the upstream fork (#1), renamed and stripped
 of bloat five days later (#18). Everything before this date is upstream
 4tronix work and now lives in `legacy/`.
 
-## 2023-05-16 — Upstream origin
+## 2023-05-16 - Upstream origin
 
 The 4tronix M.A.R.S. Rover desktop simulator, by Ian Griffiths and David
 Campey. Its physics model is still the reference the current simulator is

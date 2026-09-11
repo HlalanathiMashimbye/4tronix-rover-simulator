@@ -14,7 +14,7 @@ for what the Firestore mirror used to do and why it went.
 |------|------|
 | `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
 | `operator_console.py` / `console/` | What is left of `/operator/`: camera control and the satellite's tunables. The mission queue, the login and the review flow went with the mirror. |
-| `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>.mp4`. |
+| `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. |
 | `mission_watcher.py` | Polls the rover and releases the camera when it reports a run finished. The only background thread. |
 | `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |

@@ -4,7 +4,7 @@
 have not been done end-to-end by the person who wrote them.
 
 This is for someone who has inherited the platform and needs to operate it.
-It is not the event-day manual — that is [`yard/MANUAL.md`](../yard/MANUAL.md),
+It is not the event-day manual: that is [`yard/MANUAL.md`](../yard/MANUAL.md),
 which covers power-on order, running a session, and fixing a rover that will
 not move. Read that one on the day. Read this one when something needs
 changing, granting, or migrating.
@@ -25,7 +25,7 @@ guessable. **There are three separate identities and they do not overlap.**
 ### The Firebase CLI account trap
 
 `firebase` has its own auth, separate from `gcloud`, and it is common to have
-more than one account logged in. **They do not have the same access** — on
+more than one account logged in. **They do not have the same access**: on
 this project the UCT account can deploy rules and indexes and the personal one
 cannot. Check which is active before assuming a permissions problem is real:
 
@@ -64,22 +64,25 @@ mission-control/.env  <  yard/satellite/.env  <  real environment
 ```
 
 So anything set in `yard/satellite/.env` **overrides** the shared config. That
-is how the satellite spent a month talking to the retired project while
-Mission Control talked to the live one. **Leave the Firebase values blank in
-`yard/satellite/.env`** and let them inherit.
+is how the satellite once spent a month talking to the retired project while
+Mission Control talked to the live one. The satellite reads no Firebase config
+at all now, so **keep Firebase values out of `yard/satellite/.env`**: it needs
+`YARD_ID` and little else.
 
 ### The matrix
 
 | Where | Holds | Credential |
 |---|---|---|
-| `mission-control/.env` | `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_PROJECT_ID` | ADC (key lines commented out) |
-| `yard/satellite/.env` | `OPERATOR_SESSION_SECRET`, `YOUTUBE_*` — **Firebase blank** | inherits |
+| `mission-control/.env` | `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_PROJECT_ID`; optionally `RESEND_*`, `YOUTUBE_*`, `CRON_SECRET` | ADC |
+| `yard/satellite/.env` | `YARD_ID`, and the ports if they differ; the rest lives on `/settings` | none: the satellite holds no cloud credential |
 | `yard/rover/.env` | `ROVER_SERVER_PORT`, `YARD_TYPE`, `POSTHOG_*` (optional) | none needed |
-| Cloud Run (staging/prod) | `FIREBASE_PROJECT_ID`, `RESEND_*` from Secret Manager | ADC via runtime service account |
+| Cloud Run (staging/prod) | `FIREBASE_PROJECT_ID`; `CRON_SECRET` mounted; Resend and YouTube settings read from Secret Manager per request, edited on `/operator/settings` | ADC via runtime service account |
 
-`impact.tfvars` sets `firebase_credential_source = "adc"`, so **no
-service-account key is mounted anywhere.** Nothing to rotate, nothing to leak.
-If you find yourself pasting a private key into a `.env`, stop and use ADC.
+**No service-account key is mounted anywhere.** Cloud Run runs as its own
+runtime service account, and `firebase-admin.ts` refuses to start if
+`FIREBASE_CLIENT_EMAIL` or `FIREBASE_PRIVATE_KEY` is set. Nothing to rotate,
+nothing to leak. If you find yourself pasting a private key into a `.env`,
+stop and use ADC.
 
 ### Local setup from scratch
 
@@ -102,7 +105,7 @@ npm run dev
 
 An admin signs in to Mission Control and opens **`/operator` → Manage
 access**. Grant by email, promote, step down, or remove. The account must
-already exist in Firebase Authentication — granting a role does not create
+already exist in Firebase Authentication: granting a role does not create
 one.
 
 ### The first admin on a fresh project
@@ -126,15 +129,11 @@ This is the only thing that script is still for.
 
 ### How quickly removal takes effect
 
-| Surface | Delay |
-|---|---|
-| Mission Control | Immediate — every request re-verifies with `checkRevoked` |
-| Yard console, online | Within 5 minutes |
-| Yard console, offline | Up to `OPERATOR_SESSION_MAX_AGE` (12h default) |
-
-The satellite fails **open** when Firebase is unreachable, on purpose: a check
-that failed closed would lock an operator out of a rover because venue wifi
-dropped. The 12-hour cap is what bounds a revoked session instead.
+Immediately. Every request to an operator page or route re-verifies the
+session with `checkRevoked`. There is nothing to revoke at the yard: the
+satellite has no sign-in, and anyone on the venue LAN can use it. That is
+deliberate, because an auth gate that only works when the venue wifi does
+protects nothing on a box that has to run without it.
 
 ---
 
@@ -152,42 +151,50 @@ Without `--force` it will create missing indexes and refuse to delete ones not
 in the repo, telling you how many it skipped. Read that number before reaching
 for `--force`.
 
-**Symptom of a missing index:** the satellite logs
-`Failed to pull from Firestore: 400 The query requires an index`, with a
-console link that creates exactly the one it needs.
+**Symptom of a missing index:** a query that used to work fails with
+`The query requires an index`, and the error carries a console link that
+creates exactly the one it needs. Queries the browser makes (the feed, the
+operator queue) report it in the browser console; server-side ones in the
+Cloud Run logs.
 
 ---
 
 ## 5. Unsticking things
 
-### The queue shows a mission that will not move
+### A run is stuck in `processing`
 
-A run stuck in `processing` means the satellite stopped mid-mission. On
-restart, `recovery.py` asks the **rover** whether it finished. If the rover
-confirms, the run is completed; otherwise it is flagged for review, and no
-outcome is invented.
-
-To clear it by hand, from the operator console: **complete** it if the rover
-did run, **cancel** it if it did not. Rerun also works on a *flagged* run —
-that is the one case where a `processing` run may be restarted, and doing so
-clears the flag.
+Nothing at the yard writes run status any more: the satellite does not talk to
+Firestore, and runs are settled by an operator in Mission Control. From
+`/operator`, **complete** the run if the rover did run it, **cancel** it if it
+did not. Cancel is allowed on a running mission for exactly this case, and
+records an outcome without reaching the rover.
 
 ### The needs-review count is stuck
 
-```bash
-cd yard/satellite
-python clear_stale_review_flags.py           # dry run
-python clear_stale_review_flags.py --apply
-```
+Review flags were raised by the satellite's crash recovery, which went with the
+Firestore mirror, so nothing raises new ones. Clear any left over with
+**Resolve** on the run in `/operator`; completing or cancelling the run
+settles the flag too.
 
-Only clears flags on missions that already reached a terminal state. One still
-processing is genuinely ambiguous and is left for a human.
+### A video will not attach to its run
 
-### The satellite syncs but the queue is empty
+Work down this list:
 
-Almost always a `YARD_ID` mismatch. The pull is yard-scoped, so a wrong value
-shows up as an empty queue with nothing logged. It must be **`curiosity`** —
-the rover's own mDNS name, matching `KNOWN_YARDS` in Mission Control.
+- **Is the run complete?** The linker only attaches a video to a completed
+  run. It tries again on each later check, as long as the upload is still
+  among the channel's 50 most recent.
+- **Does the description carry the `MissionID:` and `Yard:` lines** the run
+  station writes? Uploading the file under its own name is not enough: the
+  satellite puts a timestamp in every recording's name, and the linker's
+  title match expects `<mission>__<yard>` alone.
+- **Does the satellite's `YARD_ID` match the yard in Mission Control?** It
+  must be **`curiosity`**, the rover's own mDNS name. The `Yard:` line comes
+  from it, and a video naming a yard with no run there is skipped.
+- **Is auto-linking set up at all?** It needs a YouTube key and channel on
+  `/operator/settings`, and Terraform creates the scheduler job only in the
+  environment `cron_environment` names.
+
+An operator can always attach the link by hand in `/operator`.
 
 ---
 
@@ -196,9 +203,9 @@ the rover's own mDNS name, matching `KNOWN_YARDS` in Mission Control.
 The whole stack runs on a laptop with no hardware and no cloud project.
 
 ```bash
-cd yard/rover     && ../../.venv/bin/pytest -q     # 110 tests
-cd yard/satellite && ../../.venv/bin/pytest tests -q  # 234 tests
-cd mission-control && npx jest --ci                   # 42 suites
+cd yard/rover     && ../../.venv/bin/pytest -q     # 202 tests
+cd yard/satellite && ../../.venv/bin/pytest tests -q  # 243 tests
+cd mission-control && npx jest --ci                   # 76 suites
 ```
 
 `create_driver()` returns `FakeRoverDriver` automatically when there is no
@@ -221,17 +228,17 @@ separately, weeks apart, as an unrelated-looking bug.
 
 What has to move, beyond the data:
 
-- [ ] **Composite indexes** — `firebase deploy --only firestore:indexes`.
+- [ ] **Composite indexes**: `firebase deploy --only firestore:indexes`.
       Missing ones surface as a 400 on a query that used to work.
-- [ ] **Security rules** — `firebase deploy --only firestore:rules`.
+- [ ] **Security rules**: `firebase deploy --only firestore:rules`.
 - [ ] **IAM roles for the runtime service account.** Firestore access does not
       imply Firebase Auth access. Operator login on staging was broken from the
       day it shipped because the Cloud Run identity had `roles/datastore.user`
       and nothing else.
 - [ ] **Every `.env` in the repo**, not just the one you are looking at. Check
       for the old project id: `grep -rn "old-project-id" --include=".env*"`.
-- [ ] **Operator accounts and their role claims** — they do not migrate.
-- [ ] **Secret Manager values** — a `CHANGE_ME` placeholder starts the service
+- [ ] **Operator accounts and their role claims**: they do not migrate.
+- [ ] **Secret Manager values**: a `CHANGE_ME` placeholder starts the service
       and fails at the first real call.
 
 ---
@@ -323,7 +330,7 @@ is the one operation here that can overwrite every document in the project.
 
 | Item | Blocked on |
 |---|---|
-| Operator login on **staging** | PR #96 merged, needs `terraform apply` — Werner or Gavin |
+| Operator login on **staging** | PR #96 merged, needs `terraform apply` by Werner or Gavin |
 | Two dead Firestore indexes (`missions.learnerId`, `rover-configs`) | Cleanup only; `--force` deploy when someone chooses to |
 | WiFi and SSH credentials in git history (AB#429) | Team decision: moving to a password manager |
 
@@ -333,10 +340,10 @@ is the one operation here that can overwrite every document in the project.
 
 *Honest gaps, so nobody assumes they are documented:*
 
-- Restoring from backup — the procedure is written up in §8, but the import
+- Restoring from backup: the procedure is written up in §8, but the import
   half has never been run on this project.
 - Deploying prod. It is deliberately undeployed; the promotion workflow exists
   but has never been run.
-- Rebuilding the satellite Pi from a bare flash — see `yard/MANUAL.md` §3,
+- Rebuilding the satellite Pi from a bare flash: see `yard/MANUAL.md` §3,
   which is written but *unverified* since the last reflash.
 - What to do when YouTube upload quota runs out.

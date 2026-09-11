@@ -28,18 +28,19 @@ because most obvious designs are already ruled out by one of them.
 behind carrier NAT. There is no inbound port and no tunnel in this repository.
 Mission Control is HTTPS behind a Google load balancer; the yard is plain
 HTTP. So an HTTPS page cannot call the satellite and the cloud cannot either.
-**Firestore is not the preferred channel between cloud and yard, it is the
-only one.**
+**Nothing carries a mission from the cloud to the yard except the operator**,
+who copies it out of Mission Control and pastes it into the satellite. Any
+automation has to point outward from the yard: Mission Control can queue work
+and the yard can pull it, but nothing can push to the yard.
 
-**gRPC streaming is unreliable on venue networks.** Mission Control already
-forces `experimentalForceLongPolling` because streaming is blocked by school
-and corporate firewalls. The satellite's Firestore listener is gRPC-only, so
-the polling path is a co-equal route rather than a fallback.
+**gRPC streaming is unreliable on venue networks.** Mission Control forces
+`experimentalForceLongPolling` because streaming is blocked by school and
+corporate firewalls.
 
-**The yard must work with no internet at all.** This is why the satellite
-keeps a SQLite mirror and an outbox, and why the operator console reads local
-storage rather than Firestore. Forty-five missions ran on Mandela Day on a
-venue network nobody controlled.
+**The yard must work with no internet at all.** This is why everything on the
+run path, from pasting a mission to taking the video away, needs only the
+venue LAN, and why the satellite has no sign-in and holds no cloud credential.
+Forty-five missions ran on Mandela Day on a venue network nobody controlled.
 
 **The rover is a physical object with children near it.** Stop must work on
 the first press and with no network, which is why it stays local to the yard
@@ -62,6 +63,16 @@ execution method reduced to 58, the satellite given its first interfaces, and
 Mission Control's dependency arrows reversed with tests that fail the build if
 they are reversed again. See the changelog for detail.
 
+The satellite half of that did not last the week. Mission Control had already
+grown its own operator console (`/operator`, with Firebase sign-in and
+operator and admin roles on the token claim), so the satellite's was retired:
+its mission queue page went on 2026-08-31, and its Firestore mirror, with most
+of the console package and `ports.py`, on 2026-09-02. Mission Control is now
+the only operator surface. The satellite keeps what is physical (sending a
+mission, stop, the camera and the recordings) and runs the manual loop
+described in
+[`yard/docs/what-the-yard-no-longer-does.md`](yard/docs/what-the-yard-no-longer-does.md).
+
 **Next milestone: the iteration 3 presentation, 2026-09-17.**
 
 ## Where it is going
@@ -75,49 +86,47 @@ real work rather than done at the end.
 
 Concretely, the highest-value remaining items:
 
-- **A Firestore and Auth emulator setup.** `firebase.json` has no emulator
-  config. Adding one is the single biggest handover investment available: it
-  would let someone run the whole system with no GCP project and no service
-  account key.
+- **A Firestore and Auth emulator setup.** `firebase.json` configures a
+  Firestore emulator, but only the rules test runs against it. The server's
+  Admin SDK will follow `FIRESTORE_EMULATOR_HOST`; the browser SDK has no
+  emulator wiring and there is no Auth emulator, so the app still needs a real
+  project. Closing that is the single biggest handover investment available:
+  it would let someone run the whole system with no GCP project and no Google
+  credentials at all.
 - **Backups.** A weekly managed export now lands in GCS, and the database has
   point-in-time recovery and delete protection on. The gap left is the restore
   path: it is documented and has never been run, so nothing destructive should
   be attempted until someone has imported a copy back and looked at it.
 - **The runbook kept honest** as the system changes.
 
-### Next: one interface
-
-Today there are two operator surfaces: the Flask console on the yard Pi, and
-Mission Control in the cloud. The team decided on 2026-07-23 to unify them,
-and the shape agreed is that Mission Control becomes the operator console
-while the satellite keeps a **yard control panel**. That is not a compromise:
-stop, camera and arming are physical or filesystem operations that have to
-stay local, and the offline path is why Mandela Day worked.
-
-The Flask console is not being retired. Reframing it honestly as two surfaces
-with different jobs is what survives the question "so did you actually unify
-it?"
-
 ### Later, and deliberately deferred
 
-- **Cloud dispatch** (sending a mission to the rover from the cloud UI). It
-  needs an arming mechanism first, because it removes today's implicit
-  guardrail that a human is standing in the room. Arming must not be
-  bypassable by `OPERATOR_AUTH=off`, which is the documented event-day escape
-  hatch and would otherwise let anyone on venue wifi arm the yard.
-- **Splitting `mission_store.py`.** 1379 lines, and load-bearing: it is the
-  local mirror every offline path depends on. The console split proved the
-  facade approach works, so this is tractable, but it buys clarity rather than
-  capability and should wait.
+- **The automatic route**: a mission reaching the rover without an operator
+  carrying it. Planned in
+  [`yard/docs/automatic-route-plan.md`](yard/docs/automatic-route-plan.md),
+  not built. Since nothing can push to the yard, Mission Control queues and
+  the satellite pulls, over outbound HTTP. It removes today's guardrail that a
+  human in the room presses Send, so the first step is a claim: a code shown
+  on the yard's own screen and typed into Mission Control by the operator
+  standing in front of it, held in memory and gone when the yard is switched
+  off. The manual loop stays underneath, and is what a yard falls back to
+  with no internet.
+- **Uploading the video from the yard.** Mission Control holds a read-only
+  YouTube API key and there is no OAuth client that could upload, so today
+  the operator uploads by hand and the linker finds it. Setting up that
+  client is the prerequisite, and should be proved by hand before any code
+  depends on it.
 - **Merging back upstream**, after Werner's cloud team reviews the Terraform.
 
 ## Known gaps
 
 Recorded here rather than left for someone to rediscover:
 
-- **`while True:` is accepted** in learner Python and the rover will run it
-  forever. The time ceiling is a static parse and cannot catch it. It needs a
-  wall-clock watchdog on the rover.
+- **Learner code is stopped, not contained.** The rover's runner ends a
+  program when stop is pressed or after 120 seconds of wall-clock time, so a
+  `while True:` is cut off at the limit. It does that through a trace hook,
+  and a call that blocks inside C never returns to the interpreter to be
+  stopped.
 - **Monaco loads from a CDN**, render-blocking in `<head>`. The yard works
   with no internet, but a captive-portal network could stall the page. Adding
   `defer` alone would break it: the bootstrap checks `typeof require`.
@@ -125,8 +134,11 @@ Recorded here rather than left for someone to rediscover:
   in `docs/THREAT-MODEL.md`.
 - **`pca9685` is not vendored**, so the rover Pi still needs the 4tronix
   install alongside this repository.
-- **Two secrets need rotating** after being printed to a terminal:
-  `YOUTUBE_CLIENT_SECRET` and `OPERATOR_SESSION_SECRET`.
+- **A secret printed to a terminal still needs revoking.**
+  `YOUTUBE_CLIENT_SECRET` is no longer read by anything in the code, but the
+  credential it belongs to works until it is rotated or deleted in Google
+  Cloud. `OPERATOR_SESSION_SECRET`, printed alongside it, is retired: the
+  satellite no longer has sessions to sign.
 
 ## How decisions get recorded
 
