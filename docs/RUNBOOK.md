@@ -183,10 +183,10 @@ Work down this list:
 - **Is the run complete?** The linker only attaches a video to a completed
   run. It tries again on each later check, as long as the upload is still
   among the channel's 50 most recent.
-- **Does the description carry the `MissionID:` and `Yard:` lines** the run
-  station writes? Uploading the file under its own name is not enough: the
-  satellite puts a timestamp in every recording's name, and the linker's
-  title match expects `<mission>__<yard>` alone.
+- **Does the title match `<mission>__<yard>` or `<mission>__<yard>__<UTC
+  stamp>`?** Uploading the file under its own name works either way; a title
+  edited into anything else does not, and needs the description's
+  `MissionID:` and `Yard:` lines instead.
 - **Does the satellite's `YARD_ID` match the yard in Mission Control?** It
   must be **`curiosity`**, the rover's own mDNS name. The `Yard:` line comes
   from it, and a video naming a yard with no run there is skipped.

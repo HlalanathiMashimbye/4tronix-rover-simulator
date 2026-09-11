@@ -273,11 +273,6 @@ rather than by surprise:
 - **The satellite declares no abstraction of its own.** `ports.py` went with
   the Firestore client it described. What is left talks to the rover over HTTP
   and to the camera over a WebSocket, directly.
-- **The recording's name and the linker's title match have drifted.** The
-  satellite names files `<mission>__<yard>__<UTC stamp>.mp4`, and
-  `youtubeLinking.ts` still matches an unrenamed upload's title against
-  `<mission>__<yard>` alone, so only the pasted description links a video
-  automatically. One rule in two languages, and no test across them.
 - **The auto-link cadence is set in two places that disagree.** The app
   assumes Cloud Scheduler fires every 5 minutes (the interval setting's floor
   is 5); Terraform schedules it every 15. With the default interval also 15
