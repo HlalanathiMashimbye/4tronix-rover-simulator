@@ -59,6 +59,16 @@ beforeEach(() => {
 });
 
 describe('copying a mission to paste into the yard', () => {
+  it('changes the queue action to Send to Rover only in Automatic mode', async () => {
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    expect(await screen.findByRole('button', { name: /^copy$/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^automatic$/i }));
+
+    expect(screen.getByRole('button', { name: /send to rover/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^copy$/i })).not.toBeInTheDocument();
+  });
+
   it('puts the mission Python on the clipboard', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });

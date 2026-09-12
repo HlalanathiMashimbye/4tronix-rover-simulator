@@ -125,6 +125,17 @@ def active_recordings():
         return sorted({mission_id for mission_id, _yard in _paths})
 
 
+def readiness():
+    """Return whether this satellite can create a recording file."""
+    try:
+        os.makedirs(_recording_dir(), exist_ok=True)
+        if not os.access(_recording_dir(), os.W_OK):
+            return False, 'recording directory is not writable'
+    except OSError as e:
+        return False, f'could not prepare the recording directory: {e}'
+    return True, None
+
+
 def is_recording(mission_id, yard_id):
     """Whether frames are being persisted for this key right now.
 

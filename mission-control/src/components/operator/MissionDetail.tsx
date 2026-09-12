@@ -3,6 +3,7 @@
 import { ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
+import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -26,6 +27,7 @@ export function MissionDetail({
   yardId,
   isAdmin,
   mode,
+  startAutomatic,
   onResult,
   onBack,
 }: {
@@ -35,6 +37,7 @@ export function MissionDetail({
   yardId: string;
   isAdmin: boolean;
   mode: ConsoleMode;
+  startAutomatic?: boolean;
   onResult: (message: string) => void;
   /** Only rendered on small screens, where the two panes take turns. */
   onBack?: () => void;
@@ -76,6 +79,10 @@ export function MissionDetail({
         mode={mode}
         onResult={onResult}
       />
+
+      {mode === 'auto' && (
+        <AutomaticDispatch mission={mission} yardId={yardId} startImmediately={startAutomatic} />
+      )}
 
       <MissionRuns
         missionId={mission.id}
