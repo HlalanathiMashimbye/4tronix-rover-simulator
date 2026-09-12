@@ -58,6 +58,10 @@ jobs:
   firestore-rules:
     name: firestore rules
     runs-on: ubuntu-latest
+    # One home for the pinned version: the install below and the cache key both
+    # read it, so bumping the CLI cannot leave the cache keyed to the old JAR.
+    env:
+      FIREBASE_TOOLS_VERSION: 14.24.0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -66,7 +70,24 @@ jobs:
       # A fixed version, for the same reason terraform_version is pinned: a new
       # release should not change what CI enforces under the team.
       - name: Install the Firebase CLI
-        run: npm install -g firebase-tools@14.24.0
+        run: npm install -g firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+      # emulators:exec fetches the emulator JAR from storage.googleapis.com on
+      # first use, and that download is the one thing in this job that can fail
+      # while every assertion still passes. On 2026-09-12 it took main red for
+      # two minutes on a commit that changed a comment and a runbook line:
+      #
+      #   Error: Failed to make request to https://storage.googleapis.com/
+      #   firebase-preview-drop/emulator/cloud-firestore-emulator-v1.19.8.jar
+      #
+      # A red build that means nothing is worse than no build, because it
+      # teaches everyone to re-run rather than read. Firebase's own output asks
+      # for this cache by name. Keyed on the CLI version, since that is what
+      # decides which JAR is fetched.
+      - name: Cache the Firestore emulator
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
       # emulators:exec starts the emulator, runs the script, and exits with the
       # script's status, so a failed assertion fails the build.
       - name: Check rules against the emulator
