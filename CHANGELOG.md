@@ -19,6 +19,11 @@ which is often longer than the diff.
   database. Point-in-time recovery and delete protection are on the database
   as well, set out of Terraform alongside the rest of the Firebase config.
 
+  The job runs in `europe-west1` too, on the shared `cron_region` from #182,
+  because Cloud Scheduler is not offered in `africa-south1` at all. So nothing
+  in this module sits in the region the app runs in, for two unrelated
+  reasons.
+
   This replaces a proposed Cloud Function that walked collections to JSON and
   uploaded a zip to a personal Google Drive folder. That version turned
   timestamps into strings and references into maps, and its restore wrote them
