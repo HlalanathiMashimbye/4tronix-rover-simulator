@@ -44,13 +44,9 @@ gcloud functions deploy firestore-backup \
   --no-allow-unauthenticated \
   --timeout=540 \
   --memory=512MB \
-  --set-env-vars="GCP_PROJECT=bt-impact-academy,DRIVE_FOLDER_ID=REPLACE_DRIVE_FOLDER_ID"
+  --set-env-vars="GCP_PROJECT=bt-impact-academy,DRIVE_FOLDER_ID=1scjM5Hs9x__0u3UQV9DtoeHOU4iu52Vy"
 ```
 
-**Replace before running:**
-- `bt-impact-academy` → your GCP project ID
-- `REPLACE_DRIVE_FOLDER_ID` → the Google Drive folder ID (the long string in
-  the folder URL: `https://drive.google.com/drive/folders/THIS_PART`)
 
 **Save the Function URL** from the output — you need it in step 4.
 
