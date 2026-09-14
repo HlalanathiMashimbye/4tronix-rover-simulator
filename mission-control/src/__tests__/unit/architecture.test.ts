@@ -69,6 +69,21 @@ describe('the dependency rule', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('domain never imports application', () => {
+    /**
+     * Application is built from domain, so domain cannot know application
+     * exists. The two rules above only watch core's outward edges, and this
+     * edge is inside core, so for a while nothing did: ast-allowlist-analyzer
+     * imported its own result type back from AllowlistService, which imports
+     * the analyser. tsc accepts that cycle, and so does every behavioural test.
+     */
+    const offenders = sourceFiles('core/domain').filter((f) =>
+      /from '(@\/core\/application|(\.\.\/)+application)\//.test(read(f))
+    );
+
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('src/lib stays small', () => {
