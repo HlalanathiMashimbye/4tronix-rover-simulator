@@ -102,6 +102,20 @@ export function watchUrl(videoId: string): string {
 }
 
 /**
+ * The YouTube id in a watch/share/embed URL, or null if there isn't one.
+ *
+ * The inverse of watchUrl, and here rather than in lib/missionRuns because an
+ * operator's attach-video command validates links with it, and that command is
+ * an application service: core may not import lib. lib/missionRuns re-exports
+ * it, so the learner's player and the operator still read links the same way.
+ */
+export function getYouTubeId(url: string | undefined | null): string | null {
+  if (!url) return null;
+  const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
+  return match && match[2].length === 11 ? match[2] : null;
+}
+
+/**
  * The missions the channel's recent uploads claim, newest upload first.
  *
  * De-duplicated per mission AND yard: if somebody re-uploads a run the newer
