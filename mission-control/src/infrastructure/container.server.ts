@@ -23,6 +23,11 @@ import { FirestoreMissionRepository } from '@/infrastructure/persistence/Firesto
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
+import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
+import { ResendEmailSender } from '@/infrastructure/email/resend-client';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
 export function adminMissionRepository(): IMissionRepository {
@@ -37,4 +42,19 @@ export function missionService(): MissionService {
 /** Privileged. Yards are world-readable but only ever written through here. */
 export function adminYardRepository(): IYardRepository {
   return new FirestoreYardRepository(getFirestoreInstance());
+}
+
+/**
+ * Learner status emails: Resend delivers, the learner's private contact record
+ * says where. Assembled here and nowhere else - three routes used to build it
+ * inline, each free to wire it differently, and architecture.test.ts now fails
+ * if one does again.
+ */
+export function notificationService(): MissionNotificationService {
+  return new MissionNotificationService(
+    new ResendEmailSender(),
+    missionEmailComposer,
+    new FirestoreLearnerContactReader(getFirestoreInstance()),
+    resolveAppUrl(),
+  );
 }

@@ -5,18 +5,20 @@
  * updates. Best-effort: an email-provider failure or missing learner email
  * must never fail the mission write it's reacting to, so every failure is
  * caught and logged rather than propagated.
+ *
+ * Every collaborator is a port - how mail is delivered, what it says, and whom
+ * it is for - so this class holds the rules about notifying and nothing about
+ * Resend or Firestore. It is assembled once, by notificationService() in
+ * container.server.ts; three routes used to build it by hand.
  */
 
-import { Firestore } from 'firebase-admin/firestore';
 import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import {
-  LEARNER_PRIVATE_COLLECTION,
-  LEARNER_CONTACT_DOC,
-} from '@/core/domain/services/learnerContact';
-
-const LEARNERS_COLLECTION = 'learners';
+  ILearnerContactReader,
+  LearnerContact,
+} from '@/core/domain/services/ILearnerContactReader';
 
 /** Log prefix so every notification attempt is greppable in server output. */
 const LOG_TAG = '[mission-email]';
@@ -30,18 +32,13 @@ export type NotifyOutcome =
   | { sent: true }
   | { sent: false; reason: 'no-learner-email' | 'send-failed'; error?: string };
 
-/** What the learner record contributes: where to send, and who to greet. */
-type LearnerContact = {
-  email?: string;
-  displayName?: string;
-};
-
 export class MissionNotificationService {
   constructor(
     private readonly emailSender: IEmailSender,
     /** What the email says. Injected for the same reason emailSender is. */
     private readonly emailComposer: IMissionEmailComposer,
-    private readonly firestore: Firestore,
+    /** Where the learner's address and name come from. */
+    private readonly contacts: ILearnerContactReader,
     /**
      * Base URL of the learner app, e.g. https://marsyard.sapient.rocks. The
      * per-mission and history links are derived here rather than passed in, so
@@ -54,7 +51,7 @@ export class MissionNotificationService {
     let learner: LearnerContact;
 
     try {
-      learner = await this.resolveLearner(mission.learnerRef);
+      learner = await this.contacts.findByLearnerRef(mission.learnerRef);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.error(
@@ -93,17 +90,6 @@ export class MissionNotificationService {
     }
   }
 
-  /**
-   * Address and display name both come from the learner record, found by the
-   * learnerRef the mission carries rather than by document id - the mission no
-   * longer holds the raw id to look one up with.
-   *
-   * Previously the name was read from here while the address came off the
-   * mission, and the learner record was written under a DIFFERENT id
-   * (getOrCreateSession's sessionId, not getLearnerID's learnerId) - so this
-   * lookup never hit and every email greeted "Space Explorer". Both now derive
-   * from the same learnerRef, so they cannot drift apart again.
-   */
   /** Trailing slashes on NEXT_PUBLIC_APP_URL are easy to leave in and would
    * otherwise produce '//missions/<id>', which some mail clients mangle. */
   private baseUrl(): string {
@@ -113,49 +99,5 @@ export class MissionNotificationService {
   /** Deep link to one mission - matches the app/missions/[missionId] route. */
   private missionUrl(missionId: string): string {
     return `${this.baseUrl()}/missions/${encodeURIComponent(missionId)}`;
-  }
-
-  private async resolveLearner(missionLearnerRef: string): Promise<LearnerContact> {
-    // Missions carry only a hash of the learner id, so the learner cannot be
-    // fetched by document id any more - it is found by the matching learnerRef
-    // field, which LearnerContext stamps onto the record. Single-field
-    // equality, so Firestore's automatic index covers it.
-    const matches = await this.firestore
-      .collection(LEARNERS_COLLECTION)
-      .where('learnerRef', '==', missionLearnerRef)
-      .limit(1)
-      .get();
-
-    if (matches.empty) {
-      return {};
-    }
-
-    const learnerRef = matches.docs[0].ref;
-    const data = matches.docs[0].data();
-
-    // The address lives in a browser-unreadable subcollection - see
-    // learnerContact.ts for why it is not on the learner document.
-    let email: string | undefined;
-    try {
-      const contactSnap = await learnerRef
-        .collection(LEARNER_PRIVATE_COLLECTION)
-        .doc(LEARNER_CONTACT_DOC)
-        .get();
-      email = (contactSnap.data()?.learnerEmail as string) || undefined;
-    } catch (error) {
-      console.warn('[notify] Could not read learner contact record:', error);
-    }
-
-    // Fall back to the legacy field for learners who set an address before it
-    // moved, and have not set one since. Those documents are cleaned up as
-    // each learner next saves an address; drop this once none remain.
-    if (!email) {
-      email = (data?.learnerEmail as string) || undefined;
-    }
-
-    return {
-      email,
-      displayName: (data?.displayName as string) || undefined,
-    };
   }
 }

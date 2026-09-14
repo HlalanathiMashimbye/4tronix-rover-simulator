@@ -27,12 +27,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminMissionRepository } from '@/infrastructure/container.server';
-import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
-import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
-import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { adminMissionRepository, notificationService } from '@/infrastructure/container.server';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import { getYouTubeId } from '@/lib/missionRuns';
 import {
@@ -145,7 +140,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const command = parsed.data;
 
   try {
-    const firestore = getFirestoreInstance();
     const repository = adminMissionRepository();
 
     const mission = await repository.findById(id);
@@ -318,13 +312,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     let notification: unknown = null;
     if (decision.change.status === 'completed') {
       try {
-        const notifier = new MissionNotificationService(
-          new ResendEmailSender(),
-          missionEmailComposer,
-          firestore,
-          resolveAppUrl(),
+        notification = await notificationService().notifyStatusChange(
+          { ...mission, status: 'completed' },
+          'completed',
         );
-        notification = await notifier.notifyStatusChange({ ...mission, status: 'completed' }, 'completed');
       } catch (error) {
         console.error('[operator/bookkeeping] notification failed:', error);
       }

@@ -32,6 +32,11 @@ jest.mock('@/infrastructure/container.server', () => ({
     applyBookkeeping: (...a: unknown[]) => applyBookkeeping(...a),
     softDeleteRun: (...a: unknown[]) => softDeleteRun(...a),
   }),
+  // Completing a mission emails the learner. Stubbed so a missing factory is a
+  // mock to update rather than a TypeError the route quietly catches.
+  notificationService: () => ({
+    notifyStatusChange: async () => ({ sent: false, reason: 'no-learner-email' }),
+  }),
 }));
 
 jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
