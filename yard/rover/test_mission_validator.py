@@ -142,6 +142,39 @@ class TestValidateRoverSpeed:
         assert 'Speed limit exceeded' in error
 
 
+class TestTheSpeedBoundaryItself:
+    """Literal numbers, on purpose.
+
+    Every test above is written relative to MAX_ROVER_SPEED, so each one moves
+    with the constant: raise the ceiling to 1000 and they all still pass. The
+    rover's hardware takes 0-100, so that is the number these name.
+    """
+
+    def test_100_is_the_fastest_speed_accepted(self):
+        assert validate_rover_speed('rover.forward(100)') == (True, None)
+
+    def test_101_is_refused(self):
+        assert validate_rover_speed('rover.forward(101)')[0] is False
+
+    def test_a_fraction_over_the_top_is_refused(self):
+        assert validate_rover_speed('rover.forward(100.5)')[0] is False
+
+    def test_0_is_the_slowest_speed_accepted(self):
+        assert validate_rover_speed('rover.spinLeft(0)') == (True, None)
+
+    @pytest.mark.parametrize('call', [
+        'rover.forward(-1)', 'rover.reverse(-50)', 'rover.spinLeft(-5)', 'rover.spinRight(-0.5)',
+    ])
+    def test_a_negative_speed_is_refused(self, call):
+        is_valid, error = validate_rover_speed(call)
+        assert is_valid is False
+        assert 'rover.reverse()' in error
+
+    def test_a_speed_inside_a_comment_is_not_read(self):
+        code = 'rover.forward(60)  # not rover.forward(6300)'
+        assert validate_rover_speed(code) == (True, None)
+
+
 class TestValidateMissionCode:
     def test_valid_mission(self):
         code = f'''rover.forward({MAX_ROVER_SPEED})

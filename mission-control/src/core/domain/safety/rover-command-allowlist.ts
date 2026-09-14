@@ -15,6 +15,9 @@
  * - Clear error messages guide learners to safe alternatives
  */
 
+import { ArgumentRange } from '@/core/domain/safety/ArgumentRange';
+import { MAX_ROVER_SPEED, MIN_ROVER_SPEED } from '@/core/domain/safety/limits';
+
 /**
  * Approved rover control commands
  *
@@ -49,17 +52,24 @@
  * Only the FIRST numeric argument is checked. That is where every speed and
  * duration sits, and guessing at the rest (servo indices, RGB triples) would
  * reject valid programs.
+ *
+ * Every motion command shares ONE range built from limits.ts. These used to be
+ * seven separate `max: 100` literals beside MAX_ROVER_SPEED, and changing any
+ * of them passed the whole test suite.
  */
-export const ROVER_ARGUMENT_LIMITS: Record<string, { min: number; max: number; label: string }> = {
-  'rover.forward': { min: 0, max: 100, label: 'speed' },
-  'rover.backward': { min: 0, max: 100, label: 'speed' },
-  'rover.reverse': { min: 0, max: 100, label: 'speed' },
-  'rover.spinLeft': { min: 0, max: 100, label: 'speed' },
-  'rover.spinRight': { min: 0, max: 100, label: 'speed' },
-  'rover.steerLeft': { min: 0, max: 100, label: 'speed' },
-  'rover.steerRight': { min: 0, max: 100, label: 'speed' },
-  'time.sleep': { min: 0, max: 60, label: 'number of seconds' },
-  'rover.wait': { min: 0, max: 60, label: 'number of seconds' },
+const SPEED = new ArgumentRange(MIN_ROVER_SPEED, MAX_ROVER_SPEED, 'speed');
+const SLEEP_SECONDS = new ArgumentRange(0, 60, 'number of seconds');
+
+export const ROVER_ARGUMENT_LIMITS: Readonly<Record<string, ArgumentRange>> = {
+  'rover.forward': SPEED,
+  'rover.backward': SPEED,
+  'rover.reverse': SPEED,
+  'rover.spinLeft': SPEED,
+  'rover.spinRight': SPEED,
+  'rover.steerLeft': SPEED,
+  'rover.steerRight': SPEED,
+  'time.sleep': SLEEP_SECONDS,
+  'rover.wait': SLEEP_SECONDS,
 };
 
 export const ROVER_COMMAND_ALLOWLIST = [
