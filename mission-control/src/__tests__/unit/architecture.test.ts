@@ -14,6 +14,9 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
 
+// Types only: erased at runtime, so the Firebase client is never loaded.
+import type { browserMissionRepository } from '@/infrastructure/container.browser';
+
 const SRC = join(__dirname, '..', '..');
 
 /** Every .ts/.tsx under src/<dir>, as paths relative to src, tests excluded. */
@@ -131,6 +134,32 @@ describe('the server/browser boundary', () => {
       });
 
     expect(offenders).toEqual([]);
+  });
+
+  it('hands the browser a repository with no way to write', () => {
+    /**
+     * Checked by the compiler, not by reading source. Each line below names a
+     * method the browser must not have. If the browser container ever returns
+     * the full repository again, these directives become unused and
+     * `next build` (a required CI step) fails with TS2578, as does `tsc`.
+     *
+     * Not Jest: tsconfig sets isolatedModules, so ts-jest transpiles without
+     * type errors and this test passes either way. Widening the container was
+     * tried against all three before this comment was written; only the
+     * compiler runs caught it.
+     */
+    type BrowserRepository = ReturnType<typeof browserMissionRepository>;
+
+    // @ts-expect-error - writing a mission is server-only
+    type Update = BrowserRepository['update'];
+    // @ts-expect-error - so is an operator's bookkeeping
+    type Bookkeeping = BrowserRepository['applyBookkeeping'];
+    // @ts-expect-error - and deleting a child's mission
+    type Delete = BrowserRepository['softDeleteMission'];
+
+    const reads: Array<keyof BrowserRepository> = ['findById', 'findRecent', 'findRuns'];
+    expect(reads).toHaveLength(3);
+    expect([] as Array<Update | Bookkeeping | Delete>).toEqual([]);
   });
 });
 

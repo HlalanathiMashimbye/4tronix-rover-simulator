@@ -11,11 +11,18 @@
  * subscriptions.
  */
 
-import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
+import { IMissionReader } from '@/core/domain/repositories/IMissionRepository';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
 
-/** Unprivileged. Firestore rules apply. */
-export function browserMissionRepository(): IMissionRepository {
+/**
+ * Unprivileged. Firestore rules apply.
+ *
+ * Typed as a reader, not the whole repository. Rules already deny the browser
+ * every write, so the type now says the same thing: a client component that
+ * tries to write does not compile, rather than failing at runtime in front of
+ * a learner. architecture.test.ts fails if this widens again.
+ */
+export function browserMissionRepository(): IMissionReader {
   return new FirestoreMissionRepository(getFirestoreClient());
 }
