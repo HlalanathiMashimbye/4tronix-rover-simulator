@@ -236,7 +236,7 @@ function checkArgumentRanges(line: string, lineNumber: number): AllowlistFinding
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(withoutComment)) !== null) {
       const value = Number(match[1]);
-      if (Number.isNaN(value) || (value >= limit.min && value <= limit.max)) {
+      if (Number.isNaN(value) || limit.check(value).ok) {
         continue;
       }
 

@@ -4,7 +4,7 @@ the rover cannot actually make.
 """
 
 import re
-from limits import MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED
+from limits import MISSION_TIME_LIMIT_SECONDS, MAX_ROVER_SPEED, MIN_ROVER_SPEED
 
 
 # How many arguments the rover library's motion functions really take.
@@ -84,19 +84,28 @@ def calculate_python_duration(code: str) -> float:
     return total_seconds
 
 
-def find_max_speed_in_python(code: str) -> int:
+# A sign and a fraction are part of the number. This used to match `\d+` only,
+# so rover.forward(-50) and rover.forward(100.5) were not read as speeds at all
+# and passed the ceiling by being invisible to it.
+_SPEED_CALL = re.compile(
+    r'rover\.(forward|reverse|spinLeft|spinRight|steerLeft|steerRight)'
+    r'\s*\(\s*(-?\d+(?:\.\d+)?)\s*\)'
+)
+
+
+def find_speeds_in_python(code: str) -> list[float]:
+    """Every literal speed a motion call is written with, comments ignored.
+
+    Comments are skipped for the same reason validate_rover_api skips them:
+    generated missions are mostly comments, and a speed mentioned in one never
+    reaches the motors.
     """
-    Find the maximum speed value in Python code.
-    Looks for rover.forward(N), rover.reverse(N), etc.
-    Returns 0 if no speed values found.
-    """
-    max_speed = 0
-    # Match rover.forward(N), rover.reverse(N), rover.spinLeft(N), etc.
-    pattern = r'rover\.(forward|reverse|spinLeft|spinRight|steerLeft|steerRight)\s*\(\s*(\d+)\s*\)'
-    for match in re.finditer(pattern, code):
-        speed = int(match.group(2)) or 0
-        max_speed = max(max_speed, speed)
-    return max_speed
+    return [float(m.group(2)) for m in _SPEED_CALL.finditer(_without_comments(code))]
+
+
+def find_max_speed_in_python(code: str) -> float:
+    """The fastest literal speed in the code, or 0 if there is none."""
+    return max(find_speeds_in_python(code), default=0)
 
 
 def validate_mission_duration(code: str) -> tuple[bool, str | None]:
@@ -115,12 +124,18 @@ def validate_mission_duration(code: str) -> tuple[bool, str | None]:
 
 def validate_rover_speed(code: str) -> tuple[bool, str | None]:
     """
-    Validate that rover speed does not exceed limit.
+    Validate that every rover speed is inside MIN_ROVER_SPEED..MAX_ROVER_SPEED.
     Returns (is_valid, error_message).
     """
-    max_speed = find_max_speed_in_python(code)
-    if max_speed > MAX_ROVER_SPEED:
+    speeds = find_speeds_in_python(code)
+    if any(speed > MAX_ROVER_SPEED for speed in speeds):
         return (False, f'Speed limit exceeded. The maximum rover speed is {MAX_ROVER_SPEED}.')
+    if any(speed < MIN_ROVER_SPEED for speed in speeds):
+        return (
+            False,
+            f'A rover speed cannot be below {MIN_ROVER_SPEED}. To drive the other '
+            'way, use rover.reverse() with a positive speed.',
+        )
     return (True, None)
 
 
