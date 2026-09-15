@@ -2,7 +2,7 @@
 Rover Driver Interface and Implementations
 
 Provides abstraction layer for rover hardware control with injectable drivers
-for testability (real hardware vs fake logging stand-in).
+for testability (real hardware vs a stand-in that keeps the same state).
 """
 
 import os
@@ -10,124 +10,184 @@ import time
 import threading
 from abc import ABC, abstractmethod
 
+from limits import MAX_ROVER_SPEED, MIN_ROVER_SPEED
+
+
+# Wheel geometry, shared by both drivers so they cannot disagree about it. The
+# steering servos are 9 (front left), 11 (rear left), 13 (rear right) and 15
+# (front right).
+STRAIGHT = {9: 0, 11: 0, 13: 0, 15: 0}
+
+# Toed in for spinning on the spot.
+PIVOT = {9: 50, 15: -50, 11: -50, 13: 50}
+
+
+def steer_angles(front_degrees: float) -> dict:
+    """Front wheels one way and rear wheels the other, as the steer blocks emit.
+
+    Negative front_degrees steers left.
+    """
+    return {9: front_degrees, 15: front_degrees, 11: -front_degrees, 13: -front_degrees}
+
+
+def check_speed(speed):
+    """The speed, if the rover may be driven at it. ValueError if not.
+
+    The motors take a PWM duty cycle from 0 to 100. The docstrings below said
+    "(0-100)" while neither driver checked: the real one passed forward(500)
+    straight to the motor library, and the fake printed it.
+    """
+    if (isinstance(speed, bool) or not isinstance(speed, (int, float))
+            or not MIN_ROVER_SPEED <= speed <= MAX_ROVER_SPEED):
+        raise ValueError(
+            f'Speed must be a number from {MIN_ROVER_SPEED} to {MAX_ROVER_SPEED}, '
+            f'got {speed!r}')
+    return speed
+
 
 class RoverDriver(ABC):
-    """Base class for rover hardware interface"""
+    """What every rover driver does, and the rule none of them may skip.
+
+    The motion methods callers use are defined here, once, and check the speed
+    before handing over to the implementation's `_forward`, `_spin_left` and so
+    on. A new driver implements those and inherits the check, so it cannot
+    forget it, and callers cannot tell which driver they were given.
+    test_driver_contract.py holds both implementations to the same behaviour.
+    """
 
     # True when the driver moves a physical rover; the status page shows
     # an amber badge when this is False
     hardware = True
 
-    @abstractmethod
     def forward(self, speed: int) -> None:
-        """Move forward at given speed (0-100)"""
-        pass
+        """Move forward at given speed (0-100), wheels straight"""
+        self._forward(check_speed(speed))
 
-    @abstractmethod
     def reverse(self, speed: int) -> None:
-        """Move backward at given speed (0-100)"""
-        pass
+        """Move backward at given speed (0-100), wheels straight"""
+        self._reverse(check_speed(speed))
 
-    @abstractmethod
     def spin_left(self, speed: int) -> None:
-        """Spin left in place at given speed"""
-        pass
+        """Spin left in place at given speed (0-100)"""
+        self._spin_left(check_speed(speed))
 
-    @abstractmethod
     def spin_right(self, speed: int) -> None:
-        """Spin right in place at given speed"""
-        pass
+        """Spin right in place at given speed (0-100)"""
+        self._spin_right(check_speed(speed))
 
-    @abstractmethod
     def steer_left(self, degrees: float, speed: int) -> None:
-        """Steer left while moving forward"""
-        pass
+        """Steer left while moving forward at given speed (0-100)"""
+        self._steer_left(degrees, check_speed(speed))
+
+    def steer_right(self, degrees: float, speed: int) -> None:
+        """Steer right while moving forward at given speed (0-100)"""
+        self._steer_right(degrees, check_speed(speed))
 
     @abstractmethod
-    def steer_right(self, degrees: float, speed: int) -> None:
-        """Steer right while moving forward"""
-        pass
+    def _forward(self, speed: float) -> None:
+        """Drive forward. The speed has already been checked."""
+
+    @abstractmethod
+    def _reverse(self, speed: float) -> None:
+        """Drive backward. The speed has already been checked."""
+
+    @abstractmethod
+    def _spin_left(self, speed: float) -> None:
+        """Spin left in place. The speed has already been checked."""
+
+    @abstractmethod
+    def _spin_right(self, speed: float) -> None:
+        """Spin right in place. The speed has already been checked."""
+
+    @abstractmethod
+    def _steer_left(self, degrees: float, speed: float) -> None:
+        """Steer left while driving. The speed has already been checked."""
+
+    @abstractmethod
+    def _steer_right(self, degrees: float, speed: float) -> None:
+        """Steer right while driving. The speed has already been checked."""
 
     @abstractmethod
     def stop(self) -> None:
-        """Stop all movement"""
-        pass
+        """Stop all movement and straighten the wheels"""
 
     @abstractmethod
     def set_leds(self, pattern: str) -> None:
         """Set LED pattern: 'forward', 'reverse', 'spin_left', 'spin_right', 'stop'"""
-        pass
 
     @abstractmethod
     def cleanup(self) -> None:
         """Clean up resources"""
-        pass
 
 
 class FakeRoverDriver(RoverDriver):
-    """Fake driver - a working stand-in that logs commands instead of moving hardware"""
+    """A stand-in that keeps the state a rover would be in, instead of moving one.
+
+    It used to print each command and remember nothing, so the most a test
+    built on it could prove was that nothing crashed. The steering fault lived
+    in that gap: the real driver straightened the wheels before driving, and
+    nothing could see whether this one did. It now keeps the two facts the
+    hardware has - where the wheels point, and what the motors are doing - in
+    the terms test_driver_contract.py reads off the real driver.
+
+    Still prints each command, because that log is what someone running the
+    simulator watches.
+    """
 
     hardware = False
 
     def __init__(self):
+        self.wheels = dict(STRAIGHT)
+        # ('forward', 60) and so on, named as the rover library names them.
+        # None while stopped.
+        self.motion = None
         self.animation_running = False
-        self.animation_thread = None
 
-    def forward(self, speed: int) -> None:
+    def _forward(self, speed: float) -> None:
         print(f"[FAKE] Forward at speed {speed}")
+        self.wheels.update(STRAIGHT)
+        self.motion = ('forward', speed)
 
-    def reverse(self, speed: int) -> None:
+    def _reverse(self, speed: float) -> None:
         print(f"[FAKE] Reverse at speed {speed}")
+        self.wheels.update(STRAIGHT)
+        self.motion = ('reverse', speed)
 
-    def spin_left(self, speed: int) -> None:
+    def _spin_left(self, speed: float) -> None:
         print(f"[FAKE] Spin left at speed {speed}")
-        self._start_animation('left')
+        self.wheels.update(PIVOT)
+        self.motion = ('spinLeft', speed)
+        self.animation_running = True
 
-    def spin_right(self, speed: int) -> None:
+    def _spin_right(self, speed: float) -> None:
         print(f"[FAKE] Spin right at speed {speed}")
-        self._start_animation('right')
+        self.wheels.update(PIVOT)
+        self.motion = ('spinRight', speed)
+        self.animation_running = True
 
-    def steer_left(self, degrees: float, speed: int) -> None:
+    def _steer_left(self, degrees: float, speed: float) -> None:
         print(f"[FAKE] Steer left {degrees}° at speed {speed}")
+        self.wheels.update(steer_angles(-degrees))
+        self.motion = ('forward', speed)
 
-    def steer_right(self, degrees: float, speed: int) -> None:
+    def _steer_right(self, degrees: float, speed: float) -> None:
         print(f"[FAKE] Steer right {degrees}° at speed {speed}")
+        self.wheels.update(steer_angles(degrees))
+        self.motion = ('forward', speed)
 
     def stop(self) -> None:
         print("[FAKE] Stop")
-        self._stop_animation()
+        self.motion = None
+        self.wheels.update(STRAIGHT)
+        self.animation_running = False
 
     def set_leds(self, pattern: str) -> None:
         print(f"[FAKE] Set LEDs to pattern: {pattern}")
 
     def cleanup(self) -> None:
-        self._stop_animation()
-        print("[FAKE] Cleanup complete")
-
-    def _start_animation(self, direction: str) -> None:
-        """Start fake LED spin animation"""
-        self._stop_animation()
-        self.animation_running = True
-        self.animation_thread = threading.Thread(
-            target=self._animate_spin, args=(direction,), daemon=True
-        )
-        self.animation_thread.start()
-
-    def _stop_animation(self) -> None:
-        """Stop fake LED animation"""
+        self.motion = None
         self.animation_running = False
-        if self.animation_thread:
-            self.animation_thread.join(timeout=0.5)
-            self.animation_thread = None
-
-    def _animate_spin(self, direction: str) -> None:
-        """Fake spin animation - just logs periodically"""
-        sequence = [1, 2, 3, 0] if direction == 'right' else [1, 0, 3, 2]
-        idx = 0
-        while self.animation_running:
-            # Don't print every frame in fake mode to avoid spam
-            time.sleep(0.15)
-            idx = (idx + 1) % 4
+        print("[FAKE] Cleanup complete")
 
 
 class RealRoverDriver(RoverDriver):
@@ -145,55 +205,47 @@ class RealRoverDriver(RoverDriver):
         # Set initial LED state
         self._set_all_leds_white()
 
-    def forward(self, speed: int) -> None:
+    def _forward(self, speed: float) -> None:
         self._set_leds_forward()
         # Straighten first, explicitly. rover.forward() used to do this itself
         # and that is exactly what made steering impossible, so the library no
         # longer touches the wheels - which means "drive straight" is now this
         # method's job to say. Without it, a forward straight after a spin
         # would drive off with the wheels still pivoted.
-        self._straighten()
+        self._point_wheels(STRAIGHT)
         self.rover.forward(speed)
 
-    def reverse(self, speed: int) -> None:
+    def _reverse(self, speed: float) -> None:
         self._set_leds_reverse()
-        self._straighten()
+        self._point_wheels(STRAIGHT)
         self.rover.reverse(speed)
 
-    def spin_left(self, speed: int) -> None:
+    def _spin_left(self, speed: float) -> None:
         self.rover.stop()
-        self._pivot()
+        self._point_wheels(PIVOT)
         self._start_spin_animation('left')
         self.rover.spinLeft(speed)
 
-    def spin_right(self, speed: int) -> None:
+    def _spin_right(self, speed: float) -> None:
         self.rover.stop()
-        self._pivot()
+        self._point_wheels(PIVOT)
         self._start_spin_animation('right')
         self.rover.spinRight(speed)
 
-    def steer_left(self, degrees: float, speed: int) -> None:
+    def _steer_left(self, degrees: float, speed: float) -> None:
         self._set_leds_forward()
-        # Set servo angles for left steering
-        self.rover.setServo(9, -degrees)   # Front left
-        self.rover.setServo(15, -degrees)  # Front right
-        self.rover.setServo(11, degrees)   # Rear left
-        self.rover.setServo(13, degrees)   # Rear right
+        self._point_wheels(steer_angles(-degrees))
         self.rover.forward(speed)
 
-    def steer_right(self, degrees: float, speed: int) -> None:
+    def _steer_right(self, degrees: float, speed: float) -> None:
         self._set_leds_forward()
-        # Set servo angles for right steering
-        self.rover.setServo(9, degrees)    # Front left
-        self.rover.setServo(15, degrees)   # Front right
-        self.rover.setServo(11, -degrees)  # Rear left
-        self.rover.setServo(13, -degrees)  # Rear right
+        self._point_wheels(steer_angles(degrees))
         self.rover.forward(speed)
 
     def stop(self) -> None:
         self._stop_spin_animation()
         self.rover.stop()
-        self._straighten()
+        self._point_wheels(STRAIGHT)
         self._set_all_leds_white()
 
     def set_leds(self, pattern: str) -> None:
@@ -211,17 +263,10 @@ class RealRoverDriver(RoverDriver):
         self._set_all_leds_white()
         self.rover.cleanup()
 
-    def _straighten(self) -> None:
-        """Point all four wheels along the body, for driving in a line."""
-        for servo in [9, 11, 13, 15]:
-            self.rover.setServo(servo, 0)
-
-    def _pivot(self) -> None:
-        """Set wheel servos to pivot position for spinning"""
-        self.rover.setServo(9, 50)   # Front left
-        self.rover.setServo(15, -50) # Front right
-        self.rover.setServo(11, -50) # Rear left
-        self.rover.setServo(13, 50)  # Rear right
+    def _point_wheels(self, angles: dict) -> None:
+        """Send each steering servo its angle, in the order given."""
+        for servo, degrees in angles.items():
+            self.rover.setServo(servo, degrees)
 
     def _set_all_leds_white(self) -> None:
         """Set all LEDs to white"""
