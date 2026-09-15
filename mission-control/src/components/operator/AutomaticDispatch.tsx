@@ -382,11 +382,11 @@ export function AutomaticDispatch({
         <div>
           <h3 id="automatic-dispatch-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             <Rocket className="h-4 w-4 text-primary" />
-            Automatic route
+            Yard checks
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
             {live
-              ? 'Checking this yard every 15 seconds.'
+              ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
               : 'Send to Rover unlocks when every check below is ready.'}
           </p>
         </div>
