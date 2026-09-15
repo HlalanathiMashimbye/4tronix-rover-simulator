@@ -7,12 +7,13 @@ Streams JPEG frames with IMX500 object detection over WebSocket.
 
 import asyncio
 import base64
-import io
 import json
 import logging
 import os
 import signal
 import sys
+import time
+import weakref
 
 import websockets
 
@@ -56,6 +57,19 @@ def _quiet_probe_logger():
         ws_logger.addFilter(_ProbeNoiseFilter())
     return ws_logger
 
+
+# How far behind a viewer may fall before frames stop being queued for it.
+# Roughly 25 frames at the monitor's 640x480: a browser that is slow for a
+# moment catches up, one that has stopped reading is skipped.
+MAX_CLIENT_BACKLOG_BYTES = 1_000_000
+
+# How long a viewer may stay that far behind before it is disconnected. A tab
+# that has stopped reading does not start again by itself.
+STALLED_CLIENT_SECONDS = 10.0
+
+# connection -> time.monotonic() when it first fell behind. Weak, so a
+# connection that closes by itself leaves nothing behind here.
+_behind_since = weakref.WeakKeyDictionary()
 
 # Global state
 camera = None
@@ -255,7 +269,6 @@ def parse_detections(metadata, threshold=0.55):
 def draw_detections(frame, detections):
     """Draw bounding boxes and labels on frame"""
     import cv2
-    import numpy as np
 
     for det in detections:
         x, y, w, h = det['box']
@@ -279,7 +292,6 @@ def draw_detections(frame, detections):
 def capture_frame():
     """Capture a frame and encode as JPEG. Detections only on the IMX500."""
     import cv2
-    import numpy as np
 
     if camera_backend == 'webcam':
         try:
@@ -330,6 +342,23 @@ def capture_frame():
 
 async def broadcast_frame(frame_data):
     """Broadcast frame to all connected clients"""
+    """Send a frame to every client that is keeping up, without waiting on any.
+
+    THIS USED TO AWAIT EACH CLIENT IN TURN, and that is what froze the camera
+    on 15 September 2026. A browser tab on an operator's laptop stopped reading
+    its socket. The send to it waited for a buffer that never drained, and
+    because the frame producer awaited that send, no frame reached anyone after
+    it: not the other monitors, not the recording, not the readiness probe. The
+    process stayed up and the port stayed open, so everything looked healthy
+    while nothing was sent. Closing the tab brought it back instantly.
+
+    websockets.broadcast() writes without waiting, but it has no backpressure of
+    its own, so a stalled client's frames would pile up in this process's
+    memory instead. A client whose write buffer is already past
+    MAX_CLIENT_BACKLOG_BYTES is skipped for this frame, and one that stays there
+    for STALLED_CLIENT_SECONDS is disconnected. A live frame is worth nothing
+    late, so dropping it for one slow viewer is the right trade.
+    """
     if not clients or not frame_data:
         return
 
@@ -338,30 +367,31 @@ async def broadcast_frame(frame_data):
         'data': frame_data
     })
 
-    # Iterate a snapshot, never the live set.
-    #
-    # `await client.send(...)` yields, and while it is yielded a connection
-    # handler can add or discard a client - so iterating `clients` directly
-    # raises "RuntimeError: Set changed size during iteration" and kills the
-    # frame producer. The websocket server keeps accepting connections
-    # afterwards, so the camera looks alive and simply never sends a frame,
-    # which is a miserable thing to diagnose from the outside.
-    #
-    # Latent for as long as only the monitor connected. The readiness probe
-    # made it constant: it connects, waits, and disconnects every few seconds,
-    # which is precisely the window this race needs.
-    disconnected = set()
+    now = time.monotonic()
+    keeping_up = []
+    # A snapshot, never the live set: a connection handler can add or discard a
+    # client at any await, and iterating the set itself once raised "Set
+    # changed size during iteration" and killed the producer outright.
     for client in tuple(clients):
-        try:
-            await client.send(message)
-        except websockets.exceptions.ConnectionClosed:
-            disconnected.add(client)
-        except Exception as e:
-            logger.error(f"Error sending to client: {e}")
-            disconnected.add(client)
+        transport = getattr(client, 'transport', None)
+        backlog = transport.get_write_buffer_size() if transport else 0
+        if backlog <= MAX_CLIENT_BACKLOG_BYTES:
+            _behind_since.pop(client, None)
+            keeping_up.append(client)
+            continue
 
-    # Remove disconnected clients
-    clients.difference_update(disconnected)
+        since = _behind_since.setdefault(client, now)
+        if now - since >= STALLED_CLIENT_SECONDS:
+            logger.warning(
+                f"Disconnecting {getattr(client, 'remote_address', '?')}: "
+                f"{backlog} bytes unsent for {now - since:.0f}s")
+            # abort(), not close(): a graceful close needs the other end to
+            # read, which is the one thing this client has stopped doing.
+            transport.abort()
+            clients.discard(client)
+            _behind_since.pop(client, None)
+
+    websockets.broadcast(keeping_up, message)
 
 
 async def frame_producer():

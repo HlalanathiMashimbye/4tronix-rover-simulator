@@ -42,6 +42,7 @@ describe('initializeFirebaseAdmin', () => {
     delete process.env.REACT_APP_FIREBASE_PROJECT_ID;
     delete process.env.FIREBASE_CLIENT_EMAIL;
     delete process.env.FIREBASE_PRIVATE_KEY;
+    delete process.env.FIRESTORE_EMULATOR_HOST;
   });
 
   afterAll(() => {
@@ -84,6 +85,19 @@ describe('initializeFirebaseAdmin', () => {
     expect(initializeApp).toHaveBeenCalledWith(
       expect.objectContaining({ projectId: 'quoted-project' }),
     );
+  });
+
+  it('uses the Firestore emulator without requiring a project or ADC', async () => {
+    process.env.FIRESTORE_EMULATOR_HOST = 'localhost:8080';
+    const { applicationDefault, initializeApp } = mockFirebase();
+
+    const { initializeFirebaseAdmin } = await importFirebaseAdmin();
+    initializeFirebaseAdmin();
+
+    expect(applicationDefault).not.toHaveBeenCalled();
+    expect(initializeApp).toHaveBeenCalledWith({
+      projectId: 'demo-rover-simulator',
+    });
   });
 
   it('throws a clear error when no Firebase project is configured', async () => {

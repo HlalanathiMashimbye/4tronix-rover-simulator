@@ -3,8 +3,8 @@
  *
  * WHY THIS FILE EXISTS. Every other check in this repository can pass while
  * the architecture rots. tsc is happy whether core imports infrastructure or
- * not; eslint has no opinion on which direction a dependency points; the 494
- * behavioural tests pass either way. The iteration 2 marksheet scored
+ * not; eslint has no opinion on which direction a dependency points; every
+ * behavioural test passes either way. The iteration 2 marksheet scored
  * Separation of Concerns 2.2/4 on a codebase whose build was entirely green.
  *
  * So the rules are asserted here, as rules, and they fail the build when
@@ -13,6 +13,9 @@
 
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join, relative } from 'path';
+
+// Types only: erased at runtime, so the Firebase client is never loaded.
+import type { browserMissionRepository } from '@/infrastructure/container.browser';
 
 const SRC = join(__dirname, '..', '..');
 
@@ -38,6 +41,20 @@ function read(file: string): string {
 }
 
 describe('the dependency rule', () => {
+  it('core never imports a Firebase SDK', () => {
+    /**
+     * Needed on top of the rule below, which only matches our own
+     * @/infrastructure paths. MissionNotificationService imported
+     * firebase-admin/firestore directly and passed it, so the Admin SDK - the
+     * one that ignores every Firestore rule - sat inside the application layer.
+     */
+    const offenders = sourceFiles('core').filter((f) =>
+      /from '(firebase|firebase-admin)(\/[\w-]+)?'/.test(read(f))
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it('core never imports infrastructure', () => {
     const offenders = sourceFiles('core').filter((f) =>
       read(f).includes("from '@/infrastructure")
@@ -66,6 +83,21 @@ describe('the dependency rule', () => {
         }
       }
     }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('domain never imports application', () => {
+    /**
+     * Application is built from domain, so domain cannot know application
+     * exists. The two rules above only watch core's outward edges, and this
+     * edge is inside core, so for a while nothing did: ast-allowlist-analyzer
+     * imported its own result type back from AllowlistService, which imports
+     * the analyser. tsc accepts that cycle, and so does every behavioural test.
+     */
+    const offenders = sourceFiles('core/domain').filter((f) =>
+      /from '(@\/core\/application|(\.\.\/)+application)\//.test(read(f))
+    );
 
     expect(offenders).toEqual([]);
   });
@@ -118,6 +150,32 @@ describe('the server/browser boundary', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('hands the browser a repository with no way to write', () => {
+    /**
+     * Checked by the compiler, not by reading source. Each line below names a
+     * method the browser must not have. If the browser container ever returns
+     * the full repository again, these directives become unused and
+     * `next build` (a required CI step) fails with TS2578, as does `tsc`.
+     *
+     * Not Jest: tsconfig sets isolatedModules, so ts-jest transpiles without
+     * type errors and this test passes either way. Widening the container was
+     * tried against all three before this comment was written; only the
+     * compiler runs caught it.
+     */
+    type BrowserRepository = ReturnType<typeof browserMissionRepository>;
+
+    // @ts-expect-error - writing a mission is server-only
+    type Update = BrowserRepository['update'];
+    // @ts-expect-error - so is an operator's bookkeeping
+    type Bookkeeping = BrowserRepository['applyBookkeeping'];
+    // @ts-expect-error - and deleting a child's mission
+    type Delete = BrowserRepository['softDeleteMission'];
+
+    const reads: Array<keyof BrowserRepository> = ['findById', 'findRecent', 'findRuns'];
+    expect(reads).toHaveLength(3);
+    expect([] as Array<Update | Bookkeeping | Delete>).toEqual([]);
+  });
 });
 
 describe('the composition root', () => {
@@ -132,6 +190,21 @@ describe('the composition root', () => {
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
       .filter((f) => read(f).includes('new FirestoreMissionRepository'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('is the only production code that builds an application service', () => {
+    /**
+     * Three routes each assembled the notification service by hand - sender,
+     * composer, Firestore, app URL - and two built MissionService beside a
+     * container that already exported it. Every copy was a place to wire it
+     * differently, and the template for the next route to copy.
+     */
+    const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
+                       ...sourceFiles('core'), ...sourceFiles('lib'),
+                       ...sourceFiles('contexts')]
+      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });

@@ -208,7 +208,7 @@ class TestSweepHeadroomGuard:
     def test_deletes_undownloaded_if_still_critical(self, rec_dir, monkeypatch):
         monkeypatch.setattr('tunables.get', self._fake_tunables)
 
-        path = _make_recording(rec_dir, age_seconds=3600)
+        _make_recording(rec_dir, age_seconds=3600)
         # NOT downloaded
 
         monkeypatch.setattr(recording_cleanup, 'disk_stats', self._low_disk)

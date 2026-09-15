@@ -10,15 +10,15 @@ extra broadcast subscriber, however many runs are being recorded.
 
 One shared consumer thread feeds every run's file. A dict keyed by
 (mission_id, yard_id) - matching how the run model itself is keyed
-(runs_mirror's primary key) - not a single "current recording" variable, is
-what makes that safe: nothing stops a second "Send to rover" while an earlier
-run is still 'processing' at a different yard, so two recordings can be
-genuinely simultaneous.
+(`missions/{missionId}/runs/{yardId}` in Mission Control's Firestore) - not a
+single "current recording" variable, is what makes that safe: nothing stops a
+second "Send to rover" while an earlier run is still 'processing' at a
+different yard, so two recordings can be genuinely simultaneous.
 
 cv2/numpy are imported lazily inside functions, never at module top:
 requirements-test.txt deliberately excludes opencv-python/numpy to keep CI
-light, and this module is imported from operator_console.py and
-mission_watcher.py, both covered by that suite.
+light, and this module is imported from web_server.py and mission_watcher.py,
+both covered by that suite.
 """
 
 import asyncio
@@ -26,6 +26,7 @@ import base64
 import json
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -68,9 +69,29 @@ def _now_iso():
     return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
+def recording_key(raw):
+    """The name a recording is filed and found under, from whatever names it.
+
+    Letters, digits, dash and underscore survive; anything else becomes a dash,
+    and dashes at either end go, so an operator's "Thabo's square!" cannot walk
+    out of the recordings directory.
+
+    ONE FUNCTION FOR BOTH SIDES, because both sides have to agree. The run
+    station files a recording under the mission id, and the watcher finds it
+    again by the mission id the rover reports back. The web server used to
+    reduce the name and the watcher used the raw id, and Mission Control ids can
+    start with a dash. So -BQwFDUWvyhpbQ4ZI8het was filed as
+    BQwFDUWvyhpbQ4ZI8het, never matched, and recorded for 126 minutes.
+    """
+    name = re.sub(r'[^A-Za-z0-9_-]+', '-', str(raw or '').strip()).strip('-')
+    return name[:60]
+
+
 _lock = threading.Lock()
 _writers = {}   # (mission_id, yard_id) -> cv2.VideoWriter, or None while awaiting the first frame
 _paths = {}     # (mission_id, yard_id) -> file path, for runs currently recording
+_started = {}   # (mission_id, yard_id) -> time.monotonic() when that recording began
+_dispatches = {}  # (mission_id, yard_id) -> ids of rover instructions sent while it recorded
 _consumer_thread = None
 _last_frame_at = None
 
@@ -96,9 +117,17 @@ def is_ready(timeout=None):
     async def probe():
         try:
             async with websockets.connect(_camera_uri(), open_timeout=timeout) as ws:
-                message = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                try:
+                    message = await asyncio.wait_for(ws.recv(), timeout=timeout)
+                except asyncio.TimeoutError:
+                    # Connected, and nothing came. That is a different fault
+                    # from an unreachable camera, and it is exactly what a
+                    # stalled frame producer looks like from outside. It used
+                    # to read "could not reach the camera: " with nothing
+                    # after the colon.
+                    return False, f'the camera is connected but sent no frame within {timeout:g}s'
         except (OSError, asyncio.TimeoutError, websockets.exceptions.WebSocketException) as e:
-            return False, f'could not reach the camera: {e}'
+            return False, f'could not reach the camera: {e or type(e).__name__}'
 
         try:
             payload = json.loads(message)
@@ -125,16 +154,68 @@ def active_recordings():
         return sorted({mission_id for mission_id, _yard in _paths})
 
 
+def readiness():
+    """Return whether this satellite can create a recording file."""
+    try:
+        os.makedirs(_recording_dir(), exist_ok=True)
+        if not os.access(_recording_dir(), os.W_OK):
+            return False, 'recording directory is not writable'
+    except OSError as e:
+        return False, f'could not prepare the recording directory: {e}'
+    return True, None
+
+
 def is_recording(mission_id, yard_id):
     """Whether frames are being persisted for this key right now.
 
-    The run model answers this for a queued mission, via runs_mirror's
-    recording_status. A run pasted into /run/ has no row there - it never
-    touched Firestore, which is the point of that page - so the only record
-    that a recording is open is this module's own table.
+    This module's own table is the only record. /run/ never touches
+    Firestore, which is the point of that page, so there is no run status
+    anywhere else to check against.
     """
     with _lock:
         return (mission_id, yard_id) in _paths
+
+
+def recordings_at(yard_id):
+    """The keys recording at this yard right now."""
+    with _lock:
+        return sorted(mission for mission, yard in _paths if yard == yard_id)
+
+
+def note_dispatch(mission_id, yard_id, instruction_id):
+    """Remember that the rover was sent instruction_id while this recording ran.
+
+    Called by the satellite's queue proxy, the one place that sees the id the
+    rover assigns next to the mission it was sent for. It is what lets the
+    watcher stop a recording when THIS run finishes, rather than when any run of
+    the mission is in the rover's history - and re-running a mission is the
+    normal case, so an earlier attempt nearly always is. Ignored when nothing is
+    recording under that key.
+    """
+    if not instruction_id:
+        return
+    key = (mission_id, yard_id)
+    with _lock:
+        if key in _paths:
+            _dispatches.setdefault(key, set()).add(instruction_id)
+
+
+def dispatches_for(mission_id, yard_id):
+    """The rover instruction ids sent while this recording ran."""
+    with _lock:
+        return frozenset(_dispatches.get((mission_id, yard_id), ()))
+
+
+def overdue_recordings(yard_id, max_seconds, now=None):
+    """Keys at this yard that have been recording for longer than max_seconds."""
+    now = time.monotonic() if now is None else now
+    with _lock:
+        return sorted(
+            mission for (mission, yard) in _paths
+            if yard == yard_id
+            and (mission, yard) in _started
+            and now - _started[(mission, yard)] > max_seconds
+        )
 
 
 def active_paths():
@@ -174,6 +255,8 @@ def start_recording(mission_id, yard_id):
     with _lock:
         _writers[key] = None
         _paths[key] = path
+        _started[key] = time.monotonic()
+        _dispatches[key] = set()
         _ensure_consumer_started()
 
     return True, path
@@ -197,6 +280,8 @@ def stop_recording(mission_id, yard_id, keep):
     with _lock:
         writer = _writers.pop(key, None)
         path = _paths.pop(key, None)
+        _started.pop(key, None)
+        _dispatches.pop(key, None)
 
         # RELEASED UNDER THE LOCK, with the pop, and this is not tidiness.
         #

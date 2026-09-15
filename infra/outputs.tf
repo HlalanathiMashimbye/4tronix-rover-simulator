@@ -44,3 +44,13 @@ output "service_urls" {
 output "lb_ip_addresses" {
   value = module.mission_control.lb_ip_addresses
 }
+
+# Not a GitHub variable. Where the weekly Firestore export lands, and the job
+# to run by hand when you want a copy before doing something destructive.
+output "firestore_backup" {
+  value = {
+    bucket          = module.firestore_backup.bucket
+    scheduler_job   = module.firestore_backup.job_name
+    service_account = module.firestore_backup.service_account_email
+  }
+}

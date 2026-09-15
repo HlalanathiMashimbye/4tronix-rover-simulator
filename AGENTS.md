@@ -97,6 +97,13 @@ underneath. The run station, the queue, the monitor and the recording path all
 behave identically against it, which is exactly why "switch to the simulator"
 is a button and not a separate mode.
 
+That claim is checked, not asserted: `yard/rover/test_driver_contract.py` runs
+one set of expectations against both drivers - wheel angles, motor state, and
+the 0-100 speed range. Matching method signatures is not substitutability; for
+most of the project the fake had the right signatures, printed its commands,
+and kept no state a test could compare. If you add a driver, add it to that
+fixture.
+
 ### Interface segregation
 
 Depend on the narrow thing you need, not the wide thing that contains it.

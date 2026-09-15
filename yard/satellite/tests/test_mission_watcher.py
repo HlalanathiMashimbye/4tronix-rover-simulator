@@ -48,6 +48,8 @@ def recorder(monkeypatch, tmp_path):
     monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
     monkeypatch.setattr(recording_control, '_writers', {})
     monkeypatch.setattr(recording_control, '_paths', {})
+    monkeypatch.setattr(recording_control, '_started', {})
+    monkeypatch.setattr(recording_control, '_dispatches', {})
     return recording_control
 
 
@@ -140,6 +142,62 @@ def test_a_non_200_from_the_rover_is_not_an_outcome(monkeypatch, recorder):
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
     assert recorder.is_recording('m1', YARD)
+
+
+def test_a_mission_id_starting_with_a_dash_still_finds_its_recording(monkeypatch, recorder):
+    """15 September 2026: mission -BQwFDUWvyhpbQ4ZI8het recorded for 126 minutes.
+
+    The station files a recording under the id reduced for a path, which drops
+    a leading dash. The rover reports the id exactly as it was sent, dash and
+    all, so the watcher looked for a recording that was never filed under that
+    name and nothing ever stopped it.
+    """
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
+                               'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het'}}])
+    recorder.start_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
+        'BQwFDUWvyhpbQ4ZI8het']
+    assert not recorder.is_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+
+
+def test_a_rerun_is_not_stopped_by_the_previous_run_of_the_same_mission(monkeypatch, recorder):
+    """Re-running is the normal case. The rover's history still holds the last
+    attempt, so matching on the mission id stopped the new recording on the
+    first poll, before its own run had finished."""
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'run-2')
+    earlier = {'id': 'run-1', 'status': 'completed', 'params': {'mission_id': 'm1'}}
+
+    _rover_says(monkeypatch, [earlier])
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+    _rover_says(monkeypatch, [earlier, {'id': 'run-2', 'status': 'completed',
+                                        'params': {'mission_id': 'm1'}}])
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == ['m1']
+
+
+def test_a_recording_nothing_will_stop_is_stopped_after_the_cap(recorder):
+    """A rover switched off mid-run never reports finishing, and a recording
+    started by hand has no run at all. Either way the file used to grow until
+    somebody noticed."""
+    recorder.start_recording('m1', YARD)
+    path = recorder._paths[('m1', YARD)]
+    open(path, 'wb').write(b'x')
+    began = recorder._started[('m1', YARD)]
+
+    assert mission_watcher.stop_overdue_recordings(YARD, max_seconds=600, now=began + 599) == []
+    assert recorder.is_recording('m1', YARD)
+
+    assert mission_watcher.stop_overdue_recordings(YARD, max_seconds=600, now=began + 601) == ['m1']
+    assert not recorder.is_recording('m1', YARD)
+    assert os.path.exists(path), 'an overdue recording is stopped, not thrown away'
+
+
+def test_the_cap_is_longer_than_any_mission_can_run():
+    # Missions are refused past 120 seconds on both sides of the LAN.
+    assert mission_watcher.MAX_RECORDING_SECONDS > 120 * 2
 
 
 def test_is_recording_tracks_an_open_recording(recorder):

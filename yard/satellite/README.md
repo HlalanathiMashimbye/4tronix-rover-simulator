@@ -14,9 +14,9 @@ for what the Firestore mirror used to do and why it went.
 |------|------|
 | `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
 | `operator_console.py` / `console/` | What is left of `/operator/`: camera control and the satellite's tunables. The mission queue, the login and the review flow went with the mirror. |
-| `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>.mp4`. |
-| `mission_watcher.py` | Polls the rover and releases the camera when it reports a run finished. The only background thread. |
-| `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. |
+| `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. Owns `recording_key()`, the one rule for turning a mission id into a recording name, and remembers which rover instructions each recording dispatched. |
+| `mission_watcher.py` | Polls the rover and releases the camera when a recording's own run finishes, not any run of that mission. Stops any recording older than ten minutes, for the rover that loses power mid-run. The only background thread. |
+| `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. A viewer that stops reading is skipped and then disconnected, rather than freezing the stream for everyone. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
 | `tunables.py` | Settings editable at `/settings` without a restart. |
 | `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. |

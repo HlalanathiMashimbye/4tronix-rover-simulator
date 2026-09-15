@@ -12,11 +12,11 @@
  * it one morning to find two buttons missing and no explanation; a disabled
  * button that says "the platform does this now" teaches the change.
  *
- * MODE IS A FACT, NOT A PREFERENCE. It will be derived from whether the yard's
- * satellite is online and syncing, because that is what decides whether the
- * automatic path can actually run. Until that check exists the console offers
- * a switch, which is a stand-in for the signal rather than a setting anybody
- * should want to keep.
+ * MODE IS A FACT, NOT A PREFERENCE. It will be derived from whether the yard is
+ * online and reporting back to Mission Control, because that is what decides
+ * whether the automatic path can actually run. Until that check exists the
+ * console offers a switch, which is a stand-in for the signal rather than a
+ * setting anybody should want to keep.
  */
 
 export type ConsoleMode = 'manual' | 'auto';

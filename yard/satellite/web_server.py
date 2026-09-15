@@ -10,14 +10,13 @@ import os
 import json
 import logging
 import socket
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 from flask import (Flask, render_template, request, jsonify, Response,
-                   stream_with_context, session, redirect, send_file)
+                   stream_with_context, redirect, send_file)
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -56,14 +55,34 @@ def _save_config(cfg):
 def _recording_name(raw):
     """An operator-supplied name reduced to something safe to put in a path.
 
-    Everything outside letters, digits, dash and underscore becomes a dash, so
-    a name typed at an event ("Thabo's square!") cannot walk out of the
-    recordings directory or collide with the mission__yard naming the queue
-    flow uses.
+    The rule is recording_control.recording_key. It lives there because the
+    watcher must reduce the mission id the rover reports in exactly the same
+    way to find the recording again; see that function for what happened when
+    the two sides disagreed.
     """
-    import re
-    name = re.sub(r'[^A-Za-z0-9_-]+', '-', (raw or '').strip()).strip('-')
-    return name[:60]
+    from recording_control import recording_key
+    return recording_key(raw)
+
+
+def _note_recorded_dispatches(body):
+    """Tell recording_control which rover instructions belong to which recording.
+
+    The rover gives each instruction an id, and this proxy is the only place
+    that sees that id next to the mission it was sent for. Best effort: the
+    rover has already accepted the dispatch, so nothing here may turn it into
+    an error.
+    """
+    try:
+        from recording_control import note_dispatch, recording_key
+        from satellite_identity import yard_id
+
+        yard = yard_id()
+        for instruction in (body or {}).get('instructions') or []:
+            params = instruction.get('params') or {}
+            if params.get('mission_id') and instruction.get('id'):
+                note_dispatch(recording_key(params['mission_id']), yard, instruction['id'])
+    except Exception as e:
+        logging.getLogger(__name__).warning('Could not note a dispatch for its recording: %s', e)
 
 
 def _local_ip():
@@ -114,15 +133,12 @@ ROVER_TIMEOUT = 5.0
 def index():
     """The station hub.
 
-    No sign-in and no Firestore. This used to be the mission queue behind an
-    operator login, which put a Firebase round trip in front of the one thing
-    a yard has to be able to do on a night when the venue wifi is down.
-
-    It used to open on the Firestore-backed mission queue, behind a sign-in.
-    That made the one thing a yard has to be able to do - run a mission -
-    depend on reaching Firebase, on a box whose whole point is working when
-    the venue wifi does not. Pasting code into /code/ and pressing run talks
-    to the rover over the LAN and needs nothing else, so that is the door.
+    No sign-in and no Firestore. This used to open on the Firestore-backed
+    mission queue, behind a sign-in, which made the one thing a yard has to be
+    able to do - run a mission - depend on reaching Firebase, on a box whose
+    whole point is working when the venue wifi does not. Pasting code into
+    /code/ and pressing run talks to the rover over the LAN and needs nothing
+    else, so that is the door now.
 
     /code/ and /monitor/ are login-free for the same reason: tablets and the
     TV are pointed at those URLs once during setup and never sign in.
@@ -170,6 +186,7 @@ def status():
 @app.route('/api/status', methods=['GET'])
 def api_status():
     from recording_cleanup import disk_stats
+    from recording_control import readiness
 
     satellite = {
         'hostname': socket.gethostname(),
@@ -199,14 +216,21 @@ def api_status():
     from camera_state import snapshot
     camera = snapshot()
 
-    return jsonify({
+    recording_ready, recording_detail = readiness()
+    response = jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
         # Same list, kept at the top level because the run station reads it
         # there. It is the camera's business, so it lives in the snapshot too.
-        'recording': {'active': camera['recording']},
+        'recording': {
+            'active': camera['recording'],
+            'ready': recording_ready,
+            'detail': recording_detail,
+        },
     })
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
 
 
 @app.route('/api/rover/discover', methods=['GET'])
@@ -239,7 +263,7 @@ def api_set_rover_url():
     the rover is a control action: anyone on the venue network could aim this
     satellite at a different machine and the console would carry on reporting
     success. True, but it assumed the gate was free, and it is not.
-    require_operator means a Firebase sign-in, which means internet, and the
+    require_operator meant a Firebase sign-in, which meant internet, and the
     field edit this endpoint exists for is the one an operator makes when the
     rover has moved to a new address - which is exactly when the yard is least
     likely to have working wifi. A control that only unlocks when the network
@@ -315,7 +339,10 @@ def api_queue_add():
             json=data,
             timeout=ROVER_TIMEOUT
         )
-        return jsonify(resp.json()), resp.status_code
+        body = resp.json()
+        if resp.status_code < 400:
+            _note_recorded_dispatches(body)
+        return jsonify(body), resp.status_code
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot connect to rover server'}), 503
     except requests.exceptions.Timeout:
@@ -328,11 +355,13 @@ def api_queue_add():
 def api_queue_clear():
     """Proxy to rover queue/clear endpoint - the emergency stop.
 
-    DELIBERATELY NOT behind require_operator, unlike every other control on
-    this server. The tablets at /code/ never sign in (see index()), and this is
-    the stop button a child or a facilitator hits when the rover is heading for
-    a table leg. An auth gate here would mean the one control that has to work
-    for anyone in the room is the one that asks for a password first.
+    UNAUTHENTICATED, and always was: even back when other controls on this
+    server sat behind require_operator (gone now with the rest of the login,
+    see satellite_identity.py), this one deliberately did not. The tablets at
+    /code/ never sign in (see index()), and this is the stop button a child or
+    a facilitator hits when the rover is heading for a table leg. An auth gate
+    here would mean the one control that has to work for anyone in the room is
+    the one that asks for a password first.
 
     The worst an unauthenticated caller can do is stop the robot. That is the
     safe direction to fail in, so it stays open on purpose.
@@ -437,10 +466,10 @@ def api_camera_ready():
 def api_recording_start():
     """Start recording a copy-paste run.
 
-    Dispatching a mission from the queue starts a recording on the operator's
-    behalf. Pasting code into /code/ never did, so the manual flow produced no
-    video at all: the operator ran the rover, and there was nothing to take
-    away and upload.
+    /run/ is the only path that records: the operator names the run and this
+    starts it before they press Send. Pasting straight into /code/ never
+    records at all, so that manual flow produces no video: the operator runs
+    the rover and there is nothing to take away and upload.
 
     The name is the operator's, not a mission id, because a pasted run has no
     mission. Whatever they type is what the file is called and what they will
@@ -454,11 +483,10 @@ def api_recording_start():
     if not name:
         return jsonify({'error': 'Give the recording a name'}), 400
 
-    # The same gate console/missions.py puts in front of a queued dispatch.
-    # Without it the manual loop was the one path that would happily report
-    # 'recording' with no frames arriving, and the operator found out at the
-    # end of the night when there was no file to upload. A camera that is
-    # merely listening is not a camera that is recording.
+    # Without this, the manual loop was the one path that would happily
+    # report 'recording' with no frames arriving, and the operator found out
+    # at the end of the night when there was no file to upload. A camera that
+    # is merely listening is not a camera that is recording.
     ready, detail = is_ready()
     if not ready:
         return jsonify({
@@ -561,6 +589,50 @@ def api_recording_download(name):
 
     return send_file(target, mimetype='video/mp4', as_attachment=True,
                      download_name=os.path.basename(target))
+
+
+@app.route('/api/recordings/delete', methods=['POST'])
+def api_recordings_delete():
+    """Delete one or more recordings from the SD card.
+
+    Accepts {"names": ["file1.mp4", "file2.mp4"]}. Each name gets the same
+    path-traversal and active-recording checks the download endpoint applies.
+    Returns which files were deleted and which were skipped, so the UI can
+    report partial success rather than all-or-nothing.
+    """
+    from recording_control import RECORDINGS_DIR, active_paths
+    from recording_cleanup import delete_recording
+
+    data = request.get_json(silent=True) or {}
+    names = data.get('names')
+    if not names or not isinstance(names, list):
+        return jsonify({'error': 'Provide a list of recording names'}), 400
+
+    root = os.path.realpath(RECORDINGS_DIR)
+    protected = active_paths()
+    deleted = []
+    skipped = []
+
+    for name in names:
+        if not isinstance(name, str):
+            skipped.append({'name': str(name), 'reason': 'invalid name'})
+            continue
+        target = os.path.realpath(os.path.join(root, name))
+        if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
+            skipped.append({'name': name, 'reason': 'not found'})
+            continue
+        if not os.path.isfile(target):
+            skipped.append({'name': name, 'reason': 'not found'})
+            continue
+        if target in protected:
+            skipped.append({'name': name, 'reason': 'currently recording'})
+            continue
+        if delete_recording(target, 'operator'):
+            deleted.append(name)
+        else:
+            skipped.append({'name': name, 'reason': 'delete failed'})
+
+    return jsonify({'deleted': deleted, 'skipped': skipped})
 
 
 @app.route('/api/health', methods=['GET'])

@@ -21,18 +21,29 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 const ROUTE = 'src/app/api/operator/missions/[id]/route.ts';
-const raw = readFileSync(join(process.cwd(), ROUTE), 'utf8');
+
+/**
+ * What the commands do moved out of the route into an application service, so
+ * the property has to hold there as well. A route that cannot reach a rover
+ * proves nothing if the service it calls can.
+ */
+const SERVICE = 'src/core/application/services/OperatorMissionCommands.ts';
 
 /**
  * Comments stripped before asserting.
  *
- * The route's docblock explains at length why it never touches a rover, using
- * every word this test forbids. Matching prose would fail the file for saying
- * the right thing, and the only way to pass would be to delete the explanation.
+ * Both files explain at length why they never touch a rover, using every word
+ * this test forbids. Matching prose would fail them for saying the right thing,
+ * and the only way to pass would be to delete the explanation.
  */
-const source = raw
-  .replace(/\/\*[\s\S]*?\*\//g, '')
-  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+function code(path: string): string {
+  return readFileSync(join(process.cwd(), path), 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+const source = code(ROUTE);
+const routeAndService = `${source}\n${code(SERVICE)}`;
 
 describe('the bookkeeping route is inert', () => {
   // Every way the codebase currently has of reaching a rover or a satellite.
@@ -47,20 +58,20 @@ describe('the bookkeeping route is inert', () => {
   ];
 
   it.each(forbidden)('never mentions %s', (term) => {
-    expect(source.toLowerCase()).not.toContain(term.toLowerCase());
+    expect(routeAndService.toLowerCase()).not.toContain(term.toLowerCase());
   });
 
   it('makes no outbound network call of its own', () => {
     // The one exception is the learner's completion email, which goes through
     // MissionNotificationService rather than a bare fetch. A raw fetch here
     // would be the first step towards talking to a yard directly.
-    expect(source).not.toMatch(/\bfetch\s*\(/);
+    expect(routeAndService).not.toMatch(/\bfetch\s*\(/);
   });
 
   it('writes only through the repository', () => {
     // No direct Firestore handle means no path to a collection this route has
     // no business in.
-    expect(source).not.toContain('.collection(');
+    expect(routeAndService).not.toContain('.collection(');
   });
 
   it('restricts delete to an admin, and nothing else to an admin', () => {

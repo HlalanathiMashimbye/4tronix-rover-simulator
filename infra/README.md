@@ -6,9 +6,10 @@ and GitHub Workload Identity Federation. Firebase provisioning (Firestore
 database, Auth, web app) happens alongside this, out of Terraform, see the
 migration checklist below.
 
-**This is NOT a from-zero apply.** A partial apply ran on 2026-07-17 and
-stopped part way. Part A below resumes it. State re-verified against the live
-project on 2026-08-03.
+**The apply is done.** A partial apply ran on 2026-07-17 and stopped part way;
+that is history now. 89 resources are in state, both environments serve HTTPS,
+and `terraform plan` reports 0 to add. Part A records what exists and how to
+apply against it. State re-verified against the live project on 2026-09-12.
 
 **Who runs this:** an owner on `bt-impact-academy` (Gavin, mfouche or Werner).
 The UCT team inherits `roles/editor` through
@@ -17,32 +18,35 @@ The UCT team inherits `roles/editor` through
 this apply themselves. Verified with `testIamPermissions`, not assumed from
 role names.
 
-## Part A: finish the Terraform bootstrap (one person, ~20 min)
+## Part A: applying
 
-### Already done, do not redo
+### The bootstrap is finished
+
+**89 resources are in state and `terraform plan` reports 0 to add.** This
+section used to be a to-do list for a half-finished bootstrap; it is a record
+of what exists now.
 
 - State bucket `gs://bt-impact-academy-tfstate` exists (in `africa-south1`;
   deliberate, state access has nothing to do with request latency).
-- All 7 required APIs are enabled.
-- 15 resources are already in state and healthy: the 7 APIs, the
-  `mission-control-deploy` service account, the Artifact Registry repo, both
-  Secret Manager secrets with their `CHANGE_ME` seed versions, and both
-  runtime service accounts (staging + prod).
+- 10 APIs enabled, 5 service accounts, 6 Secret Manager secrets, both Cloud
+  Run services, the external load balancer stack per environment with
+  Google-managed certificates serving HTTPS, and the Firestore backup set with
+  two Cloud Scheduler jobs in `europe-west1`.
+- There is **no** `allUsers` invoker. Impact domain-restricted sharing forbids
+  it, and learners reach the app through the load balancer only.
 
-Skipping straight to `terraform apply` is correct. Running the old bucket
-create or `gcloud services enable` will just error as already-existing.
+Two pieces of history worth keeping, because both cost a day and neither is
+visible in the code:
 
-### What is left
+- A partial apply on 2026-08-06 stopped on Cloud Run create, because
+  `constraints/run.allowedIngress` only allowed `internal`. Gavin moved
+  `bt-impact-academy` under a folder allowing ingress `all`, and it has not
+  recurred.
+- Cloud Scheduler does not exist in `africa-south1`. Both jobs run in
+  `var.cron_region` (`europe-west1`), and an apply that tries `africa-south1`
+  fails on that one resource while everything around it succeeds.
 
-A partial apply on 2026-08-06 created WIF, the plan SA, Resend secret, and
-all deploy/runtime IAM bindings. It **stopped** on Cloud Run create when
-`constraints/run.allowedIngress` only allowed `internal`. Gavin then moved
-`bt-impact-academy` under a folder that allows ingress `all`.
-
-Still not created: both Cloud Run services, their LB invoker bindings, and the
-external Application Load Balancer stack in front of them (one LB per env).
-There is **no** `allUsers` invoker — Impact domain-restricted sharing forbids
-it, and learners reach the app via the load balancer only.
+### Running an apply
 
 ```bash
 gcloud auth login
@@ -50,28 +54,31 @@ gcloud config set project bt-impact-academy
 
 cd infra
 terraform init
-terraform plan
-terraform apply
+terraform plan  -var-file=impact.tfvars
+terraform apply -var-file=impact.tfvars
 ```
 
-**Expected plan:** Cloud Run ×2, LB invoker ×2, compute API (if not yet in
-state), plus per-env LB resources (address, NEG, backend, url map, HTTP proxy
-+ forwarding rule; HTTPS pieces only when `var.domains` is set). If you see a
-**destroy** of the Artifact Registry repo, stop — `var.region` has drifted
-from `africa-south1`.
+`-var-file=impact.tfvars` is not optional for Impact. That file holds the live
+hostnames, the Resend from-address seed, and `cron_environment`. CI plans with
+the same file (see `.github/workflows/terraform-plan.yml`). A bare plan falls
+back to empty `domains` and proposes destroying both managed certs and the
+HTTPS listeners.
 
-Optional hostnames (Google-managed cert + HTTPS):
+Do not pass `demo.tfvars` against Impact state. That file targets the personal
+demo project only.
 
-```bash
-# terraform.tfvars (not committed if personal), or -var / TF_VAR_domains
-domains = {
-  staging = "mission-control-staging.example.com"
-  prod    = "mission-control.example.com"
-}
-```
+**Expected plan:** `0 to add, 0 to destroy`, and usually a small number of
+in-place changes that are provider-schema normalisation rather than anything
+anyone did (a Cloud Run `scaling` block settling to null, `client=gcloud`
+clearing on staging). Neither touches the container template, so CD's image
+digest is untouched.
 
-Without `domains`, each env is HTTP on the reserved LB IP — fine for a short
-demo; point DNS and re-apply with `domains` before real mail links.
+Two things mean stop rather than approve:
+
+- a **destroy** of the Artifact Registry repo: `var.region` has drifted from
+  `africa-south1`
+- a destroy of HTTPS certs or target-https-proxies: you forgot
+  `-var-file=impact.tfvars`
 
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
@@ -95,9 +102,9 @@ terraform output
 # var is too late. Do NOT use the Cloud Run *.run.app URI: without allUsers
 # that URL returns 403 by design.
 #
-# If using var.domains: point each hostname's DNS A record at
-# `terraform output lb_ip_addresses`, then wait until the managed cert is
-# ACTIVE before relying on HTTPS smoke checks.
+# If using domains from impact.tfvars: DNS A records should already point at
+# `terraform output lb_ip_addresses`. Wait until the managed cert is ACTIVE
+# before relying on HTTPS smoke checks.
 ```
 
 **`NEXT_PUBLIC_APP_URL` / `STAGING_URL` must be the load balancer URL.** It is
@@ -156,7 +163,7 @@ out-of-band (it is a personal address, so it is not committed):
 # The sandbox redirect is no longer a Terraform variable: it sends every
 # learner email to one inbox and the sending domain is verified now. Set
 # RESEND_SANDBOX_RECIPIENT in a local .env if you need it while testing.
-terraform apply
+terraform apply -var-file=impact.tfvars
 ```
 
 Every mission email then goes to that one inbox with the intended recipient
@@ -215,9 +222,13 @@ The app moves to Impact's Firebase world. In the Firebase console
    (`firebase firestore:rules:get`, or console copy-paste) and deploy to the
    new one. Commit `firestore.rules` + `firestore.indexes.json` to the repo
    while at it, so rules stop being console-only state.
-5. **Admin credentials**: Project settings -> Service accounts -> generate a
-   key for the Admin SDK. Its client_email and private_key are what goes into
-   Secret Manager (Part A step 5) and into the yard satellite's env.
+5. **Admin credentials**: nothing to generate. The runtime authenticates to
+   Firestore as its Cloud Run service account through ADC, which already holds
+   `roles/datastore.user`, so no key exists to store or rotate. The
+   `firebase-private-key` and `firebase-client-email` secrets were deleted and
+   `firebase-admin.ts` now REFUSES to start if `FIREBASE_PRIVATE_KEY` or
+   `FIREBASE_CLIENT_EMAIL` is set, so generating one would break the service
+   rather than configure it.
 6. **Operator accounts**: create the operator users in the new project's
    Auth, then grant roles with
    `node mission-control/scripts/set-operator-role.mjs --email <email> --role operator --apply`
@@ -263,6 +274,31 @@ The app moves to Impact's Firebase world. In the Firebase console
 
   Changing `var.region` after the first apply is painful (registry and
   services are regional, and location is force-new), so settle it first.
+
+  **The one exception is the Firestore backup bucket**, which is in
+  `europe-west1`. A managed export refuses a bucket that is not near its
+  database, so this bucket follows the data rather than the deployment.
+- **Firestore backups are the managed export, not a script.** `modules/`
+  `firestore-backup` is a Cloud Scheduler job that calls
+  `:exportDocuments` weekly, a bucket with a 90-day lifecycle, and a
+  `firestore-backup` service account holding `datastore.importExportAdmin`
+  plus Storage Admin on that one bucket. No function, no code, no key.
+
+  A hand-rolled version was written first (a Cloud Function walking every
+  collection to JSON and uploading a zip to Google Drive). It was declined on
+  three counts: it serialised Firestore timestamps to strings and references
+  to maps, and the matching restore wrote those back, so a restore would have
+  succeeded while changing the schema; it held the export and the zip in a
+  function's `/tmp`, which is memory on Cloud Run; and the destination was a
+  personal Drive folder, outside the project and outside anyone's retention or
+  offboarding.
+
+  Two settings this depends on are **not** in Terraform, for the same reason
+  the database itself is not: point-in-time recovery and delete protection are
+  set on the `(default)` database with
+  `gcloud firestore databases update --database='(default)' --enable-pitr
+  --delete-protection`. Check them with `gcloud firestore databases list`
+  before assuming the last 7 days are recoverable.
 - Terraform deliberately does NOT manage the serving image (lifecycle
   ignore_changes): CD owns which digest runs, Terraform owns everything else.
 - Naming: current names are simple (`mission-control-staging` etc.). Werner

@@ -129,7 +129,7 @@ describe('/api/operator/settings', () => {
       const resp = await PUT(put({ name: 'youtubeLinkIntervalMinutes', value: '2' }));
 
       expect(resp.status).toBe(400);
-      expect((await resp.json()).error).toMatch(/5 is the floor/);
+      expect((await resp.json()).error).toMatch(/15 is the floor/);
     });
 
     it('says plainly when the write did not land', async () => {

@@ -8,13 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { validateMission } from '@/infrastructure/validation/schemas';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminMissionRepository } from '@/infrastructure/container.server';
-import { MissionService } from '@/core/application/services/MissionService';
-import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
-import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
-import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { missionService, notificationService } from '@/infrastructure/container.server';
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -37,10 +31,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const firestore = getFirestoreInstance();
-    const repository = adminMissionRepository();
-    const service = new MissionService(repository);
-    const result = await service.submitMission(validation.data);
+    const result = await missionService().submitMission(validation.data);
 
     if (!result.success || !result.mission) {
       return NextResponse.json(
@@ -49,14 +40,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const appUrl = resolveAppUrl();
-    const notificationService = new MissionNotificationService(
-      new ResendEmailSender(),
-      missionEmailComposer,
-      firestore,
-      appUrl
-    );
-    await notificationService.notifyStatusChange(result.mission, 'queued');
+    await notificationService().notifyStatusChange(result.mission, 'queued');
 
     return NextResponse.json({ success: true, mission: result.mission }, { status: 201 });
   } catch (error) {

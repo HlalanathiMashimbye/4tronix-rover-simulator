@@ -8,7 +8,6 @@ Tests the core queue logic directly.
 import time
 import pytest
 from datetime import datetime
-from unittest.mock import MagicMock, call
 
 from drivers import FakeRoverDriver
 from service import RoverQueueService

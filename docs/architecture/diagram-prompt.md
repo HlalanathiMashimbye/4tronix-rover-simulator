@@ -3,6 +3,12 @@
 Copy everything between the rules into Claude. Self-contained: assumes no repo
 access.
 
+> **Out of date on the yard.** The prompt below describes the August 2026
+> system, including the satellite's operator console, SQLite mirror and sync
+> worker, none of which exists any more. A diagram generated from it today
+> would be wrong about the yard. Check it against
+> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) before reusing it.
+
 ---
 
 Produce a **system architecture diagram** as a single self-contained HTML page

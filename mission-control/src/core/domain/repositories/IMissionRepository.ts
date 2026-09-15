@@ -1,40 +1,33 @@
 /**
- * Mission Repository Interface
+ * Mission Repository Interfaces
  *
  * Implements the Repository pattern and Dependency Inversion Principle (SOLID).
  * Domain layer defines the contract; infrastructure layer provides concrete implementation.
  *
- * This allows us to:
- * - Swap Firestore for Redis, Cloud Tasks, or other queue systems
- * - Mock the repository for unit testing
- * - Keep business logic independent of persistence details
+ * Split by what callers actually do (Interface Segregation). One nine-method
+ * interface used to serve everyone, and no caller used more than five of its
+ * methods: the public feed needs findRecent, a mission page findById and
+ * findRuns, MissionService create, findById and update. The browser container
+ * handed all nine to client components, so code that ships to a child's
+ * browser was typed as able to soft-delete missions. Firestore rules would
+ * refuse that write, but nothing stopped anyone writing the call.
+ *
+ * - IMissionReader: what anyone may read. The browser gets only this.
+ * - IMissionWriter: creating and updating a mission.
+ * - IMissionBookkeeping: an operator's record of runs, and soft deletion.
+ * - IMissionRepository: all three, for the privileged server container.
  */
 
 import { Mission, MissionStatus } from '../entities/Mission';
 import { MissionRun } from '../entities/MissionRun';
 
-export interface IMissionRepository {
-  /**
-   * Create a new mission in the queue
-   * @param mission - Mission data (id will be generated if not provided)
-   * @returns Created mission with generated ID and calculated queue position
-   */
-  create(mission: Omit<Mission, 'id'>): Promise<Mission>;
-
+export interface IMissionReader {
   /**
    * Find a mission by ID
    * @param id - Mission ID
    * @returns Mission or null if not found
    */
   findById(id: string): Promise<Mission | null>;
-
-  /**
-   * Update mission status and related fields
-   * @param id - Mission ID
-   * @param updates - Partial mission data to update
-   * @returns Updated mission or null if not found
-   */
-  update(id: string, updates: Partial<Mission>): Promise<Mission | null>;
 
   /**
    * A page of recent missions, newest first. Reads `limit + 1` documents - no
@@ -54,7 +47,26 @@ export interface IMissionRepository {
    * video, which is also how a failed run stays invisible to them.
    */
   findRuns(missionId: string): Promise<MissionRun[]>;
+}
 
+export interface IMissionWriter {
+  /**
+   * Create a new mission in the queue
+   * @param mission - Mission data (id will be generated if not provided)
+   * @returns Created mission with generated ID and calculated queue position
+   */
+  create(mission: Omit<Mission, 'id'>): Promise<Mission>;
+
+  /**
+   * Update mission status and related fields
+   * @param id - Mission ID
+   * @param updates - Partial mission data to update
+   * @returns Updated mission or null if not found
+   */
+  update(id: string, updates: Partial<Mission>): Promise<Mission | null>;
+}
+
+export interface IMissionBookkeeping {
   /** Record one yard's attempt, creating or replacing it. */
   upsertRun(missionId: string, run: MissionRun): Promise<void>;
 
@@ -103,6 +115,9 @@ export interface IMissionRepository {
     deletedBy: string,
   ): Promise<void>;
 }
+
+/** Everything, for the server container. Prefer the narrow interface you need. */
+export interface IMissionRepository extends IMissionReader, IMissionWriter, IMissionBookkeeping {}
 
 /** Where a page ended. Both ordering fields, so ties cannot skip or repeat. */
 export interface MissionCursor {

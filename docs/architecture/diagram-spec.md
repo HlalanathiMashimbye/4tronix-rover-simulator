@@ -4,6 +4,12 @@ Blueprint for the replacement architecture diagram. The paste-ready generation
 prompt is in [diagram-prompt.md](diagram-prompt.md). The reasoning you defend in
 review is in [design-decisions.md](design-decisions.md).
 
+> **Out of date on the yard.** This specifies the August 2026 diagram. Band B
+> (the satellite's console, SQLite mirror and sync threads, and
+> `OPERATOR_AUTH=off`) describes machinery that no longer exists, so a
+> diagram built from it today would be wrong about the yard. See
+> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) for the current shape.
+
 ---
 
 ## 1. What is wrong with v1

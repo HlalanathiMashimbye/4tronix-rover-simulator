@@ -1,5 +1,6 @@
 import { findYardIn, type Yard } from '@/core/domain/entities/Yard';
 import { watchableRuns, type MissionRun } from '@/core/domain/entities/MissionRun';
+import { getYouTubeId } from '@/core/domain/services/youtubeLinking';
 
 /**
  * The runs a learner can watch for one mission, in the order they see them.
@@ -36,12 +37,9 @@ export interface RunOption {
   completedAt?: string | null;
 }
 
-/** The YouTube id in a watch/share/embed URL, or null if there isn't one. */
-export function getYouTubeId(url: string | undefined | null): string | null {
-  if (!url) return null;
-  const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
-  return match && match[2].length === 11 ? match[2] : null;
-}
+// Defined in the domain so the operator's commands can use it too; re-exported
+// here for the components that already import it from this module.
+export { getYouTubeId };
 
 /**
  * YouTube's own poster frame. `mqdefault` is 320x180 - big enough for a card,

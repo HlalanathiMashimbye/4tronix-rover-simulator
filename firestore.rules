@@ -186,8 +186,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Leaderboard entries: pseudonymous public rankings
+    // Leaderboard entries: pseudonymous public rankings.
     // World-readable for public leaderboard display.
+    //
+    // KEPT ON MAIN ON PURPOSE, even though main serves no leaderboard. Rules
+    // deploy from main for every environment, so if this block only existed on
+    // feat/challenges then switching to that branch would need a rules deploy
+    // as well as an app deploy, and "switch instantly" would quietly stop
+    // being true. An allowlist guarding a collection nothing writes costs
+    // nothing; a missing one costs a broken switch. See
+    // docs/challenges-branch.md.
     // Written only through Admin SDK to prevent client manipulation.
     //
     // Only public entries (optedIn: true) should be visible, but rules cannot

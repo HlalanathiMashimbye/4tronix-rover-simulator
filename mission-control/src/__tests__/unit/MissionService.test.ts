@@ -7,14 +7,15 @@
 
 import { MissionService } from '@/core/application/services/MissionService';
 import {
-  IMissionRepository,
+  IMissionReader,
+  IMissionWriter,
   MissionCursor,
   MissionPage,
 } from '@/core/domain/repositories/IMissionRepository';
 import { Mission } from '@/core/domain/entities/Mission';
 import { CreateMissionDto } from '@/core/application/dto/mission';
 
-class MockMissionRepository implements IMissionRepository {
+class MockMissionRepository implements IMissionReader, IMissionWriter {
   private missions: Map<string, Mission> = new Map();
   private idCounter = 0;
 
@@ -65,16 +66,10 @@ class MockMissionRepository implements IMissionRepository {
     ).length;
   }
 
-  // Widened with the port: routes needed findRuns/applyBookkeeping/
-  // softDeleteMission and could not be typed against IMissionRepository
-  // while those lived only on the Firestore class. MissionService does not
-  // use them, so here they only have to exist.
+  // Part of IMissionReader. The four run-bookkeeping stubs that used to sit
+  // here are gone: MissionService is typed against the reader and writer only,
+  // so a mock of it no longer has to pretend to delete anything.
   async findRuns() { return []; }
-  async upsertRun() { return; }
-  async applyBookkeeping() { return; }
-  async softDeleteMission() { return; }
-
-  async softDeleteRun(): Promise<void> {}
 
   async findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage> {
     const ordered = Array.from(this.missions.values()).sort((a, b) => {

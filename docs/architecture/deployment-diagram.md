@@ -61,9 +61,9 @@ The fallback annotation is there because it has been needed. If mDNS fails, SSH
 by IP. If the network is unusable, an HDMI monitor and keyboard plugged directly
 into the Pi. Neither is the intended path, but neither requires the internet.
 
-Once operational, the venue is offline-first: missions execute against the local
-SQLite mirror with no connectivity at all, and `sync_worker.py` reconciles with
-Firestore whenever the internet returns.
+Once operational, the venue needs no connectivity at all: missions are pasted
+into the satellite's run station, run on the rover over the LAN and recorded on
+the satellite, and nothing at the venue syncs with the cloud.
 
 ## Reading the lines
 

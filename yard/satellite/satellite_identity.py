@@ -1,5 +1,7 @@
 """
-Satellite identity - who this box is, for mission locking.
+Satellite identity - who this box is. `yard_id()` is live, used to key
+recordings and label the run station. `satellite_id()` is banked for mission
+locking and is not called from anywhere on this box yet.
 
 Plan reference: yard/docs/offline-sync-plan.md section 3.3.
 
@@ -32,9 +34,12 @@ CONFIG_FILE = os.environ.get(
 # LAN. The id a mission carries in Firestore is then the same word you ssh to,
 # rather than `uct-rover-1`, which matched nothing anyone could see anywhere.
 #
-# This must equal the id in mission-control's KNOWN_YARDS. A mismatch shows up
-# as an empty queue, not as an error, so it is worth checking first when the
-# satellite syncs cleanly but nothing arrives.
+# This must equal a yard id Mission Control actually knows about. Yards are
+# Firestore data now, added on the settings page - KNOWN_YARDS in
+# infrastructure/config/yards.ts is only the seed list the migration carried
+# across, kept for history. A mismatch does not error: it shows up as
+# recordings uploaded under a yard id the YouTube linker cannot match to any
+# run.
 DEFAULT_YARD_ID = 'curiosity'
 
 _lock = threading.Lock()
@@ -86,8 +91,9 @@ def yard_id():
     """Which yard's missions this satellite manages.
 
     Configured, never generated: it has to match the `yardId` that
-    mission-control stamps on missions, so a wrong value shows up as an empty
-    queue rather than as silent cross-yard interference.
+    mission-control stamps on missions, so a wrong value shows up as
+    recordings nothing in Mission Control can match to a run, rather than as
+    silent cross-yard interference.
     """
     with _lock:
         if 'yard_id' in _cached:

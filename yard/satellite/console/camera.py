@@ -11,9 +11,7 @@ import os
 
 from flask import jsonify, request
 
-import camera_control
 from console.blueprint import operator_bp
-import tunables
 
 @operator_bp.route('/api/camera/start', methods=['POST'])
 def api_camera_start():

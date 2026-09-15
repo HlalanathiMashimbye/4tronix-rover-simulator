@@ -130,6 +130,7 @@ function YardQueue({
    * stand-in for that signal, not a setting anybody should want to keep.
    */
   const [mode, setMode] = useState<ConsoleMode>('manual');
+  const [automaticMissionId, setAutomaticMissionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Read in an effect, not in useState's initialiser: this component renders
   // on the server too, where localStorage does not exist.
@@ -603,7 +604,9 @@ function YardQueue({
                   </span>
                 )}
 
-                {/* The manual bridge to the yard, and deliberately manual.
+                {/* The automatic route sends through the satellite. Manual keeps
+                  this exact Copy action as its offline fallback.
+                  The manual bridge to the yard, and deliberately manual.
                     Mission Control cannot reach the satellite: it is behind
                     carrier NAT with no inbound path, which is why Firestore is
                     the only channel between them. So the operator keeps both
@@ -614,17 +617,26 @@ function YardQueue({
                     rather than be replaced by it - it is the path that works
                     when the venue's internet does not. */}
                 <button
-                  onClick={() => copyCode(mission)}
+                  onClick={() => {
+                    if (mode === 'auto') {
+                      setAutomaticMissionId(mission.id);
+                      setSelectedId(mission.id);
+                    } else {
+                      void copyCode(mission);
+                    }
+                  }}
                   disabled={!mission.code}
-                  title="Copy the Python, then paste it into the yard's code editor"
+                  title={mode === 'auto' ? 'Check the yard and send this mission to the rover' : "Copy the Python, then paste it into the yard's code editor"}
                   className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {copiedId === mission.id ? (
+                  {mode === 'auto' ? (
+                    <Rocket className="h-3 w-3" />
+                  ) : copiedId === mission.id ? (
                     <Check className="h-3 w-3 text-primary" />
                   ) : (
                     <Copy className="h-3 w-3" />
                   )}
-                  {copiedId === mission.id ? 'Copied' : 'Copy'}
+                  {mode === 'auto' ? 'Send to Rover' : copiedId === mission.id ? 'Copied' : 'Copy'}
                 </button>
 
                 <button
@@ -668,6 +680,7 @@ function YardQueue({
         yardId={yardId}
         isAdmin={role === 'admin'}
         mode={mode}
+        startAutomatic={automaticMissionId === selectedId}
         onBack={() => setSelectedId(null)}
         onResult={(message) => {
           setFlash(message);

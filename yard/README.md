@@ -23,7 +23,7 @@ yard/
 
 **Rover** (marspi.local:8523) - Receives instructions via REST API and executes them in order. Automatically falls back to a fake driver (logs instead of moving) when not on a Pi.
 
-**Satellite** (mro.local:3001) - Serves the tablet Blockly interface at `/code/` and the TV monitor at `/monitor/`. Also streams the Pi camera at port 8890.
+**Satellite** (mro.local:3001) - Serves the operator's run station at `/run/`, the tablet Blockly interface at `/code/`, the TV monitor at `/monitor/` and settings at `/settings`, and records each run. Also streams the Pi camera at port 8890. It has no sign-in and holds no cloud credential: missions arrive by copy and paste from Mission Control's operator console.
 
 ## How It Works
 
@@ -37,9 +37,10 @@ yard/
 
 | Doc | Description |
 |-----|-------------|
-| [Yard Manual](MANUAL.md) | **Start here** — operations, quick fixes, installation, debugging |
+| [Yard Manual](MANUAL.md) | **Start here**: operations, quick fixes, installation, debugging |
 | [Rover Server](docs/rover-server.md) | Setup and API for the queue server |
 | [Satellite](docs/satellite.md) | Web interface and camera server |
 | [Architecture](docs/architecture.md) | System design and data flow |
 | [API Reference](docs/api.md) | REST endpoints and instruction format |
 | [Testing](docs/testing.md) | Running and writing tests |
+| [What the yard no longer does](docs/what-the-yard-no-longer-does.md) | The Firestore mirror that was removed, and the shape a way back should take |

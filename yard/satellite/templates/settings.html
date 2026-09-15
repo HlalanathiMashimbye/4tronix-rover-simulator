@@ -321,6 +321,59 @@
             border: 1px solid var(--border);
         }
 
+        /* Recording management: toolbar, rows, delete bar. */
+        .rec-toolbar {
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+            margin-bottom: 0.6rem;
+        }
+        .rec-toolbar label {
+            display: flex; align-items: center; gap: 0.35rem;
+            font-size: var(--fs-xs); color: var(--text-dim); cursor: pointer;
+            font-weight: 600;
+        }
+        .rec-toolbar .spacer { flex: 1; }
+        .rec-row {
+            display: flex; align-items: center; gap: 0.55rem;
+            padding: 0.45rem 0;
+        }
+        .rec-row + .rec-row { border-top: 1px solid var(--border); }
+        #recordingsSection input[type="checkbox"] {
+            flex-shrink: 0; cursor: pointer;
+            width: 16px; height: 16px;
+            accent-color: var(--signal);
+        }
+        .rec-row .rec-info { flex: 1; min-width: 0; }
+        .rec-row .rec-name {
+            font-size: var(--fs-sm); color: var(--text);
+            text-decoration: none; display: block;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .rec-row .rec-name:hover { color: var(--signal); }
+        .rec-row .rec-meta {
+            font-size: var(--fs-2xs); color: var(--text-dim);
+            font-family: var(--mono); margin-top: 0.15rem;
+        }
+        .rec-delete-bar {
+            display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+            margin-top: 0.6rem; padding-top: 0.6rem;
+            border-top: 1px solid var(--border);
+        }
+        .rec-delete-count {
+            font-size: var(--fs-xs); color: var(--text-dim);
+        }
+        .rec-result {
+            font-size: var(--fs-xs); line-height: 1.45;
+            padding: 0.45rem 0.7rem; border-radius: 10px; margin-top: 0.5rem;
+        }
+        .rec-result[data-tone="ok"] {
+            color: var(--ok); background: rgba(52,211,153,0.1);
+            border: 1px solid rgba(52,211,153,0.35);
+        }
+        .rec-result[data-tone="bad"] {
+            color: var(--bad); background: rgba(248,113,113,0.1);
+            border: 1px solid rgba(248,113,113,0.35);
+        }
+
         /* Same reason as the run station: this is operated from a tablet, and
            the camera device box, the inline edit link and the info tips were
            all well under the 44px a finger needs. */
@@ -530,7 +583,20 @@
                         <span class="disk-label" id="diskLabel"></span>
                     </div>
                     <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
+                    <div class="rec-toolbar" id="recToolbar" hidden>
+                        <label><input type="checkbox" id="recSelectAll"> Select all</label>
+                        <span class="spacer"></span>
+                        <select id="recSort" aria-label="Sort recordings">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                        </select>
+                    </div>
                     <div id="recordingsList"><span class="skel"></span></div>
+                    <div class="rec-delete-bar" id="recDeleteBar" hidden>
+                        <button class="btn danger-solid" id="recDeleteBtn" type="button">Delete selected</button>
+                        <span class="rec-delete-count" id="recDeleteCount"></span>
+                    </div>
+                    <div id="recResult" hidden></div>
                 </div>
 
             </div>
@@ -808,15 +874,23 @@
             return (n / 1024 / 1024).toFixed(1) + ' MB';
         }
 
+        function humanDate(iso) {
+            try {
+                var d = new Date(iso);
+                return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+                    + ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return ''; }
+        }
+
         function paintDiskBar(disk) {
-            const wrap = document.getElementById('diskBar');
-            const fill = document.getElementById('diskBarFill');
-            const label = document.getElementById('diskLabel');
+            var wrap = document.getElementById('diskBar');
+            var fill = document.getElementById('diskBarFill');
+            var label = document.getElementById('diskLabel');
             if (!wrap || !disk || !disk.total_bytes) return;
 
-            const pct = Math.round((disk.used_bytes / disk.total_bytes) * 100);
-            const freeGB = (disk.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
-            const totalGB = (disk.total_bytes / (1024 * 1024 * 1024)).toFixed(0);
+            var pct = Math.round((disk.used_bytes / disk.total_bytes) * 100);
+            var freeGB = (disk.free_bytes / (1024 * 1024 * 1024)).toFixed(1);
+            var totalGB = (disk.total_bytes / (1024 * 1024 * 1024)).toFixed(0);
 
             fill.style.width = pct + '%';
             if (pct >= 90) fill.dataset.tone = 'bad';
@@ -827,34 +901,166 @@
             wrap.hidden = false;
         }
 
+        var recSortOrder = 'newest';
+        var recData = [];
+
+        document.getElementById('recSort').addEventListener('change', function () {
+            recSortOrder = this.value;
+            paintRecordings();
+        });
+
+        function updateDeleteBar() {
+            var checks = document.querySelectorAll('.rec-check:checked');
+            var bar = document.getElementById('recDeleteBar');
+            var countEl = document.getElementById('recDeleteCount');
+            var n = checks.length;
+            bar.hidden = n === 0;
+            countEl.textContent = n === 1 ? '1 recording selected' : n + ' recordings selected';
+        }
+
+        document.getElementById('recSelectAll').addEventListener('change', function () {
+            var checked = this.checked;
+            document.querySelectorAll('.rec-check').forEach(function (cb) { cb.checked = checked; });
+            updateDeleteBar();
+        });
+
+        function paintRecordings() {
+            var box = document.getElementById('recordingsList');
+            var toolbar = document.getElementById('recToolbar');
+            var deleteBar = document.getElementById('recDeleteBar');
+            var selectAll = document.getElementById('recSelectAll');
+            var result = document.getElementById('recResult');
+            if (!box) return;
+
+            result.hidden = true;
+            selectAll.checked = false;
+
+            if (!recData.length) {
+                toolbar.hidden = true;
+                deleteBar.hidden = true;
+                box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
+                return;
+            }
+
+            toolbar.hidden = false;
+            var sorted = recData.slice();
+            sorted.sort(function (a, b) {
+                return recSortOrder === 'oldest'
+                    ? a.modified.localeCompare(b.modified)
+                    : b.modified.localeCompare(a.modified);
+            });
+
+            box.innerHTML = sorted.map(function (r) {
+                var badge = r.downloaded
+                    ? '<span class="dl-badge yes">downloaded</span>'
+                    : '<span class="dl-badge no">not yet</span>';
+                return '<div class="rec-row">'
+                    + '<input type="checkbox" class="rec-check" data-name="' + r.name.replace(/"/g, '&quot;') + '">'
+                    + '<div class="rec-info">'
+                    + '<a class="rec-name" download href="/api/recordings/' + encodeURIComponent(r.name) + '">' + r.name + '</a>'
+                    + '<div class="rec-meta">'
+                    + humanDate(r.modified) + ' &middot; ' + humanBytes(r.bytes) + ' ' + badge
+                    + '</div></div></div>';
+            }).join('');
+
+            box.querySelectorAll('.rec-check').forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    updateDeleteBar();
+                    var all = document.querySelectorAll('.rec-check');
+                    var checked = document.querySelectorAll('.rec-check:checked');
+                    selectAll.checked = all.length > 0 && all.length === checked.length;
+                });
+            });
+            updateDeleteBar();
+        }
+
         async function loadRecordings() {
-            const box = document.getElementById('recordingsList');
+            var box = document.getElementById('recordingsList');
             if (!box) return;
             try {
-                const resp = await fetch('/api/recordings');
+                var resp = await fetch('/api/recordings');
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                const data = await resp.json();
-                const list = data.recordings || [];
-
+                var data = await resp.json();
+                recData = data.recordings || [];
                 paintDiskBar(data.disk);
-
-                if (!list.length) {
-                    box.innerHTML = '<div class="kv"><span class="k">Nothing recorded yet</span></div>';
-                    return;
-                }
-                box.innerHTML = list.map(function (r) {
-                    var badge = r.downloaded
-                        ? '<span class="dl-badge yes">downloaded</span>'
-                        : '<span class="dl-badge no">not yet</span>';
-                    return '<div class="kv"><a class="k" style="text-decoration:none" download href="/api/recordings/'
-                        + encodeURIComponent(r.name) + '">' + r.name + '</a>'
-                        + badge
-                        + '<span class="v">' + humanBytes(r.bytes) + '</span></div>';
-                }).join('');
+                paintRecordings();
             } catch (e) {
                 box.innerHTML = '<div class="kv"><span class="k">Could not read recordings</span></div>';
             }
         }
+
+        function showRecResult(text, tone) {
+            var el = document.getElementById('recResult');
+            el.textContent = text;
+            el.className = 'rec-result';
+            el.dataset.tone = tone;
+            el.hidden = false;
+            setTimeout(function () { el.hidden = true; }, 6000);
+        }
+
+        document.getElementById('recDeleteBtn').addEventListener('click', function () {
+            var checked = document.querySelectorAll('.rec-check:checked');
+            var names = [];
+            checked.forEach(function (cb) { names.push(cb.dataset.name); });
+            if (!names.length) return;
+
+            var msg = names.length === 1
+                ? 'Delete 1 recording from the SD card?'
+                : 'Delete ' + names.length + ' recordings from the SD card?';
+
+            var overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML =
+                '<div class="modal">' +
+                '<h2>Confirm deletion</h2>' +
+                '<p>' + msg + ' This cannot be undone.</p>' +
+                '<div class="modal-actions">' +
+                '<button class="btn" id="recConfirmCancel" type="button">Cancel</button>' +
+                '<button class="btn danger" id="recConfirmDelete" type="button">Delete</button>' +
+                '</div></div>';
+            document.body.appendChild(overlay);
+
+            overlay.querySelector('#recConfirmCancel').addEventListener('click', function () {
+                overlay.remove();
+            });
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay) overlay.remove();
+            });
+
+            overlay.querySelector('#recConfirmDelete').addEventListener('click', async function () {
+                var btn = this;
+                btn.disabled = true;
+                btn.textContent = 'Deleting…';
+                try {
+                    var resp = await fetch('/api/recordings/delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ names: names }),
+                    });
+                    var data = await resp.json();
+                    overlay.remove();
+                    if (!resp.ok) {
+                        showRecResult(data.error || 'Delete failed', 'bad');
+                        return;
+                    }
+                    var nd = (data.deleted || []).length;
+                    var ns = (data.skipped || []).length;
+                    if (nd && !ns) {
+                        showRecResult('Deleted ' + nd + (nd === 1 ? ' recording.' : ' recordings.'), 'ok');
+                    } else if (nd && ns) {
+                        var reasons = data.skipped.map(function (s) { return s.name + ' (' + s.reason + ')'; }).join(', ');
+                        showRecResult('Deleted ' + nd + '. Skipped ' + ns + ': ' + reasons, 'ok');
+                    } else {
+                        var reasons = data.skipped.map(function (s) { return s.name + ' (' + s.reason + ')'; }).join(', ');
+                        showRecResult('Nothing deleted. Skipped: ' + reasons, 'bad');
+                    }
+                    await loadRecordings();
+                } catch (e) {
+                    overlay.remove();
+                    showRecResult('Could not delete: ' + e.message, 'bad');
+                }
+            });
+        });
 
         loadRecordings();
 

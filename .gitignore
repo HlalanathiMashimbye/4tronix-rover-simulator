@@ -171,8 +171,13 @@ yard/satellite/satellite_config.json
 node_modules/
 npm-debug.log*
 
-# Generated simulation videos
+# Generated simulation videos, and the sentinels the satellite writes beside
+# them. *.mp4 alone does not cover "<name>.mp4.downloaded": the pattern matches
+# the end of the name, and that file ends in .downloaded. So every yard that
+# had fetched a recording carried its markers as untracked noise, and one of
+# them reached a branch.
 *.mp4
+*.downloaded
 
 # Root lockfile — dev-only tooling (concurrently); apps own their lockfiles
 /package-lock.json

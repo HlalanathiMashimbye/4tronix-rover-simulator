@@ -22,9 +22,14 @@ import { MissionService } from '@/core/application/services/MissionService';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
-import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
-import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
+import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
+import { ResendEmailSender } from '@/infrastructure/email/resend-client';
+import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { OperatorMissionCommands } from '@/core/application/services/OperatorMissionCommands';
+import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
 export function adminMissionRepository(): IMissionRepository {
@@ -41,7 +46,22 @@ export function adminYardRepository(): IYardRepository {
   return new FirestoreYardRepository(getFirestoreInstance());
 }
 
-/** Privileged. Leaderboard writes only through Admin SDK. */
-export function adminLeaderboardRepository(): ILeaderboardRepository {
-  return new FirestoreLeaderboardRepository(getFirestoreInstance());
+/**
+ * Learner status emails: Resend delivers, the learner's private contact record
+ * says where. Assembled here and nowhere else - three routes used to build it
+ * inline, each free to wire it differently, and architecture.test.ts now fails
+ * if one does again.
+ */
+export function notificationService(): MissionNotificationService {
+  return new MissionNotificationService(
+    new ResendEmailSender(),
+    missionEmailComposer,
+    new FirestoreLearnerContactReader(getFirestoreInstance()),
+    resolveAppUrl(),
+  );
+}
+
+/** The operator's bookkeeping commands, on the privileged repository. */
+export function operatorMissionCommands(): OperatorMissionCommands {
+  return new OperatorMissionCommands(adminMissionRepository(), notificationService(), nanoid);
 }

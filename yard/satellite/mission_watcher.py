@@ -20,6 +20,16 @@ never sends anything to the rover - it only reads /queue/status.
 Left running, a recording grows at roughly 87KB/s, about 7.5GB a day on a 64GB
 card, and has no moov atom until it is closed, which means every one of those
 files is unplayable. That is the failure this exists to prevent.
+
+WHICH RUN, NOT WHICH MISSION. The rover's history keeps recent attempts, so
+"has m1 finished?" is already true when a re-run of m1 starts, and that re-run's
+recording was stopped within one poll. The queue proxy now records the id the
+rover gave each dispatch (recording_control.note_dispatch), and a recording
+stops when one of its own dispatches finishes. A recording with no dispatch on
+record, started by hand, still falls back to the mission id.
+
+AND A RECORDING NOTHING WILL EVER STOP IS STOPPED ANYWAY. A rover switched off
+mid-run never reports finishing at all; see MAX_RECORDING_SECONDS.
 """
 
 import threading
@@ -27,10 +37,26 @@ import time
 
 import requests
 
-from recording_control import is_recording, stop_recording
+from recording_control import (
+    dispatches_for,
+    overdue_recordings,
+    recording_key,
+    recordings_at,
+    stop_recording,
+)
 
 ROVER_POLL_TIMEOUT = 3.0
 DEFAULT_POLL_INTERVAL = 10  # seconds
+
+# The longest a recording may run before it is stopped whatever the rover says.
+#
+# A mission is capped at 120 seconds on both sides of the LAN and the station
+# adds a second of lead-in, so a recording past ten minutes is not a run still
+# going. It is a recording nothing is going to stop: the rover lost power
+# mid-run and never reported finishing, or somebody started one by hand and
+# walked away. Ten minutes rather than three leaves room for a short queue of
+# runs ahead of this one.
+MAX_RECORDING_SECONDS = 600
 
 
 def _mission_id_of(entry):
@@ -40,65 +66,78 @@ def _mission_id_of(entry):
     return None
 
 
-def rover_outcomes(rover_url):
-    """The mission ids the rover reports as finished, from its own history.
+def _this_yard(yard_id):
+    if yard_id is not None:
+        return yard_id
+    from satellite_identity import yard_id as get_yard_id
+    try:
+        return get_yard_id()
+    except Exception:
+        return 'curiosity'
 
-    Returns (completed_ids, errored) where `errored` maps mission_id -> the
-    rover's own error text. Empty on any failure. Never raises: an unreachable
-    rover must not stop the watcher, and "I could not tell" must never be read
-    as "it finished".
+
+def finished_runs(rover_url):
+    """[(instruction_id, mission_id)] for every run the rover says has ended.
+
+    Completed and errored both count: a run the rover could not execute is
+    still over. None when the rover could not be asked. Never raises: an
+    unreachable rover must not stop the watcher, and "I could not tell" must
+    never be read as "it finished".
     """
     try:
         resp = requests.get(f'{rover_url}/queue/status', timeout=ROVER_POLL_TIMEOUT)
         if resp.status_code != 200:
-            return set(), {}
+            return None
         data = resp.json() or {}
     except (requests.exceptions.RequestException, ValueError):
-        return set(), {}
+        return None
 
-    done = set()
-    errored = {}
+    runs = []
     for entry in data.get('history') or []:
-        if not isinstance(entry, dict):
+        if not isinstance(entry, dict) or entry.get('status') not in ('completed', 'error'):
             continue
         mission_id = _mission_id_of(entry)
-        if not mission_id:
-            continue
-        status = entry.get('status')
-        if status == 'completed':
-            done.add(mission_id)
-        elif status == 'error':
-            errored[mission_id] = str(entry.get('error') or 'rover reported an error')
-    return done, errored
+        if mission_id:
+            runs.append((entry.get('id'), mission_id))
+    return runs
 
 
 def stop_finished_recordings(rover_url, yard_id=None):
-    """Stop filming every run the rover says is over. Returns those ids.
+    """Stop filming every run at this yard the rover says is over. Returns them.
 
     keep=True for errors as well as successes: a run the rover could not
     execute may still have filmed something worth seeing, and that judgement
     belongs to whoever watches it.
-
-    The station names its recording after the mission id, and the dispatch
-    carries that id, so the key the rover reports back is the key the
-    recording is filed under. Nothing else has to agree about anything.
     """
-    if yard_id is None:
-        from satellite_identity import yard_id as get_yard_id
-        try:
-            yard_id = get_yard_id()
-        except Exception:
-            yard_id = 'curiosity'
-
-    done, errored = rover_outcomes(rover_url)
+    yard_id = _this_yard(yard_id)
+    runs = finished_runs(rover_url)
+    if not runs:
+        return []
 
     stopped = []
-    for mission_id in set(done) | set(errored):
-        if not is_recording(mission_id, yard_id):
+    for recording in recordings_at(yard_id):
+        own = dispatches_for(recording, yard_id)
+        if own:
+            over = any(instruction_id in own for instruction_id, _ in runs)
+        else:
+            over = any(recording_key(mission_id) == recording for _, mission_id in runs)
+        if not over:
             continue
-        stop_recording(mission_id, yard_id, keep=True)
-        stopped.append(mission_id)
-        print(f'[watcher] Rover finished {mission_id}; recording saved.')
+        stop_recording(recording, yard_id, keep=True)
+        stopped.append(recording)
+        print(f'[watcher] Rover finished {recording}; recording saved.')
+    return stopped
+
+
+def stop_overdue_recordings(yard_id=None, max_seconds=MAX_RECORDING_SECONDS, now=None):
+    """Stop, and keep, every recording at this yard older than max_seconds."""
+    yard_id = _this_yard(yard_id)
+    stopped = []
+    for recording in overdue_recordings(yard_id, max_seconds, now=now):
+        stop_recording(recording, yard_id, keep=True)
+        stopped.append(recording)
+        print(f'[watcher] {recording} recorded for over {max_seconds}s with no run '
+              'finishing; stopped and kept.')
     return stopped
 
 
@@ -118,6 +157,11 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
                 stop_finished_recordings(rover_url_getter())
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
+
+            try:
+                stop_overdue_recordings()
+            except Exception as e:
+                print(f'[watcher] overdue check failed: {e}')
 
             tick += 1
             if tick % CLEANUP_EVERY == 0:

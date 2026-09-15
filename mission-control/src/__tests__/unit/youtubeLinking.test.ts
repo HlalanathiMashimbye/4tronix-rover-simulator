@@ -42,13 +42,24 @@ describe('reading the mission id out of a video', () => {
 
 describe('the filename YouTube turns into a title', () => {
   /**
-   * The satellite writes `<missionId>__<yardId>.mp4` and YouTube Studio
-   * prefills a title from the uploaded filename. An operator who uploads the
-   * file as they downloaded it has labelled it without typing anything, which
-   * is the version that survives the end of a long event day.
+   * The satellite writes `<missionId>__<yardId>__<stamp>.mp4` and YouTube
+   * Studio prefills a title from the uploaded filename. An operator who
+   * uploads the file as they downloaded it has labelled it without typing
+   * anything, which is the version that survives the end of a long event day.
    */
   it('reads the mission id from an unrenamed recording', () => {
+    expect(missionFromVideo({ title: 'm-7f3a91__curiosity__20260912T013122Z', description: '' })?.missionId)
+      .toBe('m-7f3a91');
+  });
+
+  it('still reads a title with no stamp, from before recordings carried one', () => {
     expect(missionFromVideo({ title: 'm-7f3a91__curiosity', description: '' })?.missionId).toBe('m-7f3a91');
+  });
+
+  it('rejects a stamp that is not the shape recording_control writes', () => {
+    // A third segment that is not the UTC stamp format must not qualify -
+    // otherwise any two-underscore title would claim a mission.
+    expect(missionFromVideo({ title: 'm1__curiosity__notastamp', description: '' })).toBeNull();
   });
 
   it('still works when the description was pasted as well', () => {
@@ -156,6 +167,13 @@ describe('which yard a video belongs to', () => {
    */
   it('takes the yard from the recording filename', () => {
     expect(missionFromVideo({ title: 'm1__durban', description: '' })).toEqual({
+      missionId: 'm1',
+      yardId: 'durban',
+    });
+  });
+
+  it('takes the yard from a stamped recording filename too', () => {
+    expect(missionFromVideo({ title: 'm1__durban__20260912T013122Z', description: '' })).toEqual({
       missionId: 'm1',
       yardId: 'durban',
     });

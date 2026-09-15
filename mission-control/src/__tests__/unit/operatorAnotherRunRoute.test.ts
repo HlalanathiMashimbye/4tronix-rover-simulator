@@ -25,18 +25,27 @@ jest.mock('@/infrastructure/auth/dal', () => ({
   ForbiddenError,
 }));
 
-jest.mock('@/infrastructure/container.server', () => ({
-  adminMissionRepository: () => ({
+jest.mock('@/infrastructure/container.server', () => {
+  // The real commands over a stub repository, so the run id logic under test
+  // is the one that ships rather than a copy of it in this file.
+  const { OperatorMissionCommands } = jest.requireActual(
+    '@/core/application/services/OperatorMissionCommands',
+  );
+  const repository = {
     findById: (...a: unknown[]) => findById(...a),
     findRuns: (...a: unknown[]) => findRuns(...a),
     applyBookkeeping: (...a: unknown[]) => applyBookkeeping(...a),
     softDeleteRun: (...a: unknown[]) => softDeleteRun(...a),
-  }),
-}));
-
-jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
-  getFirestoreInstance: () => ({}),
-}));
+  };
+  const notifier = {
+    notifyStatusChange: async () => ({ sent: false, reason: 'no-learner-email' }),
+  };
+  let ids = 0;
+  return {
+    operatorMissionCommands: () =>
+      new OperatorMissionCommands(repository, notifier, () => `fresh-run-${++ids}`),
+  };
+});
 
 import { NextRequest } from 'next/server';
 

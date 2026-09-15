@@ -6,6 +6,15 @@ alternative we turned down, where it lives in the code, and the honest limitatio
 The limitation matters. A reviewer who finds a weakness you did not name will
 discount everything else you said.
 
+> **Partly out of date.** Sections 6 and 7, the sync-worker arithmetic in
+> section 8, the watcher and crash recovery in section 9, the SQLite and
+> `OPERATOR_AUTH=off` answers in section 11, and the lease and outbox in
+> section 12 describe the satellite's Firestore mirror, the mission lease and
+> the satellite's own operator console, none of which exists any more; the
+> changelog has when and why. For the current shape see
+> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and
+> [`yard/docs/what-the-yard-no-longer-does.md`](../../yard/docs/what-the-yard-no-longer-does.md).
+
 ---
 
 ## 0. The four constraints everything follows from
@@ -76,9 +85,9 @@ that is wired to motors.
 **Decision, three layers, each assuming the previous one failed.**
 
 1. **Client-side allowlist** in
-   [ast-allowlist-analyzer.ts](../../mission-control/src/infrastructure/sandbox/ast-allowlist-analyzer.ts)
+   [ast-allowlist-analyzer.ts](../../mission-control/src/core/domain/safety/ast-allowlist-analyzer.ts)
    and
-   [rover-command-allowlist.ts](../../mission-control/src/infrastructure/sandbox/rover-command-allowlist.ts).
+   [rover-command-allowlist.ts](../../mission-control/src/core/domain/safety/rover-command-allowlist.ts).
    This layer exists for *feedback*, not security. A learner finds out at line 4
    that `import os` is not available, in the editor, immediately.
 2. **Server-side validation** at the API edge: Zod schema, then the same
@@ -373,7 +382,7 @@ specifically does not re-dispatch, and it specifically does not mark the mission
 failed, because "failed" asserts an outcome nobody established.
 
 **And the learner never sees "Failed".**
-[discoveryStatus.ts](../../mission-control/src/lib/discoveryStatus.ts) collapses
+[discoveryStatus.ts](../../mission-control/src/core/domain/services/discoveryStatus.ts) collapses
 five internal statuses into two learner-facing ones, Completed or Pending. The
 operator console shows the full accurate status. This is not the system lying; it
 is two audiences with different needs, and the code names the reason: a learner

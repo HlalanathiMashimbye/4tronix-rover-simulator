@@ -24,22 +24,26 @@ jest.mock('@/infrastructure/auth/dal', () => ({
   ForbiddenError,
 }));
 
-jest.mock('@/infrastructure/container.server', () => ({
-  adminMissionRepository: () => ({
+jest.mock('@/infrastructure/container.server', () => {
+  // The real commands over a stub repository, so the yard guard under test is
+  // the one that ships rather than a copy of it in this file.
+  const { OperatorMissionCommands } = jest.requireActual(
+    '@/core/application/services/OperatorMissionCommands',
+  );
+  const repository = {
     // Processing, so 'complete' is a decision the bookkeeping allows and the
     // test is about the yard guard rather than about mission state.
     findById: async () => ({ id: 'm1', status: 'processing', yardId: 'curiosity' }),
     findRuns: () => findRuns(),
     applyBookkeeping: (...a: unknown[]) => applyBookkeeping(...a),
-  }),
-}));
-
-jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
-  getFirestoreInstance: () => ({}),
-  getFirebaseAdminAuth: () => ({}),
-}));
-
-jest.mock('@/infrastructure/email/resend-client', () => ({ ResendEmailSender: class {} }));
+  };
+  const notifier = {
+    notifyStatusChange: async () => ({ sent: false, reason: 'no-learner-email' }),
+  };
+  return {
+    operatorMissionCommands: () => new OperatorMissionCommands(repository, notifier, () => 'new-run'),
+  };
+});
 
 import { NextRequest } from 'next/server';
 

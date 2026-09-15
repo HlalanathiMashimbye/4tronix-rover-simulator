@@ -25,8 +25,9 @@ Removing the mirror did not remove the seams. These are deliberate:
 - **The rover reports completion.** `GET /queue/status` on the rover returns a
   history with `status` and those params, and `mission_watcher` reads it.
 - **Recordings are keyed `(mission_id, yard_id)`** and filed as
-  `<mission>__<yard>.mp4`, which is the same shape Mission Control's YouTube
-  linker parses out of an uploaded title.
+  `<mission>__<yard>__<UTC stamp>.mp4`, one file per run. The run station
+  also writes the upload's YouTube description, and its `MissionID:` and
+  `Yard:` lines are what Mission Control's linker matches an upload by.
 - **The yard knows its own id.** `satellite_identity.yard_id()`.
 - **Settings can be changed at runtime** through `tunables`, without a restart.
 
