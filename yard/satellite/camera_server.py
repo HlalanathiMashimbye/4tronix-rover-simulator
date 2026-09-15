@@ -7,7 +7,6 @@ Streams JPEG frames with IMX500 object detection over WebSocket.
 
 import asyncio
 import base64
-import io
 import json
 import logging
 import os
@@ -255,7 +254,6 @@ def parse_detections(metadata, threshold=0.55):
 def draw_detections(frame, detections):
     """Draw bounding boxes and labels on frame"""
     import cv2
-    import numpy as np
 
     for det in detections:
         x, y, w, h = det['box']
@@ -279,7 +277,6 @@ def draw_detections(frame, detections):
 def capture_frame():
     """Capture a frame and encode as JPEG. Detections only on the IMX500."""
     import cv2
-    import numpy as np
 
     if camera_backend == 'webcam':
         try:

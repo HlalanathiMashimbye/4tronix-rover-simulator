@@ -17,7 +17,6 @@ import queue
 import time
 import threading
 import pytest
-from datetime import datetime
 
 from drivers import FakeRoverDriver
 from service import RoverQueueService

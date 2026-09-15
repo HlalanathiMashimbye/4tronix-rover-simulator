@@ -23,7 +23,10 @@
  */
 
 import { analyzeCodeForAllowlist } from '@/core/domain/safety/ast-allowlist-analyzer';
-import { ROVER_COMMAND_ALLOWLIST } from '@/core/domain/safety/rover-command-allowlist';
+import {
+  ROVER_ARGUMENT_LIMITS,
+  ROVER_COMMAND_ALLOWLIST,
+} from '@/core/domain/safety/rover-command-allowlist';
 
 export interface CodeProblem {
   /** 1-based, so it can go straight to a Monaco marker. */
@@ -139,14 +142,41 @@ export function findSyntaxProblems(code: string): CodeProblem[] {
   return problems;
 }
 
+/**
+ * The command that moves the other way, for a learner who typed a negative
+ * speed. A minus sign is how people naturally write "backwards", so the useful
+ * answer names the command that does that rather than just refusing.
+ * `reverse`, not `backward`: it is the one the rover library actually has.
+ */
+const OTHER_WAY: Record<string, string> = {
+  'rover.forward': 'rover.reverse',
+  'rover.backward': 'rover.forward',
+  'rover.reverse': 'rover.forward',
+  'rover.spinLeft': 'rover.spinRight',
+  'rover.spinRight': 'rover.spinLeft',
+};
+
 /** Turn an analyser finding into something a child can act on. */
 function humanise(finding: { ruleId: string; message: string }): string {
   if (finding.ruleId === 'argument-out-of-range') {
     // "rover.forward() takes a speed between 0 and 100, but got 6300"
-    const match = finding.message.match(/^(\S+)\(\) takes a (\w+) between (\S+) and (\S+), but got (\S+)/);
-    if (match) {
-      const [, command, label, min, max, got] = match;
-      return `${got} is too big for ${label}. ${command}() goes from ${min} to ${max}, so try ${command}(${max}).`;
+    const match = finding.message.match(/^(\S+)\(\) takes a .+, but got (\S+)$/);
+    const range = match ? ROVER_ARGUMENT_LIMITS[match[1]] : undefined;
+    if (match && range) {
+      const [, command, got] = match;
+      const verdict = range.check(Number(got));
+      const rule = `${command}() goes from ${range.min} to ${range.max}`;
+
+      // Which way it is wrong comes from the range, not from here. This used
+      // to assume "too big", and told a child that -50 was too big for speed.
+      if (!verdict.ok && verdict.side === 'below') {
+        const other = OTHER_WAY[command];
+        const size = Math.min(Math.abs(Number(got)), range.max);
+        return other
+          ? `${got} is too small for ${range.label}. ${rule}. To go the other way, use ${other}(${size}).`
+          : `${got} is too small for ${range.label}. ${rule}, so try ${command}(${range.min}).`;
+      }
+      return `${got} is too big for ${range.label}. ${rule}, so try ${command}(${range.max}).`;
     }
   }
 

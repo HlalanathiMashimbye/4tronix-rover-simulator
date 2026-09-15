@@ -9,7 +9,6 @@ Note: /code/ loads Blockly from the unpkg CDN, so these tests need
 internet access.
 """
 
-import pytest
 from playwright.sync_api import Page
 
 # live_server fixture comes from tests/test_status_page.py via conftest-less

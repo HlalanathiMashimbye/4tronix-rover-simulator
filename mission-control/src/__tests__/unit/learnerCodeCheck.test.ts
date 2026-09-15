@@ -41,6 +41,26 @@ describe('the mission that started this', () => {
   });
 });
 
+describe('a speed below zero', () => {
+  // The message used to be built for one direction only, so a child who wrote
+  // rover.forward(-50) was told "-50 is too big for speed".
+  it('is called too small, not too big', () => {
+    const [problem] = checkLearnerCode('rover.forward(-50)');
+
+    expect(problem.message).toContain('too small');
+    expect(problem.message).not.toContain('too big');
+  });
+
+  it('names the command that goes the other way', () => {
+    expect(checkLearnerCode('rover.forward(-50)')[0].message).toContain('rover.reverse(50)');
+    expect(checkLearnerCode('rover.spinLeft(-30)')[0].message).toContain('rover.spinRight(30)');
+  });
+
+  it('never suggests a speed the rover would refuse', () => {
+    expect(checkLearnerCode('rover.forward(-500)')[0].message).toContain('rover.reverse(100)');
+  });
+});
+
 describe('a mistyped command', () => {
   it('offers the command they meant', () => {
     const [problem] = checkLearnerCode('rover.forwrd(50)');

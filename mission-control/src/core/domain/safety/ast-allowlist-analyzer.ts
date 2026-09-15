@@ -1,7 +1,10 @@
 /**
- * AST-based Allowlist Analyzer
+ * Allowlist Analyzer
  *
  * User Story 21, Task 23: Static analysis of Python code for security violations
+ *
+ * Despite the file name, there is no syntax tree here - see "Why not full AST
+ * parsing" below. The name predates that decision and is imported widely.
  *
  * Implementation Strategy:
  * - Pattern-based analysis (regex + line parsing)
@@ -19,13 +22,32 @@
  * 3. Sandboxed Python executor on Raspberry Pi (runtime safety)
  */
 
-import type { AllowlistFinding } from '@/core/application/services/AllowlistService';
 import {
   ROVER_COMMAND_ALLOWLIST,
   ROVER_ARGUMENT_LIMITS,
   DISALLOWED_IMPORTS,
   ALLOWLIST_ERROR_MESSAGES,
 } from '@/core/domain/safety/rover-command-allowlist';
+
+/**
+ * A single allowlist violation found in learner code.
+ *
+ * Defined here, beside the analysis that produces it. It used to live in
+ * AllowlistService, which made this domain module import from the application
+ * layer that imports it - a cycle, and the one place the layers pointed the
+ * wrong way. architecture.test.ts now fails the build on that edge.
+ *
+ * @property ruleId - Unique identifier for the violation type
+ * @property message - Human-readable explanation for learners
+ * @property line - Line number where violation occurs (optional)
+ * @property column - Column number where violation occurs (optional)
+ */
+export interface AllowlistFinding {
+  ruleId: string;
+  message: string;
+  line?: number;
+  column?: number;
+}
 
 /**
  * Analyze Python code for allowlist violations
@@ -236,7 +258,7 @@ function checkArgumentRanges(line: string, lineNumber: number): AllowlistFinding
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(withoutComment)) !== null) {
       const value = Number(match[1]);
-      if (Number.isNaN(value) || (value >= limit.min && value <= limit.max)) {
+      if (Number.isNaN(value) || limit.check(value).ok) {
         continue;
       }
 

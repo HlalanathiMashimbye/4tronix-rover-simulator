@@ -45,9 +45,16 @@ export const MISSION_MIN_DURATION_SECONDS = 2;
 /**
  * The fastest the rover may be driven.
  *
- * Not enforced here: ROVER_ARGUMENT_LIMITS already caps every motion command
- * at 0-100 during allowlist analysis, which runs first and gives a better
- * message. This constant is the shared statement of the ceiling, and the rover
- * enforces it for real in mission_validator.py, where there is no allowlist.
+ * ROVER_ARGUMENT_LIMITS builds the speed range for every motion command from
+ * this, so it is the one number to change. The rover enforces the same ceiling
+ * in mission_validator.py, and yard/rover/test_limits_match_mission_control.py
+ * fails if the two stop agreeing.
  */
 export const MAX_ROVER_SPEED = 100;
+
+/**
+ * The slowest. Zero rather than -100: the rover library takes a direction and
+ * a speed separately (forward, reverse), and a negative speed is a PWM duty
+ * cycle the motor driver refuses.
+ */
+export const MIN_ROVER_SPEED = 0;

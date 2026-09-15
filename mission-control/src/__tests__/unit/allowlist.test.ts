@@ -381,6 +381,25 @@ describe('numeric argument limits', () => {
     expect(analyzeCodeForAllowlist(`rover.forward(${speed})`)).toEqual([]);
   });
 
+  // Literal numbers, and both sides of each edge in one test. Accepting 100 and
+  // rejecting 6300 are both true of a ceiling of 1000, which is how raising the
+  // ceiling tenfold used to pass this file.
+  const SPEED_COMMANDS = ['forward', 'backward', 'reverse', 'spinLeft', 'spinRight', 'steerLeft', 'steerRight'];
+
+  it.each(SPEED_COMMANDS)('rover.%s accepts 100 and refuses 101', (name) => {
+    expect(analyzeCodeForAllowlist(`rover.${name}(100)`)).toEqual([]);
+    expect(analyzeCodeForAllowlist(`rover.${name}(101)`)).toHaveLength(1);
+  });
+
+  it.each(SPEED_COMMANDS)('rover.%s accepts 0 and refuses -1', (name) => {
+    expect(analyzeCodeForAllowlist(`rover.${name}(0)`)).toEqual([]);
+    expect(analyzeCodeForAllowlist(`rover.${name}(-1)`)).toHaveLength(1);
+  });
+
+  it('refuses a fraction just over the ceiling', () => {
+    expect(analyzeCodeForAllowlist('rover.forward(100.5)')).toHaveLength(1);
+  });
+
   it('rejects a negative speed', () => {
     expect(analyzeCodeForAllowlist('rover.spinRight(-5)')).toHaveLength(1);
   });

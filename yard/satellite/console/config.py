@@ -35,7 +35,7 @@ def api_tunables():
         return jsonify({'error': f'Unknown setting: {", ".join(sorted(unknown))}'}), 400
 
     try:
-        values = tunables.save(data)
+        tunables.save(data)
     except (TypeError, ValueError):
         return jsonify({'error': 'Every value must be a number, except the camera host'}), 400
 
