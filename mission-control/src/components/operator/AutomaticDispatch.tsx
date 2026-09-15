@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Rocket, WifiOff, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -49,6 +49,33 @@ function initialChecks(): CheckResult[] {
     status: 'Not checked',
   }));
 }
+
+/** What the satellite's status says about each check. */
+function readChecks(status: YardStatus): CheckResult[] {
+  return (Object.keys(CHECKS) as CheckKey[]).map((key): CheckResult => {
+    const ready = key === 'camera'
+      ? status.camera?.ready === true
+      : key === 'rover'
+        ? status.rover?.reachable === true && (status.rover.status == null || status.rover.status === 'ok')
+        : status.recording?.ready === true;
+    const detail = key === 'camera' ? status.camera?.detail : status.recording?.detail;
+    return {
+      ...CHECKS[key],
+      state: ready ? 'ready' : 'failed',
+      status: ready ? 'Ready' : (detail || (key === 'rover' ? 'Not reachable' : 'Not ready')),
+    };
+  });
+}
+
+/**
+ * How often an open mission re-reads the yard's checks.
+ *
+ * The request goes from this browser to the satellite on the yard network, so
+ * it costs nothing in Firestore or Cloud Run. The price is paid by the Pi: a
+ * status read asks the rover for its health, which takes about six seconds
+ * while the rover is switched off, so this stays well clear of that.
+ */
+const LIVE_CHECK_INTERVAL_MS = 15_000;
 
 function statusUrl(consoleUrl: string): string {
   const url = new URL(consoleUrl);
@@ -178,6 +205,70 @@ export function AutomaticDispatch({
   const [showRocketFeedback, setShowRocketFeedback] = useState(false);
   const [copied, setCopied] = useState(false);
   const [unreachable, setUnreachable] = useState<Unreachable | null>(null);
+  // Whether this browser has shown it can reach the yard without asking, so
+  // re-reading the checks in the background cannot pop a permission prompt at
+  // an operator who has only opened a mission.
+  const [live, setLive] = useState(false);
+  const checkingRef = useRef(false);
+  // When the yard was last read, by either path. Send to Rover turning the
+  // live checks on would otherwise read the yard twice in the same second.
+  const lastReadRef = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void localNetworkPermission().then((permission) => {
+      if (!cancelled && permission !== 'unsupported' && permission.state === 'granted') setLive(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!live) return;
+    let cancelled = false;
+    let inFlight = false;
+
+    async function refresh() {
+      // A hidden tab has nobody reading it, and Send to Rover does its own
+      // read, which a background one must not overwrite halfway through.
+      if (cancelled || inFlight || checkingRef.current || document.hidden) return;
+      if (Date.now() - lastReadRef.current < LIVE_CHECK_INTERVAL_MS / 2) return;
+      inFlight = true;
+      lastReadRef.current = Date.now();
+      try {
+        const response = await reachYard();
+        if (cancelled || checkingRef.current) return;
+        if (typeof response === 'string') {
+          if (response !== 'offline') {
+            setLive(false);
+            return;
+          }
+          setChecks(initialChecks().map((check) => ({ ...check, state: 'failed', status: 'No answer' })));
+          return;
+        }
+        if (!response.ok) return;
+        const status = (await response.json()) as YardStatus;
+        if (!cancelled && !checkingRef.current) setChecks(readChecks(status));
+      } catch {
+        // A background read that goes wrong waits for the next one.
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    void refresh();
+    const interval = window.setInterval(refresh, LIVE_CHECK_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (!document.hidden) void refresh();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [live]);
 
   async function copyCode() {
     const envelope = missionClipboardText(mission);
@@ -192,6 +283,7 @@ export function AutomaticDispatch({
   }
 
   async function checkAndSend() {
+    checkingRef.current = true;
     setChecking(true);
     setError(null);
     setFailures([]);
@@ -205,29 +297,21 @@ export function AutomaticDispatch({
       // situation from a yard whose camera is not ready, with a different way
       // forward, so it is decided before any check is read.
       const response = await reachYard();
+      lastReadRef.current = Date.now();
       if (typeof response === 'string') {
         setUnreachable(response);
         setChecks(initialChecks());
+        if (response !== 'offline') setLive(false);
         return;
       }
+      // Reached without being stopped, so later reads cannot prompt either.
+      setLive(true);
 
       // Step two: the yard answered, so read what it says about itself.
       const status = (await response.json()) as YardStatus;
       if (!response.ok) throw new Error('The satellite returned an error while checking the yard.');
 
-      const next = (Object.keys(CHECKS) as CheckKey[]).map((key): CheckResult => {
-        const ready = key === 'camera'
-          ? status.camera?.ready === true
-          : key === 'rover'
-            ? status.rover?.reachable === true && (status.rover.status == null || status.rover.status === 'ok')
-            : status.recording?.ready === true;
-        const detail = key === 'camera' ? status.camera?.detail : status.recording?.detail;
-        return {
-          ...CHECKS[key],
-          state: ready ? 'ready' : 'failed',
-          status: ready ? 'Ready' : (detail || (key === 'rover' ? 'Not reachable' : 'Not ready')),
-        };
-      });
+      const next = readChecks(status);
       setChecks(next);
 
       const failed = next.filter((check) => check.state === 'failed');
@@ -252,6 +336,7 @@ export function AutomaticDispatch({
       setError(caught instanceof Error ? caught.message : 'Could not check the satellite.');
       setFailures([]);
     } finally {
+      checkingRef.current = false;
       setChecking(false);
     }
   }
@@ -264,7 +349,9 @@ export function AutomaticDispatch({
             <Rocket className="h-4 w-4 text-primary" />
             Automatic route
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground">Check this yard before sending the mission.</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {live ? 'Checking this yard every 15 seconds.' : 'Check this yard before sending the mission.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
