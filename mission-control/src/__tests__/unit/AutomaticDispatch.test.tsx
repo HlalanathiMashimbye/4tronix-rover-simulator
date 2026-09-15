@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
@@ -47,8 +47,66 @@ describe('Automatic Route dispatch', () => {
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('Camera');
     expect(screen.getByRole('alertdialog')).toHaveTextContent('Rover');
     expect(screen.getByRole('alertdialog')).toHaveTextContent('NOT been sent');
+    // The yard answered, so this is a checks problem, not an offline yard.
+    expect(screen.queryByText('Yard offline')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('says the yard is offline, and points at copy and paste, when it cannot be reached', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const assign = jest.fn();
+
+    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Yard offline');
+    expect(alert).toHaveTextContent('run station');
+    // Nothing was checked, so there is no list of failed checks, and the
+    // browser's own error text is not what the operator reads.
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByText(/failed to fetch/i)).not.toBeInTheDocument();
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('copies the mission from the offline message', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+
+    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy for the run station' }));
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('# MissionID: m1')),
+    );
+  });
+
+  it('calls a yard that never answers offline, instead of spinning forever', async () => {
+    jest.useFakeTimers();
+    try {
+      global.fetch = jest.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('Aborted', 'AbortError')),
+            );
+          }),
+      ) as unknown as typeof fetch;
+
+      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+
+      await act(async () => {
+        jest.advanceTimersByTime(10_000);
+      });
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Yard offline');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('navigates with the mission and yard only after all checks pass', async () => {
@@ -74,7 +132,7 @@ describe('Automatic Route dispatch', () => {
     expect(target.searchParams.get('code')).toBe(mission.code);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://curiosity.local:3001/api/status',
-      { cache: 'no-store' },
+      expect.objectContaining({ cache: 'no-store' }),
     );
   }, 10000);
 });
