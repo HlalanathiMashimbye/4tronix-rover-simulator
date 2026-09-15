@@ -5,6 +5,20 @@
 **Repository:** https://github.com/HlalanathiMashimbye/4tronix-rover-simulator
 **Live system:** https://mission-control-staging-cp4cyuy7ga-bq.a.run.app
 
+> **Read this first (14 September 2026).** This is the Iteration 2 submission
+> as it was handed in, kept as a record. Some of what it describes has changed
+> since. Where it disagrees with the repository, the repository and the
+> Iteration 3 documentation are current:
+>
+> - **Offline-first venue operation** (sections 1, 4 and 7). The satellite's
+>   SQLite mirror, outbox and mission leases were removed on 2 September 2026
+>   (commit `8728859`).
+> - **`OPERATOR_AUTH=off`** (section 6). The flag no longer exists.
+> - **Current hosting** (section 6). The deployment runs in the partner
+>   organisation's project, `bt-impact-academy`, not a personal one.
+> - **Learner status emails** (section 6). They are no longer redirected to a
+>   test inbox.
+
 ---
 
 ## 1. What this is

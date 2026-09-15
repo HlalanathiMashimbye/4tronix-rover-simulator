@@ -10,14 +10,13 @@ import os
 import json
 import logging
 import socket
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
 from dotenv import load_dotenv
 from flask import (Flask, render_template, request, jsonify, Response,
-                   stream_with_context, session, redirect, send_file)
+                   stream_with_context, redirect, send_file)
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by

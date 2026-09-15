@@ -7,7 +7,8 @@
  * - Learners can only call functions in ROVER_COMMAND_ALLOWLIST
  * - All imports from DISALLOWED_IMPORTS are blocked
  * - Python built-ins like print() are allowed for debugging
- * - AST analysis prevents runtime sandbox escapes
+ * - Checked by pattern at submission (there is no Python parser here); the
+ *   restricted runner on the rover is the runtime boundary
  *
  * Design Philosophy:
  * - Start restrictive, expand as needed

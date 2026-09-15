@@ -36,7 +36,7 @@ def mark_downloaded(recording_path):
     """Create a .downloaded marker beside the recording. Idempotent."""
     marker = recording_path + MARKER_SUFFIX
     try:
-        with open(marker, 'w') as f:
+        with open(marker, 'w'):
             pass
     except OSError as e:
         logger.warning('Could not mark %s as downloaded: %s',

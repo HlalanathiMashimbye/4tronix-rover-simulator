@@ -3,8 +3,8 @@
  *
  * WHY THIS FILE EXISTS. Every other check in this repository can pass while
  * the architecture rots. tsc is happy whether core imports infrastructure or
- * not; eslint has no opinion on which direction a dependency points; the 494
- * behavioural tests pass either way. The iteration 2 marksheet scored
+ * not; eslint has no opinion on which direction a dependency points; every
+ * behavioural test passes either way. The iteration 2 marksheet scored
  * Separation of Concerns 2.2/4 on a codebase whose build was entirely green.
  *
  * So the rules are asserted here, as rules, and they fail the build when

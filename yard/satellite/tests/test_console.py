@@ -12,15 +12,11 @@ the satellite's identity and its tunables.
 
 import sys
 import os
-import re
-import threading
-import time
 
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from web_server import app as flask_app  # noqa: E402
-import requests
 
 import operator_console  # noqa: F401,E402
 from console import camera  # noqa: E402
