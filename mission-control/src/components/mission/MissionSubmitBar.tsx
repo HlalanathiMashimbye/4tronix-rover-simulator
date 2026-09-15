@@ -77,17 +77,17 @@ export function MissionSubmitBar({
   }, [submitSuccess]);
 
   return (
-    <div className="@container shrink-0 border-t border-border/60 pt-2">
+    <div className="@container shrink-0 border-t border-border/60 pt-1.5">
       {/* Only once there is something to check. An empty workspace failing
           three checks reads as an error the learner has made, when in fact
           they have not started yet. */}
       {hasCode && (
-        <div className="mb-2">
+        <div className="mb-1.5">
           <PreFlightChecklist result={preFlight} />
         </div>
       )}
 
-      <div className="flex flex-wrap items-start gap-2">
+      <div className="flex flex-wrap items-start gap-1.5">
         <MissionNameInput value={missionName} onChange={onMissionNameChange} />
 
         <button

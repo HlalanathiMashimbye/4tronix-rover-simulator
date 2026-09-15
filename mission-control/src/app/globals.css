@@ -565,10 +565,21 @@
      so Blockly's canvas and the simulator pushed the column wider than the
      phone, and everything to the right of the fold was simply unreachable. */
   grid-template-columns: minmax(0, 1fr);
-  /* Create Mission owns the viewport and sizes to it. The mission view puts
-     this inside an already-sized flex parent instead, and passes 100%. */
-  max-height: var(--workspace-height, calc(100vh - 122px));
-  height: var(--workspace-height, calc(100vh - 122px));
+  /* Take whatever the flex column above has left. This was
+     calc(100vh - 122px) - a hardcoded guess at the navbar, page padding and
+     page header stacked on top of Create Mission. It was ~2px from clipping
+     with nothing else on the page, and the "Imported from Challenge" banner
+     pushed it straight over: the grid ran past the bottom of a main that is
+     overflow-hidden, so the Send button was cut off with no scrollbar to say
+     so. The chrome above is the page's to own and the page already measures
+     it, so the guess is gone.
+
+     flex-basis 0 rather than height:100%, which is the trap this replaces: a
+     percentage resolves against the WHOLE column, header included, so the
+     grid would again ask for more than is left and lean on flex-shrink to
+     bail it out. */
+  flex: 1 1 0%;
+  min-height: 0;
   /* No transition on grid-template-columns, deliberately, and this has now
      been established the hard way twice:
        1. It is a layout property on a container that both Blockly and the
@@ -627,6 +638,10 @@
   .workspaceSplitGrid {
     height: auto;
     max-height: none;
+    /* Not a flexible track down here: the parent column is auto-height and the
+       page scrolls, so the grid takes its children's height (the 70vh floors
+       below) rather than being squeezed into a remainder. */
+    flex: 0 0 auto;
   }
 
   /* The 70vh floor is for Create Mission, where both stacked panels are things

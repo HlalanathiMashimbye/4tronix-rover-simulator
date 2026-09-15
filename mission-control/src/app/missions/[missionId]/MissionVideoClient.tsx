@@ -144,7 +144,7 @@ export default function MissionVideoClient({
     // blocks and the code were rendered, just unreachable, with no scrollbar to
     // hint that anything was below.
     <main className="px-3 py-2 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
-      <div className="mx-auto flex h-full max-w-page flex-col gap-2">
+      <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -202,13 +202,12 @@ export default function MissionVideoClient({
             The 320px floor on the right track keeps the code readable, so this
             does not squeeze the editor to buy the change.
 
-            height="100%" because this sits inside an already-sized flex
-            parent, unlike Create Mission which owns the viewport. */}
+            No height: the grid is a flexible track and takes what this flex
+            column has left, the same as Create Mission. */}
         <SplitPane
           ariaLabel="Footage and code panels"
           defaultSplit={60}
           resizable={false}
-          height="100%"
           left={
             <div className="flex min-h-0 flex-col gap-2">
               <RunStackCarousel

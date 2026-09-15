@@ -205,3 +205,57 @@ describe('the agent instructions', () => {
     }
   });
 });
+
+/**
+ * The workspace split grid sizes itself from its parent, and nothing restates
+ * how tall the chrome above it is.
+ *
+ * This had drifted the expensive way: the grid carried
+ * `calc(100vh - 122px)` - a second, hardcoded opinion about the navbar, page
+ * padding and page header that the pages above it already own. The two
+ * disagreed by more than 122px the moment Create Mission showed its "Imported
+ * from Challenge" banner, and because that main is overflow-hidden the grid
+ * ran off the bottom of the page and took the Send button with it, with no
+ * scrollbar to hint anything was there.
+ *
+ * Asserted here rather than in a component test because no rendering test can
+ * see it: jsdom has no layout, so the grid is 0x0 either way and every
+ * behavioural test passes with the page clipped.
+ */
+describe('the workspace split grid', () => {
+  const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
+  // Comments stripped: these assert the declarations, not the prose that
+  // explains them - and the prose here necessarily quotes the old bad value.
+  const grid = css
+    .slice(css.indexOf('.workspaceSplitGrid {'), css.indexOf('.workspaceSplitDivider {'))
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+
+  it('exists to be read', () => {
+    expect(grid).toContain('grid-template-columns');
+  });
+
+  it('never hardcodes a guess at the chrome stacked above it', () => {
+    // Any viewport unit minus a pixel constant is the shape of the bug: it can
+    // only ever be right for one page at one header height.
+    expect(grid).not.toMatch(/calc\([^)]*\b\d+(vh|dvh|svh|lvh)\b[^)]*-[^)]*px/);
+  });
+
+  it('takes the space its flex column has left', () => {
+    expect(grid).toMatch(/flex:\s*1\s+1\s+0%/);
+    // Without this a grid row taller than the remainder refuses to shrink,
+    // which is the same clipping by another route.
+    expect(grid).toMatch(/min-height:\s*0/);
+  });
+
+  it('is sized by parents that are actually flex columns', () => {
+    // A flexible track under a parent that is not a flex container collapses.
+    for (const file of [
+      join(SRC, 'app', 'mission', 'page.tsx'),
+      join(SRC, 'app', 'missions', '[missionId]', 'MissionVideoClient.tsx'),
+    ]) {
+      const parent = readFileSync(file, 'utf8');
+      expect(parent).toMatch(/className="mx-auto flex [^"]*flex-col/);
+      expect(parent).toMatch(/min-h-0/);
+    }
+  });
+});

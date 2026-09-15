@@ -84,7 +84,7 @@ export function PreFlightChecklist({ result }: PreFlightChecklistProps) {
   const firstUnmet = result.checks.find((check) => !check.passed);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-card/40 p-2">
+    <div className="rounded-xl border border-border/60 bg-card/40 px-2 py-1.5">
       <div className="flex items-center justify-between gap-2">
         <h4 className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-muted-foreground">
           Pre-flight checks
@@ -94,7 +94,12 @@ export function PreFlightChecklist({ result }: PreFlightChecklistProps) {
         )}
       </div>
 
-      <ul className="mt-1.5 space-y-1">
+      {/* Two columns once the panel is wide enough, so four ticks read at a
+          glance instead of pushing the Send button down the column. The
+          breakpoint is MissionSubmitBar's @container, not the viewport - this
+          panel shares its column with the simulator and can be narrow on a
+          wide screen. */}
+      <ul className="mt-1 grid grid-cols-1 gap-x-3 gap-y-0.5 @min-[24rem]:grid-cols-2">
         {result.checks.map((check) => (
           <li key={check.id} className="flex items-start gap-1.5 text-xs">
             {check.passed ? (
@@ -110,7 +115,7 @@ export function PreFlightChecklist({ result }: PreFlightChecklistProps) {
       </ul>
 
       {firstUnmet && (
-        <p className="mt-1.5 border-t border-border/60 pt-1.5 text-xs text-muted-foreground">
+        <p className="mt-1 border-t border-border/60 pt-1 text-xs leading-snug text-muted-foreground">
           {explainCheck(firstUnmet.id, result.duration)}
         </p>
       )}

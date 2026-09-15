@@ -328,9 +328,9 @@ export function MissionWorkspace() {
   }, [showEmailPrompt]);
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
       {importedFromChallenge && (
-        <div className="flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+        <div className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary">
           <Sparkles className="h-4 w-4 shrink-0" />
           Imported from Challenge: {importedFromChallenge.title}
         </div>
