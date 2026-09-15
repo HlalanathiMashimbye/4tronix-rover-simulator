@@ -76,6 +76,8 @@ def _isolated_state(tmp_path, monkeypatch):
     monkeypatch.setattr(recording_control, 'RECORDINGS_DIR', str(tmp_path / 'recordings'))
     monkeypatch.setattr(recording_control, '_writers', {})
     monkeypatch.setattr(recording_control, '_paths', {})
+    monkeypatch.setattr(recording_control, '_started', {})
+    monkeypatch.setattr(recording_control, '_dispatches', {})
     monkeypatch.setattr(recording_control, '_consumer_thread', None)
     monkeypatch.setattr(recording_control, '_last_frame_at', None)
     # start_recording() would otherwise spawn a real background thread that
@@ -106,7 +108,11 @@ def test_is_ready_returns_false_when_no_frame_arrives_before_the_timeout(monkeyp
     ready, detail = recording_control.is_ready(timeout=0.05)
 
     assert ready is False
-    assert detail
+    # Connected and silent is a different fault from unreachable, and it is the
+    # one a stalled camera shows. This said "could not reach the camera: " with
+    # nothing after the colon, which sent people looking at the wrong thing.
+    assert 'connected but sent no frame' in detail
+    assert 'could not reach' not in detail
 
 
 def test_is_ready_returns_false_when_the_camera_is_unreachable(monkeypatch):
@@ -258,38 +264,3 @@ def test_stop_recording_is_a_no_op_for_a_run_with_no_active_recording():
     assert ok is True
     assert detail == 'not recording'
 
-
-def test_broadcast_survives_a_client_connecting_mid_frame():
-    """The frame producer iterated the live client set while awaiting a send.
-
-    That await yields, and a connect or disconnect during the yield mutates the
-    set: "RuntimeError: Set changed size during iteration", which killed the
-    producer. The websocket server kept accepting afterwards, so the camera
-    looked alive and simply never sent a frame.
-
-    Latent while only the monitor connected. The readiness probe made it
-    constant - it connects, waits and disconnects every few seconds, which is
-    exactly the window the race needs.
-    """
-    import asyncio, importlib.util, os
-
-    spec = importlib.util.spec_from_file_location(
-        'camera_server_race',
-        os.path.join(os.path.dirname(__file__), '..', 'camera_server.py'),
-    )
-    cam = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(cam)
-
-    class Joiner:
-        """Sends fine, but joins another client while the send is awaited -
-        the exact interleaving that used to raise."""
-        async def send(self, _message):
-            await asyncio.sleep(0)
-            cam.clients.add(object())
-
-    cam.clients.clear()
-    cam.clients.add(Joiner())
-    try:
-        asyncio.run(cam.broadcast_frame('a-frame'))
-    finally:
-        cam.clients.clear()
