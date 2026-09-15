@@ -80,6 +80,17 @@ describe('a queued mission', () => {
     expect(row).toHaveAttribute('aria-current', 'true');
   });
 
+  it('puts sending above the actions that only change the record', async () => {
+    // Record actions first put their "does not reach the rover" note directly
+    // above Send to Rover, which read as if sending did not reach it either.
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+    await openMission();
+
+    const send = await screen.findByRole('button', { name: /send to rover/i });
+    const complete = screen.getByRole('button', { name: /mark complete/i });
+    expect(send.compareDocumentPosition(complete) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('opening a mission does not start sending it', async () => {
     // The row's Send to Rover used to open the pane AND start the yard checks.
     // Opening is now only opening: nothing is asked of the satellite until the

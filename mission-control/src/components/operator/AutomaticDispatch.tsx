@@ -172,18 +172,23 @@ async function reachYard(): Promise<Response | Unreachable> {
   }
 }
 
+/**
+ * What the operator is told when the yard cannot be read. These can show the
+ * moment a mission opens, before anyone has pressed anything, so none of them
+ * talks about a send that was never attempted.
+ */
 const UNREACHABLE_MESSAGES: Record<Unreachable, { title: string; body: string }> = {
   offline: {
     title: 'Yard offline',
-    body: 'This browser could not reach the yard, so the mission has not been sent. Copy it and paste it into the run station at the yard instead.',
+    body: 'This browser cannot reach the yard right now. Copy the mission and paste it into the run station at the yard instead.',
   },
   'permission-denied': {
     title: 'Local network access is blocked',
-    body: 'This browser is not allowed to reach the yard, so the mission has not been sent. Click the lock beside the address, open the permissions for this site, set Local network access to Allow, then try again. Or copy the mission and paste it into the run station.',
+    body: 'This browser is not allowed to reach the yard. Click the lock beside the address, open the permissions for this site, set Local network access to Allow, then try again. Or copy the mission and paste it into the run station.',
   },
   'browser-cannot': {
     title: 'This browser cannot reach the yard',
-    body: 'The mission has not been sent. Sending automatically needs a browser like Chrome or Edge, which can ask for local network access. Open Mission Control in one of them, or copy the mission and paste it into the run station.',
+    body: 'Sending automatically needs a browser like Chrome or Edge, which can ask for local network access. Open Mission Control in one of them, or copy the mission and paste it into the run station.',
   },
 };
 
@@ -210,14 +215,28 @@ export function AutomaticDispatch({
   // an operator who has only opened a mission.
   const [live, setLive] = useState(false);
   const checkingRef = useRef(false);
-  // When the yard was last read, by either path. Send to Rover turning the
-  // live checks on would otherwise read the yard twice in the same second.
+  // When the yard was last read, by either path. A button turning the live
+  // checks on would otherwise read the yard twice in the same second.
   const lastReadRef = useRef(0);
 
+  // Send to Rover is only offered against a yard that has said it is ready.
+  // Pressing it still reads the yard again: a check from seconds ago is not a
+  // reason to move a robot.
+  const allReady = checks.every((check) => check.state === 'ready');
+
   useEffect(() => {
+    // Everything the browser can say without asking the operator is said on
+    // opening, so nobody presses Send to Rover to learn Safari cannot send.
     let cancelled = false;
     void localNetworkPermission().then((permission) => {
-      if (!cancelled && permission !== 'unsupported' && permission.state === 'granted') setLive(true);
+      if (cancelled) return;
+      if (permission === 'unsupported') {
+        if (browserBlocksYard(readConsoleUrl())) setUnreachable('browser-cannot');
+      } else if (permission.state === 'granted') {
+        setLive(true);
+      } else if (permission.state === 'denied') {
+        setUnreachable('permission-denied');
+      }
     });
     return () => {
       cancelled = true;
@@ -230,8 +249,8 @@ export function AutomaticDispatch({
     let inFlight = false;
 
     async function refresh() {
-      // A hidden tab has nobody reading it, and Send to Rover does its own
-      // read, which a background one must not overwrite halfway through.
+      // A hidden tab has nobody reading it, and a button's own read must not
+      // be overwritten by a background one halfway through.
       if (cancelled || inFlight || checkingRef.current || document.hidden) return;
       if (Date.now() - lastReadRef.current < LIVE_CHECK_INTERVAL_MS / 2) return;
       inFlight = true;
@@ -240,8 +259,10 @@ export function AutomaticDispatch({
         const response = await reachYard();
         if (cancelled || checkingRef.current) return;
         if (typeof response === 'string') {
+          setUnreachable(response);
           if (response !== 'offline') {
             setLive(false);
+            setChecks(initialChecks());
             return;
           }
           setChecks(initialChecks().map((check) => ({ ...check, state: 'failed', status: 'No answer' })));
@@ -249,7 +270,9 @@ export function AutomaticDispatch({
         }
         if (!response.ok) return;
         const status = (await response.json()) as YardStatus;
-        if (!cancelled && !checkingRef.current) setChecks(readChecks(status));
+        if (cancelled || checkingRef.current) return;
+        setUnreachable(null);
+        setChecks(readChecks(status));
       } catch {
         // A background read that goes wrong waits for the next one.
       } finally {
@@ -282,7 +305,14 @@ export function AutomaticDispatch({
     }
   }
 
-  async function checkAndSend() {
+  /**
+   * Read the yard, and with `send` go on to the run station if it is ready.
+   *
+   * Without `send` this is Check yard: the first read in a browser that has
+   * not yet been allowed onto the local network, which is where the browser's
+   * own prompt appears. After that the live checks take over.
+   */
+  async function readYard(send: boolean) {
     checkingRef.current = true;
     setChecking(true);
     setError(null);
@@ -313,7 +343,9 @@ export function AutomaticDispatch({
 
       const next = readChecks(status);
       setChecks(next);
+      if (!send) return;
 
+      // Ready a moment ago and not now: say so rather than send.
       const failed = next.filter((check) => check.state === 'failed');
       if (failed.length > 0) {
         setFailures(failed);
@@ -341,27 +373,44 @@ export function AutomaticDispatch({
     }
   }
 
+  const notReady = checks.filter((check) => check.state === 'failed');
+  const showNotReady = !checking && !unreachable && !success && notReady.length > 0 && (failures.length === 0 || dismissed);
+
   return (
     <section className="rounded-2xl border border-primary/30 bg-primary/5 p-3" aria-labelledby="automatic-dispatch-title">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 id="automatic-dispatch-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             <Rocket className="h-4 w-4 text-primary" />
-            Automatic route
+            Yard checks
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            {live ? 'Checking this yard every 15 seconds.' : 'Check this yard before sending the mission.'}
+            {live
+              ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
+              : 'Send to Rover unlocks when every check below is ready.'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {!live && !unreachable && (
+            <button
+              type="button"
+              onClick={() => readYard(false)}
+              disabled={checking}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {checking ? 'Checking yard...' : 'Check yard'}
+            </button>
+          )}
           <button
             type="button"
-            onClick={checkAndSend}
-            disabled={checking || !mission.code}
+            onClick={() => readYard(true)}
+            disabled={checking || !mission.code || !allReady}
+            title={allReady ? undefined : 'Unlocks when every yard check is ready'}
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-            {checking ? 'Checking yard...' : 'Send to Rover'}
+            {checking && live ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+            Send to Rover
           </button>
           <button
             type="button"
@@ -386,6 +435,17 @@ export function AutomaticDispatch({
         ))}
       </div>
 
+      {showNotReady && (
+        <div className="mt-3 rounded-xl border border-border/60 bg-background/50 p-3 text-xs" data-testid="yard-not-ready">
+          <p className="font-semibold text-foreground">Not ready to send yet</p>
+          {notReady.map((check) => (
+            <p key={check.key} className="mt-1 text-muted-foreground">
+              <span className="font-semibold text-foreground">{check.label}:</span> {check.fix}
+            </p>
+          ))}
+        </div>
+      )}
+
       {unreachable && (
         <div role="alert" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
           <div className="flex items-start gap-2">
@@ -403,14 +463,17 @@ export function AutomaticDispatch({
                   {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   {copied ? 'Copied' : 'Copy for the run station'}
                 </button>
-                <button
-                  type="button"
-                  onClick={checkAndSend}
-                  disabled={checking}
-                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
-                >
-                  Try again
-                </button>
+                {/* Trying again cannot change which browser this is. */}
+                {unreachable !== 'browser-cannot' && (
+                  <button
+                    type="button"
+                    onClick={() => readYard(false)}
+                    disabled={checking}
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
+                  >
+                    Try again
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -441,7 +504,7 @@ export function AutomaticDispatch({
                 <button type="button" onClick={() => setDismissed(true)} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70">
                   Close
                 </button>
-                <button type="button" onClick={checkAndSend} disabled={checking} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70">
+                <button type="button" onClick={() => readYard(false)} disabled={checking} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70">
                   Retry
                 </button>
               </div>

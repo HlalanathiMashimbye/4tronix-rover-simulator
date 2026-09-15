@@ -19,10 +19,14 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  * queue unscannable on a phone, which is what an operator is holding at an
  * event.
  *
- * NOT ONE OF THESE REACHES A ROVER. Send, rerun, stop, camera and arming all
+ * NOT ONE OF THESE REACHES A ROVER. Sending is AutomaticDispatch, which hands
+ * the mission to the satellite's run station; rerun, stop, camera and arming
  * stay on the satellite, because they are physical and stop in particular has
  * to work with no internet. These settle the record, which is a desk job and
  * therefore belongs somewhere that works when the yard's network does not.
+ * The sentence under them names them, because it sits in a pane that also
+ * holds Send to Rover, and "nothing here reaches the rover" read as if that
+ * did not either.
  */
 
 type Action = 'complete' | 'cancel' | 'resolve' | 'feedback';
@@ -188,8 +192,8 @@ export function MissionActions({
           would use it as an emergency control, and it is not one. */}
       {!settled && (
         <p className="text-[11px] text-muted-foreground">
-          These record what happened. Nothing here reaches the rover, so use the
-          yard&apos;s own stop button if it is still moving.
+          Mark complete and Cancel only change the record. Neither stops the rover,
+          so use the yard&apos;s own stop button if it is still moving.
         </p>
       )}
 

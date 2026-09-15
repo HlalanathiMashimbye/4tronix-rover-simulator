@@ -70,6 +70,12 @@ export function MissionDetail({
         <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{mission.id}</p>
       </header>
 
+      {/* Sending first: it is what an operator opens a queued mission to do,
+          and the record actions below it are what they do afterwards. */}
+      {mode === 'auto' && (
+        <AutomaticDispatch mission={mission} yardId={yardId} />
+      )}
+
       <MissionActions
         mission={mission}
         yardId={yardId}
@@ -77,10 +83,6 @@ export function MissionDetail({
         mode={mode}
         onResult={onResult}
       />
-
-      {mode === 'auto' && (
-        <AutomaticDispatch mission={mission} yardId={yardId} />
-      )}
 
       <MissionRuns
         missionId={mission.id}

@@ -132,16 +132,41 @@ it('does not reach for the yard on opening when the browser would have to ask fi
 
   expect(fetchMock).not.toHaveBeenCalled();
   expect(chip('Camera')).toHaveTextContent('Not checked');
+  // The operator is offered the read that will ask, instead.
+  expect(screen.getByRole('button', { name: 'Check yard' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeDisabled();
 });
 
-it('starts reading once Send to Rover has reached the yard', async () => {
+it('locks Send to Rover when a check goes red, and unlocks it when the yard recovers', async () => {
+  global.fetch = jest.fn()
+    .mockResolvedValueOnce(answer(ready))
+    .mockResolvedValueOnce(answer(cameraDown))
+    .mockResolvedValue(answer(ready));
+  const send = () => screen.getByRole('button', { name: 'Send to Rover' });
+
+  render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+  await settle();
+  expect(send()).toBeEnabled();
+  // Nothing to check by hand once the checks run on their own.
+  expect(screen.queryByRole('button', { name: 'Check yard' })).not.toBeInTheDocument();
+
+  await wait(15_000);
+  expect(send()).toBeDisabled();
+  expect(screen.getByTestId('yard-not-ready')).toHaveTextContent('Camera');
+
+  await wait(15_000);
+  expect(send()).toBeEnabled();
+  expect(screen.queryByTestId('yard-not-ready')).not.toBeInTheDocument();
+});
+
+it('starts reading once Check yard has reached the yard', async () => {
   permission.state = 'prompt';
   const fetchMock = jest.fn().mockResolvedValue(answer(cameraDown));
   global.fetch = fetchMock;
 
   render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
   await settle();
-  fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check yard' }));
   await settle();
   expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -161,8 +186,11 @@ it('stops reading when the mission is closed', async () => {
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
 
-it('marks the checks as unanswered when the yard stops answering', async () => {
-  const fetchMock = jest.fn().mockResolvedValueOnce(answer(ready)).mockRejectedValue(new TypeError('Failed to fetch'));
+it('says the yard went offline without anyone pressing anything, and clears it when it returns', async () => {
+  const fetchMock = jest.fn()
+    .mockResolvedValueOnce(answer(ready))
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    .mockResolvedValue(answer(ready));
   global.fetch = fetchMock;
 
   render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
@@ -170,6 +198,10 @@ it('marks the checks as unanswered when the yard stops answering', async () => {
   await wait(15_000);
 
   expect(chip('Camera')).toHaveTextContent('No answer');
-  // A background read reports; only pressing Send to Rover raises an alert.
+  expect(screen.getByRole('alert')).toHaveTextContent('Yard offline');
+  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeDisabled();
+
+  await wait(15_000);
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeEnabled();
 });

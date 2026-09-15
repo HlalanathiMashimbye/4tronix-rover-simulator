@@ -7,10 +7,11 @@
  * Mission Control on the deployed site is an https page, and the satellite is
  * an http address on the yard network. Whether the browser lets one call the
  * other depends on the browser, so these run on an https page: the operator
- * testing in Safari was told the yard was offline while it was fine.
+ * testing in Safari was told the yard was offline while it was fine, and only
+ * after pressing Send to Rover.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
@@ -30,9 +31,8 @@ afterEach(() => {
   delete (navigator as { permissions?: unknown }).permissions;
 });
 
-function sendToRover() {
+function open() {
   render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
 }
 
 it('runs on an https page', () => {
@@ -40,21 +40,27 @@ it('runs on an https page', () => {
   expect(window.location.protocol).toBe('https:');
 });
 
-it('points a browser with no local network permission at Chrome or Edge, not at the yard', async () => {
-  // Safari: no permission to ask for, so the request is simply blocked.
+it('tells a browser with no local network permission to use Chrome or Edge as soon as the mission opens', async () => {
+  // Safari: no permission to ask for, so a request would simply be blocked.
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
     value: { query: jest.fn().mockRejectedValue(new TypeError('unknown permission')) },
   });
-  global.fetch = jest.fn().mockRejectedValue(new TypeError('Load failed'));
+  const fetchMock = jest.fn().mockRejectedValue(new TypeError('Load failed'));
+  global.fetch = fetchMock;
 
-  sendToRover();
+  open();
 
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent('This browser cannot reach the yard');
   expect(alert).toHaveTextContent('Chrome or Edge');
   expect(alert).not.toHaveTextContent('Yard offline');
   expect(screen.getByRole('button', { name: 'Copy for the run station' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeDisabled();
+  // Neither trying again nor checking can change which browser this is.
+  expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Check yard' })).not.toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 it('still calls the yard offline when the browser was allowed to reach it', async () => {
@@ -65,7 +71,8 @@ it('still calls the yard offline when the browser was allowed to reach it', asyn
   });
   global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
-  sendToRover();
+  open();
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Yard offline');
+  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeDisabled();
 });
