@@ -278,7 +278,7 @@ export function MissionWorkspace() {
   }, [showEmailPrompt]);
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
       <SplitPane
         ariaLabel="Resize build and simulator panels"
         defaultSplit={SPLIT_DEFAULT}

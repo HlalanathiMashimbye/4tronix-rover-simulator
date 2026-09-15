@@ -27,11 +27,6 @@ interface SplitPaneProps {
   /** Describes what is being resized, for screen readers. */
   ariaLabel: string;
   /**
-   * Height of the grid. Defaults to the Create Mission viewport calculation;
-   * pass '100%' when the split already sits inside a sized flex parent.
-   */
-  height?: string;
-  /**
    * Whether the divider can be moved. Default true.
    *
    * The mission VIEW sets this false and takes a fixed 70/30. Letting a
@@ -51,7 +46,6 @@ export function SplitPane({
   minSplit = 35,
   maxSplit = 75,
   ariaLabel,
-  height,
   resizable = true,
 }: SplitPaneProps) {
   const [panelSplit, setPanelSplit] = useState(defaultSplit);
@@ -74,12 +68,6 @@ export function SplitPane({
     el.style.setProperty('--workspace-left', `${panelSplit}fr`);
     el.style.setProperty('--workspace-right', `${100 - panelSplit}fr`);
   }, [panelSplit]);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || !height) return;
-    el.style.setProperty('--workspace-height', height);
-  }, [height]);
 
   // Where the pointer went down, and what the split was at that moment.
   // The drag is applied as a delta from these rather than as an absolute
