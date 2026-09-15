@@ -124,12 +124,10 @@ function YardQueue({
    */
   const [runsFor, setRunsFor] = useState<{ id: string; runs: MissionRun[] } | null>(null);
   /**
-   * Manual until something is actually doing this work. It will be derived
-   * from whether the yard's satellite is online and syncing, because that is
-   * what decides whether the automatic path can run at all; the switch is a
-   * stand-in for that signal, not a setting anybody should want to keep.
+   * Always automatic: the operator uses the automatic dispatch workflow.
+   * Manual mode has been removed to simplify the UI.
    */
-  const [mode, setMode] = useState<ConsoleMode>('manual');
+  const mode: ConsoleMode = 'auto';
   const [automaticMissionId, setAutomaticMissionId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   // Read in an effect, not in useState's initialiser: this component renders
@@ -527,23 +525,6 @@ function YardQueue({
         {/* A switch rather than a hidden capability, so an operator can see
             what the platform is doing for them and take it back when the yard
             is offline and it plainly is not. */}
-        <span className="inline-flex rounded-lg border border-border/60 bg-background/60 p-px text-[11px] font-semibold">
-          {(['manual', 'auto'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setMode(option)}
-              aria-pressed={mode === option}
-              className={`rounded-md px-2.5 py-1 transition-colors ${
-                mode === option
-                  ? 'bg-gradient-mars text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {option === 'manual' ? 'I do it' : 'Automatic'}
-            </button>
-          ))}
-        </span>
       </div>
 
       {/* A filter that matches nothing is not an empty yard, and saying so

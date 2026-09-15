@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
@@ -52,14 +52,20 @@ describe('Automatic Route dispatch', () => {
   });
 
   it('navigates with the mission and yard only after all checks pass', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => status() });
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(status()) });
     global.fetch = fetchMock;
     const assign = jest.fn();
 
     render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
     fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
 
-    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('status')).toHaveTextContent('Starting mission');
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    });
+
+    expect(assign).toHaveBeenCalledTimes(1);
     const target = new URL(assign.mock.calls[0][0]);
     expect(target.pathname).toBe('/run/');
     expect(target.searchParams.get('handoff')).toBe('automatic');
@@ -70,5 +76,5 @@ describe('Automatic Route dispatch', () => {
       'http://curiosity.local:3001/api/status',
       { cache: 'no-store' },
     );
-  });
+  }, 10000);
 });

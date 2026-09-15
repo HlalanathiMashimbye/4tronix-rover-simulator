@@ -156,6 +156,7 @@
         }
         .run-code::placeholder { color: var(--text-faint); }
         .run-code:focus { outline: none; border-color: var(--signal-edge); box-shadow: 0 0 0 3px var(--signal-weak); }
+        .run-code:readonly { background: var(--surface); color: var(--text-faint); cursor: default; }
 
         /* ---- The spine ---------------------------------------------------
            A numbered rail down the right column. The number is not decoration:
@@ -322,14 +323,14 @@
                     <div class="meta-field">
                         <span class="meta-label">Mission name</span>
                         <div class="meta-row">
-                            <input class="meta-value name" id="missionName" type="text" aria-label="Mission name" placeholder="Lunar Mapper" autocomplete="off">
+                            <span class="meta-value name" id="missionName">-</span>
                             <button class="btn copy-compact" type="button" data-copy="missionName">Copy</button>
                         </div>
                     </div>
                     <div class="meta-field">
                         <span class="meta-label">Mission ID</span>
                         <div class="meta-row">
-                            <input class="meta-value" id="missionId" type="text" aria-label="Mission ID" placeholder="from Mission Control" autocomplete="off" spellcheck="false">
+                            <span class="meta-value" id="missionId">-</span>
                             <button class="btn copy-compact" type="button" data-copy="missionId">Copy</button>
                         </div>
                     </div>
@@ -346,7 +347,7 @@
                     <span class="meta-label" style="margin:0;">Python</span>
                     <span class="code-hint">Read it before you send. This is exactly what the rover runs.</span>
                 </div>
-                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Paste mission above."></textarea>
+                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Paste mission above." readonly></textarea>
             </section>
 
             <div class="spine">
@@ -451,10 +452,11 @@
                 const parsed = JSON.parse(text);
                 // Mission envelope from Mission Control carries name, id, and code.
                 if (typeof parsed.code === 'string') {
-                    if (parsed.missionName) missionName.value = parsed.missionName;
-                    if (parsed.missionId)   missionId.value   = parsed.missionId;
+                    if (parsed.missionName) setMetaValue(missionName, parsed.missionName);
+                    if (parsed.missionId)   setMetaValue(missionId, parsed.missionId);
                     code.value = parsed.code;
                     updateRunIdentity();
+                    paintYouTube();
                     flash($('importMsg'), 'Mission imported', 'ok');
                     return;
                 }
@@ -470,8 +472,8 @@
         code.value = text;
         const named = text.match(HEADER_NAME);
         const identified = text.match(HEADER_ID);
-        if (named) missionName.value = named[1];
-        if (identified) missionId.value = identified[1];
+        if (named) setMetaValue(missionName, named[1]);
+        if (identified) setMetaValue(missionId, identified[1]);
         // Always, not only when an id was found: this is what fills the run id
         // and the upload description, and when there is no id it is what says
         // so in the field rather than leaving a stale one from a previous run.
@@ -517,9 +519,9 @@
 
     // A paste anywhere on the page is an import, so the operator who has just
     // copied in Mission Control can switch tab and paste without aiming at
-    // anything. Fields the operator edits by hand are left alone - pasting an
-    // id into the id box should put it in the id box.
-    const TYPED_FIELDS = ['code', 'missionName', 'missionId', 'ytDesc'];
+    // anything. Fields the operator edits by hand are left alone. missionName
+    // and missionId are read-only, so they are not in this list.
+    const TYPED_FIELDS = ['code', 'ytDesc'];
     document.addEventListener('paste', (e) => {
         if (e.target && TYPED_FIELDS.includes(e.target.id)) return;
         const text = ((e.clipboardData || window.clipboardData) || {}).getData
@@ -551,8 +553,8 @@
         if (handoff.get('yardId') !== YARD_ID) {
             flash($('runMsg'), 'This mission belongs to a different yard.', 'bad');
         } else if (handoff.get('code')) {
-            missionId.value = handoff.get('missionId') || '';
-            missionName.value = handoff.get('missionName') || '';
+            setMetaValue(missionId, handoff.get('missionId') || '');
+            setMetaValue(missionName, handoff.get('missionName') || '');
             code.value = handoff.get('code') || '';
             updateRunIdentity();
             automaticRunRequested = true;
@@ -570,6 +572,13 @@
     function metaValue(element) {
         return ('value' in element ? element.value : element.textContent).trim();
     }
+    function setMetaValue(element, value) {
+        if ('value' in element) {
+            element.value = value;
+        } else {
+            element.textContent = value;
+        }
+    }
 
     // One run per yard, so the mission and the yard together identify the run
     // exactly - and that pair is the start of what recording_control names the
@@ -581,8 +590,7 @@
         runId.textContent = id ? `${id}__${YARD_ID}` : 'Waiting for the mission ID';
         paintYouTube();
     }
-    missionId.addEventListener('input', updateRunIdentity);
-    missionName.addEventListener('input', paintYouTube);
+    // missionId and missionName are now read-only, so no input listeners needed
 
     // The Copy buttons had no handler at all: three buttons that looked live
     // and did nothing.
