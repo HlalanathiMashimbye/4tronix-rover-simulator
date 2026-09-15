@@ -63,6 +63,8 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     import rover_discovery
     monkeypatch.setattr(rover_discovery, '_health', lambda url, timeout=None: None)
     monkeypatch.setattr(rover_discovery, '_port_open', lambda *a, **k: False)
+    # Same five-second .local lookup as ROVER_URL above, once per rover found.
+    monkeypatch.setattr(rover_discovery, '_resolve', lambda host: host)
 
     yield
     camera_state.invalidate()
