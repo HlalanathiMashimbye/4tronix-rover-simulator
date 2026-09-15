@@ -101,6 +101,44 @@ class TestRecordingACopyPasteRun:
         assert web_server._recording_name('../../etc/passwd') == 'etc-passwd'
         assert web_server._recording_name('   ') == ''
 
+    def test_a_leading_dash_goes_the_same_way_the_watcher_expects(self):
+        # The watcher reduces the rover's mission id with this same rule. The
+        # two disagreed once, and a recording ran for 126 minutes.
+        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == 'BQwFDUWvyhpbQ4ZI8het'
+        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == \
+            recording_control.recording_key('-BQwFDUWvyhpbQ4ZI8het')
+
+    def test_the_queue_proxy_tells_a_recording_which_dispatch_is_its_own(
+            self, client, monkeypatch):
+        """The watcher stops a recording when its own dispatch finishes, so the
+        rover's instruction id has to reach recording_control. This proxy is the
+        only place that sees it."""
+        from satellite_identity import yard_id
+
+        monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
+        for table in ('_writers', '_paths', '_started', '_dispatches'):
+            monkeypatch.setattr(recording_control, table, {})
+        recording_control.start_recording('BQwFDUWvyhpbQ4ZI8het', yard_id())
+
+        class Reply:
+            status_code = 200
+
+            def json(self):
+                return {'status': 'ok', 'instructions': [{
+                    'id': 'run-7', 'cmd': 'run_python',
+                    'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het', 'code': 'rover.stop()'},
+                }]}
+
+        monkeypatch.setattr(web_server.requests, 'post', lambda *a, **k: Reply())
+
+        resp = client.post('/api/queue/add', json=[{
+            'cmd': 'run_python',
+            'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het', 'code': 'rover.stop()'},
+        }])
+
+        assert resp.status_code == 200
+        assert recording_control.dispatches_for('BQwFDUWvyhpbQ4ZI8het', yard_id()) == {'run-7'}
+
     def test_start_refuses_without_a_name(self, client):
         assert client.post('/api/recording/start', json={}).status_code == 400
 

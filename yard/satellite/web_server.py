@@ -55,14 +55,34 @@ def _save_config(cfg):
 def _recording_name(raw):
     """An operator-supplied name reduced to something safe to put in a path.
 
-    Everything outside letters, digits, dash and underscore becomes a dash, so
-    a name typed at an event ("Thabo's square!") cannot walk out of the
-    recordings directory or collide with the mission__yard naming the queue
-    flow uses.
+    The rule is recording_control.recording_key. It lives there because the
+    watcher must reduce the mission id the rover reports in exactly the same
+    way to find the recording again; see that function for what happened when
+    the two sides disagreed.
     """
-    import re
-    name = re.sub(r'[^A-Za-z0-9_-]+', '-', (raw or '').strip()).strip('-')
-    return name[:60]
+    from recording_control import recording_key
+    return recording_key(raw)
+
+
+def _note_recorded_dispatches(body):
+    """Tell recording_control which rover instructions belong to which recording.
+
+    The rover gives each instruction an id, and this proxy is the only place
+    that sees that id next to the mission it was sent for. Best effort: the
+    rover has already accepted the dispatch, so nothing here may turn it into
+    an error.
+    """
+    try:
+        from recording_control import note_dispatch, recording_key
+        from satellite_identity import yard_id
+
+        yard = yard_id()
+        for instruction in (body or {}).get('instructions') or []:
+            params = instruction.get('params') or {}
+            if params.get('mission_id') and instruction.get('id'):
+                note_dispatch(recording_key(params['mission_id']), yard, instruction['id'])
+    except Exception as e:
+        logging.getLogger(__name__).warning('Could not note a dispatch for its recording: %s', e)
 
 
 def _local_ip():
@@ -319,7 +339,10 @@ def api_queue_add():
             json=data,
             timeout=ROVER_TIMEOUT
         )
-        return jsonify(resp.json()), resp.status_code
+        body = resp.json()
+        if resp.status_code < 400:
+            _note_recorded_dispatches(body)
+        return jsonify(body), resp.status_code
     except requests.exceptions.ConnectionError:
         return jsonify({'error': 'Cannot connect to rover server'}), 503
     except requests.exceptions.Timeout:
