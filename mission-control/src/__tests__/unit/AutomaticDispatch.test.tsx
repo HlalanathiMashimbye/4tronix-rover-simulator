@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
@@ -59,7 +59,11 @@ describe('Automatic Route dispatch', () => {
     render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
     fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
 
-    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('status')).toHaveTextContent('Starting mission');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    });
+    expect(assign).toHaveBeenCalledTimes(1);
     const target = new URL(assign.mock.calls[0][0]);
     expect(target.pathname).toBe('/run/');
     expect(target.searchParams.get('handoff')).toBe('automatic');

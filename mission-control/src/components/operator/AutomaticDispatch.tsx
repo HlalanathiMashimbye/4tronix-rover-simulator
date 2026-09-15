@@ -173,6 +173,7 @@ export function AutomaticDispatch({
             type="button"
             onClick={copyCode}
             disabled={!mission.code}
+            aria-label={copied ? 'Copied' : 'Copy mission code'}
             title={copied ? 'Copied!' : 'Copy mission code for manual workflow'}
             className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-background/60 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
           >
