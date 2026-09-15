@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
+import { ArrowLeft, Code2, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
@@ -8,7 +8,7 @@ import { MissionRuns } from '@/components/operator/MissionRuns';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
-import { yardLabelOf, findYardIn, type Yard } from '@/core/domain/entities/Yard';
+import type { Yard } from '@/core/domain/entities/Yard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Rocket, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -77,12 +77,6 @@ export function AutomaticDispatch({
   const [showRocketFeedback, setShowRocketFeedback] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    if (startImmediately) {
-      void checkAndSend();
-    }
-  }, [startImmediately]);
-
   async function copyCode() {
     const envelope = missionClipboardText(mission);
     try {
@@ -95,7 +89,7 @@ export function AutomaticDispatch({
     }
   }
 
-  async function checkAndSend() {
+  const checkAndSend = useCallback(async () => {
     setChecking(true);
     setError(null);
     setFailures([]);
@@ -147,7 +141,17 @@ export function AutomaticDispatch({
     } finally {
       setChecking(false);
     }
-  }
+  }, [yardId, mission, navigate]);
+
+  useEffect(() => {
+    if (!startImmediately) return;
+
+    const timer = window.setTimeout(() => {
+      void checkAndSend();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [checkAndSend, startImmediately]);
 
   return (
     <section className="rounded-2xl border border-primary/30 bg-primary/5 p-3" aria-labelledby="automatic-dispatch-title">
