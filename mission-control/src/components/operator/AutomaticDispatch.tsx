@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Rocket, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -60,12 +60,10 @@ function statusUrl(consoleUrl: string): string {
 export function AutomaticDispatch({
   mission,
   yardId,
-  startImmediately = false,
   navigate = (url) => window.location.assign(url),
 }: {
   mission: QueueMission;
   yardId: string;
-  startImmediately?: boolean;
   navigate?: (url: string) => void;
 }) {
   const [checking, setChecking] = useState(false);
@@ -76,12 +74,6 @@ export function AutomaticDispatch({
   const [dismissed, setDismissed] = useState(false);
   const [showRocketFeedback, setShowRocketFeedback] = useState(false);
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (startImmediately) {
-      void checkAndSend();
-    }
-  }, [startImmediately]);
 
   async function copyCode() {
     const envelope = missionClipboardText(mission);

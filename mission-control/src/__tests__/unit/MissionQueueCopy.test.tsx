@@ -58,22 +58,56 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-describe('copying a mission to paste into the yard', () => {
-  it('shows automatic dispatch in the queue and manual copy after opening', async () => {
+/** Each queued mission is one row, and the row is the way into it. */
+async function openMission() {
+  fireEvent.click(await screen.findByRole('button', { name: /rock lover/i }));
+}
+
+describe('a queued mission', () => {
+  it('opens from its row, which carries no buttons of its own', async () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
-    expect(await screen.findByRole('button', { name: /send to rover/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /^open$/i }));
+    const row = await screen.findByRole('button', { name: /rock lover/i });
+    // The row had its own Send to Rover and Open buttons, so one mission showed
+    // two Send to Rover buttons: the row's and the mission pane's.
+    expect(screen.queryByRole('button', { name: /send to rover/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^open$/i })).not.toBeInTheDocument();
 
-    expect(await screen.findByRole('button', { name: /^copy mission code$/i })).toBeInTheDocument();
+    fireEvent.click(row);
+
+    expect(await screen.findAllByRole('button', { name: /send to rover/i })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /^copy mission code$/i })).toBeInTheDocument();
+    expect(row).toHaveAttribute('aria-current', 'true');
   });
+
+  it('opening a mission does not start sending it', async () => {
+    // The row's Send to Rover used to open the pane AND start the yard checks.
+    // Opening is now only opening: nothing is asked of the satellite until the
+    // operator presses the pane's button.
+    const fetchSpy = jest.fn();
+    const originalFetch = global.fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    try {
+      render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+      await openMission();
+      await screen.findByRole('button', { name: /send to rover/i });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe('copying a mission to paste into the yard', () => {
 
   it('puts the mission Python on the clipboard', async () => {
     const writeText = jest.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
-    fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
+    await openMission();
     fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
     // waitFor, not a bare assertion: the copy is async and sets state after it
@@ -91,7 +125,7 @@ describe('copying a mission to paste into the yard', () => {
     Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
-    fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
+    await openMission();
     fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /^copied$/i })).toBeInTheDocument());
@@ -106,7 +140,7 @@ describe('copying a mission to paste into the yard', () => {
     const prompt = jest.spyOn(window, 'prompt').mockReturnValue(null);
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
-    fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
+    await openMission();
     fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
     await waitFor(() =>
@@ -123,7 +157,7 @@ describe('copying a mission to paste into the yard', () => {
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
-    fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
+    await openMission();
     expect(await screen.findByRole('button', { name: /^copy mission code$/i })).toBeDisabled();
   });
 });

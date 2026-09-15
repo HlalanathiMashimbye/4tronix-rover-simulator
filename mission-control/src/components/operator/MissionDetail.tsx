@@ -27,7 +27,6 @@ export function MissionDetail({
   yardId,
   isAdmin,
   mode,
-  startAutomatic,
   onResult,
   onBack,
 }: {
@@ -37,7 +36,6 @@ export function MissionDetail({
   yardId: string;
   isAdmin: boolean;
   mode: ConsoleMode;
-  startAutomatic?: boolean;
   onResult: (message: string) => void;
   /** Only rendered on small screens, where the two panes take turns. */
   onBack?: () => void;
@@ -81,7 +79,7 @@ export function MissionDetail({
       />
 
       {mode === 'auto' && (
-        <AutomaticDispatch mission={mission} yardId={yardId} startImmediately={startAutomatic} />
+        <AutomaticDispatch mission={mission} yardId={yardId} />
       )}
 
       <MissionRuns
