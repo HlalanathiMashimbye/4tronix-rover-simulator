@@ -99,17 +99,16 @@
            align-items: start is the half that fixes the length: without it
            every column is as tall as the tallest, and the grid is as tall as
            the space left over. */
-        /* One column, the width of a thing you read.
+        /* One column on a phone, two independent stacks on a wide screen.
 
-           Four cards in a grid on a full-height page read as a dashboard with
-           its data missing: airy boxes at the top, a void underneath, and no
-           amount of span arithmetic fixed that because the arithmetic was
-           never the problem. A settings page is a list of settings. One
-           column, sections down it, and the space either side is margin
-           instead of a hole.
-
-           720px because that is about as wide as the longest row wants - the
-           rover's driver line, its address and Change - and no wider. */
+           The grid this replaced put cards of very different heights in shared
+           rows, so a short card left a void beside a tall one. The single
+           720px column that followed fixed the voids but made a 1440x900
+           screen 1521px of scrolling with most of its width unused. Two stacks
+           avoid both: each column is only as tall as what is in it, and
+           nothing lines up across the gap, so no card can leave a hole next
+           to another. Recordings share a stack with the cleanup that governs
+           them; health, tuning and quick actions share the other. */
         /* Centred, not just capped. Left-aligned at 720px on a wide screen the
            empty space is all on one side, which reads as a hole rather than as
            margin - the exact thing narrowing it was meant to fix. */
@@ -124,7 +123,20 @@
             display: flex; flex-direction: column;
             gap: 0.85rem;
         }
-        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; }
+        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+        /* 1100px because the health rows need about 520px each to keep the
+           rover's driver line, address and Change on one line. */
+        @media (min-width: 1100px) {
+            .settings-page { max-width: 1180px; }
+            .settings-grid {
+                display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                align-items: start;
+            }
+            /* A session's worth of recordings made its stack 2000px beside a
+               778px one, reopening the gap the two stacks exist to avoid. The
+               list scrolls inside its card instead of stretching the page. */
+            #recordingsList { max-height: 26rem; overflow-y: auto; overscroll-behavior: contain; }
+        }
 
         .page-head { flex: 0 0 auto; margin-bottom: 0.2rem; }
         /* The page title, three card headings and a field label all sat within
@@ -136,9 +148,7 @@
         .rover-url code { color: var(--text); }
         .link-btn { background: none; border: none; color: var(--primary); font-size: var(--fs-sm); cursor: pointer; padding: 0 0.25rem; }
         .link-btn:hover { text-decoration: underline; }
-        .url-editor { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
         .url-editor[hidden] { display: none; }
-        .url-editor input { flex: 1 1 260px; font-family: var(--mono); }
         .url-error { color: var(--bad); font-size: var(--fs-sm); line-height: 1.45; display: block; margin-top: 0.4rem; }
         /* The address lives in the Rover card now, not the page header. When
            the rover is wrong, the Rover card is where you look - having the
@@ -148,22 +158,30 @@
         .rover-addr code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text); }
         .rover-addr .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
         .url-editor { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
-        .sim-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .found-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .url-manual { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
-        .url-manual input { flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: var(--fs-xs); }
-        /* A found rover is a button, because picking one is the point. */
-        .found { display: flex; flex-direction: column; gap: 0.35rem; }
-        .found button {
-            appearance: none; cursor: pointer; text-align: left;
-            display: flex; align-items: center; gap: 0.5rem;
-            padding: 0.5rem 0.65rem; border: 1px solid var(--signal-edge);
-            border-radius: 9px; background: var(--signal-weak); color: var(--text);
-            font: inherit; font-size: var(--fs-xs);
+        .picker-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+        .picker-head .camera-msg { flex: 1 1 12rem; margin-top: 0; }
+        /* A list on a phone, cards side by side once two fit. Every row is a
+           button that looks like one: a found rover that saved on tap used to
+           read as a label. */
+        .rover-list {
+            list-style: none; margin: 0; padding: 0;
+            display: grid; gap: 0.4rem;
+            grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
         }
-        .found button:hover { background: color-mix(in oklab, var(--signal) 26%, transparent); }
-        .found .found-url { font-family: var(--mono); }
-        .found .found-meta { margin-left: auto; color: var(--text-dim); font-size: var(--fs-2xs); }
+        .rover-pick {
+            appearance: none; cursor: pointer; width: 100%; height: 100%; text-align: left;
+            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.6rem; align-items: center;
+            padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 9px;
+            background: var(--surface-2); color: var(--text); font: inherit;
+        }
+        .rover-pick:hover, .rover-pick.in-use { border-color: var(--signal-edge); background: var(--signal-weak); }
+        .pick-name { font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+        .pick-meta { grid-column: 1; color: var(--text-dim); font-size: var(--fs-2xs); }
+        .pick-state { grid-column: 2; grid-row: 1 / span 2; color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 600; }
+        .rover-pick.in-use .pick-state { color: var(--ok); }
+        .url-manual summary { cursor: pointer; width: fit-content; color: var(--primary); font-size: var(--fs-sm); }
+        .url-manual-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.45rem; }
+        .url-manual-row input { flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: var(--fs-xs); }
         /* A picked setting looks picked. Three named buttons rather than a
            box you type 1280x960 into: nobody operating a yard should have to
            know what that means, only that it is sharper and costs more. */
@@ -413,6 +431,7 @@
 
 
         <div class="settings-grid">
+            <div class="settings-col">
             <!-- One instrument, three rows.
 
                  This was three cards. They held very different amounts - the
@@ -448,28 +467,31 @@
                 <!-- Full width beneath its row, so opening it grows this module and
                      nothing else. Inside a status tile it made the tile burst. -->
                 <div class="hpanel" id="url-editor" hidden>
-                    <!-- First, because it is the one answer that is always
-                         right. The simulator runs on this satellite, so its
-                         address never changes and never has to be found -
-                         unlike the rover, which moves between networks and is
-                         the thing people mistype under pressure. -->
-                    <div class="sim-row">
-                        <button class="btn primary" id="use-sim-btn" type="button">Switch to the simulator</button>
-                        <span class="hhint" id="sim-hint"></span>
+                    <!-- One list to pick from. This was a simulator button, a
+                         search button, the search's results and an address box
+                         stacked on top of each other, which read as four
+                         settings rather than one choice - with the simulator,
+                         the thing a live yard least wants, as the biggest
+                         button. The simulator is a row like any rover now: the
+                         one that is always there, so it goes last. -->
+                    <div class="picker-head">
+                        <span class="camera-msg" id="findMsg" role="status" aria-live="polite"></span>
+                        <button class="btn quiet" id="findRoverBtn" type="button">Search again</button>
                     </div>
-                    <div class="found-row">
-                        <button class="btn primary" id="findRoverBtn" type="button">Find rover</button>
-                        <span class="hhint">Looks for anything answering as a rover on this network.</span>
-                        <span class="camera-msg" id="findMsg" style="margin-top:0;"></span>
-                    </div>
-                    <div id="foundList"></div>
-                    <div class="url-manual">
-                        <input type="text" id="url-input" spellcheck="false"
-                               aria-label="Rover address" placeholder="curiosity.local">
-                        <button class="btn" id="save-url-btn" type="button">Use this</button>
-                        <button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button>
-                    </div>
+                    <ul class="rover-list" id="roverList" aria-label="Rovers"></ul>
+                    <!-- Behind a toggle rather than gone: searching covers what
+                         typing was for, but an address can still be set before
+                         the rover is switched on. -->
+                    <details class="url-manual" id="url-manual">
+                        <summary>Enter an address instead</summary>
+                        <div class="url-manual-row">
+                            <input type="text" id="url-input" spellcheck="false"
+                                   aria-label="Rover address" placeholder="curiosity.local">
+                            <button class="btn" id="save-url-btn" type="button">Use this</button>
+                        </div>
+                    </details>
                     <span class="url-error" id="url-error"></span>
+                    <div><button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button></div>
                 </div>
 
                 <div class="hrow" id="card-camera">
@@ -493,8 +515,6 @@
                 </div>
             </div>
 
-
-            <div class="settings-col">
                 <div class="card" id="tunablesSection">
                     <div class="card-head-row">
                         <h2 class="card-title" style="margin-bottom:0;">Console and camera</h2>
@@ -521,9 +541,41 @@
                         <span class="camera-msg" id="tunMsg" style="margin-top:0;"></span>
                     </div>
                 </div>
+
+                <div class="card">
+                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h2>
+                    <div class="acts">
+                        <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
+                        <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
+                    </div>
+                </div>
+
             </div>
 
             <div class="settings-col">
+                <div class="card" id="recordingsSection">
+                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h2>
+                    <div id="diskBar" class="disk-bar-wrap" hidden>
+                        <div class="disk-bar"><div class="disk-bar-fill" id="diskBarFill"></div></div>
+                        <span class="disk-label" id="diskLabel"></span>
+                    </div>
+                    <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
+                    <div class="rec-toolbar" id="recToolbar" hidden>
+                        <label><input type="checkbox" id="recSelectAll"> Select all</label>
+                        <span class="spacer"></span>
+                        <select id="recSort" aria-label="Sort recordings">
+                            <option value="newest">Newest first</option>
+                            <option value="oldest">Oldest first</option>
+                        </select>
+                    </div>
+                    <div id="recordingsList"><span class="skel"></span></div>
+                    <div class="rec-delete-bar" id="recDeleteBar" hidden>
+                        <button class="btn danger-solid" id="recDeleteBtn" type="button">Delete selected</button>
+                        <span class="rec-delete-count" id="recDeleteCount"></span>
+                    </div>
+                    <div id="recResult" hidden></div>
+                </div>
+
                 <div class="card" id="cleanupSection">
                     <div class="card-head-row">
                         <h2 class="card-title" style="margin-bottom:0;">Storage cleanup</h2>
@@ -562,43 +614,6 @@
                         <span class="camera-msg" id="cleanupMsg" style="margin-top:0;"></span>
                     </div>
                 </div>
-            </div>
-
-            <div class="settings-col">
-                <div class="card">
-                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h2>
-                    <div class="acts">
-                        <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
-                        <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="settings-col">
-                <div class="card" id="recordingsSection">
-                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h2>
-                    <div id="diskBar" class="disk-bar-wrap" hidden>
-                        <div class="disk-bar"><div class="disk-bar-fill" id="diskBarFill"></div></div>
-                        <span class="disk-label" id="diskLabel"></span>
-                    </div>
-                    <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
-                    <div class="rec-toolbar" id="recToolbar" hidden>
-                        <label><input type="checkbox" id="recSelectAll"> Select all</label>
-                        <span class="spacer"></span>
-                        <select id="recSort" aria-label="Sort recordings">
-                            <option value="newest">Newest first</option>
-                            <option value="oldest">Oldest first</option>
-                        </select>
-                    </div>
-                    <div id="recordingsList"><span class="skel"></span></div>
-                    <div class="rec-delete-bar" id="recDeleteBar" hidden>
-                        <button class="btn danger-solid" id="recDeleteBtn" type="button">Delete selected</button>
-                        <span class="rec-delete-count" id="recDeleteCount"></span>
-                    </div>
-                    <div id="recResult" hidden></div>
-                </div>
-
             </div>
         </div>
 
@@ -1234,62 +1249,118 @@
             location.reload();
         });
 
+        // ---- Picking the rover ---------------------------------------
+        // Opening the editor searches straight away, so the normal path is
+        // picking a rover that demonstrably answered rather than typing three
+        // things correctly from memory - which is what went wrong at a demo.
+        const SIM_URL = 'http://localhost:8523';
+        const roverList = document.getElementById('roverList');
+        const findMsg = document.getElementById('findMsg');
+        const findBtn = document.getElementById('findRoverBtn');
+        const urlManual = document.getElementById('url-manual');
+        let searchSeq = 0;
+
+        function currentRoverUrl() {
+            return document.getElementById('rover-url').textContent.trim();
+        }
+
+        function isLocal(url) {
+            // Host, not substring: an address that merely mentions localhost
+            // somewhere is not the simulator.
+            try {
+                const host = new URL(url).hostname;
+                return host === 'localhost' || host === '127.0.0.1';
+            } catch (e) { return false; }
+        }
+
+        function shortAddress(url) {
+            return url.replace(/^https?:\/\//, '').replace(/:8523$/, '');
+        }
+
+        function pickRow(url, name, meta, inUse) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'rover-pick' + (inUse ? ' in-use' : '');
+            if (inUse) btn.setAttribute('aria-current', 'true');
+            [['pick-name', name], ['pick-meta', meta], ['pick-state', inUse ? 'In use' : 'Use']]
+                .forEach(([cls, text]) => {
+                    const span = document.createElement('span');
+                    span.className = cls;
+                    span.textContent = text;
+                    btn.appendChild(span);
+                });
+            btn.addEventListener('click', () => {
+                if (inUse) { urlEditor.hidden = true; return; }
+                saveUrl(url, false);
+            });
+            const li = document.createElement('li');
+            li.appendChild(btn);
+            return li;
+        }
+
+        function renderRovers(rovers) {
+            const rows = rovers
+                .slice()
+                .sort((a, b) => Number(!!b.hardware) - Number(!!a.hardware))
+                .map((r) => {
+                    const others = (r.addresses || []).filter((u) => u !== r.url).map(shortAddress);
+                    const meta = [r.hardware ? 'Real rover' : 'Simulator', ...others].join(' \u00b7 ');
+                    return pickRow(r.url, shortAddress(r.url), meta, !!r.current);
+                });
+            rows.push(pickRow(SIM_URL, 'Simulator', 'On this satellite. Nothing moves.', isLocal(currentRoverUrl())));
+            roverList.replaceChildren(...rows);
+        }
+
+        async function findRovers() {
+            // Reopening the editor starts a new search; a slower earlier one
+            // must not land on top of it.
+            const seq = ++searchSeq;
+            findBtn.disabled = true;
+            findMsg.dataset.tone = '';
+            findMsg.textContent = 'Looking for rovers\u2026';
+            renderRovers([]);
+            try {
+                const d = await (await fetch('/api/rover/discover')).json();
+                if (seq !== searchSeq) return;
+                // This satellite's own simulator already has its row.
+                const rovers = (d.rovers || []).filter((r) => !isLocal(r.url));
+                renderRovers(rovers);
+                if (rovers.length) {
+                    findMsg.textContent = 'Tap one to use it.';
+                } else {
+                    findMsg.dataset.tone = 'bad';
+                    findMsg.textContent = 'No rover answered. Is it switched on and on this network?';
+                }
+            } catch (e) {
+                if (seq !== searchSeq) return;
+                findMsg.dataset.tone = 'bad';
+                findMsg.textContent = 'Could not search: ' + e.message;
+            } finally {
+                if (seq === searchSeq) findBtn.disabled = false;
+            }
+        }
+
         document.getElementById('edit-url-btn').addEventListener('click', () => {
-            urlInput.value = document.getElementById('rover-url').textContent;
+            urlInput.value = currentRoverUrl();
             urlError.textContent = '';
+            urlManual.open = false;
             urlEditor.hidden = false;
-            urlInput.focus();
+            findRovers();
         });
 
         document.getElementById('cancel-url-btn').addEventListener('click', () => {
             urlEditor.hidden = true;
         });
 
-        // Find rovers rather than make somebody remember an address.
-        //
-        // The address used to be a box you typed a scheme, a host and a port
-        // into, validated only for starting with http - so a wrong one saved
-        // happily and the yard looked broken with nothing saying why. Under
-        // pressure at a demo that is exactly what happens.
-        document.getElementById('findRoverBtn').addEventListener('click', async (ev) => {
-            const btn = ev.currentTarget, msg = document.getElementById('findMsg');
-            const list = document.getElementById('foundList');
-            btn.disabled = true;
-            msg.dataset.tone = ''; msg.textContent = 'Looking\u2026';
-            list.innerHTML = '';
-            try {
-                const d = await (await fetch('/api/rover/discover')).json();
-                const rovers = d.rovers || [];
-                if (!rovers.length) {
-                    msg.dataset.tone = 'bad';
-                    msg.textContent = 'No rover answered. Is it switched on and on this network?';
-                    return;
-                }
-                msg.textContent = rovers.length === 1 ? 'Found one' : `Found ${rovers.length}`;
-                list.className = 'found';
-                list.innerHTML = rovers.map((r) =>
-                    `<button type="button" data-url="${r.url}">` +
-                    `<span class="found-url">${r.url.replace('http://', '')}</span>` +
-                    `<span class="found-meta">${r.hardware ? 'real rover' : (r.driver || '')}` +
-                    `${r.current ? ' &middot; in use' : ''}</span></button>`).join('');
-                list.querySelectorAll('button').forEach((b) => {
-                    b.addEventListener('click', () => { urlInput.value = b.dataset.url; saveUrl(); });
-                });
-            } catch (e) {
-                msg.dataset.tone = 'bad';
-                msg.textContent = 'Could not search: ' + e.message;
-            } finally {
-                btn.disabled = false;
-            }
-        });
+        findBtn.addEventListener('click', findRovers);
 
-        async function saveUrl(force) {
+        async function saveUrl(url, force) {
             urlError.textContent = '';
             try {
                 const resp = await fetch('/api/config/rover_url', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: urlInput.value, force: !!force }),
+                    body: JSON.stringify({ url, force: !!force }),
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
@@ -1305,7 +1376,7 @@
                         anyway.type = 'button';
                         anyway.className = 'btn';
                         anyway.textContent = 'Save anyway';
-                        anyway.addEventListener('click', () => saveUrl(true));
+                        anyway.addEventListener('click', () => saveUrl(url, true));
                         urlError.appendChild(anyway);
                         return;
                     }
@@ -1313,7 +1384,6 @@
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
-                paintSimSwitch();
                 if (data.persisted) {
                     urlEditor.hidden = true;
                 } else {
@@ -1325,56 +1395,9 @@
             }
         }
 
-        // ---- The simulator -------------------------------------------
-        // The one rover address that never changes: it runs on this satellite,
-        // so it is always localhost:8523. Everything else about finding a
-        // rover exists because its address moves; this one does not, which is
-        // why it gets a button instead of a search.
-        const SIM_URL = 'http://localhost:8523';
-        const LAST_ROVER_KEY = 'yard:lastRoverUrl';
-        const simBtn = document.getElementById('use-sim-btn');
-        const simHint = document.getElementById('sim-hint');
-
-        function currentRoverUrl() {
-            return document.getElementById('rover-url').textContent.trim();
-        }
-
-        function onSimulator() {
-            // Host, not substring: an address that merely mentions localhost
-            // somewhere is not the simulator.
-            try {
-                const host = new URL(currentRoverUrl()).hostname;
-                return host === 'localhost' || host === '127.0.0.1';
-            } catch (e) { return false; }
-        }
-
-        function paintSimSwitch() {
-            const sim = onSimulator();
-            simBtn.textContent = sim ? 'Switch back to the rover' : 'Switch to the simulator';
-            simHint.textContent = sim
-                ? 'Simulated: nothing moves, and the console behaves exactly the same.'
-                : 'A rover that never moves, running on this satellite. No hardware needed.';
-        }
-
-        simBtn.addEventListener('click', () => {
-            if (onSimulator()) {
-                // Back to whatever real rover was set before the switch, so
-                // returning is one press rather than typing an address again.
-                let previous = '';
-                try { previous = localStorage.getItem(LAST_ROVER_KEY) || ''; } catch (e) {}
-                urlInput.value = previous || 'curiosity.local';
-            } else {
-                try { localStorage.setItem(LAST_ROVER_KEY, currentRoverUrl()); } catch (e) {}
-                urlInput.value = SIM_URL;
-            }
-            saveUrl(false);
-        });
-
-        paintSimSwitch();
-
-        document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(false));
+        document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(urlInput.value, false));
         urlInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') saveUrl(false);
+            if (e.key === 'Enter') saveUrl(urlInput.value, false);
             if (e.key === 'Escape') urlEditor.hidden = true;
         });
     </script>

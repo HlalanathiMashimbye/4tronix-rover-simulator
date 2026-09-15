@@ -112,3 +112,45 @@ class TestDiscover:
         found = rd.discover(current_url='http://saved.local:8523')
 
         assert found[0]['url'] == 'http://saved.local:8523'
+
+
+class TestOnePerMachine:
+    """A rover answering under two names - the saved IP and its mDNS name -
+    was listed twice, so a yard with one rover appeared to have two."""
+
+    @pytest.fixture(autouse=True)
+    def _two_names_one_rover(self, monkeypatch):
+        names = {'curiosity.local': '192.168.137.121'}
+        monkeypatch.setattr(rd, '_resolve', lambda host: names.get(host, host))
+        monkeypatch.setattr(rd, '_health',
+                            lambda url, timeout=None:
+                            {'driver': 'RealRoverDriver', 'hardware': True}
+                            if 'curiosity' in url or '192.168.137.' in url else None)
+
+    def test_one_rover_under_two_names_is_listed_once_by_name(self):
+        found = rd.discover(current_url='http://192.168.137.121:8523')
+
+        assert [f['url'] for f in found] == ['http://curiosity.local:8523']
+        assert sorted(found[0]['addresses']) == [
+            'http://192.168.137.121:8523', 'http://curiosity.local:8523']
+
+    def test_two_rovers_are_not_merged(self):
+        found = rd.discover(current_url='http://192.168.137.50:8523')
+
+        assert sorted(f['url'] for f in found) == [
+            'http://192.168.137.50:8523', 'http://curiosity.local:8523']
+
+
+def test_the_rover_in_use_is_marked_under_whichever_name_is_shown(monkeypatch):
+    import web_server
+    monkeypatch.setattr(web_server, 'ROVER_URL', 'http://192.168.137.121:8523')
+    monkeypatch.setattr(rd, 'discover', lambda current_url=None, sweep=True: [{
+        'url': 'http://curiosity.local:8523',
+        'addresses': ['http://curiosity.local:8523', 'http://192.168.137.121:8523'],
+        'health': {'driver': 'RealRoverDriver', 'hardware': True, 'queue_size': 0},
+    }])
+
+    with web_server.app.test_client() as client:
+        rovers = client.get('/api/rover/discover').get_json()['rovers']
+
+    assert rovers[0]['current'] is True

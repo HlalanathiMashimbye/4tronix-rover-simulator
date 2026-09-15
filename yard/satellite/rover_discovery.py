@@ -108,11 +108,11 @@ def discover(current_url=None, sweep=True):
         list(pool.map(consider, candidates))
 
     if found or not sweep:
-        return found
+        return _one_per_machine(found)
 
     network, own_ip = _local_subnet()
     if network is None:
-        return found
+        return _one_per_machine(found)
 
     hosts = [str(h) for h in network.hosts() if str(h) != own_ip]
     with ThreadPoolExecutor(max_workers=64) as pool:
@@ -122,7 +122,52 @@ def discover(current_url=None, sweep=True):
     with ThreadPoolExecutor(max_workers=16) as pool:
         list(pool.map(lambda h: consider(f'http://{h}:{ROVER_PORT}'), open_hosts))
 
-    return found
+    return _one_per_machine(found)
+
+
+def _resolve(host):
+    try:
+        return socket.gethostbyname(host)
+    except OSError:
+        return host
+
+
+def _is_ip(host):
+    try:
+        ipaddress.ip_address(host)
+        return True
+    except ValueError:
+        return False
+
+
+def _host_port(base_url):
+    host_port = base_url.split('://', 1)[-1].split('/', 1)[0]
+    host, sep, port = host_port.rpartition(':')
+    return (host, port) if sep else (host_port, '')
+
+
+def _one_per_machine(found):
+    """One entry per rover, however many of its names answered.
+
+    The saved address is often an IP while the known names include the rover's
+    mDNS name, so a yard with one rover listed it twice. The name is kept over
+    the IP because it survives the rover getting a new DHCP lease.
+    """
+    groups = {}
+    for entry in found:
+        host, port = _host_port(entry['url'])
+        groups.setdefault((_resolve(host), port), []).append(entry)
+
+    merged = []
+    for entries in groups.values():
+        named = [e for e in entries if not _is_ip(_host_port(e['url'])[0])]
+        chosen = (named or entries)[0]
+        merged.append({
+            'url': chosen['url'],
+            'addresses': [e['url'] for e in entries],
+            'health': chosen['health'],
+        })
+    return merged
 
 
 def normalise(raw):

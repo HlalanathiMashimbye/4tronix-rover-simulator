@@ -246,10 +246,13 @@ def api_rover_discover():
     return jsonify({'rovers': [
         {
             'url': f['url'],
+            'addresses': f['addresses'],
             'driver': f['health'].get('driver'),
             'hardware': f['health'].get('hardware'),
             'queueSize': f['health'].get('queue_size'),
-            'current': f['url'].rstrip('/') == ROVER_URL.rstrip('/'),
+            # Any of its addresses, not only the one shown: the saved address
+            # is often the IP while the rover is listed by its mDNS name.
+            'current': any(u.rstrip('/') == ROVER_URL.rstrip('/') for u in f['addresses']),
         }
         for f in found
     ]})
