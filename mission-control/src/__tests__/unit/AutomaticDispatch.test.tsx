@@ -98,6 +98,8 @@ describe('Automatic Route dispatch', () => {
 
       render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
       fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+      // Let the permission lookup settle so the request, and its timer, exist.
+      await act(async () => {});
 
       await act(async () => {
         jest.advanceTimersByTime(10_000);
@@ -107,6 +109,97 @@ describe('Automatic Route dispatch', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  describe('with a local network access permission (Chrome, Edge)', () => {
+    let permission: { state: PermissionState; onchange: (() => void) | null };
+
+    beforeEach(() => {
+      permission = { state: 'granted', onchange: null };
+      Object.defineProperty(navigator, 'permissions', {
+        configurable: true,
+        value: {
+          query: jest.fn(async ({ name }: { name: string }) => {
+            if (name !== 'local-network') throw new TypeError('unknown permission');
+            return permission;
+          }),
+        },
+      });
+    });
+
+    afterEach(() => {
+      delete (navigator as { permissions?: unknown }).permissions;
+    });
+
+    it('says where to allow it when it is blocked, and does not ask the yard', async () => {
+      permission.state = 'denied';
+      const fetchMock = jest.fn();
+      global.fetch = fetchMock;
+
+      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Local network access is blocked');
+      expect(alert).not.toHaveTextContent('Yard offline');
+      expect(screen.getByRole('button', { name: 'Copy for the run station' })).toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('says it is blocked when the operator refuses the prompt', async () => {
+      permission.state = 'prompt';
+      global.fetch = jest.fn(async () => {
+        permission.state = 'denied';
+        throw new TypeError('Failed to fetch');
+      }) as unknown as typeof fetch;
+
+      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Local network access is blocked');
+    });
+
+    it('does not call the yard offline while the operator is still answering the prompt', async () => {
+      jest.useFakeTimers();
+      try {
+        permission.state = 'prompt';
+        global.fetch = jest.fn(
+          (_url: string, init?: RequestInit) =>
+            new Promise((_resolve, reject) => {
+              init?.signal?.addEventListener('abort', () =>
+                reject(new DOMException('Aborted', 'AbortError')),
+              );
+            }),
+        ) as unknown as typeof fetch;
+
+        render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+        await act(async () => {});
+
+        // Longer than the yard's own limit, with the prompt still open.
+        await act(async () => {
+          jest.advanceTimersByTime(30_000);
+        });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+        // The operator allows it; now the yard gets its ten seconds.
+        await act(async () => {
+          permission.state = 'granted';
+          permission.onchange?.();
+        });
+        await act(async () => {
+          jest.advanceTimersByTime(9_000);
+        });
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+        await act(async () => {
+          jest.advanceTimersByTime(1_000);
+        });
+        expect(await screen.findByRole('alert')).toHaveTextContent('Yard offline');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   it('navigates with the mission and yard only after all checks pass', async () => {

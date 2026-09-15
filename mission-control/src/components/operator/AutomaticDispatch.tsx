@@ -67,25 +67,98 @@ function statusUrl(consoleUrl: string): string {
 const STATUS_TIMEOUT_MS = 10_000;
 
 /**
- * The satellite's status response, or null when this browser cannot reach it.
- *
- * No response at all covers several causes: the satellite is off, this
- * browser is not on the yard network, or the browser refused the request (an
- * https page may not fetch an http satellite). Each means the automatic route
- * cannot run from here, and each has the same way forward, so they share one
- * answer rather than surfacing "Failed to fetch".
+ * How long to wait while the browser is still asking the operator whether this
+ * site may reach the local network. The ten-second limit starts once they
+ * answer; this only stops a prompt left open from spinning forever.
  */
-async function reachYard(): Promise<Response | null> {
+const PERMISSION_PROMPT_TIMEOUT_MS = 120_000;
+
+/** Why the yard did not answer, which decides what the operator is told to do. */
+type Unreachable = 'offline' | 'permission-denied' | 'browser-cannot';
+
+type LocalNetworkPermission = PermissionStatus | 'unsupported';
+
+/**
+ * This browser's local network access permission for the page.
+ *
+ * Chromium browsers (Chrome, Edge) ask before an https page may call a device
+ * on the local network, such as the satellite, and only then let the request
+ * through. Safari and Firefox have no such permission and simply block it.
+ * Chrome has used both names, so each is tried; an unknown name throws.
+ */
+async function localNetworkPermission(): Promise<LocalNetworkPermission> {
+  if (!navigator.permissions?.query) return 'unsupported';
+  for (const name of ['local-network', 'local-network-access']) {
+    try {
+      return await navigator.permissions.query({ name: name as PermissionName });
+    } catch {
+      // Not a permission this browser knows; try the next name.
+    }
+  }
+  return 'unsupported';
+}
+
+/**
+ * Whether the browser itself stops this page from calling the satellite: an
+ * https page may not fetch an http address unless a local network permission
+ * lets it, and a browser without that permission never will.
+ */
+function browserBlocksYard(consoleUrl: string): boolean {
+  return window.location.protocol === 'https:' && new URL(consoleUrl).protocol === 'http:';
+}
+
+/**
+ * The satellite's status response, or why this browser could not get one.
+ *
+ * "Yard offline" is only the answer when the browser could have reached the
+ * yard. Telling a Safari user the yard is offline sends them to check a yard
+ * that is fine, when the way forward is a different browser.
+ */
+async function reachYard(): Promise<Response | Unreachable> {
+  const consoleUrl = readConsoleUrl();
+  const permission = await localNetworkPermission();
+  if (permission !== 'unsupported' && permission.state === 'denied') return 'permission-denied';
+
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+  let timer = window.setTimeout(
+    () => controller.abort(),
+    permission !== 'unsupported' && permission.state === 'prompt' ? PERMISSION_PROMPT_TIMEOUT_MS : STATUS_TIMEOUT_MS,
+  );
+  if (permission !== 'unsupported' && permission.state === 'prompt') {
+    // The request waits on the operator's answer, so the clock for the yard
+    // starts when they give one, not when the prompt appeared.
+    permission.onchange = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => controller.abort(), STATUS_TIMEOUT_MS);
+    };
+  }
+
   try {
-    return await fetch(statusUrl(readConsoleUrl()), { cache: 'no-store', signal: controller.signal });
+    return await fetch(statusUrl(consoleUrl), { cache: 'no-store', signal: controller.signal });
   } catch {
-    return null;
+    if (permission !== 'unsupported' && permission.state === 'denied') return 'permission-denied';
+    if (permission === 'unsupported' && browserBlocksYard(consoleUrl)) return 'browser-cannot';
+    return 'offline';
   } finally {
     window.clearTimeout(timer);
+    if (permission !== 'unsupported') permission.onchange = null;
   }
 }
+
+const UNREACHABLE_MESSAGES: Record<Unreachable, { title: string; body: string }> = {
+  offline: {
+    title: 'Yard offline',
+    body: 'This browser could not reach the yard, so the mission has not been sent. Copy it and paste it into the run station at the yard instead.',
+  },
+  'permission-denied': {
+    title: 'Local network access is blocked',
+    body: 'This browser is not allowed to reach the yard, so the mission has not been sent. Click the lock beside the address, open the permissions for this site, set Local network access to Allow, then try again. Or copy the mission and paste it into the run station.',
+  },
+  'browser-cannot': {
+    title: 'This browser cannot reach the yard',
+    body: 'The mission has not been sent. Sending automatically needs a browser like Chrome or Edge, which can ask for local network access. Open Mission Control in one of them, or copy the mission and paste it into the run station.',
+  },
+};
 
 export function AutomaticDispatch({
   mission,
@@ -104,7 +177,7 @@ export function AutomaticDispatch({
   const [dismissed, setDismissed] = useState(false);
   const [showRocketFeedback, setShowRocketFeedback] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [offline, setOffline] = useState(false);
+  const [unreachable, setUnreachable] = useState<Unreachable | null>(null);
 
   async function copyCode() {
     const envelope = missionClipboardText(mission);
@@ -122,7 +195,7 @@ export function AutomaticDispatch({
     setChecking(true);
     setError(null);
     setFailures([]);
-    setOffline(false);
+    setUnreachable(null);
     setSuccess(false);
     setDismissed(false);
     setChecks(initialChecks().map((check) => ({ ...check, status: 'Checking...' })));
@@ -132,8 +205,8 @@ export function AutomaticDispatch({
       // situation from a yard whose camera is not ready, with a different way
       // forward, so it is decided before any check is read.
       const response = await reachYard();
-      if (!response) {
-        setOffline(true);
+      if (typeof response === 'string') {
+        setUnreachable(response);
         setChecks(initialChecks());
         return;
       }
@@ -226,16 +299,13 @@ export function AutomaticDispatch({
         ))}
       </div>
 
-      {offline && (
+      {unreachable && (
         <div role="alert" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
           <div className="flex items-start gap-2">
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
             <div className="min-w-0">
-              <h4 className="text-sm font-bold text-foreground">Yard offline</h4>
-              <p className="mt-1 text-xs text-muted-foreground">
-                This browser could not reach the yard, so the mission has not been sent. Copy it
-                and paste it into the run station at the yard instead.
-              </p>
+              <h4 className="text-sm font-bold text-foreground">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
+              <p className="mt-1 text-xs text-muted-foreground">{UNREACHABLE_MESSAGES[unreachable].body}</p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <button
                   type="button"
