@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Check, Loader2, Rocket, X } from 'lucide-react';
+import { AlertTriangle, Check, Copy, Loader2, Rocket, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import { readConsoleUrl } from '@/lib/yardConsole';
+import { missionClipboardText } from '@/lib/missionClipboard';
 
 type CheckKey = 'camera' | 'rover' | 'recording';
 type CheckState = 'waiting' | 'ready' | 'failed';
@@ -73,12 +74,26 @@ export function AutomaticDispatch({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [showRocketFeedback, setShowRocketFeedback] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (startImmediately) {
       void checkAndSend();
     }
   }, [startImmediately]);
+
+  async function copyCode() {
+    const envelope = missionClipboardText(mission);
+    try {
+      await navigator.clipboard.writeText(envelope);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for insecure origins
+      window.prompt('Copy this, then paste it into the yard code editor:', envelope);
+    }
+  }
 
   async function checkAndSend() {
     setChecking(true);
@@ -115,6 +130,7 @@ export function AutomaticDispatch({
       }
 
       setSuccess(true);
+      setShowRocketFeedback(true);
       const target = new URL(readConsoleUrl());
       target.pathname = '/run/';
       target.search = new URLSearchParams({
@@ -124,7 +140,7 @@ export function AutomaticDispatch({
         missionName: mission.name || '',
         code: mission.code,
       }).toString();
-      window.setTimeout(() => navigate(target.toString()), 500);
+      window.setTimeout(() => navigate(target.toString()), 1500);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not check the satellite.');
       setFailures([]);
@@ -143,15 +159,26 @@ export function AutomaticDispatch({
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">Check this yard before sending the mission.</p>
         </div>
-        <button
-          type="button"
-          onClick={checkAndSend}
-          disabled={checking || !mission.code}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-gradient-mars px-3 py-2 text-xs font-bold text-primary-foreground shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
-          {checking ? 'Checking yard...' : 'Send to Rover'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={checkAndSend}
+            disabled={checking || !mission.code}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {checking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
+            {checking ? 'Checking yard...' : 'Send to Rover'}
+          </button>
+          <button
+            type="button"
+            onClick={copyCode}
+            disabled={!mission.code}
+            title={copied ? 'Copied!' : 'Copy mission code for manual workflow'}
+            className="inline-flex shrink-0 items-center justify-center rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-background/60 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 grid gap-1.5 sm:grid-cols-3" aria-live="polite">
@@ -193,6 +220,14 @@ export function AutomaticDispatch({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showRocketFeedback && (
+        <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50">
+          <div className="animate-ping">
+            <Rocket className="h-16 w-16 text-emerald-500" />
           </div>
         </div>
       )}
