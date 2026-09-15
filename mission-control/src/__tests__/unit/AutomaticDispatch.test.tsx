@@ -25,49 +25,125 @@ const status = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const answer = (body: unknown) => ({ ok: true, json: async () => body });
+
+const sendButton = () => screen.getByRole('button', { name: 'Send to Rover' });
+
+function mount(navigate = jest.fn()) {
+  render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={navigate} />);
+  return navigate;
+}
+
+async function checkYard() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Check yard' }));
+}
+
 beforeEach(() => {
   jest.restoreAllMocks();
 });
 
+/**
+ * This page has no local network permission to consult (jsdom, like a plain
+ * http page), so nothing reads the yard until Check yard is pressed.
+ */
 describe('Automatic Route dispatch', () => {
-  it('shows every failed check and does not navigate', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => status({
-        camera: { ready: false, detail: 'camera server is not running' },
-        rover: { reachable: false, status: null },
-      }),
-    });
+  it('keeps Send to Rover locked until the yard has been read', async () => {
+    const fetchMock = jest.fn();
     global.fetch = fetchMock;
-    const assign = jest.fn();
 
-    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+    mount();
 
-    expect(await screen.findByRole('alertdialog')).toHaveTextContent('Camera');
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('Rover');
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('NOT been sent');
-    // The yard answered, so this is a checks problem, not an offline yard.
+    expect(await screen.findByRole('button', { name: 'Check yard' })).toBeEnabled();
+    expect(sendButton()).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('shows every check that is not ready, with its fix, and keeps Send to Rover locked', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(answer(status({
+      camera: { ready: false, detail: 'camera server is not running' },
+      rover: { reachable: false, status: null },
+    })));
+    global.fetch = fetchMock;
+    const navigate = mount();
+
+    await checkYard();
+
+    const notReady = await screen.findByTestId('yard-not-ready');
+    expect(notReady).toHaveTextContent('Camera');
+    expect(notReady).toHaveTextContent('Rover');
+    expect(notReady).not.toHaveTextContent('Recording');
+    expect(sendButton()).toBeDisabled();
+    // Nothing was sent, so there is nothing to call a failed send.
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Yard offline')).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(assign).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('unlocks Send to Rover when every check is ready, and sends only when it is pressed', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(answer(status()));
+    global.fetch = fetchMock;
+    const navigate = mount();
+
+    await checkYard();
+    await waitFor(() => expect(sendButton()).toBeEnabled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1600));
+    });
+    expect(navigate).not.toHaveBeenCalled();
+
+    fireEvent.click(sendButton());
+    expect(await screen.findByRole('status')).toHaveTextContent('Starting mission');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1600));
+    });
+
+    // Pressing it read the yard again rather than trusting the earlier check.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(navigate).toHaveBeenCalledTimes(1);
+    const target = new URL(navigate.mock.calls[0][0]);
+    expect(target.pathname).toBe('/run/');
+    expect(target.searchParams.get('handoff')).toBe('automatic');
+    expect(target.searchParams.get('yardId')).toBe('curiosity');
+    expect(target.searchParams.get('missionId')).toBe('m1');
+    expect(target.searchParams.get('code')).toBe(mission.code);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://curiosity.local:3001/api/status',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+  }, 10000);
+
+  it('does not send when the yard stopped being ready between the check and the press', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(answer(status()))
+      .mockResolvedValue(answer(status({ camera: { ready: false, detail: 'camera server is not running' } })));
+    const navigate = mount();
+
+    await checkYard();
+    await waitFor(() => expect(sendButton()).toBeEnabled());
+    fireEvent.click(sendButton());
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Camera');
+    expect(dialog).toHaveTextContent('NOT been sent');
+    expect(sendButton()).toBeDisabled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('says the yard is offline, and points at copy and paste, when it cannot be reached', async () => {
     global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
-    const assign = jest.fn();
+    const navigate = mount();
 
-    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+    await checkYard();
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Yard offline');
     expect(alert).toHaveTextContent('run station');
-    // Nothing was checked, so there is no list of failed checks, and the
-    // browser's own error text is not what the operator reads.
+    // The browser's own error text is not what the operator reads.
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(screen.queryByText(/failed to fetch/i)).not.toBeInTheDocument();
-    expect(assign).not.toHaveBeenCalled();
+    expect(sendButton()).toBeDisabled();
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('copies the mission from the offline message', async () => {
@@ -75,8 +151,8 @@ describe('Automatic Route dispatch', () => {
     Object.assign(navigator, { clipboard: { writeText } });
     global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'));
 
-    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+    mount();
+    await checkYard();
     fireEvent.click(await screen.findByRole('button', { name: 'Copy for the run station' }));
 
     await waitFor(() =>
@@ -96,8 +172,9 @@ describe('Automatic Route dispatch', () => {
           }),
       ) as unknown as typeof fetch;
 
-      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+      mount();
+      await act(async () => {});
+      await checkYard();
       // Let the permission lookup settle so the request, and its timer, exist.
       await act(async () => {});
 
@@ -131,18 +208,18 @@ describe('Automatic Route dispatch', () => {
       delete (navigator as { permissions?: unknown }).permissions;
     });
 
-    it('says where to allow it when it is blocked, and does not ask the yard', async () => {
+    it('says where to allow it as soon as the mission opens, without asking the yard', async () => {
       permission.state = 'denied';
       const fetchMock = jest.fn();
       global.fetch = fetchMock;
 
-      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+      mount();
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent('Local network access is blocked');
       expect(alert).not.toHaveTextContent('Yard offline');
       expect(screen.getByRole('button', { name: 'Copy for the run station' })).toBeInTheDocument();
+      expect(sendButton()).toBeDisabled();
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -153,8 +230,8 @@ describe('Automatic Route dispatch', () => {
         throw new TypeError('Failed to fetch');
       }) as unknown as typeof fetch;
 
-      render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+      mount();
+      await checkYard();
 
       expect(await screen.findByRole('alert')).toHaveTextContent('Local network access is blocked');
     });
@@ -172,8 +249,9 @@ describe('Automatic Route dispatch', () => {
             }),
         ) as unknown as typeof fetch;
 
-        render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
-        fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
+        mount();
+        await act(async () => {});
+        await checkYard();
         await act(async () => {});
 
         // Longer than the yard's own limit, with the prompt still open.
@@ -201,31 +279,4 @@ describe('Automatic Route dispatch', () => {
       }
     });
   });
-
-  it('navigates with the mission and yard only after all checks pass', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: jest.fn().mockResolvedValue(status()) });
-    global.fetch = fetchMock;
-    const assign = jest.fn();
-
-    render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={assign} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Rover' }));
-
-    expect(await screen.findByRole('status')).toHaveTextContent('Starting mission');
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    });
-
-    expect(assign).toHaveBeenCalledTimes(1);
-    const target = new URL(assign.mock.calls[0][0]);
-    expect(target.pathname).toBe('/run/');
-    expect(target.searchParams.get('handoff')).toBe('automatic');
-    expect(target.searchParams.get('yardId')).toBe('curiosity');
-    expect(target.searchParams.get('missionId')).toBe('m1');
-    expect(target.searchParams.get('code')).toBe(mission.code);
-    expect(fetchMock).toHaveBeenCalledWith(
-      'http://curiosity.local:3001/api/status',
-      expect.objectContaining({ cache: 'no-store' }),
-    );
-  }, 10000);
 });
