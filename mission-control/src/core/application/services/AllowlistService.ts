@@ -4,7 +4,7 @@
  * User Story 21, Tasks 22-23: Validate learner code against rover command allowlist
  *
  * Responsibilities:
- * - Coordinate AST analysis
+ * - Run the pattern analysis in the domain layer
  * - Enforce rover command allowlist
  * - Return clear violation messages for learners
  *
@@ -14,22 +14,12 @@
  * - Detailed error messages for learning
  */
 
-import { analyzeCodeForAllowlist } from '@/core/domain/safety/ast-allowlist-analyzer';
+import {
+  analyzeCodeForAllowlist,
+  type AllowlistFinding,
+} from '@/core/domain/safety/ast-allowlist-analyzer';
 
-/**
- * Represents a single allowlist violation found in learner code
- *
- * @property ruleId - Unique identifier for the violation type
- * @property message - Human-readable explanation for learners
- * @property line - Line number where violation occurs (optional)
- * @property column - Column number where violation occurs (optional)
- */
-export interface AllowlistFinding {
-  ruleId: string;
-  message: string;
-  line?: number;
-  column?: number;
-}
+export type { AllowlistFinding };
 
 /**
  * Validation result for code allowlist check
@@ -44,10 +34,10 @@ export class AllowlistService {
   /**
    * Analyze learner code for allowlist violations
    *
-   * Process:
-   * 1. Parse Python code into AST
-   * 2. Check all imports against DISALLOWED_IMPORTS
-   * 3. Check all function calls against ROVER_COMMAND_ALLOWLIST
+   * Process (line by line, by pattern - there is no Python parser here):
+   * 1. Check all imports against DISALLOWED_IMPORTS
+   * 2. Check all function calls against ROVER_COMMAND_ALLOWLIST
+   * 3. Check numeric arguments against ROVER_ARGUMENT_LIMITS
    * 4. Return all violations found
    *
    * @param code - Python code submitted by learner
@@ -58,7 +48,6 @@ export class AllowlistService {
    */
   analyze(code: string): AllowlistValidationResult {
     try {
-      // Delegate to AST analyzer for detailed parsing
       const findings = analyzeCodeForAllowlist(code);
 
       return {
@@ -66,8 +55,8 @@ export class AllowlistService {
         findings,
       };
     } catch (error) {
-      // If AST parsing fails, reject the code
-      // This prevents bypass via malformed syntax
+      // If the analysis itself throws, reject the code rather than let
+      // something it could not read through unchecked
       return {
         isValid: false,
         findings: [],
