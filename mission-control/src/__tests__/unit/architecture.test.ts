@@ -38,6 +38,20 @@ function read(file: string): string {
 }
 
 describe('the dependency rule', () => {
+  it('core never imports a Firebase SDK', () => {
+    /**
+     * Needed on top of the rule below, which only matches our own
+     * @/infrastructure paths. MissionNotificationService imported
+     * firebase-admin/firestore directly and passed it, so the Admin SDK - the
+     * one that ignores every Firestore rule - sat inside the application layer.
+     */
+    const offenders = sourceFiles('core').filter((f) =>
+      /from '(firebase|firebase-admin)(\/[\w-]+)?'/.test(read(f))
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
   it('core never imports infrastructure', () => {
     const offenders = sourceFiles('core').filter((f) =>
       read(f).includes("from '@/infrastructure")
@@ -147,6 +161,21 @@ describe('the composition root', () => {
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
       .filter((f) => read(f).includes('new FirestoreMissionRepository'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('is the only production code that builds an application service', () => {
+    /**
+     * Three routes each assembled the notification service by hand - sender,
+     * composer, Firestore, app URL - and two built MissionService beside a
+     * container that already exported it. Every copy was a place to wire it
+     * differently, and the template for the next route to copy.
+     */
+    const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
+                       ...sourceFiles('core'), ...sourceFiles('lib'),
+                       ...sourceFiles('contexts')]
+      .filter((f) => /new (MissionNotificationService|MissionService)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });

@@ -10,13 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminMissionRepository } from '@/infrastructure/container.server';
-import { MissionService } from '@/core/application/services/MissionService';
-import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
-import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
-import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { missionService, notificationService } from '@/infrastructure/container.server';
 
 const notifyRequestSchema = z.object({
   status: z.enum(['queued', 'processing', 'completed', 'failed', 'cancelled']),
@@ -52,10 +46,7 @@ export async function POST(
   }
 
   try {
-    const firestore = getFirestoreInstance();
-    const repository = adminMissionRepository();
-    const service = new MissionService(repository);
-    const mission = await service.getMissionById(id);
+    const mission = await missionService().getMissionById(id);
 
     if (!mission) {
       return NextResponse.json(
@@ -64,15 +55,7 @@ export async function POST(
       );
     }
 
-    const appUrl = resolveAppUrl();
-    const notificationService = new MissionNotificationService(
-      new ResendEmailSender(),
-      missionEmailComposer,
-      firestore,
-      appUrl
-    );
-
-    const outcome = await notificationService.notifyStatusChange(mission, validation.data.status);
+    const outcome = await notificationService().notifyStatusChange(mission, validation.data.status);
 
     // Surfaced rather than discarded. Sending stays best-effort - a provider
     // outage must not fail the caller, which is the yard console - but the

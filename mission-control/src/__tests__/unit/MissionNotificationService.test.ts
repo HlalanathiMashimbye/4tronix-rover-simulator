@@ -1,13 +1,18 @@
 /**
  * Unit Tests for MissionNotificationService
  *
- * Tests notification logic in isolation using a mocked IEmailSender and a
- * minimal Firestore-like stub, mirroring MissionService.test.ts's use of a
- * hand-written mock repository.
+ * Tests notification logic in isolation: a mocked IEmailSender, a recording
+ * composer, and a contact reader that returns whatever the test says. Where the
+ * address is read from in Firestore is FirestoreLearnerContactReader's job, and
+ * is tested there.
  */
 
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
+import {
+  ILearnerContactReader,
+  LearnerContact,
+} from '@/core/domain/services/ILearnerContactReader';
 import { Mission } from '@/core/domain/entities/Mission';
 
 class MockEmailSender implements IEmailSender {
@@ -26,40 +31,11 @@ class MockEmailSender implements IEmailSender {
   }
 }
 
-/**
- * `contactDoc` models learners/{id}/private/contact - the browser-unreadable
- * subcollection the address actually lives in. `learnerDoc.learnerEmail` models
- * the legacy field left on records written before it moved there.
- */
-function makeFirestoreStub(
-  learnerDoc: Record<string, unknown> | undefined,
-  contactDoc?: Record<string, unknown>,
-) {
-  // The learner is found by querying on learnerRef, not by document id: the
-  // mission only carries a hash of the id now, so there is no id to fetch by.
-  const docRef = {
-    collection: jest.fn(() => ({
-      doc: jest.fn(() => ({
-        get: jest.fn(async () => ({
-          exists: !!contactDoc,
-          data: () => contactDoc,
-        })),
-      })),
-    })),
-  };
-
-  return {
-    collection: jest.fn(() => ({
-      where: jest.fn(() => ({
-        limit: jest.fn(() => ({
-          get: jest.fn(async () => ({
-            empty: !learnerDoc,
-            docs: learnerDoc ? [{ ref: docRef, data: () => learnerDoc }] : [],
-          })),
-        })),
-      })),
-    })),
-  };
+/** A reader that knows exactly one learner, and records who it was asked for. */
+function contactsOf(contact: LearnerContact) {
+  const findByLearnerRef = jest.fn(async (_learnerRef: string) => contact);
+  const reader: ILearnerContactReader = { findByLearnerRef };
+  return { reader, findByLearnerRef };
 }
 
 function makeMission(overrides: Partial<Mission> = {}): Mission {
@@ -78,11 +54,6 @@ function makeMission(overrides: Partial<Mission> = {}): Mission {
 
 const APP_URL = 'http://localhost:3000';
 
-/**
- * The address now comes from the learner record, not the mission - mission
- * documents are world-readable, so they carry only a hash. These stubs model
- * learners/{learnerId}.
- */
 /**
  * A composer that records what it was asked for rather than rendering HTML.
  * This is what the IMissionEmailComposer port buys: these tests are about
@@ -104,15 +75,16 @@ const composer = {
   },
 } as never;
 
+const ADA = { email: 'ada@school.edu', displayName: 'Ada' };
+
 beforeEach(() => {
   composerCalls.length = 0;
 });
 
 describe('MissionNotificationService', () => {
-  it('skips when the learner record has no email', async () => {
+  it('skips when the learner has no email', async () => {
     const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(sender, composer, contactsOf({ displayName: 'Ada' }).reader, APP_URL);
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(service.notifyStatusChange(makeMission(), 'processing')).resolves.toEqual({
@@ -124,10 +96,9 @@ describe('MissionNotificationService', () => {
     warn.mockRestore();
   });
 
-  it('skips when the learner record does not exist at all', async () => {
+  it('skips when there is no learner at all', async () => {
     const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub(undefined);
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(sender, composer, contactsOf({}).reader, APP_URL);
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(service.notifyStatusChange(makeMission(), 'processing')).resolves.toEqual({
@@ -139,62 +110,25 @@ describe('MissionNotificationService', () => {
     warn.mockRestore();
   });
 
-  it('reads the address from the private contact record, not the learner document', async () => {
-    // The learner document is readable by anyone holding the learner id, and
-    // those ids are published on world-readable missions - so the address is
-    // kept in a subcollection browsers are denied. This is the primary path.
+  it("sends to the address of this mission's learner", async () => {
     const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub(
-      { displayName: 'Ada' },
-      { learnerEmail: 'ada@school.edu' },
-    );
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const contacts = contactsOf(ADA);
+    const service = new MissionNotificationService(sender, composer, contacts.reader, APP_URL);
 
-    await expect(service.notifyStatusChange(makeMission(), 'completed')).resolves.toEqual({
-      sent: true,
-    });
+    await expect(service.notifyStatusChange(makeMission({ learnerRef: 'learner-7' }), 'completed'))
+      .resolves.toEqual({ sent: true });
 
-    expect(sender.calls[0].to).toBe('ada@school.edu');
-    expect(composerCalls[0].learnerName).toBe('Ada');
-  });
-
-  it('prefers the private contact record over a legacy address', async () => {
-    // A learner who has re-saved their address has it in both places while the
-    // old field is being cleaned up. The current one must win.
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub(
-      { learnerEmail: 'stale@school.edu', displayName: 'Ada' },
-      { learnerEmail: 'current@school.edu' },
-    );
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
-
-    await service.notifyStatusChange(makeMission(), 'completed');
-
-    expect(sender.calls[0].to).toBe('current@school.edu');
-  });
-
-  it('still finds a legacy address for learners who have not re-saved one', async () => {
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
-
-    await expect(service.notifyStatusChange(makeMission(), 'completed')).resolves.toEqual({
-      sent: true,
-    });
-
+    expect(contacts.findByLearnerRef).toHaveBeenCalledWith('learner-7');
     expect(sender.calls).toHaveLength(1);
     expect(sender.calls[0].to).toBe('ada@school.edu');
     expect(composerCalls[0].missionName).toBe('Orbital Nomad');
-    expect(composerCalls[0].learnerName).toBe('Ada');
     expect(composerCalls[0].historyUrl).toBe(`${APP_URL}/history`);
   });
 
   it('deep links the email to the mission that changed, not just the history list', async () => {
     // David asked for /missions/<id> so a learner opens the run the email is
     // about. The history link stays as the secondary way back in.
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
@@ -204,9 +138,9 @@ describe('MissionNotificationService', () => {
   it('does not double up the slash when the app URL has a trailing one', async () => {
     // NEXT_PUBLIC_APP_URL is set by hand in a GitHub variable, so a trailing
     // slash is a realistic typo and '//missions/x' breaks some mail clients.
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, `${APP_URL}/`);
+    const service = new MissionNotificationService(
+      new MockEmailSender(), composer, contactsOf(ADA).reader, `${APP_URL}/`,
+    );
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
@@ -214,23 +148,20 @@ describe('MissionNotificationService', () => {
     expect(composerCalls[0].missionUrl).not.toContain('//missions');
   });
 
-  it('greets by display name from the same record the address came from', async () => {
+  it('greets by the display name that came with the address', async () => {
     // Regression: the address used to be read off the mission while the name
     // was looked up under a different id, so every email said "Space Explorer".
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
 
     await service.notifyStatusChange(makeMission(), 'completed');
 
     expect(composerCalls[0].learnerName).toBe('Ada');
-    expect(composerCalls[0].learnerName).toBe('Ada');
   });
 
-  it('falls back to "Space Explorer" when the record has an email but no name', async () => {
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+  it('falls back to "Space Explorer" when the learner has an email but no name', async () => {
+    const service = new MissionNotificationService(
+      new MockEmailSender(), composer, contactsOf({ email: 'ada@school.edu' }).reader, APP_URL,
+    );
 
     await service.notifyStatusChange(makeMission(), 'completed');
 
@@ -238,9 +169,7 @@ describe('MissionNotificationService', () => {
   });
 
   it('falls back to the mission id when the mission has no name', async () => {
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
 
     await service.notifyStatusChange(makeMission({ name: undefined, id: 'mission-xyz' }), 'completed');
 
@@ -248,9 +177,7 @@ describe('MissionNotificationService', () => {
   });
 
   it('never puts a plaintext address on the mission it reads', async () => {
-    const sender = new MockEmailSender();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
     const mission = makeMission();
 
     await service.notifyStatusChange(mission, 'completed');
@@ -261,8 +188,7 @@ describe('MissionNotificationService', () => {
   it('reports sender errors instead of throwing', async () => {
     const sender = new MockEmailSender();
     sender.failOnNextSend();
-    const firestore = makeFirestoreStub({ learnerEmail: 'ada@school.edu', displayName: 'Ada' });
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(sender, composer, contactsOf(ADA).reader, APP_URL);
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(service.notifyStatusChange(makeMission(), 'failed')).resolves.toEqual({
@@ -277,18 +203,12 @@ describe('MissionNotificationService', () => {
 
   it('reports a failure when the learner lookup itself throws', async () => {
     const sender = new MockEmailSender();
-    const firestore = {
-      collection: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: jest.fn(async () => {
-              throw new Error('Firestore unavailable');
-            }),
-          })),
-        })),
-      })),
+    const failing: ILearnerContactReader = {
+      findByLearnerRef: async () => {
+        throw new Error('Firestore unavailable');
+      },
     };
-    const service = new MissionNotificationService(sender, composer, firestore as never, APP_URL);
+    const service = new MissionNotificationService(sender, composer, failing, APP_URL);
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(service.notifyStatusChange(makeMission(), 'queued')).resolves.toEqual({
