@@ -97,7 +97,13 @@ export function MissionSubmitBar({
           // button does not repeat itself - but a disabled control with no
           // accessible reason is invisible to a screen reader.
           title={!preFlight.ready && hasCode ? 'Pre-flight checks are not complete yet' : undefined}
-          className="clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl bg-gradient-mars px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto"
+          // Green once the checks pass, mission orange until then. The button
+          // is disabled for exactly the same condition, so the colour is not a
+          // second thing to keep in step - it is the disabled state wearing a
+          // visible answer to "is it my turn yet".
+          className={`clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto ${
+            preFlight.ready ? 'bg-gradient-buzz' : 'bg-gradient-mars'
+          }`}
         >
           {submitting ? (
             <>
