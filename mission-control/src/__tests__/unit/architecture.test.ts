@@ -204,7 +204,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new (MissionNotificationService|MissionService)\(/.test(read(f)));
+      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });

@@ -21,30 +21,27 @@
  * The Admin SDK does the writing because Firestore rules deny the browser every
  * write to a mission or a run (firestore.rules), which is what keeps a public
  * feed safe to leave world-readable.
+ *
+ * THIS FILE IS THE HTTP HALF: who the operator is, whether the body parses, and
+ * which status code a result becomes. What the commands do - finding the run,
+ * checking yards, deciding, writing, emailing the learner - is
+ * OperatorMissionCommands, where it can be tested without a request.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { nanoid } from 'nanoid';
 
-import { adminMissionRepository, notificationService } from '@/infrastructure/container.server';
+import { operatorMissionCommands } from '@/infrastructure/container.server';
 import { requireOperator, requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
-import { getYouTubeId } from '@/lib/missionRuns';
-import {
-  decideAnotherRun,
-  decideAttachVideo,
-  decideRemoveVideo,
-  decideCancel,
-  decideComplete,
-  decideFeedback,
-  decideResolve,
-  type Decision,
-  type RunSnapshot,
-} from '@/core/domain/services/missionBookkeeping';
+import type {
+  CommandFailure,
+  CommandResult,
+  OperatorCommand,
+} from '@/core/application/services/OperatorMissionCommands';
 
 /**
- * Not checked against a list here. It is checked against the SESSION's yard
- * below, and that one was validated against the live yards at sign-in.
+ * Not checked against a list here. It is checked against the SESSION's yard,
+ * and that one was validated against the live yards at sign-in.
  *
  * It used to refine against the hardcoded KNOWN_YARDS, which stopped being
  * true the moment yards became data an admin can add: a venue added this
@@ -56,9 +53,6 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('complete'), yardId }),
   z.object({ action: z.literal('cancel'), yardId }),
   z.object({ action: z.literal('another-run'), yardId }),
-  // runId is optional on purpose: without one these act on the operator's
-  // latest run at this yard, which is what every existing caller means. With
-  // one they act on a named attempt, which is what managing several needs.
   z.object({
     action: z.literal('attach-video'), yardId,
     url: z.string().trim().min(1),
@@ -82,7 +76,7 @@ const bodySchema = z.discriminatedUnion('action', [
      */
     text: z.string().trim().min(1, 'Write something before sending it.').max(280),
   }),
-]);
+]) satisfies z.ZodType<OperatorCommand>;
 
 function authFailure(error: unknown) {
   if (error instanceof UnauthorizedError) {
@@ -95,6 +89,34 @@ function authFailure(error: unknown) {
     );
   }
   return null;
+}
+
+/**
+ * A refused command, as HTTP. A conflict is 409 rather than 400: the request
+ * was well formed, the mission simply is not in a state where it makes sense,
+ * usually because somebody else got there first. The console shows the message
+ * and refreshes rather than telling the operator they typed something wrong.
+ */
+const STATUS_FOR: Record<CommandFailure, number> = {
+  'not-found': 404,
+  forbidden: 403,
+  invalid: 400,
+  conflict: 409,
+};
+
+function respond(result: CommandResult) {
+  if (!result.ok) {
+    return NextResponse.json(
+      { success: false, error: result.error },
+      { status: STATUS_FOR[result.failure] },
+    );
+  }
+  return NextResponse.json({
+    success: true,
+    missionId: result.missionId,
+    status: result.status,
+    notification: result.notification,
+  });
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -137,196 +159,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const command = parsed.data;
-
   try {
-    const repository = adminMissionRepository();
-
-    const mission = await repository.findById(id);
-    if (!mission || mission.deleted) {
-      return NextResponse.json({ success: false, error: 'Mission not found' }, { status: 404 });
-    }
-
-    // A missing run is ordinary, not an error: a yard with no network never
-    // flushed one. The decision falls back to the mission's own status and the
-    // write creates the run.
-    const runs = await repository.findRuns(id);
-    // The LATEST run at this yard, not the first match. Runs are keyed by
-    // runId now precisely so a yard can attempt a mission twice, and an
-    // operator pressing "mark complete" means the run in front of them, not
-    // the one from last week that happens to sort first.
-    const run =
-      runs
-        .filter((r) => r.yardId === command.yardId)
-        .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null;
-
-    const snapshot: RunSnapshot = {
-      runStatus: run?.status ?? null,
-      missionStatus: mission.status,
-      needsReview: run?.needsReview ?? mission.needsReview ?? false,
-    };
-
-    // Removing a run returns here rather than joining the decision switch
-    // below: it produces no status change, so threading it through
-    // applyBookkeeping would mean inventing one.
-    //
-    // Operator rather than admin, unlike deleting a mission. This is somebody
-    // tidying an attempt they logged themselves a minute ago, not erasing a
-    // child's work, and the yard check below is what keeps it to their own.
-    if (command.action === 'delete-run') {
-      if (command.yardId !== session.yardId) {
-        return NextResponse.json(
-          { success: false, error: 'That mission is at another yard. Sign out to change yards.' },
-          { status: 403 },
-        );
-      }
-
-      const target = runs.find((r) => r.runId === command.runId);
-      if (!target) {
-        return NextResponse.json({ success: false, error: 'Run not found' }, { status: 404 });
-      }
-      if (target.yardId !== command.yardId) {
-        return NextResponse.json(
-          { success: false, error: 'That run belongs to another yard.' },
-          { status: 403 },
-        );
-      }
-
-      await repository.softDeleteRun(
-        id,
-        command.runId,
-        new Date().toISOString(),
-        session.email ?? session.uid,
-      );
-      return NextResponse.json({ success: true });
-    }
-
-    let decision: Decision;
-    let youtubeUrl: string | undefined;
-    let feedback: string | undefined;
-    let clearsVideo = false;
-
-    switch (command.action) {
-      case 'complete':
-        decision = decideComplete(snapshot);
-        break;
-      case 'cancel':
-        decision = decideCancel(snapshot);
-        break;
-      case 'another-run':
-        decision = decideAnotherRun(snapshot);
-        break;
-      case 'attach-video': {
-        // Parsed rather than pattern-matched, using the same helper the learner
-        // player uses. If the id cannot be read out of it, the mission page
-        // could not have embedded it either, so accepting it would store a link
-        // that renders as an empty frame.
-        if (!getYouTubeId(command.url)) {
-          return NextResponse.json(
-            { success: false, error: 'Use a youtube.com/watch?v=... or youtu.be/... link.' },
-            { status: 400 },
-          );
-        }
-        youtubeUrl = command.url;
-        decision = decideAttachVideo(snapshot);
-        break;
-      }
-      case 'remove-video':
-        clearsVideo = true;
-        decision = decideRemoveVideo(snapshot);
-        break;
-      case 'resolve':
-        decision = decideResolve(snapshot, command.outcome);
-        break;
-      case 'feedback':
-        feedback = command.text;
-        decision = decideFeedback(snapshot);
-        break;
-    }
-
-    // A named run has to be one of this yard's own. Without this the runId
-    // above is an arbitrary document path from the request body, and an
-    // operator could attach a video to - or clear one from - another yard's
-    // attempt at the same mission.
-    if ('runId' in command && command.runId) {
-      const named = runs.find((r) => r.runId === command.runId);
-      if (!named) {
-        return NextResponse.json({ success: false, error: 'Run not found' }, { status: 404 });
-      }
-      if (named.yardId !== session.yardId) {
-        return NextResponse.json(
-          { success: false, error: 'That run belongs to another yard.' },
-          { status: 403 },
-        );
-      }
-    }
-
-    if (command.yardId !== session.yardId) {
-      return NextResponse.json(
-        { success: false, error: 'That mission is at another yard. Sign out to change yards.' },
-        { status: 403 },
-      );
-    }
-
-    if (!decision.ok) {
-      // 409, not 400. The request was well formed; the mission simply is not in
-      // a state where this makes sense, usually because somebody else got there
-      // first. The console shows the message and refreshes rather than telling
-      // the operator they typed something wrong.
-      return NextResponse.json({ success: false, error: decision.error }, { status: 409 });
-    }
-
-    const decidedAt = new Date().toISOString();
-    // For offline yards, the run may not exist yet. Generate a runId if needed.
-    //
-    // 'another-run' always takes a fresh one, which is the entire point of it:
-    // reusing the existing runId would merge the second attempt over the first
-    // and destroy the record this action exists to create. Every other action
-    // acts on the run in front of the operator.
-    const runId =
-      command.action === 'another-run'
-        ? nanoid()
-        // A named run when the caller gave one, which is how a mission with
-        // several attempts says which video belongs to which. Falls back to
-        // the latest at this yard, which is what every caller meant when a
-        // mission could only have one.
-        : ('runId' in command && command.runId ? command.runId : (run?.runId ?? nanoid()));
-
-    await repository.applyBookkeeping(id, runId, command.yardId, {
-      status: decision.change.status,
-      clearsReview: decision.change.clearsReview,
-      youtubeUrl,
-      clearsVideo,
-      feedback,
-      decidedAt,
-      decidedBy: session.email ?? session.uid,
+    const result = await operatorMissionCommands().run(id, parsed.data, {
+      name: session.email ?? session.uid,
+      yardId: session.yardId,
     });
-
-    // The learner's email on completion, which until now only ever fired when
-    // the YARD marked a mission complete. Without this the same event sends a
-    // message or does not depending on which console the operator happened to
-    // use, and the child is the one who notices.
-    //
-    // Best effort, and deliberately after the write: a Resend outage must not
-    // roll back a decision the operator already made.
-    let notification: unknown = null;
-    if (decision.change.status === 'completed') {
-      try {
-        notification = await notificationService().notifyStatusChange(
-          { ...mission, status: 'completed' },
-          'completed',
-        );
-      } catch (error) {
-        console.error('[operator/bookkeeping] notification failed:', error);
-      }
-    }
-
-    return NextResponse.json({
-      success: true,
-      missionId: id,
-      status: decision.change.status ?? mission.status,
-      notification,
-    });
+    return respond(result);
   } catch (error) {
     console.error('[operator/bookkeeping] failed:', error);
     return NextResponse.json(
@@ -341,9 +179,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
  *
  * Its own verb rather than another action in the union above, so the narrower
  * permission is visible in the handler signature instead of buried in a branch.
- *
- * Cancel is the reversible option and stays the answer to "this is not going to
- * run". Delete is for a mission that should not exist at all.
  */
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   let session;
@@ -359,22 +194,9 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params;
 
   try {
-    const repository = adminMissionRepository();
-
-    const mission = await repository.findById(id);
-    if (!mission) {
-      return NextResponse.json({ success: false, error: 'Mission not found' }, { status: 404 });
-    }
-    if (mission.deleted) {
-      return NextResponse.json(
-        { success: false, error: 'This mission is already deleted' },
-        { status: 409 },
-      );
-    }
-
-    await repository.softDeleteMission(id, new Date().toISOString(), session.email ?? session.uid);
-
-    return NextResponse.json({ success: true, missionId: id });
+    return respond(
+      await operatorMissionCommands().deleteMission(id, { name: session.email ?? session.uid }),
+    );
   } catch (error) {
     console.error('[operator/bookkeeping] delete failed:', error);
     return NextResponse.json(

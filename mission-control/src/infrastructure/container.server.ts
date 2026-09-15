@@ -28,6 +28,8 @@ import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/Fire
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { OperatorMissionCommands } from '@/core/application/services/OperatorMissionCommands';
+import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
 export function adminMissionRepository(): IMissionRepository {
@@ -57,4 +59,9 @@ export function notificationService(): MissionNotificationService {
     new FirestoreLearnerContactReader(getFirestoreInstance()),
     resolveAppUrl(),
   );
+}
+
+/** The operator's bookkeeping commands, on the privileged repository. */
+export function operatorMissionCommands(): OperatorMissionCommands {
+  return new OperatorMissionCommands(adminMissionRepository(), notificationService(), nanoid);
 }
