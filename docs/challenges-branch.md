@@ -40,6 +40,24 @@ sharper reason: rules deploy from `main` for every environment. If that block
 only existed on the branch, switching would need a rules deploy as well as an
 app deploy, and "switch instantly" would quietly stop being true.
 
+`firestore.indexes.json` keeps the two `leaderboardEntries` composite indexes
+on `main` for the same reason. The public leaderboard (`optedIn` equality,
+ordered by `score`, `displayName`, id) and a learner's rank (`optedIn`
+equality, `score` range) both need one, and without them both queries fail in
+a real project with "The query requires an index". The Firestore emulator does
+not enforce composite indexes, which is why the feature works locally without
+them. Deploy them separately from the app:
+
+```bash
+firebase deploy --only firestore:indexes --project bt-impact-academy
+```
+
+Answer **No** if it offers to delete indexes that are not in the file, and
+never pass `--force`, which deletes them without asking. The account needs
+permission to manage Firestore indexes on the project (for example
+`roles/datastore.indexAdmin`); an account that cannot run
+`firebase firestore:indexes` cannot deploy them either.
+
 `feat/challenges` carries the other 42 files: the pages, the API routes, the
 components, the domain entities and services, the repositories, the hooks, the
 config and the tests.
