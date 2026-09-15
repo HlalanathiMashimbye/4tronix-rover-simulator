@@ -13,7 +13,7 @@
  */
 
 import { Mission } from '@/core/domain/entities/Mission';
-import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
+import { IMissionReader, IMissionWriter } from '@/core/domain/repositories/IMissionRepository';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { CreateMissionDto } from '@/core/application/dto/mission';
@@ -25,7 +25,8 @@ export interface SubmitMissionResult {
 }
 
 export class MissionService {
-  constructor(private readonly missionRepository: IMissionRepository) {}
+  /** Reads and writes missions; never touches runs, so it is not given them. */
+  constructor(private readonly missionRepository: IMissionReader & IMissionWriter) {}
 
   /**
    * Submit a new mission (anonymous - no authentication required)

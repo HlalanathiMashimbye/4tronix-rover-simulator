@@ -112,6 +112,11 @@ Paths in this section are relative to `mission-control/src`.
   needed `findRuns`, `applyBookkeeping` and `softDeleteMission`, which existed
   only on the concrete Firestore class, so that route was structurally unable
   to hold the interface type, and an abstraction nobody can use is decoration.
+  Widening it then went too far the other way, so it is now split by caller:
+  `IMissionReader`, `IMissionWriter` and `IMissionBookkeeping`, with
+  `IMissionRepository` as all three for the server container only. The browser
+  container returns `IMissionReader`, and `architecture.test.ts` fails the
+  build if that widens.
 - **`core/application/dto`** - the shapes the application accepts. Declared
   here in plain TypeScript, with the Zod schemas asserting they produce them
   (`satisfies z.ZodType<CreateMissionDto>`). Inferring the DTO from the schema
