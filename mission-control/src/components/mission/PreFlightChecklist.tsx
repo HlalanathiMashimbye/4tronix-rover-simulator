@@ -90,7 +90,7 @@ export function PreFlightChecklist({ result }: PreFlightChecklistProps) {
           Pre-flight checks
         </h4>
         {result.ready && (
-          <span className="text-[0.65rem] font-bold text-buzz">Ready to fly</span>
+          <span className="text-[0.65rem] font-bold text-buzz">Ready to send</span>
         )}
       </div>
 

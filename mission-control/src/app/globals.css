@@ -89,6 +89,9 @@
 
   --gradient-mars: linear-gradient(135deg, var(--mars) 0%, var(--mars-glow) 100%);
   --gradient-cosmic: linear-gradient(135deg, var(--cosmic) 0%, var(--mars) 100%);
+  /* The ready-to-send CTA. Bright here because --primary-foreground is
+     near-black in this theme, so dark text on the buzz greens runs 8.5:1. */
+  --gradient-buzz: linear-gradient(135deg, var(--buzz) 0%, var(--buzz-glow) 100%);
   --gradient-launch: linear-gradient(135deg, var(--primary) 0%, oklch(0.65 0.24 12) 100%);
 
   --shadow-glow-mars: 0 20px 60px -15px color-mix(in oklab, var(--mars) 55%, transparent);
@@ -196,6 +199,17 @@
      resolve to ink here. Dark mode keeps the mission orange. */
   --gradient-mars: var(--gradient-ink);
   --gradient-launch: var(--gradient-ink);
+  /* Deepened, exactly as the block colours above are. --primary-foreground is
+     near-WHITE here, and white on the dark theme's buzz green is 2.11:1 - the
+     same failure the block comment describes. These run 5.7:1 at the start of
+     the gradient and 4.6:1 at the end, so the label clears 4.5:1 across the
+     whole button rather than only where it starts.
+
+     This CTA stays green while every other one resolves to ink. That is the
+     point of it: green here means one specific thing - the checks passed and
+     the rover will accept this - so it is the one place colour still carries
+     information on a monochrome page. */
+  --gradient-buzz: linear-gradient(135deg, oklch(0.47 0.15 150) 0%, oklch(0.52 0.14 158) 100%);
   --shadow-card: var(--shadow-soft);
 }
 
@@ -314,6 +328,7 @@
 
   .bg-gradient-mars { background: var(--gradient-mars); }
   .bg-gradient-cosmic { background: var(--gradient-cosmic); }
+  .bg-gradient-buzz { background: var(--gradient-buzz); }
   .shadow-glow-mars { box-shadow: var(--shadow-glow-mars); }
   .shadow-glow-buzz { box-shadow: var(--shadow-glow-buzz); }
   .shadow-card { box-shadow: var(--shadow-card); }
