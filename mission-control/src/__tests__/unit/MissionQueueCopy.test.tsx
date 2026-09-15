@@ -65,7 +65,7 @@ describe('copying a mission to paste into the yard', () => {
     expect(await screen.findByRole('button', { name: /send to rover/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^open$/i }));
 
-    expect(await screen.findByRole('button', { name: /copy mission code/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^copy mission code$/i })).toBeInTheDocument();
   });
 
   it('puts the mission Python on the clipboard', async () => {
@@ -74,7 +74,7 @@ describe('copying a mission to paste into the yard', () => {
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /copy mission code/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
     // waitFor, not a bare assertion: the copy is async and sets state after it
     // resolves, so asserting synchronously both races the write and leaves an
@@ -84,7 +84,7 @@ describe('copying a mission to paste into the yard', () => {
         '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
       ),
     );
-    await screen.findByRole('button', { name: /copied/i });
+    await screen.findByRole('button', { name: /^copied$/i });
   });
 
   it('confirms, so the operator knows to switch tabs', async () => {
@@ -92,9 +92,9 @@ describe('copying a mission to paste into the yard', () => {
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /copy mission code/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /copied/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^copied$/i })).toBeInTheDocument());
   });
 
   it('falls back to a prompt when the clipboard is refused', async () => {
@@ -107,7 +107,7 @@ describe('copying a mission to paste into the yard', () => {
 
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
     fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
-    fireEvent.click(await screen.findByRole('button', { name: /copy mission code/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /^copy mission code$/i }));
 
     await waitFor(() =>
       expect(prompt).toHaveBeenCalledWith(
@@ -115,7 +115,7 @@ describe('copying a mission to paste into the yard', () => {
         '# Mission: Rock Lover\n# MissionID: m1\n\nrover.forward(60)\nrover.stop()',
       ),
     );
-    expect(screen.queryByRole('button', { name: /copied/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^copied$/i })).not.toBeInTheDocument();
   });
 
   it('cannot copy a mission with no code', async () => {
@@ -124,7 +124,7 @@ describe('copying a mission to paste into the yard', () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
     fireEvent.click(await screen.findByRole('button', { name: /^open$/i }));
-    expect(await screen.findByRole('button', { name: /copy mission code/i })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: /^copy mission code$/i })).toBeDisabled();
   });
 });
 
