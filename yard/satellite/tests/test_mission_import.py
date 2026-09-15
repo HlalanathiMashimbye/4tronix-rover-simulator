@@ -109,10 +109,18 @@ class TestImportNeedsNoDialog:
         assert "addEventListener('paste'" in page
 
     def test_a_paste_into_a_field_the_operator_edits_is_left_alone(self, page):
-        """Pasting an id into the id box should fill the id box, not re-import."""
+        """Pasting into read-only fields should trigger an import, not fill the field.
+
+        missionName and missionId are now read-only to the operator, so they are
+        not in TYPED_FIELDS. Only code and ytDesc are manually editable.
+        """
         assert 'TYPED_FIELDS' in page
-        for field in ('code', 'missionName', 'missionId', 'ytDesc'):
-            assert f"'{field}'" in page.split('TYPED_FIELDS')[1].split(']')[0]
+        typed_fields_section = page.split('TYPED_FIELDS')[1].split(']')[0]
+        for field in ('code', 'ytDesc'):
+            assert f"'{field}'" in typed_fields_section
+        # missionName and missionId should NOT be in TYPED_FIELDS
+        for field in ('missionName', 'missionId'):
+            assert f"'{field}'" not in typed_fields_section
 
 
 class TestStandupFeedback:
