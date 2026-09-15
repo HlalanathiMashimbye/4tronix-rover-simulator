@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Blocks, Check, CheckCircle2, Code2, Copy, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronRight, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
 import {
   subscribeToMissionRuns,
@@ -19,7 +19,6 @@ import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useRegisterSort, useSearch } from '@/contexts/SearchContext';
 import { sortMissions } from '@/core/domain/services/missionSort';
 import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
-import { missionClipboardText } from '@/lib/missionClipboard';
 import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
 
 /**
@@ -128,8 +127,6 @@ function YardQueue({
    * Manual mode has been removed to simplify the UI.
    */
   const mode: ConsoleMode = 'auto';
-  const [automaticMissionId, setAutomaticMissionId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   // Read in an effect, not in useState's initialiser: this component renders
   // on the server too, where localStorage does not exist.
   const [consoleUrl, setConsoleUrl] = useState<string>('');
@@ -137,23 +134,6 @@ function YardQueue({
   useEffect(() => setConsoleUrl(readConsoleUrl()), []);
   const [done, setDone] = useState<QueueMission[] | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
-
-  async function copyCode(mission: QueueMission) {
-    // Shared with the mission page, so both Copy buttons put the same thing on
-    // the clipboard and the run station gets the same paste either way.
-    const envelope = missionClipboardText(mission);
-    try {
-      await navigator.clipboard.writeText(envelope);
-      setCopiedId(mission.id);
-      // Long enough to read, short enough that the next copy is unambiguous.
-      window.setTimeout(() => setCopiedId((id) => (id === mission.id ? null : id)), 2000);
-    } catch {
-      // Clipboard access can be refused (insecure origin, denied permission).
-      // Say so rather than showing "Copied" over an empty clipboard, which
-      // would send an operator to paste nothing into the yard.
-      window.prompt('Copy this, then paste it into the yard code editor:', envelope);
-    }
-  }
 
   const { query, activeFilter, sort } = useSearch();
   useRegisterSort();
@@ -541,16 +521,23 @@ function YardQueue({
           const isSelected = selectedId === mission.id;
 
           return (
-            <li
-              key={mission.id}
-              onClick={() => setSelectedId(mission.id)}
-              className={`cursor-pointer rounded-2xl border px-3.5 py-3 transition-colors ${
-                isSelected
-                  ? 'border-primary/60 bg-primary/5'
-                  : 'border-border/50 bg-background/40 hover:border-border'
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <li key={mission.id}>
+              {/* One target per mission. The row used to carry its own Send to
+                  Rover and Open buttons, so a mission had two Send to Rover
+                  buttons on screen at once, the row's and the mission pane's.
+                  Everything done to a mission now happens in the pane, and the
+                  chevron is how the row says it opens. A real button, so the
+                  queue works from a keyboard too. */}
+              <button
+                type="button"
+                onClick={() => setSelectedId(mission.id)}
+                aria-current={isSelected ? 'true' : undefined}
+                className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                  isSelected
+                    ? 'border-primary/60 bg-primary/5'
+                    : 'border-border/50 bg-background/40 hover:border-border'
+                }`}
+              >
                 <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
                   {index + 1}
                 </span>
@@ -571,9 +558,9 @@ function YardQueue({
                 {/* The mission name is the only handle, and the only one
                     needed: a child says "mine is Rock Lover" and the operator
                     finds that row without learning anything about them. */}
-                <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {mission.name || 'Untitled mission'}
-                </p>
+                </span>
 
                 {mission.needsReview && (
                   <span
@@ -585,53 +572,13 @@ function YardQueue({
                   </span>
                 )}
 
-                {/* The automatic route sends through the satellite. Manual keeps
-                  this exact Copy action as its offline fallback.
-                  The manual bridge to the yard, and deliberately manual.
-                    Mission Control cannot reach the satellite: it is behind
-                    carrier NAT with no inbound path, which is why Firestore is
-                    the only channel between them. So the operator keeps both
-                    open in tabs, copies the Python here, and pastes it into
-                    the yard's /code/ editor to run.
-
-                    This is a fallback that should survive automated dispatch
-                    rather than be replaced by it - it is the path that works
-                    when the venue's internet does not. */}
-                <button
-                  onClick={() => {
-                    if (mode === 'auto') {
-                      setAutomaticMissionId(mission.id);
-                      setSelectedId(mission.id);
-                    } else {
-                      void copyCode(mission);
-                    }
-                  }}
-                  disabled={!mission.code}
-                  title={mode === 'auto' ? 'Check the yard and send this mission to the rover' : "Copy the Python, then paste it into the yard's code editor"}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {mode === 'auto' ? (
-                    <Rocket className="h-3 w-3" />
-                  ) : copiedId === mission.id ? (
-                    <Check className="h-3 w-3 text-primary" />
-                  ) : (
-                    <Copy className="h-3 w-3" />
-                  )}
-                  {mode === 'auto' ? 'Send to Rover' : copiedId === mission.id ? 'Copied' : 'Copy'}
-                </button>
-
-                <button
-                  onClick={() => setSelectedId(mission.id)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
-                >
-                  {mission.blocklyState ? (
-                    <Blocks className="h-3 w-3" />
-                  ) : (
-                    <Code2 className="h-3 w-3" />
-                  )}
-                  Open
-                </button>
-              </div>
+                <ChevronRight
+                  aria-hidden="true"
+                  className={`h-4 w-4 shrink-0 transition-[transform,color] duration-150 motion-reduce:transition-none ${
+                    isSelected ? 'translate-x-0.5 text-primary' : 'text-muted-foreground'
+                  }`}
+                />
+              </button>
             </li>
           );
         })}
@@ -661,7 +608,6 @@ function YardQueue({
         yardId={yardId}
         isAdmin={role === 'admin'}
         mode={mode}
-        startAutomatic={automaticMissionId === selectedId}
         onBack={() => setSelectedId(null)}
         onResult={(message) => {
           setFlash(message);
