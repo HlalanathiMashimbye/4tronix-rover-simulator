@@ -11,9 +11,9 @@ internet access.
 
 from playwright.sync_api import Page
 
-# live_server fixture comes from tests/test_status_page.py via conftest-less
-# sharing: import it so pytest sees the same session server
-from tests.test_status_page import live_server  # noqa: F401
+# live_server comes from conftest.py. It used to be imported here from
+# test_status_page, which quietly registered the fixture a second time and
+# started a second server; see the fixture's docstring.
 
 
 def _generate(page: Page, live_server, build_js: str) -> str:

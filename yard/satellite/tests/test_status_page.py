@@ -1,26 +1,14 @@
-import threading
-import time
 import json
-import pytest
 import sys
 import os
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from web_server import app as flask_app
 from playwright.sync_api import Page
 
-PORT = 15050
-
-
-@pytest.fixture(scope='session', autouse=True)
-def live_server():
-    t = threading.Thread(
-        target=lambda: flask_app.run(port=PORT, use_reloader=False, threaded=True),
-        daemon=True,
-    )
-    t.start()
-    time.sleep(1)
-    return f'http://localhost:{PORT}'
+# live_server comes from conftest.py: one session server shared with
+# test_blockly_codegen.py, on an ephemeral port.
 
 
 def mock_status(page, satellite=None, rover=None, camera=None):
