@@ -136,10 +136,12 @@ If a rebase gets ugly, it will be in that list, and nowhere else.
 
 ## The mobile tab bar
 
-`feat/challenges` adds a fourth slot to the mobile bottom bar. On `main` the row
-is Home, History and Alerts; on the branch it is Home, Challenges, History and
-Alerts. Create Mission is the floating button below the row on both, and is not
-one of the slots.
+`feat/challenges` changes the mobile bottom bar. On `main` the row is Home,
+History and Alerts; on the branch it is Home, Challenges, History and
+Leaderboard, and the bell moves up to the top bar to make room. The row is read
+from `NAV_ITEMS`, so every destination the laptop bar has is on the phone too.
+Create Mission is the floating button below the row on both, and is not one of
+the slots.
 
 Three slots is a normal tab bar and needs no decision. Noted only so the count
 changing between branches is expected rather than alarming.
