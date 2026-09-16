@@ -10,7 +10,7 @@ import {
 /**
  * Plain-English label for a check - presentation only, not domain logic.
  *
- * The domain says which rules there
+ * Same split ChallengeInstructionsPanel uses: the domain says which rules there
  * are and whether they pass, and this says it in words a nine-year-old can act
  * on. Rewording a line touches this file and nothing in core.
  */
@@ -72,9 +72,9 @@ function formatSeconds(seconds: number): string {
  * the checks are close enough to sequential that the first one is nearly always
  * the one to act on.
  *
- * One tick vocabulary across the app - filled green
+ * Deliberately mirrors ChallengeInstructionsPanel's tick vocabulary - filled green
  * CheckCircle2 against a hollow muted Circle. A learner arriving from the
- * learner only ever has to learn what those two icons mean once.
+ * challenges flow has already learnt what those two icons mean.
  */
 interface PreFlightChecklistProps {
   result: PreFlightResult;
