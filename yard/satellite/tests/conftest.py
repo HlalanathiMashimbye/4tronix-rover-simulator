@@ -12,9 +12,46 @@ Skipping at collection time keeps `pytest tests` correct everywhere: it runs
 everything it can, and says plainly what it left out.
 """
 
+import asyncio
+import contextlib
+import threading
+
 import pytest
 
 collect_ignore = []
+
+# Fixtures that mean "this test drives Playwright". Playwright's sync API needs
+# its parked loop marker left alone (its internals call get_running_loop() when
+# a call switches into the dispatcher greenlet), so _no_phantom_event_loop
+# below must stand aside for these.
+_PLAYWRIGHT_FIXTURES = {'playwright', 'browser_type', 'browser', 'context', 'page'}
+
+
+@contextlib.contextmanager
+def hidden_running_loop():
+    """Hide a parked event loop's running-loop marker for the duration.
+
+    Playwright's sync API parks `loop.run_until_complete(...)` on a greenlet
+    "until the end of times" (its own words), and pytest-playwright keeps that
+    playwright instance alive for the whole session. Parking a greenlet does
+    not clear the thread's running-loop marker, so from the moment the first
+    browser test runs, every later test in the process sees a "running" event
+    loop that is not actually executing - and its asyncio.run() dies with
+    "cannot be called from a running event loop". recording_control.is_ready
+    swallows that into ready=False, which is how nine tests failed only in a
+    full run while CI, with the browser tests in a separate job, stayed green.
+
+    _set_running_loop is a private asyncio API, but it is the exact
+    thread-local the parked loop set on its way in; saving and restoring it
+    around code that never switches into the parked greenlet is safe, because
+    nothing can resume that loop while our code holds the thread.
+    """
+    parked = asyncio.events._get_running_loop()
+    asyncio.events._set_running_loop(None)
+    try:
+        yield
+    finally:
+        asyncio.events._set_running_loop(parked)
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +105,44 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
 
     yield
     camera_state.invalidate()
+
+
+@pytest.fixture(scope='session')
+def live_server():
+    """One Flask server for every browser-driven test, on an ephemeral port.
+
+    This lived in test_status_page.py, and test_blockly_codegen.py imported
+    it - which registers a SECOND fixture under the same name, so "session
+    scope" ran twice and the second server died binding the same fixed port
+    in a daemon thread nobody looked at. The tests passed anyway (the first
+    server answered for both), leaving a spurious unhandled-thread warning in
+    every full run. One definition here is visible to both files without the
+    import, and make_server binds before the thread starts, so there is no
+    fixed port to collide on and no sleep to guess the startup time.
+    """
+    from werkzeug.serving import make_server
+    from web_server import app as flask_app
+
+    server = make_server('127.0.0.1', 0, flask_app, threaded=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f'http://127.0.0.1:{server.server_port}'
+    server.shutdown()
+    thread.join(timeout=5)
+
+
+@pytest.fixture(autouse=True)
+def _no_phantom_event_loop(request):
+    """No test may inherit the browser tests' parked event loop.
+
+    See hidden_running_loop for the failure this prevents. Playwright tests
+    are the one place the marker is load-bearing, so they are left alone.
+    """
+    if _PLAYWRIGHT_FIXTURES & set(request.fixturenames):
+        yield
+        return
+    with hidden_running_loop():
+        yield
 
 
 try:  # pragma: no cover - trivial import probe
