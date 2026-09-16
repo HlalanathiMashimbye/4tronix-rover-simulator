@@ -11,7 +11,7 @@
  * so it has to be at least as good.
  */
 
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 const subscribeToYardQueue = jest.fn();
 const subscribeToYardCompleted = jest.fn();
@@ -57,6 +57,15 @@ function renderQueue(missions = QUEUE, settled: unknown[] = []) {
       <MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} />
     </SearchProvider>,
   );
+}
+
+/**
+ * The chip row, not the whole document. A queue row's second line now says
+ * "Waiting" or "Running now" too, and a row is a button, so an unscoped
+ * lookup for a chip by name finds the row as well.
+ */
+function chips() {
+  return within(screen.getByRole('group', { name: 'Filter missions by status' }));
 }
 
 function search(text: string) {
@@ -120,7 +129,7 @@ describe('filtering the queue', () => {
     // All in queue minus whatever is running, and one rover runs one mission.
     // Its slot went to work an operator can actually act on.
     for (const label of ['All in queue', 'Needs video', 'Running now', 'Needs review']) {
-      expect(screen.getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument();
+      expect(chips().getByRole('button', { name: new RegExp(label, 'i') })).toBeInTheDocument();
     }
   });
 
@@ -129,16 +138,16 @@ describe('filtering the queue', () => {
     await screen.findByText('Rock Lover');
 
     // Three in the queue, one running, one flagged - before anything is tapped.
-    expect(screen.getByRole('button', { name: /all in queue\s*3/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /running now\s*1/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /needs review\s*1/i })).toBeInTheDocument();
+    expect(chips().getByRole('button', { name: /all in queue\s*3/i })).toBeInTheDocument();
+    expect(chips().getByRole('button', { name: /running now\s*1/i })).toBeInTheDocument();
+    expect(chips().getByRole('button', { name: /needs review\s*1/i })).toBeInTheDocument();
   });
 
   it('shows only flagged missions under Needs review', async () => {
     renderQueue();
     await screen.findByText('Rock Lover');
 
-    fireEvent.click(screen.getByRole('button', { name: /needs review/i }));
+    fireEvent.click(chips().getByRole('button', { name: /needs review/i }));
 
     expect(screen.getByText('Crater Pioneer')).toBeInTheDocument();
     expect(screen.queryByText('Rock Lover')).not.toBeInTheDocument();
@@ -212,7 +221,7 @@ describe('the Done chip does not claim the yard has nothing finished', () => {
    * had 16 missions in total.
    */
   function doneChip() {
-    return screen.getAllByRole('button', { name: /done/i })[0];
+    return chips().getByRole('button', { name: /done/i });
   }
 
   it('shows no number before the list has been fetched', () => {
@@ -246,7 +255,7 @@ describe('the Done chip does not claim the yard has nothing finished', () => {
     // which needs review, so the zero here is genuine rather than unfetched.
     renderQueue([QUEUE[0]]);
 
-    expect(screen.getAllByRole('button', { name: /needs review/i })[0])
+    expect(chips().getByRole('button', { name: /needs review/i }))
       .toHaveTextContent('0');
   });
 });
@@ -270,13 +279,13 @@ describe('the Needs video filter', () => {
   ];
 
   function chip(name: RegExp) {
-    return screen.getAllByRole('button', { name })[0];
+    return chips().getByRole('button', { name });
   }
 
   it('replaces Waiting, which duplicated All in queue', () => {
     renderQueue();
 
-    expect(screen.queryAllByRole('button', { name: /waiting/i })).toHaveLength(0);
+    expect(chips().queryAllByRole('button', { name: /waiting/i })).toHaveLength(0);
     expect(chip(/needs video/i)).toBeInTheDocument();
   });
 

@@ -33,38 +33,98 @@ import { useSearch } from '@/contexts/SearchContext';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { SortSelect } from './SortSelect';
 
-export function MobileSearch() {
-  const { query, setQuery, activeFilter, setActiveFilter, filters } = useSearch();
-  const reduceMotion = useReducedMotion();
+export function MobileSearch({
+  /**
+   * `full` is the learner feed: field, labelled chips, then the sort on its
+   * own row. `compact` is a page that renders its filters somewhere else - the
+   * operator console puts them in a bottom tab bar on a phone - so it is one
+   * row: the field with the sort icon beside it. Beside, not inside: the
+   * field already carries the clear button, and a second control inside it is
+   * how 375px starts truncating the placeholder.
+   */
+  layout = 'full',
+}: {
+  layout?: 'full' | 'compact';
+} = {}) {
+  const { query, setQuery, filters } = useSearch();
 
   // Same rule as the navbar: a page that registered no filters has nothing to
   // search, so this is not a control it should show.
   if (filters.length === 0) return null;
 
+  if (layout === 'compact') {
+    return (
+      <div className="flex shrink-0 flex-col gap-2 lg:hidden">
+        <div className="flex items-center gap-2">
+          <SearchField query={query} setQuery={setQuery} className="flex-1" />
+          <SortSelect variant="icon" />
+        </div>
+        {/* The chips come back between md and lg. The tab bar that replaces
+            them stops at md, where the learner bottom bar it stands in for
+            stops; the navbar's own chips only start at lg. Without this row
+            an iPad in portrait had no way to change view at all. */}
+        <FilterChips className="hidden md:flex" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex shrink-0 flex-col gap-2 pb-2 lg:hidden">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search missions"
-          aria-label="Search missions by name or code"
-          className="h-11 w-full rounded-full border border-border/60 bg-card/60 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
-        />
-        {query && (
-          <button
-            onClick={() => setQuery('')}
-            aria-label="Clear search"
-            className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      <SearchField query={query} setQuery={setQuery} />
 
+      <FilterChips />
 
+      {/* Below the chips, not above them. The chips are the control a learner
+          reaches for first and they belong nearest the field; ordering is the
+          adjustment you make once you can see the list, so it sits last. Its
+          own row either way: the field already carries the clear button, and a
+          second control inside it is how a 375px layout starts truncating. */}
+      <SortSelect variant="labelled" className="self-start px-1" />
+    </div>
+  );
+}
+
+/** The field itself, shared by both shapes so they cannot drift. */
+function SearchField({
+  query,
+  setQuery,
+  className = '',
+}: {
+  query: string;
+  setQuery: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <div className={`relative ${className}`}>
+      <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search missions"
+        aria-label="Search missions by name or code"
+        className="h-11 w-full rounded-full border border-border/60 bg-card/60 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+      />
+      {query && (
+        <button
+          onClick={() => setQuery('')}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The status chips, shared by both shapes so they cannot drift. */
+function FilterChips({ className = '' }: { className?: string }) {
+  const { activeFilter, setActiveFilter, filters } = useSearch();
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <>
       {/* Labelled, unlike the navbar's icon-only chips. There is room for the
           words here, and a filter whose meaning has to be guessed from a glyph
           is one a child will not use. The count comes too, so "Completed 12"
@@ -74,7 +134,7 @@ export function MobileSearch() {
           stretch to fill instead, so the row lines up with the field above it
           rather than stopping short and reading as unfinished. */}
       <div
-        className="flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] sm:overflow-visible"
+        className={`flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] sm:overflow-visible ${className}`}
         role="group"
         aria-label="Filter missions by status"
       >
@@ -116,13 +176,6 @@ export function MobileSearch() {
           );
         })}
       </div>
-
-      {/* Below the chips, not above them. The chips are the control a learner
-          reaches for first and they belong nearest the field; ordering is the
-          adjustment you make once you can see the list, so it sits last. Its
-          own row either way: the field already carries the clear button, and a
-          second control inside it is how a 375px layout starts truncating. */}
-      <SortSelect variant="labelled" className="self-start px-1" />
-    </div>
+    </>
   );
 }

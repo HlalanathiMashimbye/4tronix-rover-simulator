@@ -3,11 +3,23 @@
 import { useState } from 'react';
 import { LogOut } from 'lucide-react';
 
+import { menuItemClass } from '@/components/ui/Menu';
+
 /**
  * Ends the server session and revokes it, so signing out takes effect
  * everywhere rather than only in this browser.
  */
-export function SignOutButton() {
+export function SignOutButton({
+  /**
+   * `chip` in the laptop header, `menu-item` inside the phone's overflow
+   * menu. One component with two shapes rather than two components, because
+   * the thing that matters here - revoke, then hard-navigate even on failure -
+   * must not be copied.
+   */
+  variant = 'chip',
+}: {
+  variant?: 'chip' | 'menu-item';
+} = {}) {
   const [busy, setBusy] = useState(false);
 
   async function signOut() {
@@ -23,19 +35,24 @@ export function SignOutButton() {
     }
   }
 
+  if (variant === 'menu-item') {
+    return (
+      <button type="button" role="menuitem" onClick={signOut} disabled={busy} className={menuItemClass}>
+        <LogOut className="h-4 w-4 text-muted-foreground" />
+        {busy ? 'Signing out…' : 'Sign out'}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={signOut}
       disabled={busy}
-      aria-label="Sign out"
-      // Icon-only below md. The word is the first thing the console header can
-      // give up on a phone: three labelled controls and a title do not share
-      // 375px, and this one is recognisable without it.
-      className="clay-press inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-card text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50 md:w-auto md:rounded-lg md:px-3.5"
+      className="clay-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
     >
-      <LogOut className="h-4 w-4 md:h-3.5 md:w-3.5" />
-      <span className="hidden md:inline">{busy ? 'Signing out…' : 'Sign out'}</span>
+      <LogOut className="h-3.5 w-3.5" />
+      {busy ? 'Signing out…' : 'Sign out'}
     </button>
   );
 }

@@ -69,10 +69,15 @@ export function Navbar() {
   );
 
   /**
-   * The learner's floating action button is not a control an operator can use,
-   * and on a phone it is fixed over the corner the console's own panes end in:
-   * it sat on top of the last queue row and on top of the mission pane's code.
-   * The tabs beside it still get them back to the learner site.
+   * On a phone, the operator console wears its own chrome and none of this.
+   *
+   * Below md this bar, the bottom tab bar and the floating Create Mission
+   * button are the learner's: Home, History, Alerts and a new mission are
+   * places a child goes. They took 128px of an 844px screen from an operator
+   * who goes to none of them, and the floating button sat over the corner
+   * both console panes end in. OperatorMobileBar and OperatorTabBar stand in
+   * for them there. From md up nothing changes: the desktop console uses the
+   * search field in this bar.
    *
    * The route is named in lib/appSurfaces.ts rather than here - see the
    * note there for why this file must not contain the string.
@@ -108,7 +113,11 @@ export function Navbar() {
           works in both themes without touching the palette. The shadow is an
           OUTER one so the bar stays exactly 64px and the page mains below
           (h-page) do not overflow by a pixel. */}
-      <nav className="sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)]">
+      <nav
+        className={`sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)] ${
+          onOperatorSurface ? 'hidden md:block' : ''
+        }`}
+      >
         {/* Use a balanced three-column layout so the search sits in the true
             visual center of the navbar, with the brand and action cluster
             anchored to opposite edges. */}
@@ -209,6 +218,7 @@ export function Navbar() {
           button below instead: an action and a destination should not look
           alike. feat/challenges adds a fourth slot back here, a Challenges
           tab - see docs/challenges-branch.md. */}
+      {!onOperatorSurface && (
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
@@ -244,6 +254,7 @@ export function Navbar() {
           </button>
         </div>
       </nav>
+      )}
 
       {/* Floating Create Mission button. Sits above and overlapping the tab
           bar rather than inside it - z-index above the bar, positioned so its

@@ -45,6 +45,13 @@ export interface SearchFilter {
    */
   count: number | null;
   icon: LucideIcon;
+  /**
+   * The label a tab has room for. A chip can say "All in queue"; a tab bar
+   * sharing 390px five ways cannot, and truncating the chip label to fit is
+   * how "Needs vi..." happens. Optional: pages that only render as chips
+   * never set it.
+   */
+  shortLabel?: string;
 }
 
 /**
