@@ -237,14 +237,14 @@ export function Navbar() {
       {!onOperatorSurface && (
       <nav
         aria-label="Tabs"
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[var(--app-bottom-chrome)] border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
       >
-        <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
+        <div className="mx-auto flex h-full max-w-md items-center justify-around px-2">
           {NAV_ITEMS.map(({ href, mobileLabel, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className={`relative flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[10px] font-bold transition-colors ${
+              className={`relative flex flex-col items-center gap-0.5 rounded-xl px-2 py-0.5 text-[10px] leading-none font-bold transition-colors ${
                 isActive(href) ? 'text-primary' : 'text-muted-foreground'
               }`}
             >
@@ -270,7 +270,7 @@ export function Navbar() {
         <Link
           href="/mission"
           aria-label="Create Mission"
-          className="clay clay-press fixed bottom-14 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
+          className="clay clay-press fixed bottom-10 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
         >
           <Plus className="h-6 w-6" strokeWidth={2.5} />
         </Link>
