@@ -7,8 +7,11 @@ review is in [design-decisions.md](design-decisions.md).
 > **Out of date on the yard.** This specifies the August 2026 diagram. Band B
 > (the satellite's console, SQLite mirror and sync threads, and
 > `OPERATOR_AUTH=off`) describes machinery that no longer exists, so a
-> diagram built from it today would be wrong about the yard. See
-> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) for the current shape.
+> diagram built from it today would be wrong about the yard. Kept for its
+> reasoning about form: boundaries, the edge grammar, the density rules.
+> [diagram-prompt.md](diagram-prompt.md) was regenerated on 16 September 2026
+> from [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and is the current
+> content; generate from the prompt, not from this spec.
 
 ---
 

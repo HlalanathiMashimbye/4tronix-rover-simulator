@@ -1,0 +1,336 @@
+<title>Mission Control Architecture</title>
+<style>
+  :root {
+    --paper: #FAF7F2;
+    --ink: #1A1D21;
+    --node: #F3EFE7;
+    --ext: #F1ECE2;
+    --line: #C9C2B4;
+    --muted: #6E6A60;
+    --indigo: #3B4CCA;
+    --teal: #0E7C7B;
+    --forest: #2F6B3A;
+    --slate: #475569;
+    --green: #2F8F46;
+    --amber-bg: #F3E3BB;
+    --amber-ink: #7A5A17;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #12100E;
+      --ink: #F2EFE9;
+      --node: #1C1915;
+      --ext: #181510;
+      --line: #45403A;
+      --muted: #A39D91;
+      --indigo: #8D99F0;
+      --teal: #41B9B6;
+      --forest: #7CC48A;
+      --slate: #97A5BB;
+      --green: #63C078;
+      --amber-bg: #35290F;
+      --amber-ink: #E8C56A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #12100E;
+    --ink: #F2EFE9;
+    --node: #1C1915;
+    --ext: #181510;
+    --line: #45403A;
+    --muted: #A39D91;
+    --indigo: #8D99F0;
+    --teal: #41B9B6;
+    --forest: #7CC48A;
+    --slate: #97A5BB;
+    --green: #63C078;
+    --amber-bg: #35290F;
+    --amber-ink: #E8C56A;
+  }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding-block: 24px;
+    padding-inline: 16px;
+    margin: 0;
+  }
+  .frame { max-width: 100%; overflow-x: auto; }
+  svg { display: block; width: 100%; min-width: 1150px; height: auto; }
+
+  text { fill: var(--ink); }
+  .title  { font-size: 26px; font-weight: 650; }
+  .stamp  { font-size: 12px; fill: var(--muted); }
+  .band   { font-size: 19px; font-weight: 700; letter-spacing: 1.5px; }
+  .bandsub{ font-size: 12px; font-weight: 600; fill: var(--muted); letter-spacing: .4px; }
+  .ntitle { font-size: 15px; font-weight: 600; }
+  .nsub   { font-size: 12px; fill: var(--muted); }
+  .body   { font-size: 12px; }
+  .mono   { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  .monosb { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 600; }
+  .lbl    { font-size: 11px; paint-order: stroke; stroke: var(--paper); stroke-width: 6px; stroke-linejoin: round; }
+  .lblsb  { font-size: 12px; font-weight: 650; paint-order: stroke; stroke: var(--paper); stroke-width: 6px; stroke-linejoin: round; }
+  .rulelbl{ font-size: 13px; font-weight: 700; letter-spacing: 1px; paint-order: stroke; stroke: var(--paper); stroke-width: 8px; stroke-linejoin: round; }
+  .cap    { font-size: 11px; fill: var(--muted); }
+
+  .node   { fill: var(--node); stroke: var(--ink); stroke-width: 1.4; }
+  .paperfill { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; }
+  .extnode{ fill: var(--ext); stroke: var(--line); stroke-width: 1.2; }
+  .row    { fill: var(--paper); stroke: var(--line); stroke-width: 1; }
+  .focus  { fill: var(--node); stroke: var(--ink); stroke-width: 2.4; }
+
+  .sync   { stroke: var(--ink); stroke-width: 2; fill: none; }
+  .syncbig{ stroke: var(--ink); stroke-width: 3; fill: none; }
+  .bg     { stroke: var(--ink); stroke-width: 2; fill: none; stroke-dasharray: 6 4; }
+  .stream-o { stroke: var(--ink); stroke-width: 4.6; fill: none; }
+  .stream-i { stroke: var(--paper); stroke-width: 2.2; fill: none; }
+  .actuate{ stroke: var(--green); stroke-width: 4; fill: none; }
+  .ah     { fill: var(--ink); }
+  .ahg    { fill: var(--green); }
+  .inherit{ fill: var(--paper); stroke: var(--ink); stroke-width: 1.4; }
+  .icon   { stroke: var(--ink); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+</style>
+<div class="frame">
+<svg viewBox="0 0 1600 1010" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Mission Control system architecture diagram">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0,0.5 L10,5 L0,9.5 z" class="ah"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0.5 L10,5 L0,9.5 z" class="ahg"/>
+    </marker>
+  </defs>
+
+  <!-- ======================= title ======================= -->
+  <text class="title" x="40" y="36">Mission Control: system architecture</text>
+  <text class="stamp" x="1560" y="36" text-anchor="end">as of September 2026</text>
+
+  <!-- ======================= BAND A ======================= -->
+  <line x1="40" y1="58" x2="1560" y2="58" stroke="var(--indigo)" stroke-width="2.5"/>
+  <rect x="40" y="66" width="9" height="15" fill="var(--indigo)"/>
+  <text class="band" x="58" y="79">PUBLIC INTERNET / GOOGLE CLOUD</text>
+
+  <!-- A1 learners -->
+  <rect class="node" x="50" y="130" width="150" height="140" rx="8"/>
+  <text class="ntitle" x="70" y="156">Learners</text>
+  <g class="icon">
+    <rect x="70" y="176" width="28" height="18" rx="2"/>
+    <line x1="78" y1="200" x2="90" y2="200"/>
+  </g>
+  <text class="body" x="108" y="192">desktop</text>
+  <g class="icon">
+    <rect x="70" y="216" width="18" height="26" rx="3"/>
+    <line x1="77" y1="237" x2="81" y2="237"/>
+  </g>
+  <text class="body" x="108" y="232">tablet</text>
+
+  <!-- A2 Mission Control -->
+  <rect class="node" x="300" y="90" width="520" height="240" rx="12"/>
+  <text class="ntitle" x="324" y="114">Mission Control</text>
+  <text class="nsub" x="796" y="114" text-anchor="end">Next.js on Cloud Run</text>
+  <!-- dependencies arrow -->
+  <line x1="317" y1="130" x2="317" y2="296" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="311" y="290" transform="rotate(-90 311 290)">dependencies point inward</text>
+  <!-- strata -->
+  <rect class="row" x="336" y="124" width="466" height="42" rx="6"/>
+  <text x="348" y="141"><tspan class="ntitle" style="font-size:13px">Presentation</tspan><tspan class="nsub" dx="8">src/app, src/components</tspan></text>
+  <text class="body" x="348" y="158">learner app, editors, 2D simulator, operator console at /operator</text>
+  <rect class="row" x="336" y="172" width="466" height="42" rx="6"/>
+  <text x="348" y="189"><tspan class="ntitle" style="font-size:13px">API routes</tspan><tspan class="nsub" dx="8">src/app/api</tspan></text>
+  <text class="body" x="348" y="206">missions, operator desk actions, session exchange, Zod at the edge</text>
+  <rect class="row" x="336" y="220" width="466" height="42" rx="6"/>
+  <text x="348" y="237"><tspan class="ntitle" style="font-size:13px">Core</tspan><tspan class="nsub" dx="8">src/core</tspan></text>
+  <text class="body" x="348" y="254">entities, safety rules, IMissionReader / Writer / Bookkeeping ports</text>
+  <rect class="row" x="336" y="268" width="466" height="42" rx="6"/>
+  <text x="348" y="285"><tspan class="ntitle" style="font-size:13px">Infrastructure</tspan><tspan class="nsub" dx="8">src/infrastructure</tspan></text>
+  <text class="body" x="348" y="302">FirestoreMissionRepository, server / browser containers, Resend, YouTube</text>
+
+  <!-- A3 managed services -->
+  <rect class="extnode" x="1150" y="90" width="410" height="255" rx="12"/>
+  <line x1="1150" y1="102" x2="1150" y2="333" stroke="var(--ink)" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text class="ntitle" x="1174" y="114">Managed services</text>
+  <text class="nsub" x="1536" y="114" text-anchor="end">external</text>
+  <text x="1174" y="153"><tspan class="ntitle" style="font-size:13px">Firestore</tspan><tspan class="body" dx="8">missions, runs, learners; rules-guarded reads</tspan></text>
+  <text x="1174" y="193"><tspan class="ntitle" style="font-size:13px">Firebase Auth</tspan><tspan class="body" dx="8">sign-in, role as a custom claim</tspan></text>
+  <text x="1174" y="233"><tspan class="ntitle" style="font-size:13px">Resend</tspan><tspan class="body" dx="8">learner status email</tspan></text>
+  <text x="1174" y="273"><tspan class="ntitle" style="font-size:13px">YouTube Data API</tspan><tspan class="body" dx="8">finds the run video by MissionID</tspan></text>
+  <text x="1174" y="313"><tspan class="ntitle" style="font-size:13px">Cloud Scheduler</tspan><tspan class="body" dx="8">cron: /api/cron/youtube-link</tspan></text>
+
+  <!-- Band A edges -->
+  <line x1="200" y1="200" x2="296" y2="200" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="248" y="194" text-anchor="middle">HTTPS</text>
+
+  <!-- learner live feed stream (arc over A2) -->
+  <path d="M125,128 C140,66 800,54 1244,84" class="stream-o"/>
+  <path d="M125,128 C140,66 800,54 1244,84" class="stream-i"/>
+  <polygon class="ah" points="1252,86.5 1240,79.5 1242,92.5"/>
+  <text class="lbl" x="700" y="64" text-anchor="middle">public live feed, rules-guarded</text>
+
+  <!-- infra to services / scheduler cron -->
+  <line x1="822" y1="262" x2="1146" y2="262" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="984" y="254" text-anchor="middle">Admin SDK, Resend, YouTube</text>
+  <path d="M1148,312 C1000,326 910,318 826,304" class="bg" marker-end="url(#a)"/>
+  <text class="lbl" x="984" y="330" text-anchor="middle">cron, shared secret</text>
+
+  <!-- ================== TRUST BOUNDARY ================== -->
+  <g stroke="var(--ink)" stroke-width="3">
+    <line x1="40" y1="396" x2="860" y2="396"/>
+    <line x1="40" y1="403" x2="860" y2="403"/>
+    <line x1="1110" y1="396" x2="1560" y2="396"/>
+    <line x1="1110" y1="403" x2="1560" y2="403"/>
+  </g>
+  <text class="rulelbl" x="1335" y="404" text-anchor="middle">TRUST BOUNDARY: internet | venue LAN, frequently offline</text>
+
+  <!-- the operator's browser, on the boundary -->
+  <rect class="focus" x="870" y="325" width="230" height="170" rx="12"/>
+  <text class="ntitle" x="886" y="348">Operator's browser</text>
+  <text class="nsub" x="886" y="364">on the venue LAN</text>
+  <text class="body" x="886" y="384">live mission queue for this yard</text>
+  <text class="body" x="886" y="399">yard checks before send: camera,</text>
+  <text class="body" x="886" y="414">rover, recording, via /api/status</text>
+  <text class="body" x="886" y="432">Send to Rover: mission in the URL;</text>
+  <text class="body" x="886" y="447">Copy stays as the fallback</text>
+  <rect x="882" y="454" width="206" height="34" rx="5" fill="var(--amber-bg)"/>
+  <text x="985" y="468" text-anchor="middle" style="font-size:10.5px" fill="var(--amber-ink)">cloud page, LAN fetch: Safari may ask</text>
+  <text x="985" y="482" text-anchor="middle" style="font-size:10.5px" fill="var(--amber-ink)">for local-network permission</text>
+
+  <!-- boundary edges: desk actions, live queue -->
+  <path d="M868,349 C846,344 830,338 812,332" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="852" y="322" text-anchor="middle">desk actions</text>
+  <path d="M1102,360 C1160,360 1214,356 1240,349" class="stream-o"/>
+  <path d="M1102,360 C1160,360 1214,356 1240,349" class="stream-i"/>
+  <polygon class="ah" points="1247,346 1234,343.5 1238,356"/>
+  <text class="lbl" x="1168" y="376" text-anchor="middle">live queue</text>
+
+  <!-- SEND TO ROVER: the bridge -->
+  <path d="M868,372 C650,372 380,372 265,410 C215,427 190,478 182,524" class="syncbig" marker-end="url(#a)"/>
+  <text class="lblsb" x="440" y="360" text-anchor="middle">SEND TO ROVER: /run/?handoff=automatic, mission in the URL</text>
+
+  <!-- yard checks -->
+  <line x1="940" y1="497" x2="940" y2="530" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="952" y="512">yard checks: GET /api/status</text>
+
+  <!-- ======================= BAND B ======================= -->
+  <line x1="40" y1="505" x2="1560" y2="505" stroke="var(--teal)" stroke-width="2.5"/>
+  <rect x="40" y="513" width="9" height="15" fill="var(--teal)"/>
+  <text class="band" x="58" y="526">VENUE LAN: YARD SATELLITE</text>
+  <text class="bandsub" x="392" y="526">Flask on mro.local:3001, no cloud credential, no sign-in</text>
+
+  <!-- B1 surfaces -->
+  <rect class="node" x="50" y="538" width="180" height="176" rx="8"/>
+  <text class="ntitle" x="66" y="561">Surfaces</text>
+  <text x="66" y="586"><tspan class="monosb">/run/</tspan><tspan class="nsub" dx="7">run station</tspan></text>
+  <text x="66" y="618"><tspan class="monosb">/code/</tspan><tspan class="nsub" dx="7">tablet editor</tspan></text>
+  <text x="66" y="650"><tspan class="monosb">/monitor/</tspan><tspan class="nsub" dx="7">TV</tspan></text>
+  <text x="66" y="682"><tspan class="monosb">/settings</tspan><tspan class="nsub" dx="7">tunables</tspan></text>
+
+  <!-- B3 camera -->
+  <rect class="node" x="290" y="560" width="180" height="110" rx="8"/>
+  <text class="ntitle" x="306" y="584">Camera</text>
+  <text class="mono" x="306" y="606">camera_server.py</text>
+  <text class="body" x="306" y="624">WebSocket on 8890</text>
+  <g class="icon">
+    <rect x="306" y="636" width="26" height="18" rx="3"/>
+    <circle cx="319" cy="645" r="5"/>
+  </g>
+
+  <!-- B2 one module per question -->
+  <rect class="node" x="540" y="538" width="470" height="178" rx="12"/>
+  <text class="ntitle" x="556" y="560">One module per question</text>
+  <text x="568" y="584"><tspan class="monosb">camera_state.py</tspan><tspan class="body" dx="8">the one answer to: is the camera ready</tspan></text>
+  <text x="568" y="614"><tspan class="monosb">recording_control.py</tspan><tspan class="body" dx="8">&lt;mission&gt;__&lt;yard&gt;__&lt;UTC&gt;.mp4</tspan></text>
+  <text x="568" y="644"><tspan class="monosb">mission_watcher.py</tspan><tspan class="body" dx="8">the only background thread</tspan></text>
+  <text x="568" y="674"><tspan class="monosb">recording_cleanup.py</tspan><tspan class="body" dx="8">prunes so the SD card never fills</tspan></text>
+  <text class="cap" x="568" y="700">no database, no outbox, no sync worker: that absence is the design</text>
+
+  <!-- camera streams -->
+  <path d="M288,616 C264,624 246,634 236,644" class="stream-o"/>
+  <path d="M288,616 C264,624 246,634 236,644" class="stream-i"/>
+  <polygon class="ah" points="230,649 243,650 237,638"/>
+  <path d="M472,610 L530,610" class="stream-o"/>
+  <path d="M472,610 L530,610" class="stream-i"/>
+  <polygon class="ah" points="538,610 527,604 527,616"/>
+  <text class="lbl" x="502" y="598" text-anchor="middle">WS 8890</text>
+
+  <!-- close on finish (right margin of B2) -->
+  <path d="M1012,646 C1030,638 1030,618 1012,610" class="bg" marker-end="url(#a)"/>
+  <text class="lbl" x="1040" y="632">close on finish</text>
+
+  <!-- video return arc -->
+  <path d="M1010,700 C1300,700 1424,560 1432,352" class="bg" marker-end="url(#a)"/>
+  <text class="lbl" x="1210" y="662" text-anchor="middle">video: taken off the station,</text>
+  <text class="lbl" x="1210" y="677" text-anchor="middle">uploaded to YouTube by hand</text>
+
+  <!-- ================== DEVICE BOUNDARY ================== -->
+  <line x1="40" y1="742" x2="1560" y2="742" stroke="var(--ink)" stroke-width="2"/>
+  <text class="rulelbl" x="800" y="746" text-anchor="middle" style="font-size:12px">DEVICE BOUNDARY: physical actuation</text>
+
+  <!-- dispatch + SSE + poll, crossing to the rover -->
+  <line x1="140" y1="716" x2="140" y2="778" class="sync" marker-end="url(#a)"/>
+  <text class="lbl" x="152" y="733">dispatch: POST /queue/add, mission id in params</text>
+  <path d="M210,780 C204,724 220,690 232,664" class="stream-o"/>
+  <path d="M210,780 C204,724 220,690 232,664" class="stream-i"/>
+  <polygon class="ah" points="235,656 224,663 236,669"/>
+  <text class="lbl" x="252" y="708">SSE: /queue/events</text>
+  <path d="M580,718 C520,750 380,756 262,784" class="bg" marker-end="url(#a)"/>
+  <text class="lbl" x="420" y="772" text-anchor="middle">poll /queue/status, read only</text>
+
+  <!-- ======================= BAND C ======================= -->
+  <rect x="40" y="762" width="9" height="15" fill="var(--forest)"/>
+  <text class="band" x="58" y="775">ROVER</text>
+  <text class="bandsub" x="152" y="775">marspi.local:8523</text>
+
+  <rect class="node" x="60" y="790" width="200" height="135" rx="8"/>
+  <text x="76" y="812"><tspan class="monosb">rover_server.py</tspan><tspan class="nsub" dx="7">Flask</tspan></text>
+  <text class="mono" x="76" y="836">/queue/add</text>
+  <text class="mono" x="76" y="856">/queue/status</text>
+  <text class="mono" x="76" y="876">/queue/events (SSE)</text>
+  <text class="mono" x="76" y="896">/photo</text>
+
+  <rect class="node" x="320" y="800" width="200" height="110" rx="8"/>
+  <text class="ntitle" x="336" y="824">RoverQueueService</text>
+  <text class="body" x="336" y="846">implements RoverQueuePort</text>
+  <text class="body" x="336" y="864">FIFO queue,</text>
+  <text class="body" x="336" y="882">one worker thread</text>
+
+  <rect class="node" x="580" y="800" width="190" height="110" rx="8"/>
+  <text class="monosb" x="596" y="824">python_runner.py</text>
+  <text class="body" x="596" y="846">learner-code sandbox,</text>
+  <text class="body" x="596" y="864">traced stop button,</text>
+  <text class="body" x="596" y="882">wall-clock watchdog</text>
+
+  <!-- driver fork -->
+  <rect class="paperfill" x="850" y="790" width="170" height="36" rx="8"/>
+  <text x="935" y="813" text-anchor="middle"><tspan class="ntitle" style="font-size:13px">RoverDriver</tspan><tspan class="nsub" dx="6">abstract</tspan></text>
+  <rect class="node" x="810" y="866" width="145" height="40" rx="8"/>
+  <text x="882" y="884" text-anchor="middle" class="ntitle" style="font-size:12.5px">FakeRoverDriver</text>
+  <text x="882" y="899" text-anchor="middle" class="nsub" style="font-size:11px">simulator</text>
+  <rect class="node" x="985" y="866" width="145" height="40" rx="8"/>
+  <text x="1057" y="884" text-anchor="middle" class="ntitle" style="font-size:12.5px">RealRoverDriver</text>
+  <text x="1057" y="899" text-anchor="middle" class="nsub" style="font-size:11px">hardware</text>
+  <line x1="882" y1="864" x2="925" y2="838" class="sync"/>
+  <line x1="1050" y1="864" x2="945" y2="838" class="sync"/>
+  <polygon class="inherit" points="935,828 926,840 944,840"/>
+
+  <rect class="node" x="1200" y="795" width="210" height="120" rx="8"/>
+  <text class="ntitle" x="1216" y="818">4tronix M.A.R.S. rover</text>
+  <text class="body" x="1216" y="840">Raspberry Pi</text>
+  <text class="body" x="1216" y="860">motors, servo steering,</text>
+  <text class="body" x="1216" y="878">mast camera, ultrasonic</text>
+
+  <!-- pipeline edges -->
+  <line x1="262" y1="855" x2="316" y2="855" class="sync" marker-end="url(#a)"/>
+  <line x1="522" y1="855" x2="576" y2="855" class="sync" marker-end="url(#a)"/>
+  <path d="M772,845 C806,838 822,825 846,814" class="sync" marker-end="url(#a)"/>
+  <line x1="1132" y1="886" x2="1194" y2="886" class="actuate" marker-end="url(#ag)"/>
+  <text class="lbl" x="1163" y="908" text-anchor="middle" fill="var(--green)">physical actuation</text>
+
+  <text class="cap" x="320" y="940">mission_validator.py + limits.py gate every queued program: speed and time ceilings, calls the rover cannot make</text>
+  <text class="cap" x="1010" y="940">no physics here: the simulator is this same queue with FakeRoverDriver</text>
+
+  <!-- ======================= BAND D ======================= -->
+  <line x1="40" y1="956" x2="1560" y2="956" stroke="var(--slate)" stroke-width="2"/>
+  <text class="bandsub" x="40" y="976" style="letter-spacing:1px; font-weight:700">PLATFORM &amp; DELIVERY</text>
+  <text class="body" x="240" y="976" fill="var(--muted)">Terraform, GCS remote state &#8594; GitHub Actions, 5 required checks &#8594; Artifact Registry &#8594; Cloud Run, staging + prod &#8594; Secret Manager &#183; Workload Identity Federation: OIDC, no JSON keys</text>
+</svg>
+</div>
