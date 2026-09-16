@@ -511,8 +511,11 @@ class TestReadinessIndicators:
         assert '.ready[data-state="ok"]   .status-sub { color: var(--ok); }' in page
         assert '.status-dot.ok' in page
 
-    def test_the_two_rows_are_one_module(self, client):
-        """A shared border with a hairline between, rather than two cards."""
+    def test_the_two_tiles_are_one_module(self, client):
+        """A shared border with a hairline between, rather than two cards.
+        The module runs horizontally now - it shares the header row with the
+        page title, so it spends width, not height - which makes the hairline
+        a left border instead of a top one."""
         page = client.get('/run/').get_data(as_text=True)
 
-        assert '.ready + .ready { border-top:' in page
+        assert '.ready + .ready { border-left:' in page

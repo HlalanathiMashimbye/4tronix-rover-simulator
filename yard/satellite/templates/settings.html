@@ -10,178 +10,160 @@
            the shared console layer in yard-base.css, so this page cannot drift
            away from the queue and mission pages the way it had. */
 
-        /* Health as one instrument, then two columns of settings.
+        /* One card per category - Rover, Camera, Storage, Recordings - each
+           wearing its own status lamp in its head.
 
-           It was three cards across the top. They carry very different
-           amounts - a hostname, a set of camera controls, an address editor -
-           so three identical containers sat at wildly different heights, one
-           nearly empty beside one bursting. Tinted by state they also read as
-           three alerts rather than three readings.
-
-           One module, a row per subsystem, hairlines between, colour only in
-           the lamp and the state word. The same shape the run station uses for
-           readiness, so the two pages teach each other. */
-        /* Two columns wide, not the whole page.
-
-           As a full-width band each row ran to about 1075px for a line of text
-           that needs a third of it, so every row had a gulf between its detail
-           and its controls. It is a card among cards now: wide enough for the
-           longest row (the rover's driver line plus its address and Change),
-           and no wider. */
-        .health {
-            display: flex; flex-direction: column;
-            border: 1px solid var(--border); border-radius: 12px;
-            background: var(--surface); box-shadow: var(--e1);
-            overflow: hidden;
-        }
-        .hrow {
-            display: flex; align-items: center; gap: 0.7rem;
-            min-height: 46px;
-            padding: 0.6rem 0.9rem; min-width: 0;
-            /* Wrap rather than squeeze. The status pill and the address both
-               hold their width, so with a long label like "fake driver (no
-               hardware)" the diagnostic was crushed into a column six
-               characters wide and wrapped on every other word. */
-            flex-wrap: wrap;
-        }
-        .hrow + .hrow, .hpanel + .hrow { border-top: 1px solid var(--border); }
-        .hname {
-            flex: 0 0 5.5rem;
+           The previous shape was a separate health module above anonymous
+           tuning cards, which meant every question ("why won't it record?")
+           started with the eye stitching a status row to the controls two
+           cards away. A category owns its status AND its controls now, and
+           the card's head is its health row. */
+        .cat-head { display: flex; align-items: center; gap: 0.55rem; min-width: 0; flex-wrap: wrap; }
+        .cat-head .stat-ic { width: 26px; height: 26px; }
+        .cat-head .stat-ic svg { width: 15px; height: 15px; }
+        .cat-detail {
             color: var(--text-dim); font-family: var(--mono);
-            font-size: var(--fs-2xs); font-weight: 600;
-            letter-spacing: 0.1em; text-transform: uppercase;
-        }
-        .hdetail {
-            /* A real basis, not auto: min-width 0 let this shrink to nothing
-               whenever a sibling refused to. Below ~16rem it takes its own
-               line instead. */
-            flex: 1 1 16rem; min-width: 0;
-            color: var(--text-dim); font-family: var(--mono);
-            font-size: var(--fs-2xs); line-height: 1.5;
-            /* Wraps rather than truncates. Ellipsis kept the rows a uniform
-               height, at the cost of "Mast cam: not detected (reseat + rebo..."
-               - and a diagnostic that stops before the instruction is worse
-               than a row that is a line taller. */
+            font-size: var(--fs-2xs); line-height: 1.6;
             overflow-wrap: anywhere;
+            margin-top: 0.35rem;
         }
-        .hdetail span { color: var(--text); }
-        .haction { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
-        .haction code { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text); }
-        .haction .camera-managed { color: var(--text-faint); font-size: var(--fs-2xs); }
-        .haction .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
-
-        /* A panel belongs to the row above it and spans the module, so opening
-           it grows this and distorts nothing beside it. */
-        .hpanel {
-            display: flex; flex-direction: column; gap: 0.55rem;
-            padding: 0.75rem 0.9rem;
-            border-top: 1px solid var(--border);
-            background: var(--bg-2);
+        .cat-detail span { color: var(--text); }
+        /* A labelled row, not a value floating at the head's far edge with
+           nothing saying what it was. Same shape as the run station's meta
+           rows, so an address reads the same way on both pages. */
+        .cat-kv {
+            display: flex; align-items: baseline; gap: 0.5rem; min-width: 0;
+            margin-top: 0.3rem; padding-top: 0.3rem; border-top: 1px solid var(--border);
         }
-        /* A stripe on the row, not a wash across it. Enough to find the bad
-           one at a glance, quiet enough that three good ones say nothing. */
-        .hrow { border-left: 3px solid transparent; }
-        .hrow[data-state="ok"]   { border-left-color: var(--ok); }
-        .hrow[data-state="warn"] { border-left-color: var(--warn); background: var(--warn-weak); }
-        .hrow[data-state="bad"]  { border-left-color: var(--bad); background: var(--bad-weak); }
+        .cat-addr { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text); overflow-wrap: anywhere; min-width: 0; }
+        /* The one divider rule every card's section breaks share - the
+           Rover card grew its own copy of this (.rover-config's border-top)
+           before the Camera card needed the same seam between its three
+           settings, which is exactly the kind of drift a shared rule stops.
+           An empty rule element, not border-top-on-the-next-thing: Camera's
+           three sections are different element types (a controls row, a
+           label, another label), and a shared standalone line does not care
+           which one comes next. */
+        .settings-divider { border-top: 1px solid var(--border); margin: 0.6rem 0; }
+        /* The card carries its state as a stripe, quiet when everything is
+           fine, so a broken subsystem is the only card with colour on it. */
+        .settings-page .card { border-left: 3px solid transparent; }
+        .settings-page .card[data-state="warn"] { border-left-color: var(--warn); }
+        .settings-page .card[data-state="bad"]  { border-left-color: var(--bad); }
+        .settings-page .card[data-state="ok"]   { border-left-color: color-mix(in oklab, var(--ok) 55%, transparent); }
 
-        .hpanel.quiet-panel { flex-direction: row; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.5rem 0.9rem; }
-        .hhint { color: var(--text-faint); font-size: var(--fs-2xs); }
+        /* The satellite is identity, not a setting, so it is a chip on the
+           header rather than a card of its own. */
+        .sat-chip {
+            margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 999px;
+            background: var(--surface); min-width: 0;
+        }
+        .sat-chip .stat-ic { width: 22px; height: 22px; border: 0; background: none; }
+        .sat-chip .stat-ic svg { width: 14px; height: 14px; }
+        .cat-name { color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+        .sat-chip .cat-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        /* Cap the width and let the cards be their own height.
+        /* Pointing at a rover: a switch, a finder, and a typed address, in
+           that order, as a two-row grid rather than a run of controls that
+           wrap wherever they run out of space. The label/input column and
+           the button column each hold one width, so "Find rover" and "Use"
+           share a right edge and the whole thing reads as a small form
+           instead of a paragraph of buttons. */
+        .rover-config {
+            display: grid; grid-template-columns: minmax(0, 1fr) auto;
+            align-items: center; gap: 0.5rem 0.6rem;
+            margin-top: 0.55rem; padding-top: 0.55rem; border-top: 1px solid var(--border);
+        }
+        .cfg-btn { min-width: 6.5rem; min-height: 36px; justify-content: center; }
+        .cfg-input { min-width: 0; min-height: 36px; font-family: var(--mono); font-size: var(--fs-xs); }
+        .rover-config ~ .camera-msg, .rover-config ~ .url-error { margin-top: 0.4rem; display: block; }
+        .switch-label { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--text); font-size: var(--fs-sm); font-weight: 600; cursor: pointer; }
+        .switch {
+            appearance: none; width: 38px; height: 22px; border-radius: 999px;
+            background: var(--surface-3); border: 1px solid var(--border);
+            position: relative; cursor: pointer; flex-shrink: 0; margin: 0;
+            transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out);
+        }
+        .switch::after {
+            content: ""; position: absolute; top: 2px; left: 2px;
+            width: 16px; height: 16px; border-radius: 50%;
+            background: var(--text-dim);
+            transition: transform 160ms var(--ease-out), background 160ms var(--ease-out);
+        }
+        .switch:checked { background: var(--signal); border-color: var(--signal); }
+        .switch:checked::after { transform: translateX(16px); background: var(--signal-ink); }
+        .switch:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 
-           The shell is full bleed, so on a 1440 screen this page was 1395px of
-           three short rows and two columns stretched to 574px tall by the grid
-           rather than by anything in them - wide and long, both for nothing.
-           There is not much on this page; it should look like there is not
-           much on this page.
+        /* One screen, like the run station.
 
-           align-items: start is the half that fixes the length: without it
-           every column is as tall as the tallest, and the grid is as tall as
-           the space left over. */
-        /* One column on a phone, two independent stacks on a wide screen.
-
-           The grid this replaced put cards of very different heights in shared
-           rows, so a short card left a void beside a tall one. The single
-           720px column that followed fixed the voids but made a 1440x900
-           screen 1521px of scrolling with most of its width unused. Two stacks
-           avoid both: each column is only as tall as what is in it, and
-           nothing lines up across the gap, so no card can leave a hole next
-           to another. Recordings share a stack with the cleanup that governs
-           them; health, tuning and quick actions share the other. */
-        /* Centred, not just capped. Left-aligned at 720px on a wide screen the
-           empty space is all on one side, which reads as a hole rather than as
-           margin - the exact thing narrowing it was meant to fix. */
-        .settings-page { max-width: 720px; margin-inline: auto; }
-        /* The shell is 100dvh with no page scroll, which is right for the
-           run station and wrong here: a column of sections is meant to be
-           scrolled if it outgrows the screen, not clipped. */
-        .console.fixed-shell:has(.settings-page) { height: auto; min-height: 100dvh; overflow: visible; }
-        .settings-page { flex: 0 0 auto; }
+           The content is small: four category cards and a list. It is laid
+           out AS one screen - full bleed, tuning down the left, recordings
+           filling the right - and the only scrollbar anywhere is the
+           recordings list, the one thing here that genuinely grows without
+           bound. */
+        .settings-page { width: 100%; }
+        /* A real 2x2 grid, not two independently-stacked columns.
+           Two flex columns let Rover+Camera and Storage+Recordings each grow
+           to their own total height, so nothing about the two columns lined
+           up: Rover's bottom edge landed wherever Rover's content happened to
+           end, unrelated to Storage's. Explicit rows fix that - row 1
+           (Rover | Storage) and row 2 (Camera | Recordings) each size to the
+           taller of their pair and grid's default stretch makes the shorter
+           one match it, so every corner in the layout lines up with its
+           neighbour. Row 2 is 1fr: it takes whatever height is left after
+           row 1, and Camera stretching to match Recordings is what puts
+           Camera's bottom on Recordings' bottom - the same corner Live yard
+           and The video share on the run station.
+           .settings-col stays in the DOM (for its other rules and as the
+           mobile stacking order) but contributes no box of its own here, so
+           its children - the actual cards - are the grid's direct items and
+           can be placed by row/column below. */
         .settings-grid {
-            flex: 0 0 auto;
-            display: flex; flex-direction: column;
-            gap: 0.85rem;
+            flex: 1; min-height: 0;
+            display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+            grid-template-rows: auto 1fr;
+            gap: 0.75rem; overflow-y: auto; overscroll-behavior: contain;
         }
-        .settings-col { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
-        /* 1100px because the health rows need about 520px each to keep the
-           rover's driver line, address and Change on one line. */
-        @media (min-width: 1100px) {
-            .settings-page { max-width: 1180px; }
-            .settings-grid {
-                display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-                align-items: start;
-            }
-            /* A session's worth of recordings made its stack 2000px beside a
-               778px one, reopening the gap the two stacks exist to avoid. The
-               list scrolls inside its card instead of stretching the page. */
-            #recordingsList { max-height: 26rem; overflow-y: auto; overscroll-behavior: contain; }
+        .settings-col { display: contents; }
+        #card-rover        { grid-column: 1; grid-row: 1; }
+        #cleanupSection    { grid-column: 2; grid-row: 1; }
+        #card-camera       { grid-column: 1; grid-row: 2; min-height: 0; }
+        #recordingsSection { grid-column: 2; grid-row: 2; min-height: 0; }
+        /* The page must fit a laptop screen, so the shared paddings tighten a
+           notch here: same components, less air between them. */
+        .settings-page .card { padding: 0.75rem 0.9rem; }
+        .settings-page .sync-field { margin-bottom: 0.3rem; }
+        .settings-page { padding-top: 0.55rem; padding-bottom: 0.6rem; }
+        .settings-page .camera-msg { margin-top: 0; }
+
+        /* The recordings card is the column: head fixed, list scrolling. */
+        #recordingsSection { display: flex; flex-direction: column; }
+        #recordingsList { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+        /* Phones: stacked and scrolling. One screen is a promise this page
+           can only keep where the operator actually tunes a yard - a laptop
+           or a landscape tablet - not on a 700px-tall phone. 720 rather than
+           900: the category cards hold their shape down to ~350px columns,
+           and 800-wide windows were falling into the scrolling branch. */
+        @media (max-width: 720px) {
+            .console.fixed-shell:has(.settings-page) { height: auto; min-height: 100dvh; overflow: visible; }
+            /* .settings-col is still display:contents, so this puts the four
+               cards themselves in DOM order - Rover, Camera, Storage,
+               Recordings - exactly the stacking order a phone wants. */
+            .settings-grid { display: flex; flex-direction: column; overflow: visible; }
+            #card-camera, #recordingsSection { min-height: auto; }
+            /* The page scrolls here, so the list does not also scroll inside
+               it - one scrollbar per screen. */
+            #recordingsList { flex: none; overflow-y: visible; }
         }
 
-        .page-head { flex: 0 0 auto; margin-bottom: 0.2rem; }
-        /* The page title, three card headings and a field label all sat within
-           4px of each other, so nothing announced itself and the eye had no
-           entry point. Size and weight do that work now. */
-        .rover-url code { font-family: var(--mono); font-size: var(--fs-xs); }
-        .card-head-row { display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.7rem; }
-        .rover-url { color: var(--text-faint); font-size: var(--fs-sm); }
-        .rover-url code { color: var(--text); }
-        .link-btn { background: none; border: none; color: var(--primary); font-size: var(--fs-sm); cursor: pointer; padding: 0 0.25rem; }
-        .link-btn:hover { text-decoration: underline; }
-        .url-editor[hidden] { display: none; }
-        .url-error { color: var(--bad); font-size: var(--fs-sm); line-height: 1.45; display: block; margin-top: 0.4rem; }
-        /* The address lives in the Rover card now, not the page header. When
-           the rover is wrong, the Rover card is where you look - having the
-           only way to fix it somewhere else is how you end up typing an
-           address into the wrong box at a demo. */
-        .rover-addr { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.45rem; flex-wrap: wrap; }
-        .rover-addr code { font-family: var(--mono); font-size: var(--fs-xs); color: var(--text); }
-        .rover-addr .btn { min-height: 28px !important; padding: 0.2rem 0.6rem !important; font-size: var(--fs-2xs) !important; }
-        .url-editor { margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; }
-        .picker-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-        .picker-head .camera-msg { flex: 1 1 12rem; margin-top: 0; }
-        /* A list on a phone, cards side by side once two fit. Every row is a
-           button that looks like one: a found rover that saved on tap used to
-           read as a label. */
-        .rover-list {
-            list-style: none; margin: 0; padding: 0;
-            display: grid; gap: 0.4rem;
-            grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
-        }
-        .rover-pick {
-            appearance: none; cursor: pointer; width: 100%; height: 100%; text-align: left;
-            display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.15rem 0.6rem; align-items: center;
-            padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 9px;
-            background: var(--surface-2); color: var(--text); font: inherit;
-        }
-        .rover-pick:hover, .rover-pick.in-use { border-color: var(--signal-edge); background: var(--signal-weak); }
-        .pick-name { font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; }
-        .pick-meta { grid-column: 1; color: var(--text-dim); font-size: var(--fs-2xs); }
-        .pick-state { grid-column: 2; grid-row: 1 / span 2; color: var(--text-dim); font-size: var(--fs-2xs); font-weight: 600; }
-        .rover-pick.in-use .pick-state { color: var(--ok); }
-        .url-manual summary { cursor: pointer; width: fit-content; color: var(--primary); font-size: var(--fs-sm); }
-        .url-manual-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.45rem; }
-        .url-manual-row input { flex: 1 1 180px; min-width: 0; font-family: var(--mono); font-size: var(--fs-xs); }
+        /* The title shares its line with the summary: a three-line page head
+           was a tenth of the screen spent saying the word Settings. */
+        .page-head { flex: 0 0 auto; display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+        .page-head .page-sub { margin: 0; font-size: var(--fs-xs); }
+        .url-error { color: var(--bad); font-size: var(--fs-sm); line-height: 1.45; display: block; }
+        .url-error:empty { display: none; }
         /* A picked setting looks picked. Three named buttons rather than a
            box you type 1280x960 into: nobody operating a yard should have to
            know what that means, only that it is sharper and costs more. */
@@ -190,7 +172,7 @@
             appearance: none; border: 0; cursor: pointer;
             background: var(--surface-2); color: var(--text-dim);
             font: inherit; font-size: var(--fs-sm); font-weight: 600;
-            padding: 0.5rem 0.95rem; min-height: 40px;
+            padding: 0.35rem 0.85rem; min-height: 34px;
             display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
             transition: background 160ms var(--ease-out), color 160ms var(--ease-out);
         }
@@ -198,7 +180,7 @@
         .seg button:hover { background: var(--surface-3); color: var(--text); }
         .seg button[aria-checked="true"] { background: var(--signal); color: var(--signal-ink); }
         .seg button:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
-        .seg .seg-dim { font-size: var(--fs-2xs); font-weight: 500; opacity: 0.75; font-family: var(--mono); }
+        .seg .seg-dim { font-size: var(--fs-2xs); font-weight: 500; opacity: 0.75; font-family: var(--mono); white-space: nowrap; }
         /* One action colour across the console. Mars orange stays on brand
            chrome (the nav, the wordmark); the thing you press is teal, here and
            on the run station, so the two pages do not disagree about it. */
@@ -221,18 +203,6 @@
         .stat-ic.amber { background: rgba(251,191,36,0.12);  color: var(--warn); border-color: rgba(251,191,36,0.3); }
         .stat-ic.red   { background: rgba(248,113,113,0.12); color: var(--bad);  border-color: rgba(248,113,113,0.3); }
         .stat-ic.grey  { background: var(--surface-3); color: var(--text-faint); border-color: var(--border); }
-                        /* Matches .setup-name's treatment exactly - same page, same role (an
-           item's name), so the same typeface and weight. It used to be
-           Fredoka at a different size while Setup's row names sat a few
-           inches away in Inter, which is the "different fonts" this page got
-           called out for specifically. */
-        .stat-name { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
-        .stat-detail {
-            font-size: var(--fs-xs); color: var(--text-dim); line-height: 1.55;
-            font-family: var(--mono); margin-top: 0.2rem; word-break: break-word;
-        }
-        .stat-detail span { color: var(--text); }
-
         /* status-label keeps its name because setBadge() writes it */
         .status-label {
             display: inline-flex; align-items: center;
@@ -245,7 +215,7 @@
         .status-label.red   { color: var(--bad);  background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
         .status-label.grey  { color: var(--text-faint); background: var(--surface-3); border-color: var(--border); }
 
-        .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; }
+        .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
         .camera-controls .btn { min-height: 34px; padding: 0.3rem 0.65rem; font-size: var(--fs-xs); }
         .camera-index-label { color: var(--text-faint); font-size: var(--fs-xs); }
         .camera-index { width: 58px; min-height: 34px; padding: 0.25rem 0.45rem; }
@@ -255,49 +225,100 @@
         .camera-msg[data-tone="ok"]  { color: var(--ok); }
 
         /* Field styles now live in yard-base.css under .console. Only the
-           narrow numeric input is specific to this page's sync controls. */
+           narrow numeric input is specific to this page's sync controls.
+           (The .setup-*, .conflict-* and .sync-estimate rules that sat here
+           styled the Setup and Sync-conflict sections, which left with the
+           Firestore mirror; the rules outlived their markup and are gone.) */
         .sync-input-row input { width: 88px; min-height: 40px; }
-        .sync-estimate {
-            padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 10px;
-            background: var(--surface-2); color: var(--text-dim);
-            font-size: 0.72rem; line-height: 1.55; margin-bottom: 0.6rem;
-        }
-        .sync-estimate b { color: var(--heading); font-family: var(--mono); }
-        .sync-estimate[data-tone="warn"] { border-color: color-mix(in oklab, var(--warn) 45%, transparent); }
-        .sync-estimate[data-tone="warn"] b { color: var(--warn); }
-        .sync-estimate[data-tone="bad"] { border-color: color-mix(in oklab, var(--bad) 45%, transparent); }
-        .sync-estimate[data-tone="bad"] b { color: var(--bad); }
-
-        .setup-row { display: flex; gap: 0.55rem; align-items: flex-start; padding: 0.35rem 0; }
-        .setup-body { flex: 1; min-width: 0; }
-        .setup-name { color: var(--heading); font-size: var(--fs-sm); font-weight: 600; }
-        .setup-why { color: var(--text-dim); font-size: 0.7rem; margin-top: 0.05rem; line-height: 1.45; }
-        .setup-detail { color: var(--text-faint); font-size: 0.68rem; font-family: var(--mono); margin-top: 0.2rem; word-break: break-word; }
-        .setup-dot { margin-top: 0.35rem; }
-        .setup-dot.on { background: var(--ok); }
-        .setup-dot.off { background: var(--warn); }
-
-        .conflict-row {
-            display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline;
-            padding: 0.35rem 0; font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim);
-        }
-        .conflict-row b { color: var(--heading); font-weight: 600; }
-        .conflict-win { color: var(--warn); }
 
         .footer { flex: 0 0 auto; font-size: var(--fs-xs); color: var(--text-faint); }
 
-        /* ---------- Right rail ---------- */
-        .acts { display: flex; flex-direction: column; gap: 0.45rem; }
-        .act {
-            display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
-            width: 100%; background: var(--surface-2); border: 1px solid var(--border);
-            border-radius: 9px; color: var(--text); font-size: var(--fs-sm); font-weight: 600;
-            padding: 0.55rem 0.75rem; min-height: 40px; cursor: pointer; text-decoration: none; text-align: left;
+        /* ---------- Compact tunable rows ----------
+           Label left, input right, the explanation behind an (i). Stacked
+           label-input-hint fields spent three lines per number; a settings
+           page an operator reads under pressure wants the numbers in a
+           column, not the prose. The prose is one tap away, via the shared
+           info-tip the nav bar already wires. */
+        /* .sync-field on both selectors: the shared .console .sync-field rule
+           is two classes deep, so a bare .num-field loses the specificity
+           race and the field silently stays a column. */
+        /* flex-wrap so the quality picker drops below its label at narrow
+           widths instead of crushing its buttons three lines tall. */
+        .sync-field.num-field { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.4rem 0.7rem; margin-bottom: 0.45rem; }
+        .sync-field.num-field .sync-label { flex: 1 1 auto; min-width: 0; }
+        .sync-field.num-field .sync-input-row { flex: 0 0 auto; }
+        /* The unit column holds one width, so every number box shares a left
+           edge instead of drifting with "hours" vs "GB free". */
+        .sync-field.num-field .sync-unit { width: 4.2em; }
+
+        /* The camera-ready wait, as a slider rather than a number box - the
+           range that actually matters operationally is small (half a second
+           to five), so dragging a short track says that more honestly than
+           a text box that looked happy to take 30. */
+        .sync-input-row.slider-row { display: flex; align-items: center; gap: 0.6rem; }
+        .sync-input-row.slider-row input[type="range"] {
+            -webkit-appearance: none; appearance: none;
+            width: 130px; height: 28px; min-height: 40px; background: transparent; margin: 0; cursor: pointer;
         }
-        .act:hover { border-color: var(--border-strong); }
-        .act .hint { font-size: var(--fs-xs); font-weight: 400; color: var(--text-faint); }
+        .slider-row input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: var(--surface-3); }
+        .slider-row input[type="range"]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--surface-3); }
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 18px; height: 18px; margin-top: -6px; border-radius: 50%;
+            background: var(--signal); border: 2px solid var(--signal-ink);
+            box-shadow: 0 0 0 3px var(--signal-weak);
+        }
+        .slider-row input[type="range"]::-moz-range-thumb {
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--signal); border: 2px solid var(--signal-ink);
+            box-shadow: 0 0 0 3px var(--signal-weak);
+        }
+        .slider-row input[type="range"]:focus-visible { outline: none; }
+        .slider-row input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--signal); outline-offset: 2px; }
+        .slider-row input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--signal); outline-offset: 2px; }
+        /* Fixed width, right-aligned: the readout does not shift the slider
+           as its text goes from "0.5s" to "5.0s". */
+        .slider-val { width: 3em; text-align: right; font-family: var(--mono); font-size: var(--fs-xs); color: var(--text); font-variant-numeric: tabular-nums; }
 
+        /* A sub-heading inside the Tuning card: cleanup shares the card (and
+           its one Save - both halves post to the same endpoint) but still
+           deserves a name. */
+        .card-sub { margin-top: 0.35rem; padding-top: 0.4rem; border-top: 1px solid var(--border); }
+        .sub-title { color: var(--heading); font-size: var(--fs-sm); font-weight: 700; display: inline-flex; align-items: center; gap: 0.3rem; }
 
+        /* ---------- Saying what happened ----------
+           Nothing on this page has a Save button any more, so this is the
+           whole of the feedback: the field that just committed flashes, and
+           the card writes a line. Two Save buttons used to sit here looking
+           identical whether or not anything was pending, which meant the one
+           question an operator actually has - "is what I am looking at what
+           is in force?" - had no answer on screen. */
+        .save-status {
+            display: block; margin-top: 0.15rem;
+            font-size: var(--fs-2xs); line-height: 1.5; color: var(--text-dim);
+        }
+        /* No empty line holding a card open for a message that is not there. */
+        .save-status:empty { display: none; }
+        .save-status[data-tone="ok"]   { color: var(--ok); }
+        .save-status[data-tone="bad"]  { color: var(--bad); }
+        .save-status[data-tone="warn"] { color: var(--warn); }
+
+        /* The card-level line cannot say WHICH of three numbers took, so the
+           field says it itself. A class on a timer rather than a keyframe
+           animation: the console kills animations under prefers-reduced-
+           motion, and a confirmation that only exists as an animation is a
+           confirmation those operators never get. */
+        .sync-input-row.just-saved {
+            border-radius: 10px; box-shadow: 0 0 0 3px var(--ok-weak);
+            transition: box-shadow 200ms var(--ease-out);
+        }
+        .sync-input-row.just-saved input { border-color: var(--ok); }
+        .seg.just-saved { box-shadow: 0 0 0 3px var(--ok-weak); }
+        /* A save that did not land leaves the field marked until one does.
+           The number on screen is true nowhere else at that point, and this
+           is the only thing on the card that says so field by field. */
+        .sync-input-row.save-failed { border-radius: 10px; box-shadow: 0 0 0 3px var(--bad-weak); }
+        .sync-input-row.save-failed input { border-color: var(--bad); }
 
         /* Disk usage bar in the recordings card. */
         .disk-bar-wrap {
@@ -422,144 +443,176 @@
 
     <main class="shell settings-page">
         <div class="page-head">
-            <div class="eyebrow">Satellite</div>
-            <h1 class="page-title">Settings</h1>
-            <p class="page-sub">Rover and camera health, recordings to download, and how this satellite is tuned.</p>
+            <h1 class="h-page">Settings</h1>
+            <p class="page-sub">One card per thing in the yard. Only the recordings list scrolls.</p>
+            <!-- The box itself: pure identity, no controls, so it lives as a
+                 chip on the header rather than spending a card. -->
+            <span class="sat-chip" id="card-satellite">
+                <span class="stat-ic grey" id="badge-satellite"></span>
+                <span class="cat-name">Satellite</span>
+                <span class="status-label grey" id="label-satellite">checking</span>
+                <span class="cat-detail" id="detail-satellite">Loading&hellip;</span>
+            </span>
         </div>
 
-
-
-
+        <!-- One card per category - rover, camera, storage, recordings - each
+             wearing its own status lamp, instead of a separate health module
+             the eye had to join to the controls it was describing. -->
         <div class="settings-grid">
-            <div class="settings-col">
-            <!-- One instrument, three rows.
-
-                 This was three cards. They held very different amounts - the
-                 satellite row is a hostname, the camera row has controls, and the
-                 rover row grew an address editor - so three identical containers
-                 sat at wildly different heights with one nearly empty beside one
-                 bursting. Tinted green they also read as three alerts rather than
-                 three readings.
-
-                 Same shape the run station uses for readiness: a bordered module,
-                 a row per subsystem, hairlines between, colour only in the lamp
-                 and the state word. A healthy yard is quiet, and a row can expand
-                 without distorting anything beside it. -->
-            <div class="health" id="health">
-                <div class="hrow" id="card-satellite">
-                    <span class="stat-ic grey" id="badge-satellite"></span>
-                    <span class="hname">Satellite</span>
-                    <span class="status-label grey" id="label-satellite">checking</span>
-                    <span class="hdetail" id="detail-satellite">Loading&hellip;</span>
-                </div>
-
-                <div class="hrow" id="card-rover">
-                    <span class="stat-ic grey" id="badge-rover"></span>
-                    <span class="hname">Rover</span>
-                    <span class="status-label grey" id="label-rover">checking</span>
-                    <span class="hdetail" id="detail-rover">Loading&hellip;</span>
-                    <span class="haction">
-                        <code id="rover-url">{{ rover_url }}</code>
-                        <button class="btn" id="edit-url-btn" type="button">Change</button>
-                    </span>
-                </div>
-
-                <!-- Full width beneath its row, so opening it grows this module and
-                     nothing else. Inside a status tile it made the tile burst. -->
-                <div class="hpanel" id="url-editor" hidden>
-                    <!-- One list to pick from. This was a simulator button, a
-                         search button, the search's results and an address box
-                         stacked on top of each other, which read as four
-                         settings rather than one choice - with the simulator,
-                         the thing a live yard least wants, as the biggest
-                         button. The simulator is a row like any rover now: the
-                         one that is always there, so it goes last. -->
-                    <div class="picker-head">
-                        <span class="camera-msg" id="findMsg" role="status" aria-live="polite"></span>
-                        <button class="btn quiet" id="findRoverBtn" type="button">Search again</button>
+            <div class="settings-col tune">
+                <div class="card" id="card-rover">
+                    <div class="cat-head">
+                        <span class="stat-ic grey" id="badge-rover"></span>
+                        <h2 class="card-title" style="margin-bottom:0;">Rover</h2>
+                        <span class="status-label grey" id="label-rover">checking</span>
                     </div>
-                    <ul class="rover-list" id="roverList" aria-label="Rovers"></ul>
-                    <!-- Behind a toggle rather than gone: searching covers what
-                         typing was for, but an address can still be set before
-                         the rover is switched on. -->
-                    <details class="url-manual" id="url-manual">
-                        <summary>Enter an address instead</summary>
-                        <div class="url-manual-row">
-                            <input type="text" id="url-input" spellcheck="false"
-                                   aria-label="Rover address" placeholder="curiosity.local">
-                            <button class="btn" id="save-url-btn" type="button">Use this</button>
-                        </div>
-                    </details>
+                    <div class="cat-detail" id="detail-rover">Loading&hellip;</div>
+                    <div class="cat-kv">
+                        <span class="meta-label">Address</span>
+                        <code class="cat-addr" id="rover-url">{{ rover_url }}</code>
+                    </div>
+
+                    <!-- Three ways to point at a rover, in the order they are
+                         reached for: flip to the simulator, find the real one,
+                         and only then type. Always visible and always flat -
+                         the expanding editor this replaces hid all three
+                         behind a button called Change. A two-column grid so
+                         "Find rover" and "Use" share a right edge instead of
+                         trailing whatever their row happens to be. -->
+                    <div class="rover-config">
+                        <label class="switch-label" for="simToggle">
+                            <input type="checkbox" id="simToggle" class="switch">
+                            Simulator
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-sim" aria-label="About the simulator"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </label>
+                        <button class="btn quiet cfg-btn" id="findRoverBtn" type="button">Find rover</button>
+                        <input type="text" id="url-input" class="cfg-input" spellcheck="false"
+                               aria-label="Rover address" placeholder="Or type its address: curiosity.local">
+                        <button class="btn quiet cfg-btn" id="save-url-btn" type="button">Use</button>
+                    </div>
+                    <div class="info-pop" id="tip-sim" role="tooltip">Runs missions against the simulator on this satellite instead of the real rover. Nothing moves. Flipping it off goes back to the last real rover.</div>
+                    <span class="camera-msg" id="findMsg" role="status" aria-live="polite"></span>
                     <span class="url-error" id="url-error"></span>
-                    <div><button class="btn quiet" id="cancel-url-btn" type="button">Cancel</button></div>
                 </div>
 
-                <div class="hrow" id="card-camera">
-                    <span class="stat-ic grey" id="badge-camera"></span>
-                    <span class="hname">Camera</span>
-                    <span class="status-label grey" id="label-camera">checking</span>
-                    <span class="hdetail" id="detail-camera">Loading&hellip;</span>
-                    <span class="haction camera-controls">
+                <div class="card" id="card-camera">
+                    <div class="cat-head">
+                        <span class="stat-ic grey" id="badge-camera"></span>
+                        <h2 class="card-title" style="margin-bottom:0;">Camera</h2>
+                        <span class="status-label grey" id="label-camera">checking</span>
+                        <span class="cat-detail" id="detail-camera">Loading&hellip;</span>
+                    </div>
+                    <div class="camera-controls">
                         <button class="btn" id="camera-start">Start</button>
                         <button class="btn" id="camera-stop">Stop</button>
                         <label class="camera-index-label" for="camera-index">Device</label>
                         <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
-                        <!-- Who owns the camera's lifecycle belongs beside the
-                             buttons that change it, not adrift under the module. -->
                         <span class="camera-managed" id="camera-managed"></span>
-                    </span>
-                </div>
-                <!-- Only appears when the camera has something to say. -->
-                <div class="hpanel quiet-panel" id="camera-msg-panel" hidden>
-                    <span class="camera-msg" id="camera-msg" role="status" aria-live="polite"></span>
-                </div>
-            </div>
-
-                <div class="card" id="tunablesSection">
-                    <div class="card-head-row">
-                        <h2 class="card-title" style="margin-bottom:0;">Console and camera</h2>
+                    </div>
+                    <!-- Only appears when the camera has something to say. -->
+                    <div id="camera-msg-panel" hidden>
+                        <span class="camera-msg" id="camera-msg" role="status" aria-live="polite"></span>
                     </div>
 
-                    <div class="sync-field">
-                        <span class="sync-label">Picture quality</span>
-                        <div class="seg" id="tunResolution" role="radiogroup" aria-label="Picture quality"></div>
-                        <span class="sync-hint" id="resHint">Sharper fills a big screen better and costs more bandwidth.</span>
-                    </div>
-
-
-                    <label class="sync-field">
-                        <span class="sync-label">Wait for camera up to</span>
-                        <span class="sync-input-row">
-                            <input type="number" id="tunCameraReady" min="0.5" max="30" step="0.5">
-                            <span class="sync-unit">seconds</span>
+                    <!-- Three separate settings - device, quality, timeout -
+                         each got its own divider rather than running into the
+                         one above it. Same border-top-and-gap the Rover card
+                         already uses between its own sections, so the card
+                         teaches its own pattern rather than inventing one. -->
+                    <div class="settings-divider"></div>
+                    <div class="sync-field num-field">
+                        <span class="sync-label">Picture quality
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-quality" aria-label="About picture quality"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
                         </span>
-                        <span class="sync-hint">How long "Send to rover" waits for a real frame before refusing.</span>
+                        <div class="seg" id="tunResolution" role="radiogroup" aria-label="Picture quality"></div>
+                    </div>
+                    <div class="info-pop" id="tip-quality" role="tooltip">Sharper fills a big screen better and costs more bandwidth. Picking one saves and restarts the camera.</div>
+
+                    <div class="settings-divider"></div>
+                    <label class="sync-field num-field">
+                        <span class="sync-label">Wait for camera up to
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-camready" aria-label="About the camera wait"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <span class="sync-input-row slider-row">
+                            <input type="range" id="tunCameraReady" min="0.5" max="5" step="0.5" value="2"
+                                   aria-label="Wait for camera up to, seconds">
+                            <output for="tunCameraReady" id="tunCameraReadyVal" class="slider-val">2.0s</output>
+                        </span>
                     </label>
+                    <div class="info-pop" id="tip-camready" role="tooltip">How long "Send to rover" waits for a real frame before refusing.</div>
 
-                    <div class="camera-controls" style="margin-top:0;">
-                        <button class="btn primary" id="tunSave">Save</button>
-                        <span class="camera-msg" id="tunMsg" style="margin-top:0;"></span>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Quick actions</h2>
-                    <div class="acts">
-                        <button class="act" id="refreshBtn" type="button">Refresh now <span class="hint" id="refreshHint"></span></button>
-                        <button class="act" id="clearCacheBtn" type="button">Clear local cache <span class="hint">reloads</span></button>
-                    </div>
+                    <!-- What the card has to say about itself, and the only
+                         thing here that was ever a Save button's job. Takes
+                         no room until it has something to report. -->
+                    <span class="save-status" id="tunMsg" role="status" aria-live="polite"></span>
                 </div>
 
             </div>
 
             <div class="settings-col">
-                <div class="card" id="recordingsSection">
-                    <h2 class="card-title rail-h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings</h2>
+                <div class="card" id="cleanupSection">
+                    <div class="cat-head">
+                        <h2 class="card-title" style="margin-bottom:0;">Storage
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-cleanup" aria-label="How cleanup works"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </h2>
+                    </div>
+                    <div class="info-pop" id="tip-cleanup" role="tooltip">Downloaded recordings are deleted automatically after the grace period. Very old recordings are deleted regardless. If the card is nearly full, the oldest downloaded recordings go first.</div>
+                    <!-- The disk this cleanup exists to protect, so the gauge
+                         lives with the numbers that defend it. -->
                     <div id="diskBar" class="disk-bar-wrap" hidden>
                         <div class="disk-bar"><div class="disk-bar-fill" id="diskBarFill"></div></div>
                         <span class="disk-label" id="diskLabel"></span>
                     </div>
-                    <p class="sync-hint" style="margin:0 0 0.6rem;">Tap one to save it to this device, then upload it to YouTube and paste the link into Mission Control. Comes off this satellite over the local network, so it works with no internet.</p>
+
+                    <label class="sync-field num-field">
+                        <span class="sync-label">Keep downloads for
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-grace" aria-label="About the grace period"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunGracePeriod" min="1" max="168" step="1">
+                            <span class="sync-unit">hours</span>
+                        </span>
+                    </label>
+                    <div class="info-pop" id="tip-grace" role="tooltip">After this, downloaded recordings are deleted. Default 72 (3 days).</div>
+
+                    <label class="sync-field num-field">
+                        <span class="sync-label">Delete anything older than
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-maxage" aria-label="About the age limit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunMaxAge" min="1" max="60" step="1">
+                            <span class="sync-unit">days</span>
+                        </span>
+                    </label>
+                    <div class="info-pop" id="tip-maxage" role="tooltip">Even if nobody downloaded it. Default 21 (3 weeks).</div>
+
+                    <label class="sync-field num-field">
+                        <span class="sync-label">Keep at least
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-minfree" aria-label="About emergency cleanup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <span class="sync-input-row">
+                            <input type="number" id="tunMinFreeGB" min="0.5" max="16" step="0.5">
+                            <span class="sync-unit">GB free</span>
+                        </span>
+                    </label>
+                    <div class="info-pop" id="tip-minfree" role="tooltip">If the card drops below this, delete the oldest downloaded recordings immediately.</div>
+
+                    <span class="save-status" id="cleanupMsg" role="status" aria-live="polite"></span>
+                </div>
+
+
+                <div class="card" id="recordingsSection">
+                    <div class="cat-head" style="justify-content:space-between;">
+                        <h2 class="card-title rail-h" style="margin-bottom:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Recordings
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-recordings" aria-label="About recordings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </h2>
+                        <!-- Tucked where its subject is, not a pill in a card of
+                             its own. Status refreshes itself every 5s; this list
+                             is the one thing on the page that only loads on
+                             open, so the refresh lives on it. -->
+                        <button class="iconbtn" id="refreshBtn" type="button" aria-label="Refresh" title="Refresh health and recordings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+                    </div>
+                    <div class="info-pop" id="tip-recordings" role="tooltip">Tap one to save it to this device, then upload it to YouTube. Comes off this satellite over the local network, so it works with no internet.</div>
                     <div class="rec-toolbar" id="recToolbar" hidden>
                         <label><input type="checkbox" id="recSelectAll"> Select all</label>
                         <span class="spacer"></span>
@@ -574,45 +627,6 @@
                         <span class="rec-delete-count" id="recDeleteCount"></span>
                     </div>
                     <div id="recResult" hidden></div>
-                </div>
-
-                <div class="card" id="cleanupSection">
-                    <div class="card-head-row">
-                        <h2 class="card-title" style="margin-bottom:0;">Storage cleanup</h2>
-                    </div>
-                    <p class="sync-hint" style="margin:0 0 0.6rem;">Downloaded recordings are deleted automatically after the grace period. Very old recordings are deleted regardless. If the card is nearly full, the oldest downloaded recordings go first.</p>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Keep downloaded recordings for</span>
-                        <span class="sync-input-row">
-                            <input type="number" id="tunGracePeriod" min="1" max="168" step="1">
-                            <span class="sync-unit">hours</span>
-                        </span>
-                        <span class="sync-hint">After this, downloaded recordings are deleted. Default 72 (3 days).</span>
-                    </label>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Delete any recording older than</span>
-                        <span class="sync-input-row">
-                            <input type="number" id="tunMaxAge" min="1" max="60" step="1">
-                            <span class="sync-unit">days</span>
-                        </span>
-                        <span class="sync-hint">Even if nobody downloaded it. Default 21 (3 weeks).</span>
-                    </label>
-
-                    <label class="sync-field">
-                        <span class="sync-label">Emergency cleanup below</span>
-                        <span class="sync-input-row">
-                            <input type="number" id="tunMinFreeGB" min="0.5" max="16" step="0.5">
-                            <span class="sync-unit">GB free</span>
-                        </span>
-                        <span class="sync-hint">If the card drops below this, delete the oldest downloaded recordings immediately.</span>
-                    </label>
-
-                    <div class="camera-controls" style="margin-top:0;">
-                        <button class="btn primary" id="cleanupSave">Save</button>
-                        <span class="camera-msg" id="cleanupMsg" style="margin-top:0;"></span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -762,12 +776,15 @@
             });
         }
 
+        // The one setting that was always instant, now saying so the same way
+        // the rest of the card does. Its message is its own, though: this is
+        // the only tunable that does not take effect on the next use but
+        // needs the camera taken down and brought back up.
         async function chooseResolution(value) {
             if (value === resolutionChoice) return;
-            const hint = document.getElementById('resHint');
             const before = resolutionChoice;
             paintResolution(lastResolutionOptions, value);
-            hint.textContent = 'Saving and restarting the camera\u2026';
+            setStatus(tunMsg, 'Saving and restarting the camera\u2026');
             try {
                 const resp = await fetch('/operator/api/config/tunables', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -777,15 +794,30 @@
                 // The camera only reads this at startup, so the setting is not
                 // real until it has been through one.
                 await fetch('/operator/api/camera/start', { method: 'POST' });
-                hint.textContent = 'Camera restarting at the new quality. Give it a few seconds.';
+                flashSaved(document.getElementById('tunResolution'));
+                setStatus(tunMsg, 'Saved. The camera is restarting at the new quality.', 'ok', 6000);
             } catch (e) {
                 paintResolution(lastResolutionOptions, before);
-                hint.textContent = 'Could not change the quality. The camera is unchanged.';
+                setStatus(tunMsg, 'Could not change the quality. The camera is unchanged.', 'bad');
             }
         }
 
         let lastResolutionOptions = null;
         const tunMsg = document.getElementById('tunMsg');
+
+        // The slider's own readout, since a range input shows no number on
+        // its own. Kept in sync on every drag and every time something
+        // programmatic sets .value (page load, a save's repaint) - a range
+        // input fires no 'input' event for the latter, so those call sites
+        // call this directly rather than relying on the listener alone.
+        const camReadySlider = document.getElementById('tunCameraReady');
+        const camReadyVal = document.getElementById('tunCameraReadyVal');
+        function syncCamReadyVal() {
+            if (camReadySlider && camReadyVal) {
+                camReadyVal.textContent = Number(camReadySlider.value).toFixed(1) + 's';
+            }
+        }
+        camReadySlider?.addEventListener('input', syncCamReadyVal);
 
         async function loadTunables() {
             try {
@@ -800,84 +832,127 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                syncCamReadyVal();
+                // A range input silently clamps what it DISPLAYS, so a value
+                // set before this slider existed, or through the API, shows
+                // as 5.0s over a yard that is really waiting 7.5. Say the
+                // real number instead of letting the control lie about it;
+                // the next drag brings it into the slider's range for good.
+                const inForce = d.values.cameraReadyTimeout;
+                if (camReadySlider && inForce !== undefined
+                        && Number(inForce) > Number(camReadySlider.max)) {
+                    setStatus(tunMsg, `In force: ${inForce}s. This slider stops at ${camReadySlider.max}s.`, 'warn');
+                }
                 lastResolutionOptions = (d.options || {}).cameraResolution || null;
                 paintResolution(lastResolutionOptions, d.values.cameraResolution);
             } catch (e) { /* offline: leave the fields as they are */ }
         }
 
-        document.getElementById('tunSave').addEventListener('click', async (ev) => {
-            const btn = ev.currentTarget;
-            btn.disabled = true;
-            tunMsg.dataset.tone = '';
-            tunMsg.textContent = 'Saving\u2026';
+        // ---- Every setting commits itself -----------------------------
+        //
+        // There is no Save button on this page, because a Save button could
+        // not answer the question an operator actually has. It looked the
+        // same whether or not anything was pending, so "have I saved this?"
+        // had no answer on screen, and the honest one was "press it again
+        // and see". Picture quality never had that problem: it saved on
+        // click and said so. Everything here works that way now.
+        //
+        // The feedback is what the button was standing in for, and it is in
+        // two places on purpose: the field flashes, because the card's line
+        // cannot say which of three numbers took, and the card writes a
+        // line, because a flash cannot say "adjusted to 16" or why a save
+        // failed.
+        function setStatus(el, text, tone, clearAfter) {
+            if (!el) return;
+            el.textContent = text || '';
+            if (tone) { el.dataset.tone = tone; } else { delete el.dataset.tone; }
+            clearTimeout(el._statusTimer);
+            if (clearAfter) {
+                el._statusTimer = setTimeout(() => {
+                    el.textContent = '';
+                    delete el.dataset.tone;
+                }, clearAfter);
+            }
+        }
+
+        function flashSaved(el) {
+            if (!el) return;
+            clearTimeout(el._flashTimer);
+            el.classList.add('just-saved');
+            el._flashTimer = setTimeout(() => el.classList.remove('just-saved'), 1400);
+        }
+
+        // The field's own frame, which is what carries the flash: the number
+        // boxes and the slider all sit inside one of these, and a range
+        // input styled down to a bare track has no border of its own to
+        // light up.
+        function frameOf(el) { return el.closest('.sync-input-row') || el; }
+
+        // Latest write wins, per field. Two saves of the same setting can be
+        // in flight when someone drags the slider, lets go, and drags again
+        // inside the debounce; without this the older response can land last
+        // and repaint the field to a value the operator has already moved on
+        // from.
+        const saveSeq = new Map();
+        const saveTimers = new Map();
+        const SAVE_DEBOUNCE_MS = 400;
+
+        async function commit(name, el, statusEl) {
+            const value = Number(el.value);
+            const seq = (saveSeq.get(name) || 0) + 1;
+            saveSeq.set(name, seq);
+            setStatus(statusEl, 'Saving\u2026');
             try {
-                const body = {};
-                for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
-                    const el = document.getElementById(id);
-                    if (!el) continue;
-                    body[name] = Number(el.value);
-                }
                 const resp = await fetch('/operator/api/config/tunables', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
+                    body: JSON.stringify({ [name]: value }),
                 });
                 const d = await resp.json().catch(() => ({}));
                 if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
-                // Repaint from the response: the server clamps out-of-range
-                // values, so what you typed is not always what is in force.
-                for (const [name, id] of Object.entries(TUNABLE_FIELDS)) {
-                    const el = document.getElementById(id);
-                    if (el && d.values[name] !== undefined) el.value = d.values[name];
-                }
-                tunMsg.dataset.tone = 'ok';
-                tunMsg.textContent = 'Saved. Applies on next use, no restart.';
+                if (saveSeq.get(name) !== seq) return;   // a newer save already went out
+
+                // Repaint from the response. The server clamps, so what was
+                // typed is not always what is in force, and a number left on
+                // screen that is true nowhere else is worse than no number.
+                const inForce = (d.values || {})[name];
+                const adjusted = inForce !== undefined && Number(inForce) !== value;
+                if (inForce !== undefined) { el.value = inForce; syncCamReadyVal(); }
+                frameOf(el).classList.remove('save-failed');
+                flashSaved(frameOf(el));
+                setStatus(statusEl,
+                          adjusted ? `Saved, adjusted to ${inForce}` : 'Saved',
+                          'ok', 4000);
             } catch (e) {
-                tunMsg.dataset.tone = 'bad';
-                tunMsg.textContent = e.message || 'Could not save';
-            } finally {
-                btn.disabled = false;
-                setTimeout(() => { tunMsg.textContent = ''; tunMsg.dataset.tone = ''; }, 5000);
+                if (saveSeq.get(name) !== seq) return;
+                // The field keeps the mark until it saves, because the number
+                // on screen is now true nowhere else, and neither the message
+                // nor the mark may be on a timer: one that cleared itself
+                // would leave the operator believing it went through.
+                frameOf(el).classList.add('save-failed');
+                setStatus(statusEl, e.message || 'Could not save', 'bad');
             }
-        });
+        }
+
+        function wireAutoSave(fields, statusEl) {
+            for (const [name, id] of Object.entries(fields)) {
+                const el = document.getElementById(id);
+                if (!el) continue;
+                // 'change', not 'input': a number box commits on blur or
+                // Enter and the slider on release, so the "7" on the way to
+                // "72" is never sent and then clamped to something nobody
+                // asked for. The debounce behind it folds a burst of
+                // arrow-key nudges into one request.
+                el.addEventListener('change', () => {
+                    clearTimeout(saveTimers.get(name));
+                    saveTimers.set(name, setTimeout(() => commit(name, el, statusEl), SAVE_DEBOUNCE_MS));
+                });
+            }
+        }
+        wireAutoSave(TUNABLE_FIELDS, tunMsg);
+        wireAutoSave(CLEANUP_FIELDS, document.getElementById('cleanupMsg'));
 
         loadTunables();
-
-        // --- Cleanup tunables save ------------------------------------
-        const cleanupMsg = document.getElementById('cleanupMsg');
-        document.getElementById('cleanupSave').addEventListener('click', async (ev) => {
-            const btn = ev.currentTarget;
-            btn.disabled = true;
-            cleanupMsg.dataset.tone = '';
-            cleanupMsg.textContent = 'Saving…';
-            try {
-                const body = {};
-                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
-                    const el = document.getElementById(id);
-                    if (!el) continue;
-                    body[name] = Number(el.value);
-                }
-                const resp = await fetch('/operator/api/config/tunables', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body),
-                });
-                const d = await resp.json().catch(() => ({}));
-                if (!resp.ok) throw new Error(d.error || `Failed (HTTP ${resp.status})`);
-                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
-                    const el = document.getElementById(id);
-                    if (el && d.values[name] !== undefined) el.value = d.values[name];
-                }
-                cleanupMsg.dataset.tone = 'ok';
-                cleanupMsg.textContent = 'Saved. Takes effect on the next cleanup pass.';
-            } catch (e) {
-                cleanupMsg.dataset.tone = 'bad';
-                cleanupMsg.textContent = e.message || 'Could not save';
-            } finally {
-                btn.disabled = false;
-                setTimeout(() => { cleanupMsg.textContent = ''; cleanupMsg.dataset.tone = ''; }, 5000);
-            }
-        });
 
         // --- Recordings ------------------------------------------------
         // Downloads come off the satellite over the LAN, which is the whole
@@ -1139,20 +1214,24 @@
                 row('IP', data.satellite.ip)
             );
 
-            // Keep the displayed rover URL in sync with the server
+            // Keep the displayed rover URL and the simulator toggle in sync
+            // with the server, whoever changed the address.
             document.getElementById('rover-url').textContent = data.rover.url;
+            syncRoverConfig(data.rover.url);
 
             // Rover
             const r = data.rover;
             if (!r.reachable) {
                 setBadge('rover', { colour: 'red', text: 'Unreachable' });
-                setDetail('rover', row('URL', r.url));
+                // The address is its own row below (cat-kv) now, so this does
+                // not repeat it - just says what "Unreachable" means.
+                setDetail('rover', 'Not answering at this address.');
             } else if (r.status && r.status !== 'ok') {
                 // Reachable but the queue processor thread is dead:
                 // commands would be accepted yet never executed
                 setBadge('rover', { colour: 'red', text: 'Processor stalled' });
                 setDetail('rover',
-                    row('Driver', r.driver) +
+                    row('Driver', r.driver) + '<br>' +
                     row('Queue', r.queue_size) +
                     roverCam(r)
                 );
@@ -1163,7 +1242,7 @@
                     setBadge('rover', { colour: 'green', text: 'OK' });
                 }
                 setDetail('rover',
-                    row('Driver', r.driver) +
+                    row('Driver', r.driver) + '<br>' +
                     row('Queue', r.queue_size) +
                     roverCam(r)
                 );
@@ -1181,14 +1260,6 @@
         }
 
         let consecutiveFailures = 0;
-
-        // The nav bar polls /api/status for its rover chip; this page used to
-        // run an identical poller alongside it, so every 5s the satellite
-        // answered the same request twice and called out to the rover twice.
-        // Subscribing gets the same data at half the cost, and the first
-        // callback carries the cached snapshot so the cards still paint
-        // instantly instead of sitting on "Loading…".
-        const statusPoller = { refreshNow: () => YardStatus.refreshNow() };
 
         // The footer speaks only when something is wrong.
         //
@@ -1224,41 +1295,34 @@
                 : 'Fetch failed, retrying...');
         });
 
-        // Rover URL editor
-        const urlEditor = document.getElementById('url-editor');
         const urlInput = document.getElementById('url-input');
         const urlError = document.getElementById('url-error');
 
 
-        var refreshHint = document.getElementById('refreshHint');
-        document.getElementById('refreshBtn').addEventListener('click', function () {
-            refreshHint.textContent = 'refreshing\u2026';
+        // "Clear local cache" used to live next to this. It predates the
+        // shared YardCache poller, whose cached snapshots now expire and
+        // refresh on their own - so all the button did was reload the page
+        // with extra steps, and it is gone.
+        document.getElementById('refreshBtn').addEventListener('click', function (ev) {
+            var btn = ev.currentTarget;
+            btn.disabled = true;
             Promise.allSettled([YardStatus.refreshNow(), loadRecordings()])
-                .then(function () {
-                    refreshHint.textContent = 'done';
-                    setTimeout(function () { refreshHint.textContent = ''; }, 1200);
-                });
+                .then(function () { btn.disabled = false; });
         });
 
-        document.getElementById('clearCacheBtn').addEventListener('click', function () {
-            try {
-                Object.keys(localStorage).forEach(function (k) {
-                    if (k.indexOf('yardcache:') === 0) localStorage.removeItem(k);
-                });
-            } catch (e) { /* storage disabled, nothing to clear */ }
-            location.reload();
-        });
-
-        // ---- Picking the rover ---------------------------------------
-        // Opening the editor searches straight away, so the normal path is
-        // picking a rover that demonstrably answered rather than typing three
-        // things correctly from memory - which is what went wrong at a demo.
+        // ---- Pointing at a rover ---------------------------------------
+        // Three flat controls in the order they are reached for: flip to the
+        // simulator, find the real rover, type an address. This replaces an
+        // editor that expanded out of the status row - a list, a toggle-away
+        // address box and a Cancel button all behind a button called Change,
+        // for what is really one small decision.
         const SIM_URL = 'http://localhost:8523';
-        const roverList = document.getElementById('roverList');
         const findMsg = document.getElementById('findMsg');
         const findBtn = document.getElementById('findRoverBtn');
-        const urlManual = document.getElementById('url-manual');
-        let searchSeq = 0;
+        const simToggle = document.getElementById('simToggle');
+        // Where "off" goes back to. localStorage because it is a convenience,
+        // not state: with nothing remembered the toggle falls back to a find.
+        const LAST_REAL_KEY = 'yard:lastRealRover';
 
         function currentRoverUrl() {
             return document.getElementById('rover-url').textContent.trim();
@@ -1277,60 +1341,63 @@
             return url.replace(/^https?:\/\//, '').replace(/:8523$/, '');
         }
 
-        function pickRow(url, name, meta, inUse) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'rover-pick' + (inUse ? ' in-use' : '');
-            if (inUse) btn.setAttribute('aria-current', 'true');
-            [['pick-name', name], ['pick-meta', meta], ['pick-state', inUse ? 'In use' : 'Use']]
-                .forEach(([cls, text]) => {
-                    const span = document.createElement('span');
-                    span.className = cls;
-                    span.textContent = text;
-                    btn.appendChild(span);
-                });
-            btn.addEventListener('click', () => {
-                if (inUse) { urlEditor.hidden = true; return; }
-                saveUrl(url, false);
-            });
-            const li = document.createElement('li');
-            li.appendChild(btn);
-            return li;
+        // The toggle mirrors the saved address, whoever changed it - this
+        // page, another tab, or the config file. Called from renderStatus.
+        function syncRoverConfig(url) {
+            simToggle.checked = isLocal(url);
+            if (!isLocal(url)) {
+                try { localStorage.setItem(LAST_REAL_KEY, url); } catch (e) { /* convenience only */ }
+            }
         }
 
-        function renderRovers(rovers) {
-            const rows = rovers
-                .slice()
-                .sort((a, b) => Number(!!b.hardware) - Number(!!a.hardware))
-                .map((r) => {
-                    const others = (r.addresses || []).filter((u) => u !== r.url).map(shortAddress);
-                    const meta = [r.hardware ? 'Real rover' : 'Simulator', ...others].join(' \u00b7 ');
-                    return pickRow(r.url, shortAddress(r.url), meta, !!r.current);
-                });
-            rows.push(pickRow(SIM_URL, 'Simulator', 'On this satellite. Nothing moves.', isLocal(currentRoverUrl())));
-            roverList.replaceChildren(...rows);
-        }
+        simToggle.addEventListener('change', async () => {
+            findMsg.dataset.tone = '';
+            if (simToggle.checked) {
+                // Deliberate flip to the stand-in, so no reachability veto:
+                // the simulator lives on this satellite and starts on demand.
+                findMsg.textContent = 'Switching to the simulator\u2026';
+                await saveUrl(SIM_URL, true);
+                findMsg.textContent = 'Simulator. Nothing moves.';
+            } else {
+                let last = null;
+                try { last = localStorage.getItem(LAST_REAL_KEY); } catch (e) { /* fall through */ }
+                if (last && !isLocal(last)) {
+                    findMsg.textContent = 'Back to ' + shortAddress(last);
+                    await saveUrl(last, false);
+                } else {
+                    // Never seen a real rover from this browser: go find one.
+                    await findRover();
+                }
+            }
+            syncRoverConfig(currentRoverUrl());
+        });
 
-        async function findRovers() {
-            // Reopening the editor starts a new search; a slower earlier one
-            // must not land on top of it.
+        let searchSeq = 0;
+        async function findRover() {
+            // A repeat press starts a new search; a slower earlier one must
+            // not land on top of it.
             const seq = ++searchSeq;
             findBtn.disabled = true;
             findMsg.dataset.tone = '';
             findMsg.textContent = 'Looking for rovers\u2026';
-            renderRovers([]);
             try {
                 const d = await (await fetch('/api/rover/discover')).json();
                 if (seq !== searchSeq) return;
-                // This satellite's own simulator already has its row.
-                const rovers = (d.rovers || []).filter((r) => !isLocal(r.url));
-                renderRovers(rovers);
-                if (rovers.length) {
-                    findMsg.textContent = 'Tap one to use it.';
-                } else {
+                // Real hardware first; this satellite's own simulator is the
+                // toggle's job, not a search result.
+                const rovers = (d.rovers || [])
+                    .filter((r) => !isLocal(r.url))
+                    .sort((a, b) => Number(!!b.hardware) - Number(!!a.hardware));
+                if (!rovers.length) {
                     findMsg.dataset.tone = 'bad';
-                    findMsg.textContent = 'No rover answered. Is it switched on and on this network?';
+                    findMsg.textContent = 'No rover answered. Is it on this network? Type its address below.';
+                    return;
                 }
+                const best = rovers[0];
+                const others = rovers.length - 1;
+                await saveUrl(best.url, false);
+                findMsg.textContent = 'Using ' + shortAddress(best.url)
+                    + (others ? ` (${others} other${others === 1 ? '' : 's'} answered)` : '');
             } catch (e) {
                 if (seq !== searchSeq) return;
                 findMsg.dataset.tone = 'bad';
@@ -1340,19 +1407,7 @@
             }
         }
 
-        document.getElementById('edit-url-btn').addEventListener('click', () => {
-            urlInput.value = currentRoverUrl();
-            urlError.textContent = '';
-            urlManual.open = false;
-            urlEditor.hidden = false;
-            findRovers();
-        });
-
-        document.getElementById('cancel-url-btn').addEventListener('click', () => {
-            urlEditor.hidden = true;
-        });
-
-        findBtn.addEventListener('click', findRovers);
+        findBtn.addEventListener('click', findRover);
 
         async function saveUrl(url, force) {
             urlError.textContent = '';
@@ -1384,12 +1439,11 @@
                     return;
                 }
                 document.getElementById('rover-url').textContent = data.rover_url;
-                if (data.persisted) {
-                    urlEditor.hidden = true;
-                } else {
+                syncRoverConfig(data.rover_url);
+                if (!data.persisted) {
                     urlError.textContent = 'Applied, but could not write the config file, so it resets on restart';
                 }
-                statusPoller.refreshNow().catch(() => {}); // jump the backoff queue after a config change instead of waiting out any backoff delay; failure is already surfaced via the footer banner
+                YardStatus.refreshNow().catch(() => {}); // jump the backoff queue after a config change instead of waiting out any backoff delay; failure is already surfaced via the footer banner
             } catch (e) {
                 urlError.textContent = 'Save failed: ' + e.message;
             }
@@ -1398,7 +1452,6 @@
         document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(urlInput.value, false));
         urlInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') saveUrl(urlInput.value, false);
-            if (e.key === 'Escape') urlEditor.hidden = true;
         });
     </script>
 </body>

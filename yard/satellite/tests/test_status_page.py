@@ -159,51 +159,63 @@ DEV_LAPTOP_SIM = {
 }
 
 
-def open_picker(page, live_server, rovers):
+def open_settings(page, live_server, rovers):
     mock_discover(page, rovers)
     page.goto(f'{live_server}/status')
     wait_for_badge(page, 'rover')
-    page.click('#edit-url-btn')
-    rows = page.locator('#roverList .rover-pick')
-    rows.nth(len(rovers)).wait_for()
-    return rows
 
 
-def test_rover_picker_is_one_list_real_rovers_first_simulator_last(page: Page, live_server):
+def test_find_rover_picks_real_hardware_over_a_simulator(page: Page, live_server):
+    """One press, one decision. Auto-find saves the best rover that actually
+    answered - real hardware first - instead of opening a list to read."""
     mock_status(page, rover={'reachable': True, 'url': 'http://192.168.137.121:8523'})
+    posted = capture_save(page, CURIOSITY['url'])
 
-    rows = open_picker(page, live_server, [DEV_LAPTOP_SIM, CURIOSITY])
+    open_settings(page, live_server, [DEV_LAPTOP_SIM, CURIOSITY])
+    page.click('#findRoverBtn')
 
-    texts = rows.all_inner_texts()
-    assert len(texts) == 3
-    assert 'curiosity.local' in texts[0] and 'Real rover' in texts[0] and 'In use' in texts[0]
-    assert '192.168.137.121' in texts[0]
-    assert 'dev-laptop.local' in texts[1] and 'Simulator' in texts[1] and 'In use' not in texts[1]
-    assert 'On this satellite' in texts[2]
+    page.wait_for_function(
+        "document.getElementById('findMsg').textContent.includes('curiosity.local')"
+    )
+    assert posted['url'] == CURIOSITY['url']
 
 
-def test_typing_an_address_waits_behind_its_toggle(page: Page, live_server):
+def test_find_rover_says_so_when_nothing_answers(page: Page, live_server):
     mock_status(page)
-    open_picker(page, live_server, [])
+    open_settings(page, live_server, [])
 
-    assert not page.locator('#url-input').is_visible()
-    page.click('#url-manual summary')
-    assert page.locator('#url-input').is_visible()
+    page.click('#findRoverBtn')
+
+    page.wait_for_function(
+        "document.getElementById('findMsg').textContent.includes('No rover answered')"
+    )
 
 
-@pytest.mark.parametrize('row_text,expected_url', [
-    ('dev-laptop.local', 'http://dev-laptop.local:8523'),
-    ('On this satellite', 'http://localhost:8523'),
-])
-def test_picking_a_row_saves_its_address(page: Page, live_server, row_text, expected_url):
+def test_the_simulator_is_a_toggle(page: Page, live_server):
+    """Flipping it on points the yard at the simulator on this satellite;
+    the toggle reflects the saved address, not a hopeful local state."""
     mock_status(page, rover={'reachable': True, 'url': 'http://192.168.137.121:8523'})
-    posted = capture_save(page, expected_url)
+    posted = capture_save(page, 'http://localhost:8523')
 
-    rows = open_picker(page, live_server, [DEV_LAPTOP_SIM])
-    rows.filter(has_text=row_text).click()
+    open_settings(page, live_server, [])
+    assert not page.locator('#simToggle').is_checked()
+    page.click('#simToggle')
 
-    page.wait_for_selector('#url-editor', state='hidden')
-    assert posted['url'] == expected_url
+    # The saved address is the source of truth to wait on via findMsg, not
+    # #rover-url: the mocked /api/status keeps repainting the stale address,
+    # which is exactly what a real save would change server-side.
+    page.wait_for_function(
+        "document.getElementById('findMsg').textContent.includes('Simulator')"
+    )
+    assert posted['url'] == 'http://localhost:8523'
+    assert posted['force'] is True
+
+
+def test_the_toggle_starts_on_when_the_yard_already_runs_the_simulator(page: Page, live_server):
+    mock_status(page, rover={'reachable': True, 'url': 'http://localhost:8523'})
+    open_settings(page, live_server, [])
+
+    page.wait_for_function("document.getElementById('simToggle').checked")
 
 
 def list_scrolls_inside(page, selector):
@@ -225,34 +237,40 @@ def test_settings_is_two_stacks_on_a_wide_screen_and_one_column_on_a_phone(page:
     page.goto(f'{live_server}/status')
     wait_for_badge(page, 'satellite')
     page.wait_for_selector('#recordingsList .rec-row')
-    health = page.locator('#health').bounding_box()
+    rover = page.locator('#card-rover').bounding_box()
+    storage = page.locator('#cleanupSection').bounding_box()
     recordings = page.locator('#recordingsSection').bounding_box()
-    assert recordings['x'] >= health['x'] + health['width']
-    assert abs(recordings['y'] - health['y']) < 2
+    # Rover and camera down the left; storage and the recordings it governs
+    # share the right stack.
+    assert storage['x'] >= rover['x'] + rover['width']
+    assert abs(storage['y'] - rover['y']) < 2
+    assert recordings['y'] > storage['y'] + storage['height']
     # A session's recordings scroll inside their card rather than stretching
     # that stack far past the other one.
     assert list_scrolls_inside(page, '#recordingsList')
 
     page.set_viewport_size({'width': 400, 'height': 800})
-    health = page.locator('#health').bounding_box()
+    rover = page.locator('#card-rover').bounding_box()
     recordings = page.locator('#recordingsSection').bounding_box()
-    assert abs(recordings['x'] - health['x']) < 2
-    assert recordings['y'] > health['y'] + health['height']
+    assert abs(recordings['x'] - rover['x']) < 2
+    assert recordings['y'] > rover['y'] + rover['height']
     assert not list_scrolls_inside(page, '#recordingsList')
 
 
-def test_rover_url_editable(page: Page, live_server):
+def test_typing_an_address_still_works_as_the_fallback(page: Page, live_server):
     mock_status(page)
     posted = capture_save(page, 'http://newrover.local:8523')
-    open_picker(page, live_server, [])
+    open_settings(page, live_server, [])
 
-    assert not page.locator('#url-editor').is_hidden()
-    page.click('#url-manual summary')
     page.fill('#url-input', 'http://newrover.local:8523')
     page.click('#save-url-btn')
 
-    # Editor closes only on the success path
-    page.wait_for_selector('#url-editor', state='hidden')
+    # Wait on the POST itself: the mocked /api/status keeps repainting the
+    # old address over #rover-url, which a real save would have changed.
+    for _ in range(50):
+        if posted:
+            break
+        page.wait_for_timeout(100)
     assert posted['url'] == 'http://newrover.local:8523'
 
 
@@ -262,13 +280,174 @@ def test_rover_url_edit_rejected_shows_error(page: Page, live_server):
         status=400, content_type='application/json',
         body=json.dumps({'error': 'URL must start with http:// or https://'})
     ))
-    open_picker(page, live_server, [])
+    open_settings(page, live_server, [])
 
-    page.click('#url-manual summary')
     page.fill('#url-input', 'not-a-url')
     page.click('#save-url-btn')
 
     page.wait_for_function(
         "document.getElementById('url-error').textContent.includes('http://')"
     )
-    assert not page.locator('#url-editor').is_hidden()
+
+
+# ---- Saving a setting -------------------------------------------------
+# There is no Save button on this page. Every control commits itself when it
+# is done being changed, and says so in two places, because the card's line
+# cannot name which of three numbers took and a flash on the field cannot say
+# "adjusted to 16" or why a save failed.
+
+TUNABLE_VALUES = {
+    'cameraReadyTimeout': 2.0,
+    'cameraResolution': '640x480',
+    'cleanupGracePeriod': 72.0,
+    'cleanupMaxAge': 21.0,
+    'cleanupMinFreeGB': 2.0,
+}
+RESOLUTION_OPTIONS = {
+    'cameraResolution': {
+        'values': ['640x480', '1280x960', '1920x1440'],
+        'labels': ['Standard', 'Sharp', 'Sharpest'],
+    }
+}
+
+
+def mock_tunables(page, clamp_to=None, fail=False):
+    """Serve the tunables endpoint, recording what gets POSTed to it.
+
+    One URL serves both the load (GET) and every save (POST), so the handler
+    has to split on the method. `clamp_to` stands in for the server refusing
+    the number it was sent and answering with the one actually in force.
+    """
+    posted = []
+
+    def handle(route):
+        request = route.request
+        if request.method != 'POST':
+            route.fulfill(status=200, content_type='application/json', body=json.dumps(
+                {'values': TUNABLE_VALUES, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+            return
+
+        body = json.loads(request.post_data)
+        posted.append(body)
+        if fail:
+            route.fulfill(status=500, content_type='application/json',
+                          body=json.dumps({'error': 'Could not write the config file'}))
+            return
+        in_force = dict(TUNABLE_VALUES)
+        in_force.update(body)
+        if clamp_to is not None:
+            in_force.update(clamp_to)
+        route.fulfill(status=200, content_type='application/json', body=json.dumps(
+            {'status': 'ok', 'values': in_force, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+
+    page.route('**/api/config/tunables', handle)
+    return posted
+
+
+def open_tuned_settings(page, live_server, **kwargs):
+    mock_status(page)
+    posted = mock_tunables(page, **kwargs)
+    page.goto(f'{live_server}/status')
+    wait_for_badge(page, 'satellite')
+    # The load has to have landed, or the first save races the repaint.
+    page.wait_for_function(
+        "document.getElementById('tunGracePeriod').value === '72'")
+    return posted
+
+
+def test_a_number_saves_itself_with_no_button_pressed(page: Page, live_server):
+    posted = open_tuned_settings(page, live_server)
+
+    page.fill('#tunGracePeriod', '48')
+    page.locator('#tunGracePeriod').blur()
+
+    page.wait_for_function(
+        "document.getElementById('cleanupMsg').textContent === 'Saved'")
+    assert posted == [{'cleanupGracePeriod': 48}]
+
+
+def test_the_field_that_saved_says_so_itself(page: Page, live_server):
+    """The card's line cannot name which of three numbers took."""
+    open_tuned_settings(page, live_server)
+
+    page.fill('#tunMaxAge', '30')
+    page.locator('#tunMaxAge').blur()
+
+    page.wait_for_function(
+        "document.getElementById('tunMaxAge').closest('.sync-input-row')"
+        ".classList.contains('just-saved')")
+
+
+def test_a_clamped_value_repaints_and_says_it_was_adjusted(page: Page, live_server):
+    """The server clamps, so what was typed is not always what is in force.
+
+    A number left on screen that is true nowhere else is worse than no
+    number, and worse still silently: this is the one save where what the
+    operator asked for and what they got are different.
+    """
+    posted = open_tuned_settings(page, live_server, clamp_to={'cleanupMinFreeGB': 16})
+
+    page.fill('#tunMinFreeGB', '99')
+    page.locator('#tunMinFreeGB').blur()
+
+    page.wait_for_function(
+        "document.getElementById('cleanupMsg').textContent.includes('adjusted to 16')")
+    assert posted == [{'cleanupMinFreeGB': 99}]
+    assert page.locator('#tunMinFreeGB').input_value() == '16'
+
+
+def test_a_failed_save_marks_the_field_and_keeps_saying_so(page: Page, live_server):
+    """The number on screen is now true nowhere else.
+
+    Neither the message nor the mark may be on a timer, because one that
+    cleared itself would leave the operator believing it went through.
+    """
+    open_tuned_settings(page, live_server, fail=True)
+
+    page.fill('#tunGracePeriod', '48')
+    page.locator('#tunGracePeriod').blur()
+
+    page.wait_for_function(
+        "document.getElementById('tunGracePeriod').closest('.sync-input-row')"
+        ".classList.contains('save-failed')")
+    message = page.locator('#cleanupMsg')
+    assert 'Could not write' in message.text_content()
+    # Still there well after the success message's own timeout would have run.
+    page.wait_for_timeout(4500)
+    assert 'Could not write' in message.text_content()
+
+
+def test_the_slider_saves_on_release_not_on_every_step(page: Page, live_server):
+    """Dragging fires 'input' the whole way across; only the release counts."""
+    posted = open_tuned_settings(page, live_server)
+
+    page.eval_on_selector('#tunCameraReady', """el => {
+        el.value = 3.5;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    }""")
+    page.wait_for_timeout(700)
+    assert posted == [], 'a drag in progress is not a decision'
+
+    page.eval_on_selector('#tunCameraReady',
+                          "el => el.dispatchEvent(new Event('change', { bubbles: true }))")
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent === 'Saved'")
+    assert posted == [{'cameraReadyTimeout': 3.5}]
+
+
+def test_a_value_above_the_slider_says_the_real_number(page: Page, live_server):
+    """A range input clamps what it DISPLAYS, so 7.5 shows as 5.0 and lies.
+
+    Values above the slider's ceiling can be set through the API or predate
+    the slider, and the yard this was written on had one.
+    """
+    mock_status(page)
+    page.route('**/api/config/tunables', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps({'values': dict(TUNABLE_VALUES, cameraReadyTimeout=7.5),
+                         'options': RESOLUTION_OPTIONS, 'limits': {}})))
+    page.goto(f'{live_server}/status')
+    wait_for_badge(page, 'satellite')
+
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent.includes('In force: 7.5s')")

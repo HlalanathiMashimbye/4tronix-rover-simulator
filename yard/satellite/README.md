@@ -19,7 +19,7 @@ for what the Firestore mirror used to do and why it went.
 | `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. A viewer that stops reading is skipped and then disconnected, rather than freezing the stream for everyone. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
 | `tunables.py` | Settings editable at `/settings` without a restart. |
-| `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. |
+| `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. `static/camera-client.js` is the one camera-stream WebSocket client, shared by the monitor and the run station's live view. |
 | `tests/` | pytest. `pytest tests` from this directory. |
 
 ## Pages
@@ -27,7 +27,7 @@ for what the Firestore mirror used to do and why it went.
 | Path | For |
 |------|-----|
 | `/` | Station hub |
-| `/run/` | The operator's station: import a mission, run it, take the video |
+| `/run/` | The operator's station: watch the run live, stop it, take the video, hand it to YouTube. Pasting a mission in is the fallback for when Mission Control's handoff fails. |
 | `/code/` | The tablet's Blockly and Python editor |
 | `/monitor/` | The TV: camera feed and instruction queue |
 | `/settings` | Health, recordings, and the tunables |

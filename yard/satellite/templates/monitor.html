@@ -8,6 +8,7 @@
          venue and /code/ has to load when that drops. See
          mission-control/scripts/vendor-blockly.mjs. -->
     <script src="/static/vendor/blockly/blockly.min.js"></script>
+    <script src="/static/camera-client.js"></script>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
         * {
@@ -748,7 +749,7 @@
         });
 
         // ============================================================
-        // Camera WebSocket Client
+        // Camera WebSocket Client (shared, /static/camera-client.js)
         // ============================================================
 
         // The camera runs on the same machine as this web server in both
@@ -760,109 +761,6 @@
         // monitor by IP, or on a dev machine, left it dialling a host that does
         // not resolve and sitting on "Connecting..." forever with no clue why.
         const CAMERA_WS_URL = `ws://${window.location.hostname}:{{ camera_port }}`;
-
-        class CameraClient {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas.getContext('2d');
-                this.ws = null;
-                this.reconnectAttempts = 0;
-                this.reconnectInterval = 5000;
-                this.maxReconnectDelay = 30000;
-
-                this.cameraDot = document.getElementById('cameraDot');
-                this.cameraStatus = document.getElementById('cameraStatus');
-                this.cameraMessage = document.getElementById('cameraMessage');
-            }
-
-            connect(url = CAMERA_WS_URL) {
-                // A reconnect timer scheduled before disable() will still fire;
-                // this is where it gets stopped.
-                if (this.disabled) return;
-                this.updateStatus('connecting', 'Connecting...');
-
-                try {
-                    this.ws = new WebSocket(url);
-
-                    this.ws.onopen = () => {
-                        this.reconnectAttempts = 0;
-                        this.updateStatus('connected', 'Connected');
-                        this.cameraMessage.classList.add('hidden');
-                    };
-
-                    this.ws.onmessage = (event) => {
-                        this.handleMessage(event.data);
-                    };
-
-                    this.ws.onclose = () => {
-                        this.updateStatus('disconnected', 'Disconnected');
-                        this.cameraMessage.classList.remove('hidden');
-                        this.handleReconnect(url);
-                    };
-
-                    this.ws.onerror = (error) => {
-                        console.error('Camera WebSocket error:', error);
-                    };
-
-                } catch (error) {
-                    console.error('Failed to connect to camera:', error);
-                    this.handleReconnect(url);
-                }
-            }
-
-            handleMessage(data) {
-                try {
-                    const message = JSON.parse(data);
-                    if (message.type === 'frame') {
-                        this.displayFrame(message.data);
-                    }
-                } catch (e) {
-                    console.error('Error parsing camera message:', e);
-                }
-            }
-
-            displayFrame(frameData) {
-                const img = new Image();
-                img.onload = () => {
-                    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                    this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
-                };
-                img.src = 'data:image/jpeg;base64,' + frameData;
-            }
-
-            handleReconnect(url) {
-                // Retry forever with capped backoff — the camera service may
-                // be down for hours and must recover without a page reload
-                if (this.disabled) return;
-                this.reconnectAttempts++;
-                const delay = Math.min(
-                    this.reconnectInterval * this.reconnectAttempts,
-                    this.maxReconnectDelay
-                );
-                this.updateStatus('disconnected', 'Reconnecting…');
-                setTimeout(() => this.connect(url), delay);
-            }
-
-            updateStatus(state, text) {
-                this.cameraDot.className = 'connection-dot ' + state;
-                this.cameraStatus.textContent = text;
-            }
-
-            // Stand down permanently and hand the canvas to something else.
-            // Used when the yard is running a fake rover: there is no camera
-            // to connect to, so retrying forever would both fight the
-            // simulator for the canvas and sit on "Reconnecting…" for good.
-            disable() {
-                this.disabled = true;
-                if (this.ws) {
-                    this.ws.onclose = null;   // don't trigger the reconnect loop
-                    this.ws.onerror = null;
-                    try { this.ws.close(); } catch (e) { /* already closing */ }
-                    this.ws = null;
-                }
-                this.cameraMessage.classList.add('hidden');
-            }
-        }
 
         // ============================================================
         // Queue Status Poller
@@ -1084,8 +982,23 @@
             outputToastTimer = setTimeout(() => outputToastEl.classList.remove('visible'), 5000);
         }
 
-        const camera = new CameraClient('cameraCanvas');
-        camera.connect();
+        // The shared client reports state; how it looks is this page's business.
+        // The overlay message hides while frames flow and while the simulator
+        // owns the canvas, exactly as the inline client did.
+        const cameraDot = document.getElementById('cameraDot');
+        const cameraStatusEl = document.getElementById('cameraStatus');
+        const cameraMessage = document.getElementById('cameraMessage');
+        const camera = new CameraClient(document.getElementById('cameraCanvas'), {
+            onStatus: (state, text) => {
+                if (state !== 'disabled') {
+                    cameraDot.className = 'connection-dot ' + state;
+                    cameraStatusEl.textContent = text;
+                }
+                cameraMessage.classList.toggle('hidden',
+                    state === 'connected' || state === 'disabled');
+            },
+        });
+        camera.connect(CAMERA_WS_URL);
 
         // Queue — SSE push with manual refresh fallback
         const queue = new QueuePoller();

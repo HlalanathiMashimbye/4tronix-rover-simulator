@@ -6,7 +6,7 @@
    Loads /static/yard-cache.js (window.YardCache) for every page that includes
    this bar. There used to be a second, near-identical YardCache defined inline
    here, so pages that did not load the static file silently got a different
-   implementation - one that ignored the onOnline/onOffline options they were
+   implementation - one that quietly ignored poller options callers were
    passing it. One file now, so a fix lands everywhere.
 
    Also defines window.YardStatus: the single owner of the /api/status poll.
@@ -16,6 +16,15 @@
    a 2s-timeout call out to the rover. Pages subscribe instead of polling. #}
 <script src="/static/yard-cache.js"></script>
 <header class="topbar">
+  {# The way back to Mission Control. Operators run with both screens open -
+     dispatch there, run and film here - and the return trip used to mean
+     typing a URL on a tablet. A plain anchor, not window.history.back():
+     the operator usually arrived by handoff URL or bookmark, so "back" in
+     history terms is rarely Mission Control at all. #}
+  <a class="mc-back" href="{{ mission_control_url }}" title="Back to Mission Control">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    <span>Mission Control</span>
+  </a>
   <a class="brand" href="/">
     <span class="brand-mark"></span>
     <span class="brand-txt"><b>Mars Yard</b><small>Satellite Console</small></span>

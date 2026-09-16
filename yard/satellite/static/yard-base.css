@@ -179,6 +179,20 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
 .brand-txt b { color: var(--heading); font-size: 0.98rem; font-weight: 700; letter-spacing: 0.01em; }
 .brand-txt small { color: var(--text-faint); font-size: 0.58rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; }
 
+/* The door back to Mission Control. It sits where a back control belongs -
+   before the brand - and stays a quiet outline: it leaves the console, so it
+   must be findable without competing with the stations themselves. */
+.mc-back {
+  display: inline-flex; align-items: center; gap: 0.35rem; flex-shrink: 0;
+  padding: 0.34rem 0.7rem 0.34rem 0.5rem; min-height: 36px;
+  border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--text-dim);
+  text-decoration: none; font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.mc-back:hover { color: var(--text); border-color: var(--primary); background: var(--surface-2); }
+.mc-back svg { width: 15px; height: 15px; flex-shrink: 0; }
+
 .topnav { display: flex; align-items: center; gap: 0.15rem; }
 .topnav a {
   color: var(--text-dim); text-decoration: none; font-size: 0.85rem; font-weight: 500;
@@ -297,6 +311,10 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
   .topbar { gap: 0.6rem; padding: 0 0.9rem; }
   .op-email { display: none; }
   .brand-txt small { display: none; }
+  /* Icon only: the label does not fit beside the brand on a phone, and the
+     chevron plus the tooltip still say where it goes. */
+  .mc-back span { display: none; }
+  .mc-back { padding: 0; width: 36px; justify-content: center; }
 }
 
 /* ==========================================================================
@@ -314,6 +332,12 @@ h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0
    ========================================================================== */
 
 .console { --fs-body: 0.9rem; --fs-sm: 0.8rem; --fs-xs: 0.72rem; }
+
+/* Scrollbars in the console's own colours. The fixed-shell pages scroll
+   inside panels (the recordings list, the run station's rail), and the UA's
+   default light scrollbar is the brightest thing on the page the moment one
+   appears. scrollbar-color inherits, so one declaration covers them all. */
+.console { scrollbar-color: var(--surface-3) transparent; scrollbar-width: thin; }
 
 /* A link with no class of its own.
    There were none until one turned up in an error message and rendered in the
