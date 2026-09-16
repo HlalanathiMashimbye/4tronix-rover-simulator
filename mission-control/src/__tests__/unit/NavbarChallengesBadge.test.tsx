@@ -12,7 +12,7 @@
  * about the badge, not the rest of the bar.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 jest.mock('next/navigation', () => ({ usePathname: () => '/' }));
 jest.mock('next/image', () => ({ __esModule: true, default: () => null }));
@@ -62,5 +62,42 @@ describe('Navbar Challenges badge', () => {
     render(<Navbar />);
 
     expect(screen.queryByText('0/0')).not.toBeInTheDocument();
+  });
+});
+
+describe('Navbar destinations', () => {
+  beforeEach(() => {
+    useChallengeProgress.mockReturnValue({ completedCount: 0, totalCount: 0, loading: false });
+  });
+
+  it('puts every laptop destination on the phone tab bar too', () => {
+    // The Leaderboard shipped in the laptop bar and nowhere on a phone,
+    // because the two bars were written out separately.
+    render(<Navbar />);
+
+    const top = screen.getAllByRole('navigation')[0];
+    const tabs = screen.getByRole('navigation', { name: 'Tabs' });
+    // Destinations only: the brand also links home, and Create Mission is
+    // an action that lives in the floating button on a phone.
+    const destinations = (nav: HTMLElement) => [
+      ...new Set(
+        within(nav)
+          .getAllByRole('link')
+          .map((a) => a.getAttribute('href'))
+          .filter((href) => href !== '/mission'),
+      ),
+    ].sort();
+
+    expect(destinations(tabs)).toEqual(destinations(top));
+    expect(destinations(tabs)).toContain('/leaderboard');
+  });
+
+  it('names each icon-only laptop link for a screen reader', () => {
+    render(<Navbar />);
+
+    const top = screen.getAllByRole('navigation')[0];
+    for (const name of ['Home', 'Challenges', 'My History', 'Leaderboard']) {
+      expect(within(top).getByRole('link', { name })).toBeInTheDocument();
+    }
   });
 });
