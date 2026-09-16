@@ -19,6 +19,16 @@
      JavaScript never runs at all. */
   --app-chrome: 64px;
 
+  /* How much fixed chrome sits BELOW the page: the learner tab bar, which is
+     fixed over the bottom of the viewport under md and gone from md up.
+     One definition, read by the page area's own padding in layout.tsx and by
+     the h-page utility below, because the two drifting apart is exactly what
+     went wrong: every full-height main measured 100dvh - navbar while the page
+     area also carried 4rem of padding, so on a phone the document was 64px
+     taller than the screen. The operator console spent that as a page that
+     scrolled a little and a queue whose last row sat under the tab bar. */
+  --app-bottom-chrome: 4rem;
+
   /* 0.9rem came with the Paper & Ink palette. It lives here rather than in the
      light block because radius is not a colour-scheme concern, so this
      tightens the corners in BOTH themes by 1.6px at the base step. */
@@ -278,6 +288,31 @@
   --animate-blast: blast-off 1.6s ease-in-out infinite;
   --animate-drift: drift 240s linear infinite;
   --animate-shoot: shoot 6s ease-in infinite;
+}
+
+@media (min-width: 768px) {
+  :root { --app-bottom-chrome: 0px; }
+}
+
+/*
+ * A page that fills what is left of the viewport, chrome at both ends
+ * accounted for. The pages using it hold their own scrolling panes inside and
+ * must not also scroll the document.
+ *
+ * THE ONLY PLACE THIS SUM IS WRITTEN. Seven mains each spelled out
+ * calc(100dvh - var(--app-chrome)) and every one of them was wrong below md,
+ * where the tab bar takes another 4rem - the seventh copy is how a rule goes
+ * stale without anyone touching it. architecture.test.ts fails on a new one.
+ *
+ * @utility rather than a class in @layer utilities: Tailwind v4 only generates
+ * variants - md:h-page - for utilities declared this way.
+ */
+@utility h-page {
+  height: calc(100dvh - var(--app-chrome) - var(--app-bottom-chrome));
+}
+
+@utility min-h-page {
+  min-height: calc(100dvh - var(--app-chrome) - var(--app-bottom-chrome));
 }
 
 @layer base {

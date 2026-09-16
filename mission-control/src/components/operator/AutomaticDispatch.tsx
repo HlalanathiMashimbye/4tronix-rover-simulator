@@ -378,8 +378,12 @@ export function AutomaticDispatch({
 
   return (
     <section className="rounded-2xl border border-primary/30 bg-primary/5 p-3" aria-labelledby="automatic-dispatch-title">
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      {/* Stacked on a phone. Side by side, the heading and its sentence got
+          about 170px and wrapped to four lines while the buttons kept their
+          own column, so the block was taller stacked side by side than it is
+          stacked. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0">
           <h3 id="automatic-dispatch-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             <Rocket className="h-4 w-4 text-primary" />
             Yard checks
@@ -390,7 +394,7 @@ export function AutomaticDispatch({
               : 'Send to Rover unlocks when every check below is ready.'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {!live && !unreachable && (
             <button
               type="button"
@@ -407,7 +411,10 @@ export function AutomaticDispatch({
             onClick={() => readYard(true)}
             disabled={checking || !mission.code || !allReady}
             title={allReady ? undefined : 'Unlocks when every yard check is ready'}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            // Takes the width left on the row on a phone: it is the one thing
+            // an operator opens a queued mission to press, and a 96px target
+            // beside a 96px secondary is a coin toss under pressure.
+            className="inline-flex min-h-9 flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
           >
             {checking && live ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
             Send to Rover

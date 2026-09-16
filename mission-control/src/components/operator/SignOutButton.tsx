@@ -28,10 +28,14 @@ export function SignOutButton() {
       type="button"
       onClick={signOut}
       disabled={busy}
-      className="clay-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-border/60 bg-card px-3.5 text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50"
+      aria-label="Sign out"
+      // Icon-only below md. The word is the first thing the console header can
+      // give up on a phone: three labelled controls and a title do not share
+      // 375px, and this one is recognisable without it.
+      className="clay-press inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full border border-border/60 bg-card text-xs font-medium text-muted-foreground transition hover:text-foreground disabled:opacity-50 md:w-auto md:rounded-lg md:px-3.5"
     >
-      <LogOut className="h-3.5 w-3.5" />
-      {busy ? 'Signing out…' : 'Sign out'}
+      <LogOut className="h-4 w-4 md:h-3.5 md:w-3.5" />
+      <span className="hidden md:inline">{busy ? 'Signing out…' : 'Sign out'}</span>
     </button>
   );
 }

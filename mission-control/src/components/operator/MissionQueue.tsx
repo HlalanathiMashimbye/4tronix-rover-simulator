@@ -394,7 +394,12 @@ function YardQueue({
 
   return (
     <>
-    <MobileSearch />
+    {/* Below lg the panes take turns, so with a mission open the search field
+        and the four filter chips are 150px of controls for a list that is not
+        on the screen - on an 812px phone that was most of what the mission
+        pane had left. They come back with the queue. MobileSearch is already
+        lg:hidden, so this changes nothing on a desktop. */}
+    {!selectedId && <MobileSearch />}
     {/* Two panes from lg up. Below that they take turns: a queue stacked above
         a detail pane means scrolling past every mission to reach the one you
         picked, and a tablet is the device an operator actually holds. */}
@@ -402,7 +407,7 @@ function YardQueue({
         pane holds the code and the blocks, which is the thing anyone is
         actually reading. */}
     <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-    <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
+    <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-3 sm:p-5 ${
       selectedId ? 'hidden lg:block' : ''
     }`}>
       {/* The console runs on the satellite in the room, on a network this app
@@ -443,7 +448,12 @@ function YardQueue({
               className="inline-flex items-center gap-1.5 rounded-md bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
             >
               <SatelliteDish className="h-3.5 w-3.5" aria-hidden="true" />
-              Open operator console
+              {/* The short label is the one a phone gets. "Open operator
+                  console" plus Change plus YouTube Studio is 320px of buttons
+                  in a 343px card, so the row wrapped and cost a second line
+                  off the queue underneath it. */}
+              <span className="sm:hidden">Yard console</span>
+              <span className="hidden sm:inline">Open operator console</span>
             </a>
             <button
               type="button"
@@ -467,10 +477,11 @@ function YardQueue({
           target="_blank"
           rel="noopener noreferrer"
           style={{ backgroundColor: YOUTUBE_RED }}
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
+          aria-label="YouTube Studio"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90 sm:px-3"
         >
           <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-          YouTube Studio
+          <span className="hidden sm:inline">YouTube Studio</span>
         </a>
       </div>
 
@@ -490,21 +501,15 @@ function YardQueue({
                 whichever chip is selected. So a search reports what it found,
                 not a fraction of a list it did not search. */}
             ({searching
-              ? `${visible.length} found at ${yardName}`
+              ? `${visible.length} found`
               : visible.length === source.length
-                ? `${source.length} at ${yardName}`
-                : `${visible.length} of ${source.length} at ${yardName}`})
+                ? `${source.length}`
+                : `${visible.length} of ${source.length}`}
+            {/* The yard is already named in the header, and on a phone
+                repeating it here wrapped this heading onto a second line. */}
+            <span className="hidden sm:inline"> at {yardName}</span>)
           </span>
         </h2>
-      </div>
-
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Bookkeeping
-        </span>
-        {/* A switch rather than a hidden capability, so an operator can see
-            what the platform is doing for them and take it back when the yard
-            is offline and it plainly is not. */}
       </div>
 
       {/* A filter that matches nothing is not an empty yard, and saying so
@@ -538,7 +543,11 @@ function YardQueue({
                     : 'border-border/50 bg-background/40 hover:border-border'
                 }`}
               >
-                <span className="w-5 shrink-0 text-xs font-semibold text-muted-foreground">
+                {/* Hidden on a phone. It repeats what the row's position
+                    already says, and its 20px was coming out of the mission
+                    name, which is the only handle an operator has: at 375px
+                    "Crater Crawler" was rendering as "Crater...". */}
+                <span className="hidden w-5 shrink-0 text-xs font-semibold text-muted-foreground sm:block">
                   {index + 1}
                 </span>
 
@@ -585,7 +594,7 @@ function YardQueue({
       </ol>
     </div>
 
-    <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5 ${
+    <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-3 sm:p-5 ${
       selectedId ? '' : 'hidden lg:block'
     }`}>
       {/* Beside the button that caused it. This used to render at the top of

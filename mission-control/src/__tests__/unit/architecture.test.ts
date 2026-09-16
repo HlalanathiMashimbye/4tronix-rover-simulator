@@ -119,13 +119,43 @@ describe('src/lib stays small', () => {
       'roverSimRender', 'roverBlockly',
     ];
     const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns',
-                        'missionClipboard', 'yardConsole'];
+                        'missionClipboard', 'yardConsole', 'appSurfaces'];
 
     const actual = sourceFiles('lib')
       .map((f) => f.replace(/\\/g, '/').replace(/^lib\//, '').replace(/\.tsx?$/, ''))
       .sort();
 
     expect(actual).toEqual([...SHARED_WITH_YARD, ...UI_HELPERS].sort());
+  });
+});
+
+describe('how tall a full-height page is', () => {
+  it('is spelled out in globals.css and nowhere else', () => {
+    /**
+     * Seven mains each wrote calc(100dvh - var(--app-chrome)) for themselves,
+     * and every one of them was wrong below md: the learner tab bar is fixed
+     * over the bottom 4rem of the viewport and the page area carries matching
+     * padding, so the document came out 64px taller than the screen. The
+     * operator console spent that as a page that scrolled a little and a queue
+     * whose last row sat under the bar.
+     *
+     * The sum lives in the h-page utility now. This is what stops the eighth
+     * copy: a page that hand-rolls it gets the old bug back, silently, and no
+     * other check in this repository would say a word.
+     */
+    const offenders = [...sourceFiles('app'), ...sourceFiles('components')]
+      .filter((f) => /100dvh\s*-\s*var\(--app-chrome\)/.test(read(f)));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('accounts for the chrome below the page as well as above it', () => {
+    // Both halves of the pair, because the padding and the height are set in
+    // different files and only agree while they read the same token.
+    const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
+
+    expect(css).toMatch(/@utility h-page \{[^}]*--app-bottom-chrome/);
+    expect(read('app/layout.tsx')).toContain('pb-[var(--app-bottom-chrome)]');
   });
 });
 
