@@ -103,7 +103,9 @@ function SearchField({
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search missions"
         aria-label="Search missions by name or code"
-        className="h-11 w-full rounded-full border border-border/60 bg-card/60 pl-10 pr-10 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
+        // text-base, not text-sm: iOS Safari zooms the page into a focused
+        // input whose text is under 16px and leaves it zoomed on blur.
+        className="h-11 w-full rounded-full border border-border/60 bg-card/60 pl-10 pr-10 text-base text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-primary"
       />
       {query && (
         <button

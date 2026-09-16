@@ -66,6 +66,13 @@ const YOUTUBE_RED = '#E60000';
  */
 const SETTLED_FILTERS = ['done', 'needs-video'];
 
+/** 08:41, in the operator's own clock. Falls back to nothing for a bad date. */
+function clockTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 /**
  * The second line of a queue row: what is true of this mission right now.
  *
@@ -80,7 +87,9 @@ function rowStatusLine(mission: QueueMission): string {
     case 'processing':
       return 'Running now';
     case 'queued':
-      return 'Waiting';
+      // When it arrived, which is what triage reads: a queue of nineteen
+      // saying "Waiting" nineteen times said nothing the position did not.
+      return mission.submittedAt ? `Sent ${clockTime(mission.submittedAt)}` : 'Waiting';
     case 'completed':
       return stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
     case 'cancelled':

@@ -87,7 +87,7 @@ export default async function OperatorPage() {
         </div>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-2 pb-2 md:gap-3 md:pb-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-2 md:gap-3 md:pb-5">
         {yard ? (
           <MissionQueue
             role={session.role}
