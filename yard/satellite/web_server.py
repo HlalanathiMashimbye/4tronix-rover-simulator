@@ -128,6 +128,25 @@ app.register_blueprint(operator_console.operator_bp)
 # Request timeout for rover API calls
 ROVER_TIMEOUT = 5.0
 
+# Where the console's "Mission Control" link points. The satellite never talks
+# to Mission Control itself - this is purely a door for the operator, who works
+# with both screens open and needs a way back that is not typing a URL on a
+# tablet. Env first so a yard can pin it, then the config file, then the
+# deployed hub.
+MISSION_CONTROL_URL = (os.environ.get('MISSION_CONTROL_URL')
+                       or _load_config().get('mission_control_url')
+                       or 'https://marsyard.labs.ws')
+
+
+@app.context_processor
+def _console_chrome():
+    """Context every page gets, because _nav.html is included by every page.
+
+    A per-route render_template argument would have to be repeated in five
+    places and forgotten in the sixth.
+    """
+    return {'mission_control_url': MISSION_CONTROL_URL}
+
 
 @app.route('/')
 def index():
@@ -164,8 +183,10 @@ def run_station():
     can depend on reaching Firebase.
     """
     from satellite_identity import yard_id
-    return render_template('run.html', server_ip=_local_ip(),
-                           server_port=SERVER_PORT, yard_id=yard_id())
+    # camera_port for the same reason the monitor gets it: the live view dials
+    # the camera stream from the browser, and the port is server config.
+    return render_template('run.html', yard_id=yard_id(),
+                           camera_port=CAMERA_PORT)
 
 
 @app.route('/settings')

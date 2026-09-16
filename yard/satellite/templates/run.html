@@ -5,68 +5,59 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Run · Mars Yard</title>
     <link rel="stylesheet" href="/static/yard-base.css">
+    <script src="/static/camera-client.js"></script>
     <style>
         /* ------------------------------------------------------------------
-           The station is a sequence, so it is drawn as one.
+           The station is a control room for a run that is already on its way.
 
-           It used to be four equally weighted cards in a Z: step 1 top left,
-           step 2 top right, steps 3 and 4 bottom right, every one with the same
-           border, radius and background. Nothing said which came first except
-           the words "Step N", and an operator mid-event does not read labels.
+           It used to be built around getting a mission in: half the page was
+           a paste-and-read panel, and the run itself was step 1 of a numbered
+           spine squeezed down the right. That was true once - but missions
+           arrive from Mission Control now, dispatched by the operator there
+           and handed off through the URL. What the operator does HERE is
+           watch the run, stop it if it goes wrong, take the video, and hand
+           it to YouTube. So the live view is the page, the aftermath stacks
+           down a side rail, and pasting a mission is the small fallback it
+           actually is.
 
-           Now: readiness lives in the header because it gates everything and
-           has to be glanceable at all times; the mission and its code take the
-           left; and the work runs down a numbered spine on the right.
+           One screen, no page scroll: the shared .fixed-shell owns that, and
+           everything below is sized to fit inside it. Only the Python
+           drawer's textarea scrolls internally.
            ------------------------------------------------------------------ */
-        .run-desk {
-            height: calc(100dvh - 62px);
-            max-width: none !important;
-            padding: 0.9rem 1.4rem 1.1rem;
-            display: flex; flex-direction: column; gap: 0.85rem;
-            overflow: hidden;
-        }
+        .run-desk { gap: 0.7rem; }
 
         /* ---- Header: identity left, readiness right ---------------------- */
-        .desk-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1.2rem; flex-wrap: wrap; }
-        .run-desk .page-title { margin-top: 0.15rem; font-size: var(--fs-xl); line-height: 1.1; letter-spacing: -0.015em; }
-        .run-desk .page-sub { margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--text-dim); max-width: 54ch; }
+        /* Wraps rather than clips: on a narrow window the readiness strip
+           drops under the title instead of losing its rover tile off the
+           right edge. */
+        .desk-top { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; flex-wrap: wrap; }
+        .desk-top .page-sub { color: var(--text-dim); font-size: var(--fs-xs); margin-top: 0.1rem; }
 
         /* Readiness, as an instrument rather than two warning banners.
-
-           These were a pair of wide boxes flooded with a red or green tint and
-           a thick coloured edge. At the size they needed, the fill was the
-           loudest thing on a page whose actual subject is a mission, and two
-           tinted slabs side by side read as a pair of alerts even when both
-           said everything was fine. Green does not need to shout.
-
-           One bordered module, one row per subsystem, a hairline between them.
            The colour is concentrated into a small lamp and the state word;
            the surface stays neutral, so a healthy yard is quiet and a broken
-           one is the only thing with colour in it. */
+           one is the only thing with colour in it. Horizontal now: it shares
+           a row with the title, so it spends width, not height. */
         .ready-strip {
-            display: flex; flex-direction: column;
+            display: flex; align-items: stretch;
             border: 1px solid var(--border); border-radius: 11px;
             background: var(--surface); box-shadow: var(--e1);
-            overflow: hidden; min-width: 300px;
+            overflow: hidden;
         }
-        .ready {
-            display: flex; align-items: center; gap: 0.6rem;
-            padding: 0.5rem 0.75rem;
-        }
-        .ready + .ready { border-top: 1px solid var(--border); }
-        .ready-txt { min-width: 0; display: flex; align-items: baseline; gap: 0.5rem; }
+        .ready { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.8rem; }
+        .ready + .ready { border-left: 1px solid var(--border); }
+        .ready-txt { min-width: 0; display: flex; align-items: baseline; gap: 0.45rem; }
         .status-name {
             color: var(--text-dim); font-family: var(--mono);
             font-size: var(--fs-2xs); font-weight: 600;
             letter-spacing: 0.1em; text-transform: uppercase;
-            min-width: 4.6em;
         }
-        .status-sub { color: var(--text); font-size: var(--fs-xs); }
+        .status-sub { color: var(--text); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         .ready[data-state="ok"]   .status-sub { color: var(--ok); }
         .ready[data-state="bad"]  .status-sub { color: var(--bad); }
         .ready[data-state="wait"] .status-sub { color: var(--warn); }
 
-        /* A lamp, not a dot: the ring is what makes a 8px circle read as lit
+        /* A lamp, not a dot: the ring is what makes an 8px circle read as lit
            rather than as a bullet point. */
         .status-dot {
             width: 8px; height: 8px; flex: none; border-radius: 50%;
@@ -75,45 +66,105 @@
         .status-dot.ok  { background: var(--ok);  box-shadow: 0 0 0 3px var(--ok-weak),  0 0 10px -1px var(--ok); }
         .status-dot.bad { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-weak), 0 0 10px -1px var(--bad); }
         .ready .btn {
-            margin-left: auto; min-height: 28px !important;
+            margin-left: 0.2rem; min-height: 28px !important;
             padding: 0.25rem 0.6rem !important; font-size: var(--fs-2xs) !important;
+            white-space: nowrap;
         }
 
-        /* ---- Body -------------------------------------------------------- */
-        .desk-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr); gap: 0.9rem; }
-        .panel-card {
-            min-height: 0; display: flex; flex-direction: column; gap: 0.7rem;
-            padding: 0.9rem 1rem; border: 1px solid var(--border); border-radius: 14px;
-            background: var(--surface); box-shadow: var(--e2);
+        /* ---- Body: the live view, then a rail ----------------------------
+           The rail scales with the window instead of being pinned at 400px:
+           the live view letterboxes to 4:3 anyway, so width past its height
+           limit was empty margin while the rail scrolled. */
+        .desk-grid {
+            flex: 1; min-height: 0;
+            display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
+            gap: 0.8rem;
         }
-        /* .card-head and .card-title now live in yard-base.css, shared with
-           settings. The run station's cards put the title inline with a
-           button, so they cancel the shared bottom margin. */
-        .card-head .card-title { margin-bottom: 0; }
-        .card-note { color: var(--text-faint); font-size: var(--fs-2xs); }
 
-        /* ---- Mission identity -------------------------------------------- */
-        .mission-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; }
-        .meta-field { min-width: 0; }
-        .meta-field.full { grid-column: 1 / -1; }
+        /* ---- The live view ----------------------------------------------- */
+        .live-head-state { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+        .live-head-state .btn, .live-head-state .tag { white-space: nowrap; }
+        .live-panel .card-title { white-space: nowrap; }
+        .live-now { color: var(--text-dim); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .live-view {
+            position: relative; flex: 1; min-height: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-2);
+        }
+        /* width/height + object-fit rather than max-*: the canvas fills the
+           panel and keeps the camera's 4:3, letterboxing instead of
+           stretching. Same reasoning as the monitor's canvas. */
+        #cameraCanvas { width: 100%; height: 100%; object-fit: contain; }
+        .live-msg {
+            position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
+            color: var(--text-faint); font-size: var(--fs-sm);
+        }
+        .live-foot { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.7rem 0.9rem; border-top: 1px solid var(--border); }
+
+        /* ---- Actions -----------------------------------------------------
+           Stop is the bigger of the two. Send is gated (disabled until the
+           yard is ready) and only fires once at the top of a run; Stop is
+           the control an operator reaches for one-handed, fast, at whatever
+           moment the rover is doing the wrong thing - it has to be the
+           easier target, not the quieter sibling of the button that starts
+           things moving. */
+        .action-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 0.5rem; }
+        .btn.run-primary {
+            min-height: 48px; font-size: var(--fs-sm); font-weight: 700;
+            background: var(--signal); border-color: var(--signal); color: var(--signal-ink);
+            box-shadow: 0 6px 18px -10px var(--signal);
+        }
+        .btn.run-primary:hover:not(:disabled) { filter: brightness(1.07); }
+        .btn.run-primary:disabled { background: var(--surface-3); border-color: var(--border); color: var(--text-faint); box-shadow: none; cursor: not-allowed; }
+        .btn.stop-action {
+            min-height: 58px; font-size: var(--fs-md); font-weight: 800;
+            color: var(--bad); border-width: 2px;
+            border-color: color-mix(in oklab, var(--bad) 55%, var(--border)); background: transparent;
+        }
+        .btn.stop-action:hover { background: var(--bad-weak); }
+        .warning-box {
+            display: none; padding: 0.45rem 0.7rem; border-radius: 9px;
+            border: 1px solid color-mix(in oklab, var(--warn) 34%, transparent);
+            background: var(--warn-weak); color: var(--warn);
+            font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
+        }
+        .warning-box.show { display: block; }
+        .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
+        .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
+        @keyframes recpulse { 50% { opacity: 0.35; } }
+        @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
+
+        /* ---- The rail ---------------------------------------------------- */
+        /* overflow-y is a safety valve, not a design: the rail is sized to
+           fit, and the page itself never scrolls, so on a window shorter than
+           the rail the rail gives way rather than the Stop button. */
+        .side { min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; overflow-y: auto; overscroll-behavior: contain; }
+        .side .card { flex: 0 0 auto; }
+        .live-panel { overflow: hidden; }
+        .side .card { display: flex; flex-direction: column; gap: 0.55rem; box-shadow: var(--e1); padding: 0.7rem 0.85rem; }
+        .side .card-head .card-title { margin-bottom: 0; }
+        /* The video card grows to fill whatever height Mission Details left
+           in the rail, so its bottom edge lands on Live yard's bottom edge
+           instead of stopping short with blank space under it. The
+           description box is what actually grows inside it - the field
+           that most benefits from the extra room. */
+        #videoCard { flex: 1 1 auto; min-height: 0; }
+        .card-actions { display: flex; align-items: center; gap: 0.4rem; }
+
+        /* The paste fallback's one visible face: an icon button. Pasting is
+           not a step of the job any more - the mission arrives from Mission
+           Control - so it earns an icon's worth of space, not a labelled
+           button's. The label lives on for hover and screen readers. */
+        .paste-btn {
+            width: 34px; min-height: 34px !important; padding: 0 !important;
+            color: var(--signal); border-color: var(--signal-edge); background: transparent;
+        }
+        .paste-btn:hover { background: var(--signal-weak); border-color: var(--signal); color: var(--signal) !important; }
+        .paste-btn svg { width: 16px; height: 16px; }
+
         /* The paste target. Hidden until the operator asks to import and the
            clipboard turns out to be unreadable, so the common path stays a
-           single button and this never appears on a secure origin. */
-        /* The one control on this page that leaves it. It was a grey button
-           among grey buttons, so the step ended in something the operator had
-           to look for. YouTube's red, one shade off the brand value: #FF0000
-           on white is 4.0:1 and this is 4.8:1, which clears AA at this size
-           and is indistinguishable at a glance. */
-        .yt-btn {
-            background: #E60000 !important;
-            border-color: #E60000 !important;
-            color: #fff !important;
-            font-weight: 700 !important;
-        }
-        .yt-btn:hover { background: #cc0000 !important; border-color: #cc0000 !important; }
-        .yt-btn svg { flex: 0 0 auto; }
-
-        .paste-catch { margin: 0.55rem 0 0.2rem; }
+           single tap and this never appears on a secure origin. */
         .paste-box {
             width: 100%; box-sizing: border-box;
             background: var(--bg-2); color: var(--text);
@@ -125,103 +176,107 @@
         .paste-box:focus { outline: none; box-shadow: 0 0 0 3px var(--signal-weak); }
         #pasteHint { color: var(--signal); }
 
-        .meta-label { display: block; color: var(--text-faint); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 0.3rem; }
+        /* ---- Mission identity -------------------------------------------- */
         .meta-row {
-            display: flex; align-items: center; gap: 0.5rem; min-width: 0;
-            padding: 0.5rem 0.65rem; border: 1px solid var(--border);
+            display: grid; grid-template-columns: 4.2em minmax(0, 1fr) auto;
+            align-items: center; gap: 0.5rem;
+            padding: 0.35rem 0.55rem; border: 1px solid var(--border);
             border-radius: 9px; background: var(--bg-2);
         }
-        /* Machine values in mono, prose in sans. Half of this page is data an
+        .meta-row + .meta-row { margin-top: 0.35rem; }
+        .meta-label { color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+        /* Machine values in mono, prose in sans. Half of this rail is data an
            operator has to compare character by character against another
            screen; the other half is instructions. They should not share a face. */
-        .meta-value { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+        .meta-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-family: var(--mono); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
         .meta-value.name { font-family: var(--font-sans); font-size: var(--fs-sm); }
-        /* Real inputs, not contenteditable spans: paste carries formatting into
-           a contenteditable, there is no placeholder, and "empty" ends up being
-           a string comparison against whatever prompt text was left in the DOM. */
-        input.meta-value { border: 0; background: none; padding: 0; min-height: 0; border-radius: 0; }
+        input.meta-value { border: 0 !important; background: none !important; padding: 0 !important; min-height: 0 !important; border-radius: 0; width: 100%; }
         input.meta-value:focus { outline: none; }
-        input.meta-value::placeholder { color: var(--text-faint); }
         .meta-row:focus-within { border-color: var(--signal-edge); box-shadow: 0 0 0 3px var(--signal-weak); }
         .copy-compact { min-height: 26px !important; padding: 0.2rem 0.5rem !important; font-size: var(--fs-2xs) !important; }
 
-        /* ---- The code ---------------------------------------------------- */
-        .code-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; }
-        .code-hint { color: var(--text-faint); font-size: var(--fs-2xs); text-align: right; }
+        /* ---- The code, behind a drawer ------------------------------------
+           Still here in full - it is exactly what the rover runs, and the
+           paste fallback needs somewhere to land - but folded away, because
+           on the normal path the code was already read and dispatched in
+           Mission Control. The drawer opens itself when a paste arrives. */
+        .code-drawer summary {
+            cursor: pointer; color: var(--text-dim); font-size: var(--fs-xs); font-weight: 600;
+            width: fit-content;
+        }
+        .code-drawer summary:hover { color: var(--text); }
         .run-code {
-            flex: 1; min-height: 0; width: 100%; resize: none;
+            margin-top: 0.45rem; width: 100%; height: 130px; resize: none; box-sizing: border-box;
             background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
-            border-radius: 10px; padding: 0.85rem 0.9rem;
-            font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.65;
+            border-radius: 10px; padding: 0.6rem 0.7rem;
+            font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.6;
         }
         .run-code::placeholder { color: var(--text-faint); }
         .run-code:focus { outline: none; border-color: var(--signal-edge); box-shadow: 0 0 0 3px var(--signal-weak); }
-        .run-code:readonly { background: var(--surface); color: var(--text-faint); cursor: default; }
-
-        /* ---- The spine ---------------------------------------------------
-           A numbered rail down the right column. The number is not decoration:
-           these steps genuinely happen in order, and the rail is what says so
-           without four repetitions of the word "Step". */
-        .spine { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.55rem; overflow-y: auto; padding-right: 0.15rem; }
-        .node { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 0.7rem; }
-        .node::before {
-            content: ""; position: absolute; left: 12.5px; top: 26px; bottom: -0.55rem;
-            width: 1px; background: var(--border);
-        }
-        .node:last-child::before { display: none; }
-        .node-num {
-            position: relative; z-index: 1;
-            width: 26px; height: 26px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            border: 1px solid var(--border); background: var(--surface-2);
-            color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 700;
-        }
-        .node-body { min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; padding-bottom: 0.35rem; }
-        .node-title { color: var(--heading); font-size: var(--fs-sm); font-weight: 700; }
-        .node-note { color: var(--text-dim); font-size: var(--fs-2xs); line-height: 1.5; }
-
-        /* ---- Actions -----------------------------------------------------
-           One primary per screen. Send is the only filled action on the page;
-           Stop is quiet until there is something to stop, and Send refuses
-           rather than firing into a yard that is not ready. */
-        .action-row { display: grid; grid-template-columns: 1.9fr 1fr; gap: 0.5rem; }
-        .btn.run-primary {
-            min-height: 50px; font-size: var(--fs-md); font-weight: 700;
-            background: var(--signal); border-color: var(--signal); color: var(--signal-ink);
-            box-shadow: 0 6px 18px -10px var(--signal);
-        }
-        .btn.run-primary:hover:not(:disabled) { filter: brightness(1.07); }
-        .btn.run-primary:disabled { background: var(--surface-3); border-color: var(--border); color: var(--text-faint); box-shadow: none; cursor: not-allowed; }
-        .btn.stop-action { min-height: 50px; font-weight: 700; color: var(--bad); border-color: color-mix(in oklab, var(--bad) 40%, var(--border)); background: transparent; }
-        .btn.stop-action:hover { background: var(--bad-weak); }
-        .warning-box {
-            display: none; padding: 0.5rem 0.7rem; border-radius: 9px;
-            border: 1px solid color-mix(in oklab, var(--warn) 34%, transparent);
-            background: var(--warn-weak); color: var(--warn);
-            font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
-        }
-        .warning-box.show { display: block; }
-        .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
-        .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
-        @keyframes recpulse { 50% { opacity: 0.35; } }
-        @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
-        .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 
         /* ---- Handoff ------------------------------------------------------ */
-        .video-controls { display: flex; gap: 0.45rem; align-items: center; }
-        .video-controls select { min-width: 0; flex: 1; min-height: 36px; font-family: var(--mono); font-size: var(--fs-2xs); }
-        .yt-box {
-            width: 100%; min-height: 92px; resize: none;
-            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
-            border-radius: 9px; padding: 0.6rem 0.7rem;
-            font-family: var(--mono); font-size: var(--fs-2xs); line-height: 1.6;
+        .video-controls { display: flex; flex-direction: column; gap: 0.3rem; }
+        .video-controls .meta-label { margin: 0; }
+        /* The card's one real decision - which take - so it gets the
+           tallest, boldest control on the card: a full-width bar with the
+           signal border every other field on this page uses for the thing
+           that matters, not the thin grey strip a bare <select> defaults
+           to. A custom chevron replaces the native one, which render sizes
+           differently per browser and reads as an afterthought at this
+           size. */
+        .video-controls select.video-pick {
+            width: 100%; min-width: 0; min-height: 44px;
+            font-family: var(--mono); font-size: var(--fs-sm); font-weight: 600;
+            color: var(--text); background: var(--bg-2);
+            border: 1px solid var(--signal-edge); border-radius: 10px;
+            padding: 0.55rem 2.2rem 0.55rem 0.75rem;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2376ffdd' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 0.7rem center; background-size: 15px;
         }
-        /* One filled action on the page, and it is Send.
-           Import, Download and Copy description are each the main action of
-           their own block, but they are not the point of the screen. They were
-           all filled Mars orange, so four buttons competed and the eye had no
-           reason to land on the one that moves a physical rover. They keep the
-           signal colour, as outlines. */
+        .video-controls select.video-pick:hover:not(:disabled) { border-color: var(--signal); background-color: var(--surface-2); }
+        .video-controls select.video-pick:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--signal-weak); border-color: var(--signal); }
+        .video-controls select.video-pick:disabled { opacity: 0.6; cursor: default; }
+        /* Description gets its own head - a label and a Copy button shaped
+           exactly like the Title row above it - instead of a full-width
+           primary button underneath eating a whole extra line. flex: 1 on
+           the box means the space that button used to take, plus whatever
+           the video card grows into, goes straight into the one field an
+           operator actually reads before pasting. */
+        .field-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.15rem; }
+        .yt-box {
+            width: 100%; flex: 1; min-height: 60px; resize: none; box-sizing: border-box;
+            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 9px; padding: 0.55rem 0.65rem;
+            font-family: var(--mono); font-size: var(--fs-2xs); line-height: 1.55;
+        }
+        /* The one control on this page that leaves it. It was a grey button
+           among grey buttons, so the step ended in something the operator had
+           to look for. YouTube's red, one shade off the brand value: #FF0000
+           on white is 4.0:1 and this is 4.8:1, which clears AA at this size
+           and is indistinguishable at a glance. */
+        .yt-btn {
+            background: #E60000 !important;
+            border-color: #E60000 !important;
+            color: #fff !important;
+            font-weight: 700 !important;
+            min-height: 32px !important; padding: 0.25rem 0.7rem !important; font-size: var(--fs-2xs) !important;
+        }
+        .yt-btn:hover { background: #cc0000 !important; border-color: #cc0000 !important; }
+        .yt-btn svg { flex: 0 0 auto; }
+        /* Download, iconified and moved into the card head, left of Open
+           Studio - the two doors this card ends at, side by side in the
+           order they are used: get the file, then go upload it. */
+        .dl-btn {
+            width: 32px; min-height: 32px !important; padding: 0 !important;
+            color: var(--signal); border-color: var(--signal-edge); background: transparent;
+        }
+        .dl-btn:hover:not(:disabled) { background: var(--signal-weak); border-color: var(--signal); color: var(--signal) !important; }
+        .dl-btn svg { width: 15px; height: 15px; }
+
+        /* Import / Download / Copy keep the signal colour as outlines: each is
+           the main action of its own block, but none is the point of the
+           screen. Send is, and Send alone is filled. */
         .run-desk .btn.primary {
             background: transparent;
             border-color: var(--signal-edge);
@@ -231,53 +286,50 @@
         .run-desk .btn.primary:hover { background: var(--signal-weak); border-color: var(--signal); }
         .run-desk .btn.primary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
 
-        .run-desk .hub-note { display: none; }
-
+        .camera-msg { font-size: var(--fs-2xs); color: var(--text-dim); min-height: 1.1em; }
+        .camera-msg[data-tone="bad"] { color: var(--bad); }
+        .camera-msg[data-tone="ok"]  { color: var(--ok); }
+        .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 
         /* Touch targets.
-           The yard is operated from a tablet, and these had been tuned by eye
-           on a laptop: 26px Copy buttons, a 28px Start camera, a 36px select.
-           Any pointer that is not a mouse gets the 44px the platforms ask for.
-           Sized with padding rather than a bigger font so the compact look on a
-           desktop survives. */
+           The yard is operated from a tablet, and these are tuned by eye on a
+           laptop. Any pointer that is not a mouse gets the 44px the platforms
+           ask for, sized with padding rather than a bigger font so the compact
+           look on a desktop survives. */
         @media (pointer: coarse) {
             .copy-compact { min-height: 44px !important; padding: 0.25rem 0.8rem !important; }
             .ready .btn { min-height: 44px !important; padding: 0.25rem 0.8rem !important; }
+            .paste-btn { width: 44px; min-height: 44px !important; }
+            .dl-btn { width: 44px; min-height: 44px !important; }
+            .yt-btn { min-height: 44px !important; }
             .video-controls select, .video-controls .btn { min-height: 44px; }
             .btn { min-height: 44px; }
         }
-        @media (max-width: 980px) {
-            .run-desk { height: auto; min-height: calc(100dvh - 62px); overflow: visible; }
-            .desk-grid { grid-template-columns: 1fr; }
-            .panel-card.mission { min-height: 460px; }
-            .spine { overflow: visible; }
+
+        /* Stacked, and still one screen: the live view keeps a fixed share of
+           the height and the rail scrolls inside itself. The page never
+           scrolls - the whole point of the station is that Stop is always
+           where the thumb left it. */
+        @media (max-width: 720px) {
+            .desk-grid { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 5fr) auto; }
+            .desk-top { flex-wrap: wrap; }
         }
         @media (max-width: 700px) {
-            .run-desk { padding: 0.8rem 0.9rem 1rem; }
-            .mission-meta, .action-row { grid-template-columns: 1fr; }
-            .meta-field.full { grid-column: auto; }
-            .code-hint { display: none; }
-            /* The strip is a flex child of the header, so it sized to its
-               content and the two tiles stopped short of the right edge with a
-               ragged gap beside them. */
-            .desk-top { display: block; }
-            .ready-strip { margin-top: 0.8rem; display: grid; grid-template-columns: 1fr; }
-            .ready { min-width: 0; }
+            .action-row { grid-template-columns: 1fr 1fr; }
         }
     </style>
 </head>
-<body class="console">
+<body class="console fixed-shell">
     {% set nav_active = 'run' %}{% include "_nav.html" %}
 
-    <main class="page run-desk">
+    <main class="shell run-desk">
         <div class="desk-top">
             <div>
-                <div class="eyebrow">Station</div>
-                <h1 class="page-title">Run a mission</h1>
-                <p class="page-sub">Everything for one mission, in order. Closing the mission happens in Mission Control.</p>
+                <h1 class="h-page">Run a mission</h1>
+                <p class="page-sub">Watch the run, stop it if you must, then take the video to YouTube. Closing the mission happens in Mission Control.</p>
             </div>
 
-            <!-- Readiness sits in the header, not in step two, because it
+            <!-- Readiness sits in the header, not in a step, because it
                  decides whether any of the rest can work and an operator needs
                  to see it without hunting. -->
             <div class="ready-strip">
@@ -300,114 +352,139 @@
         </div>
 
         <div class="desk-grid">
-            <section class="panel-card mission">
-                <div class="card-head">
-                    <span class="card-title">The mission</span>
-                    <button class="btn primary" id="importBtn" type="button">Paste mission</button>
+            <!-- The live view: what the camera is filming, what the rover is
+                 doing, and the two controls that act on a moving machine. On a
+                 fake-rover yard the simulator takes the canvas over, exactly
+                 as it does on the monitor. -->
+            <section class="panel live-panel">
+                <div class="panel-head">
+                    <span class="card-title rail-h" style="margin:0;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>Live yard</span>
+                    <div class="live-head-state">
+                        <span class="badge" id="liveMode" data-tone="info" hidden>Simulated</span>
+                        <span class="live-now" id="liveNow">Rover idle</span>
+                        <span class="tag" id="runState">Ready</span>
+                        <button class="btn quiet" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
+                    </div>
                 </div>
-                <span class="camera-msg" id="importMsg" style="margin-top:0;"></span>
-
-                <!-- Shown only when the clipboard cannot be read directly. The
-                     yard is served over plain HTTP to a tablet, which is not a
-                     secure context, so navigator.clipboard.readText does not
-                     exist here and never will. This is where the operator
-                     pastes instead. It replaces a window.prompt: a modal
-                     typing dialog in the middle of a run. -->
-                <div class="paste-catch" id="pasteCatch" hidden>
-                    <label class="meta-label" for="pasteBox" id="pasteHint">Paste the copied mission</label>
-                    <textarea id="pasteBox" class="paste-box" rows="2" spellcheck="false"
-                              autocomplete="off" placeholder="Paste here"></textarea>
+                <div class="live-view">
+                    <canvas id="cameraCanvas" width="640" height="480"></canvas>
+                    <div class="live-msg" id="liveMsg">Connecting to camera...</div>
                 </div>
+                <div class="live-foot">
+                    <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
+                    <div class="action-row">
+                        <button class="btn run-primary" id="runBtn" type="button">Send to rover</button>
+                        <button class="btn stop-action" id="stopBtn" type="button">Stop</button>
+                    </div>
+                    <div class="camera-msg" id="runMsg"></div>
+                </div>
+            </section>
 
-                <div class="mission-meta">
-                    <div class="meta-field">
-                        <span class="meta-label">Mission name</span>
+            <div class="side">
+                <!-- The mission's identity. Read-only on the normal path: it
+                     arrived filled in from Mission Control. The paste icon is
+                     the fallback for when it did not. -->
+                <section class="card">
+                    <div class="card-head">
+                        <span class="card-title">Mission Details</span>
+                        <div class="card-actions">
+                            <span class="camera-msg" id="importMsg"></span>
+                            <button class="btn primary paste-btn" id="importBtn" type="button"
+                                    aria-label="Paste mission" title="Paste mission (fallback if Mission Control's handoff fails)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Shown only when the clipboard cannot be read directly.
+                         The yard is served over plain HTTP to a tablet, which
+                         is not a secure context, so navigator.clipboard.readText
+                         does not exist there and never will. This is where the
+                         operator pastes instead. -->
+                    <div id="pasteCatch" hidden>
+                        <label class="meta-label" for="pasteBox" id="pasteHint" style="display:block;margin-bottom:0.3rem;">Paste the copied mission</label>
+                        <textarea id="pasteBox" class="paste-box" rows="2" spellcheck="false"
+                                  autocomplete="off" placeholder="Paste here"></textarea>
+                    </div>
+
+                    <div>
                         <div class="meta-row">
+                            <span class="meta-label">Name</span>
                             <span class="meta-value name" id="missionName">-</span>
                             <button class="btn copy-compact" type="button" data-copy="missionName">Copy</button>
                         </div>
-                    </div>
-                    <div class="meta-field">
-                        <span class="meta-label">Mission ID</span>
                         <div class="meta-row">
+                            <span class="meta-label">ID</span>
                             <span class="meta-value" id="missionId">-</span>
                             <button class="btn copy-compact" type="button" data-copy="missionId">Copy</button>
                         </div>
-                    </div>
-                    <div class="meta-field full">
-                        <span class="meta-label">Run ID, which the recording is named after</span>
-                        <div class="meta-row">
+                        <div class="meta-row" title="The recording is named after the run ID">
+                            <span class="meta-label">Run ID</span>
                             <span class="meta-value" id="runId">Waiting for the mission ID</span>
                             <button class="btn copy-compact" type="button" data-copy="runId">Copy</button>
                         </div>
                     </div>
-                </div>
 
-                <div class="code-head">
-                    <span class="meta-label" style="margin:0;">Python</span>
-                    <span class="code-hint">Read it before you send. This is exactly what the rover runs.</span>
-                </div>
-                <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or press Paste mission above." readonly></textarea>
-            </section>
+                    <details class="code-drawer" id="codeDrawer">
+                        <summary>Python the rover runs</summary>
+                        <textarea class="run-code" id="code" spellcheck="false" placeholder="Paste the mission's Python, or tap the paste button above." readonly></textarea>
+                    </details>
+                </section>
 
-            <div class="spine">
-                <div class="node">
-                    <span class="node-num">1</span>
-                    <div class="node-body">
-                        <span class="node-title">Run it</span>
-                        <span class="node-note">Send starts the recording, waits a second so the rover's first move is in the video, then runs the code. Filming stops on its own when the rover reports the run is over. Stop ends both early.</span>
-                        <div class="row">
-                            <button class="btn" id="recBtn" type="button"><span class="rec-dot" id="recDot"></span> Start recording</button>
-                            <span class="tag" id="runState">Ready</span>
-                        </div>
-                        <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
-                        <div class="action-row">
-                            <button class="btn run-primary" id="runBtn" type="button">Send to rover</button>
-                            <button class="btn stop-action" id="stopBtn" type="button">Stop</button>
-                        </div>
-                        <div class="camera-msg" id="runMsg" style="margin-top:0;"></div>
-                    </div>
-                </div>
-
-                <div class="node">
-                    <span class="node-num">2</span>
-                    <div class="node-body">
-                        <span class="node-title">Take the video</span>
-                        <span class="node-note">Pick a recording saved on this satellite and save it to this device. Local network, no internet.</span>
-                        <div class="video-controls">
-                            <select id="videoPick" aria-label="Saved recording"><option value="">Loading...</option></select>
-                            <button class="btn primary" id="videoGet" type="button" disabled>Download</button>
-                        </div>
-                        <span class="camera-msg" id="videoMsg" style="margin-top:0;"></span>
-                    </div>
-                </div>
-
-                <div class="node">
-                    <span class="node-num">3</span>
-                    <div class="node-body">
-                        <span class="node-title">Upload it</span>
-                        <span class="node-note">Paste this as the video's description in YouTube Studio. The MissionID and Yard lines are what make the platform find the upload and attach it to this yard's run on its own, so nobody has to paste a link back.</span>
-                        <textarea class="yt-box" id="ytDesc" readonly></textarea>
-                        <div class="row">
-                            <button class="btn primary" id="ytCopy" type="button">Copy description</button>
-                            <!-- The next thing the operator does after copying is open
-                                 Studio and paste it there, so the step ends with the
-                                 door rather than leaving them to find it. Opens in a
-                                 new tab: losing the run station mid-upload would mean
-                                 setting the mission up again. -->
+                <!-- One card for the whole handover: pull the recording off
+                     this satellite (local network, no internet), then the
+                     title and description that make the upload link itself
+                     back to this run - MissionID and Yard are matched
+                     literally by the auto-linker, so they are built here
+                     rather than typed by hand at the end of a long day.
+                     Grows to fill the rail, so its bottom lines up with
+                     Live yard's - the description box is what takes the
+                     extra room. -->
+                <section class="card" id="videoCard">
+                    <div class="card-head">
+                        <span class="card-title">The video</span>
+                        <div class="card-actions">
+                            <!-- Download, then the door it's for - Studio -
+                                 in that order, both in the head so neither
+                                 needs a full-width row of its own. -->
+                            <button class="btn primary dl-btn" id="videoGet" type="button" disabled
+                                    aria-label="Download the selected recording" title="Download">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </button>
+                            <!-- The next thing after downloading is opening
+                                 Studio, so the step ends with the door. New
+                                 tab: losing the run station mid-upload means
+                                 setting it up again. -->
                             <a class="btn yt-btn" id="ytStudio" href="https://studio.youtube.com/"
                                target="_blank" rel="noopener noreferrer">
-                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"
+                                <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"
                                      fill="currentColor" focusable="false"><path d="M8 5v14l11-7z"/></svg>
-                                Open YouTube Studio</a>
-                            <span class="camera-msg" id="ytMsg" style="margin-top:0;"></span>
+                                Open Studio</a>
                         </div>
-                        <input type="text" id="ytTitle" readonly hidden>
                     </div>
-                </div>
+                    <!-- The one decision this card asks the operator to make
+                         - which take - so it gets a visible label and the
+                         card's largest control, not a bare unlabelled select
+                         that reads as an afterthought once Download moved
+                         into the header beside it. -->
+                    <div class="video-controls">
+                        <label class="meta-label" for="videoPick">Recording</label>
+                        <select id="videoPick" class="video-pick" aria-label="Saved recording"><option value="">Loading...</option></select>
+                    </div>
+                    <span class="camera-msg" id="videoMsg"></span>
+                    <div class="meta-row">
+                        <span class="meta-label">Title</span>
+                        <input class="meta-value" type="text" id="ytTitle" readonly aria-label="Video title">
+                        <button class="btn copy-compact" type="button" data-copy="ytTitle">Copy</button>
+                    </div>
+                    <div class="field-head">
+                        <span class="meta-label">Description</span>
+                        <button class="btn copy-compact" type="button" data-copy="ytDesc" id="ytCopy">Copy</button>
+                    </div>
+                    <textarea class="yt-box" id="ytDesc" readonly aria-label="Video description"></textarea>
+                </section>
             </div>
         </div>
-        <p class="hub-note">Mark the mission complete in Mission Control, not here.</p>
     </main>
 
 <script>
@@ -425,10 +502,10 @@
         setTimeout(() => { el.textContent = ''; el.dataset.tone = ''; }, 5000);
     }
 
-    // ---- Step 1: import -----------------------------------------------
+    // ---- The fallback: import by paste --------------------------------
     // One button rather than "right-click, paste". navigator.clipboard.readText
     // needs a secure context and the yard is plain HTTP on a LAN address, so
-    // the read is attempted and then falls back to a prompt rather than the
+    // the read is attempted and then falls back to a paste box rather than the
     // button simply doing nothing on the machine it matters on.
     // Mission Control's Copy button writes the mission's identity into two
     // header comments above the code. They are comments, so what it copies is
@@ -455,6 +532,7 @@
                     if (parsed.missionName) setMetaValue(missionName, parsed.missionName);
                     if (parsed.missionId)   setMetaValue(missionId, parsed.missionId);
                     code.value = parsed.code;
+                    $('codeDrawer').open = true;
                     updateRunIdentity();
                     paintYouTube();
                     flash($('importMsg'), 'Mission imported', 'ok');
@@ -470,6 +548,10 @@
         }
         // Python, with the identity carried in header comments.
         code.value = text;
+        // The drawer opens so a fallback import is read before it is sent -
+        // this path exists precisely because the normal review in Mission
+        // Control did not happen.
+        $('codeDrawer').open = true;
         const named = text.match(HEADER_NAME);
         const identified = text.match(HEADER_ID);
         if (named) setMetaValue(missionName, named[1]);
@@ -480,18 +562,18 @@
         updateRunIdentity();
         flash($('importMsg'),
               identified ? 'Mission imported'
-                         : 'Python imported. No mission ID in it, so fill it in above.',
+                         : 'Python imported, but it has no mission ID.',
               identified ? 'ok' : '');
     }
 
     // ---- Getting the mission onto the page ----------------------------
     // Reading the clipboard outright needs a secure context. The yard is
     // served over plain HTTP to a tablet on the venue network, so that call is
-    // absent here and cannot be made to work; the operator pastes instead.
+    // absent there and cannot be made to work; the operator pastes instead.
     // Both paths end in applyImport, and neither opens a dialog.
     const pasteCatch = $('pasteCatch'), pasteBox = $('pasteBox');
     const PASTE_KEY = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
-        ? '\u2318V' : 'Ctrl-V';
+        ? '⌘V' : 'Ctrl-V';
 
     function hidePaste() { pasteCatch.hidden = true; pasteBox.value = ''; }
 
@@ -532,7 +614,7 @@
         applyImport(text);
     });
 
-    // ---- Step 4: the description that links the upload ----------------
+    // ---- The description that links the upload ------------------------
     // "MissionID: <id>" and "Yard: <id>" are both matched literally by the
     // auto-linker, so they are built here rather than typed by hand at the
     // end of a long day.
@@ -570,7 +652,12 @@
             : 'Fill in the Mission ID above and this becomes the description to paste.';
     }
     function metaValue(element) {
-        return ('value' in element ? element.value : element.textContent).trim();
+        const value = ('value' in element ? element.value : element.textContent).trim();
+        // '-' is the empty placeholder the fields render with. Reading it back
+        // as a value put "- · Mars Yard rover run" in the YouTube title and a
+        // literal "MissionID: -" in the description before anything was
+        // imported.
+        return value === '-' ? '' : value;
     }
     function setMetaValue(element, value) {
         if ('value' in element) {
@@ -590,10 +677,8 @@
         runId.textContent = id ? `${id}__${YARD_ID}` : 'Waiting for the mission ID';
         paintYouTube();
     }
-    // missionId and missionName are now read-only, so no input listeners needed
 
-    // The Copy buttons had no handler at all: three buttons that looked live
-    // and did nothing.
+    // One handler for every Copy on the page, including the YouTube pair.
     document.querySelectorAll('[data-copy]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const text = metaValue($(btn.dataset.copy));
@@ -605,6 +690,7 @@
             } catch (e) {
                 // Plain HTTP on a LAN address is not a secure context, so the
                 // clipboard API is unavailable on the machine this runs on.
+                // Select the text and name the key instead.
                 const field = $(btn.dataset.copy);
                 if (field.select) { field.select(); } else {
                     const range = document.createRange();
@@ -622,7 +708,7 @@
         const box = $(id);
         box.querySelector('.status-dot').className = `status-dot ${ok ? 'ok' : (waiting ? '' : 'bad')}`;
         box.querySelector('.status-sub').textContent = label;
-        // The tile itself carries the state, not just the dot. A 8px dot is
+        // The tile itself carries the state, not just the dot. An 8px dot is
         // not enough signal for the two things that decide whether the rest
         // of this page can do anything.
         box.dataset.state = ok ? 'ok' : (waiting ? 'wait' : 'bad');
@@ -640,14 +726,7 @@
         $('runState').textContent = recordingName ? 'Recording' : (ready ? 'Ready' : 'Not ready');
     }
     // One question about the camera, answered by /api/status like everything
-    // else on this page.
-    //
-    // This used to hold its own state machine: a cheap "is the port open" from
-    // /api/status, a separate expensive /api/camera/ready probe fired only
-    // when the cheap answer changed, and its own idea of whether either had
-    // happened yet. Settings ran a third check. So two pages could describe
-    // the same camera differently and both be telling the truth about their
-    // own poll. The server holds one snapshot now; this reads it.
+    // else on this page. The server holds one snapshot; this reads it.
     let cameraPrimed = false, roverOk = false;
 
     function paintCamera(state) {
@@ -694,7 +773,7 @@
                 recordingName = null;
                 $('recDot').classList.remove('on');
                 $('recBtn').lastChild.textContent = ' Start recording';
-                flash($('runMsg'), 'Rover finished. Recording saved, pick it up in step 2.', 'ok');
+                flash($('runMsg'), 'Rover finished. Recording saved - it is in Save the video.', 'ok');
                 loadRecordings();
             }
             paintGate();
@@ -707,25 +786,14 @@
         });
     }
 
-    $('ytCopy').addEventListener('click', async () => {
-        const text = $('ytDesc').value;
-        try {
-            await navigator.clipboard.writeText(text);
-            flash($('ytMsg'), 'Copied', 'ok');
-        } catch (e) {
-            // Same insecure-context problem as the import, the other way round.
-            $('ytDesc').select();
-            flash($('ytMsg'), 'Press Ctrl/Cmd-C to copy', '');
-        }
-    });
-
-    // ---- Step 2: record and run ---------------------------------------
+    // ---- Record and run ------------------------------------------------
     function runName() {
         return (metaValue(missionId) || metaValue(missionName) || 'run');
     }
 
     // Recording is a thing the station does, not a button the operator has to
-    // remember. Send starts it; the button below is the manual override.
+    // remember. Send starts it; the button in the panel head is the manual
+    // override.
     async function startRecording() {
         if (recordingName) return;
         const resp = await fetch('/api/recording/start', {
@@ -765,7 +833,7 @@
                 flash($('runMsg'), 'Recording', 'ok');
             } else {
                 await stopRecording();
-                flash($('runMsg'), 'Saved. Pick it up in step 2.', 'ok');
+                flash($('runMsg'), 'Saved - it is in Save the video.', 'ok');
             }
         } catch (e) {
             flash($('runMsg'), e.message, 'bad');
@@ -847,7 +915,7 @@
             // record is left with a recording that never stops.
             if (recordingName) {
                 await stopRecording();
-                flash($('runMsg'), 'Rover stopped. Recording saved, pick it up in step 2.', 'ok');
+                flash($('runMsg'), 'Rover stopped. Recording saved - it is in Save the video.', 'ok');
             } else {
                 flash($('runMsg'), 'Rover queue cleared', 'ok');
             }
@@ -856,7 +924,7 @@
         }
     });
 
-    // ---- Step 3: the recordings ---------------------------------------
+    // ---- The recordings ------------------------------------------------
     function humanBytes(n) {
         if (n < 1024) return n + ' B';
         if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' KB';
@@ -908,9 +976,90 @@
         flash($('videoMsg'), 'Saving ' + name, 'ok');
     });
 
+    // ---- The live view --------------------------------------------------
+    // Same stream and same shared client as the monitor. The camera runs on
+    // the same machine as this web server, so the host comes from wherever
+    // this page was served; the port is server config.
+    const liveMsg = $('liveMsg');
+    const feed = new CameraClient($('cameraCanvas'), {
+        onStatus: (state, text) => {
+            liveMsg.hidden = (state === 'connected' || state === 'disabled');
+            if (state !== 'disabled') liveMsg.textContent = 'Camera: ' + text.toLowerCase();
+        },
+    });
+    feed.connect(`ws://${window.location.hostname}:` + {{ camera_port | tojson }});
+
+    // What the rover is doing right now, from the same queue stream the
+    // monitor watches. This is the "monitoring" half of the page: the SSE
+    // carries changes, the one fetch carries whatever happened before the
+    // page opened, and both land in the same dispatcher - which is also what
+    // the simulated view subscribes to on a fake-rover yard.
+    const queueSubscribers = [];
+    let lastQueueStatus = null;
+    function dispatchQueue(status) {
+        lastQueueStatus = status;
+        for (const fn of queueSubscribers) {
+            try { fn(status); } catch (e) { console.error('[run] queue subscriber failed:', e); }
+        }
+    }
+    // Late subscribers replay the last snapshot, for the same reason the
+    // monitor's hook does: the sim module registers after an await, by which
+    // time the backlog fetch has usually already landed.
+    function onQueueEvent(fn) {
+        queueSubscribers.push(fn);
+        if (lastQueueStatus) {
+            try { fn(lastQueueStatus); } catch (e) { console.error('[run] queue subscriber failed:', e); }
+        }
+    }
+
+    onQueueEvent((status) => {
+        const cur = status && status.current;
+        const pending = (status && status.pending_count) || 0;
+        const queued = pending ? ` · ${pending} queued` : '';
+        $('liveNow').textContent = cur
+            ? `Rover: ${(cur.cmd || '').replace(/_/g, ' ')}${queued}`
+            : `Rover idle${queued}`;
+    });
+
+    // Retried because one attempt was too few on the monitor: a rover blip on
+    // load looked exactly like "the mission I just sent is missing".
+    (function loadQueueBacklog(attempt) {
+        fetch('/api/queue/status')
+            .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+            .then(dispatchQueue)
+            .catch(() => { if (attempt < 5) setTimeout(() => loadQueueBacklog(attempt + 1), 1000 * attempt); });
+    })(1);
+    new EventSource('/api/queue/events').onmessage = (event) => {
+        try { dispatchQueue(JSON.parse(event.data)); } catch (e) { /* partial frame */ }
+    };
+
+    // Handed to the simulator module below. The same narrow surface the
+    // monitor exposes, so initSimIfFakeRover works against either page.
+    window.__yardRunHooks = {
+        camera: feed,
+        onQueueEvent,
+        setLabel: (text) => {
+            const mode = $('liveMode');
+            mode.textContent = text;
+            mode.hidden = false;
+        },
+    };
+
     paintYouTube();
     loadRecordings();
 })();
+</script>
+
+<!-- Fake-rover simulation, exactly as on the monitor: takes the canvas over
+     only when the rover reports itself as running the fake driver. On real
+     hardware this does nothing beyond one /api/status call. Module scripts
+     are deferred, so this runs after the classic script above has published
+     its hooks. -->
+<script type="module">
+    import { initSimIfFakeRover } from '/static/sim-monitor.js';
+    initSimIfFakeRover(window.__yardRunHooks || {}).catch((e) =>
+        console.warn('[sim] not started:', e)
+    );
 </script>
 </body>
 </html>

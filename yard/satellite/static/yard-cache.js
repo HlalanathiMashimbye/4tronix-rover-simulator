@@ -8,7 +8,7 @@
  *   YardCache.read(key)        -> {value, ts} | null   (sync, tier 1)
  *   YardCache.write(key, val)  -> {value, ts}           (writes both tiers)
  *   YardCache.readDurable(key) -> Promise<{value, ts} | null>  (tier 2)
- *   YardCache.createPoller({ interval, maxInterval, fetchFn, onError, onOnline, onOffline })
+ *   YardCache.createPoller({ interval, maxInterval, fetchFn, onError })
  *     -> { refreshNow() }
  */
 (function (global) {
@@ -95,8 +95,6 @@
             var maxInterval = opts.maxInterval || interval;
             var fetchFn = opts.fetchFn || function () {};
             var onError = opts.onError || function () {};
-            var onOnline = opts.onOnline || function () {};
-            var onOffline = opts.onOffline || function () {};
 
             var timer = null;
             var currentDelay = interval;
@@ -167,12 +165,14 @@
                 });
             }
 
+            // The listeners stay - regaining the network refreshes at once -
+            // but the onOnline/onOffline callback options are gone: nothing
+            // ever passed them once the pages moved to YardStatus.subscribe.
             global.addEventListener('online', function () {
-                if (wasOffline) { wasOffline = false; onOnline(); refreshNow(); }
+                if (wasOffline) { wasOffline = false; refreshNow(); }
             });
             global.addEventListener('offline', function () {
                 wasOffline = true;
-                onOffline();
             });
 
             tick(); // kick off immediately

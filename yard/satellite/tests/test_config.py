@@ -299,30 +299,131 @@ class TestConsoleDesignSystem:
         assert 'function paintGate()' in page
         assert "$('runBtn').disabled = !ready" in page
 
-    def test_the_sequence_is_drawn_as_a_sequence(self, client):
-        """Four equally weighted cards in a Z, and the only thing saying which
-        came first was the words "Step N"."""
+    def test_the_live_view_is_the_page_and_paste_is_a_fallback(self, client):
+        """The station was built around getting a mission in: half the page
+        was a paste-and-read panel and the run was step 1 of a numbered spine.
+        Missions arrive from Mission Control now, so the live view carries the
+        page, Stop is always on screen, and pasting is an icon-sized fallback
+        that still names itself for hover and screen readers."""
+        import re
         page = client.get('/run/').get_data(as_text=True)
 
-        assert 'class="spine"' in page
-        assert 'class="node-num"' in page
+        assert 'class="spine"' not in page
+        assert 'live-panel' in page
+        assert 'id="stopBtn"' in page
+        paste = re.search(r'<button[^>]*id="importBtn"[^>]*>', page).group(0)
+        assert 'aria-label="Paste mission"' in paste
 
-    def test_health_reads_across_the_top_of_settings(self, client):
-        """It was a narrow left column of three stacked cards, given a third of
-        the width it never needed, with the bottom half empty while the middle
-        column scrolled. Then it was three cards across the top, which carried
-        very different amounts and sat at wildly different heights. It is one
-        module with a row per subsystem now, the same shape the run station
-        uses for readiness."""
+    def test_the_run_station_watches_the_same_feed_as_the_monitor(self, client):
+        """The live view is the shared camera client dialling the camera port
+        the server rendered, with the simulator taking the canvas over on a
+        fake-rover yard - the monitor's behaviour, not a parallel one."""
+        page = client.get('/run/').get_data(as_text=True)
+
+        assert '/static/camera-client.js' in page
+        assert 'new CameraClient' in page
+        # CAMERA_PORT defaults to 8890 in tests; the page must render the
+        # server's port rather than hardcode one.
+        assert '8890' in page
+        assert 'initSimIfFakeRover' in page
+
+    def test_the_upload_step_offers_the_title_too(self, client):
+        """The linker reads the title as well as the description, and the
+        operator has to type one into Studio either way. The field was built
+        and then hidden; now it is a copyable row like the run id."""
+        import re
+        page = client.get('/run/').get_data(as_text=True)
+
+        title = re.search(r'<input[^>]*id="ytTitle"[^>]*>', page).group(0)
+        assert 'hidden' not in title
+        assert 'data-copy="ytTitle"' in page
+
+    def test_settings_is_one_card_per_category_wearing_its_own_status(self, client):
+        """Rover, Camera, Storage, Recordings. The separate health module made
+        every question start with the eye stitching a status row to the
+        controls two cards away; a category owns its status AND its controls
+        now, and the card's head is its health row. The satellite itself is
+        identity, not a setting, so it is a chip on the page header."""
         page = client.get('/settings').get_data(as_text=True)
 
-        assert 'class="health"' in page
-        assert page.count('class="hrow"') == 3
-        # It is the first thing in the grid now rather than a band above it: as
-        # a full-width strip every row ran the width of the page for a line of
-        # text needing a third of it.
-        assert page.index('class="settings-grid"') < page.index('class="health"')
-        assert page.index('class="health"') < page.index('id="tunablesSection"')
+        for card in ('id="card-rover"', 'id="card-camera"',
+                     'id="cleanupSection"', 'id="recordingsSection"'):
+            assert card in page, card
+        # The status lamps live inside their category cards.
+        assert page.index('id="card-rover"') < page.index('id="badge-rover"')
+        assert page.index('id="card-camera"') < page.index('id="badge-camera"')
+        # The old standalone module is gone, not renamed.
+        assert 'class="health"' not in page and 'class="hrow"' not in page
+
+    def test_the_rover_card_is_toggle_find_then_type(self, client):
+        """The address editor used to expand out of the status row behind a
+        button called Change. The three ways to point at a rover are flat on
+        the card now, in the order they are reached for: the simulator
+        toggle, auto-find, and a typed address as the fallback."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        card = page[page.index('id="card-rover"'):page.index('id="card-camera"')]
+        assert 'id="simToggle"' in card
+        assert 'id="findRoverBtn"' in card
+        assert 'id="url-input"' in card
+        assert card.index('id="simToggle"') < card.index('id="findRoverBtn"') \
+            < card.index('id="url-input"')
+        # Nothing left to expand or cancel.
+        assert 'edit-url-btn' not in page
+        assert 'cancel-url-btn' not in page
+
+    def test_no_setting_waits_behind_a_save_button(self, client):
+        """A Save button could not answer the question it was there for.
+
+        It looked identical whether or not anything was pending, so "have I
+        saved this?" had no answer on screen and the honest one was "press it
+        again and see". Picture quality never had that problem - it saved on
+        click - and the rest of the page works that way now, which means the
+        buttons are gone and each card has a line that speaks instead.
+        """
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'id="tunSave"' not in page
+        assert 'id="cleanupSave"' not in page
+        # Both cards that hold settings can still report on themselves.
+        for status in ('id="tunMsg"', 'id="cleanupMsg"'):
+            assert f'class="save-status" {status}' in page, status
+
+    def test_a_setting_commits_on_change_not_on_every_keystroke(self, client):
+        """'input' would send the "7" on the way to "72" and clamp it.
+
+        Pins the event, because the difference is invisible until someone
+        types a two-digit number into a box whose floor is above one digit.
+        """
+        page = client.get('/settings').get_data(as_text=True)
+        body = page[page.index('function wireAutoSave'):]
+        wiring = body[:body.index('wireAutoSave(TUNABLE_FIELDS')]
+
+        assert "addEventListener('change'" in wiring
+        assert "addEventListener('input'" not in wiring
+
+    def test_settings_lost_the_dead_cache_button_and_kept_refresh_tucked(self, client):
+        """"Clear local cache" predates the shared poller, whose snapshots
+        expire and refresh on their own, so the button was a page reload with
+        extra steps. Refresh survives as an icon on the recordings card - the
+        one thing on the page that only loads on open - rather than a card of
+        pill-sized buttons."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'clearCacheBtn' not in page
+        assert 'Quick actions' not in page
+        assert 'id="refreshBtn"' in page
+        assert page.index('id="recordingsSection"') < page.index('id="refreshBtn"')
+
+    def test_settings_keeps_the_one_screen_shell(self, client):
+        """The page is fixed to the viewport like the run station; the
+        recordings list is the only thing that grows without bound, so it is
+        the only scroll container at desktop widths."""
+        page = client.get('/settings').get_data(as_text=True)
+
+        assert 'class="console fixed-shell"' in page
+        rec_rule = page[page.index('#recordingsList'):]
+        assert 'overflow-y: auto' in rec_rule[:200]
 
     def test_touch_targets_are_raised_for_a_finger(self, client):
         """The yard is operated from a tablet and these were tuned by eye on a
@@ -645,17 +746,24 @@ class TestSettingsSpeaksTheConsoleLanguage:
         with web_server.app.test_client() as client:
             return client.get(path).get_data(as_text=True)
 
-    def test_it_has_the_same_page_header_as_every_other_page(self):
-        page = self._page('/settings')
-        assert 'class="eyebrow"' in page
-        assert 'class="page-title"' in page
-        assert 'class="page-sub"' in page
+    def test_it_has_the_same_page_header_as_the_run_station(self):
+        """The two fixed-shell pages spend one line on their header - the
+        shared .h-page title with the summary beside it - because on a page
+        that must fit the screen, a three-line masthead is a tenth of the
+        screen spent saying the page's name. The hub keeps the tall header;
+        it has room to be a landing page."""
+        for path in ('/settings', '/run/'):
+            page = self._page(path)
+            assert 'class="h-page"' in page, path
+            assert 'page-sub' in page, path
 
     def test_the_header_classes_are_the_shared_ones(self):
-        """Not a page-local h-page that only looks similar."""
+        """h-page comes from yard-base's console layer, not a page-local
+        class that only looks similar."""
         page = self._page('/settings')
-        assert 'h-page' not in page
         assert 'headrow' not in page
+        css = self._page('/static/yard-base.css')
+        assert '.console .h-page' in css
 
     def test_section_headings_use_the_shared_card_title(self):
         page = self._page('/settings')

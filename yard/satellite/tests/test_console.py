@@ -61,6 +61,18 @@ def test_root_opens_the_station_hub_without_a_session(client):
 
 
 
+def test_the_console_links_back_to_mission_control(client):
+    """The yard console is one half of a two-screen job: dispatch in Mission
+    Control, run and film here. The way back used to be typing a URL on a
+    tablet, so the shared bar carries a door. Default target is the deployed
+    hub; MISSION_CONTROL_URL or the config file can repoint it."""
+    for path in ('/', '/run/', '/settings'):
+        page = client.get(path).get_data(as_text=True)
+        assert 'class="mc-back"' in page, path
+        assert 'https://marsyard.labs.ws' in page, path
+
+
+
 def test_root_does_not_send_anyone_to_a_login(client):
     assert '/operator/login' not in client.get('/').headers.get('Location', '')
 
