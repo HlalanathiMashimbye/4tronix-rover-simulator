@@ -294,6 +294,12 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
+/* The operator console does not render the learner's tab bar below md
+   (Navbar.tsx) and lays its own inside the page instead, so there is no
+   fixed chrome to keep clear of. Read from the attribute the operator layout
+   sets rather than from the route, so the CSS never learns the path. */
+:root:has([data-surface="operator"]) { --app-bottom-chrome: 0px; }
+
 /*
  * A page that fills what is left of the viewport, chrome at both ends
  * accounted for. The pages using it hold their own scrolling panes inside and
@@ -607,6 +613,10 @@
 /* Slight orbital motion for a planet */
 .animate-orbit { animation: orbit 40s linear infinite; }
 
+/* will-change: transform makes this the containing block for every
+   position: fixed element inside a page - they pin to the page area, not the
+   viewport. Fixed chrome belongs in Navbar.tsx, outside this wrapper; the
+   operator tab bar learnt this the hard way and sits in the flow instead. */
 .page-transition-enter {
   animation: page-enter 220ms ease-out both;
   will-change: transform, opacity;

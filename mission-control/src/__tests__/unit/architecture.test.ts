@@ -157,6 +157,16 @@ describe('how tall a full-height page is', () => {
     expect(css).toMatch(/@utility h-page \{[^}]*--app-bottom-chrome/);
     expect(read('app/layout.tsx')).toContain('pb-[var(--app-bottom-chrome)]');
   });
+
+  it('drops the bottom chrome on the operator surface, which lays its own', () => {
+    // The attribute and the rule that reads it are in different files and
+    // only agree while both exist. Without the rule the console's own tab bar
+    // sits above a dead 64px band; without the attribute the rule is inert.
+    expect(read('app/operator/layout.tsx')).toMatch(/data-surface="operator"/);
+    const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
+    expect(css).toMatch(/:has\(\[data-surface="operator"\]\)\s*\{[^}]*--app-bottom-chrome:\s*0px/);
+  });
+
 });
 
 describe('the server/browser boundary', () => {

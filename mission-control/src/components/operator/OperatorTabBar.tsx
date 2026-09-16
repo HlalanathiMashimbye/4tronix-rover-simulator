@@ -38,9 +38,18 @@ export function OperatorTabBar({
   if (filters.length === 0) return null;
 
   return (
+    // In the flow at the foot of the page, NOT position: fixed. Every page
+    // renders inside PageTransition, whose will-change: transform makes it the
+    // containing block for fixed descendants, so "fixed, bottom: 0" put this
+    // bar at the bottom of the page area instead of the viewport - 64px too
+    // high on an iPhone, with the last queue rows sliding under it and a dead
+    // band below. The learner's bar gets away with fixed because Navbar
+    // renders outside that wrapper. This one cannot, so the console's main
+    // runs to the viewport's bottom edge (see --app-bottom-chrome) and the
+    // bar is its last child.
     <nav
       aria-label="Queue views"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
+      className="-mx-3 shrink-0 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
     >
       <div className="mx-auto flex h-16 max-w-md items-stretch justify-around px-1">
         {filters.map((f) => {

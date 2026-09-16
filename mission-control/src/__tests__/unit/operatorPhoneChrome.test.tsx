@@ -67,7 +67,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { SearchProvider } from '@/contexts/SearchContext';
 
 const QUEUE = [
-  { id: 'a', name: 'Rock Lover', code: 'forward(60)', status: 'queued' as const },
+  { id: 'a', name: 'Rock Lover', code: 'forward(60)', status: 'queued' as const, submittedAt: '2026-09-16T08:41:00Z' },
   { id: 'b', name: 'Dune Walker', code: 'stop()', status: 'processing' as const },
   {
     id: 'c',
@@ -152,6 +152,8 @@ describe('the queue screen on a phone', () => {
     expect(rows.getByText('The satellite stopped while this mission was running.')).toBeInTheDocument();
     expect(rows.queryByText('processing')).not.toBeInTheDocument();
     expect(rows.queryByText('queued')).not.toBeInTheDocument();
+    // A waiting mission says when it arrived, in the operator's clock.
+    expect(rows.getByText(/^Sent \d{2}:\d{2}/)).toBeInTheDocument();
   });
 });
 

@@ -16,5 +16,14 @@ export const metadata: Metadata = {
 };
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  // data-surface is read by globals.css to zero --app-bottom-chrome: below
+  // md the learner's fixed tab bar is not rendered on this surface (see
+  // Navbar.tsx), so the padding that keeps content clear of it would be a
+  // dead 64px band under the console's own tab bar. display: contents keeps
+  // this wrapper out of the layout.
+  return (
+    <div data-surface="operator" className="contents">
+      {children}
+    </div>
+  );
 }
