@@ -21,6 +21,17 @@ const STORAGE_KEY = 'yard:consoleUrl';
 export const DEFAULT_CONSOLE_URL = 'http://mro.local:3001/run/';
 
 /**
+ * The other door out of the console: where the run video gets uploaded.
+ *
+ * Not configurable, unlike the address above: Studio is the same for
+ * everyone, and the channel it opens is whichever the operator is signed
+ * into. It lives here because the two doors are offered together - in the
+ * queue's toolbar on a laptop and in the overflow menu on a phone - and a
+ * constant that two components each declare is two constants.
+ */
+export const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+
+/**
  * Normalise what somebody typed into something openable.
  *
  * Returns null for anything that is not a plain http(s) address, so a stored

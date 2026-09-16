@@ -57,7 +57,10 @@ in a hurry read the same in a diff. Its own filename avoids the substring for
 the same reason - an import of `@/lib/operatorSurface` would have reintroduced
 it into every file that imported it.
 
-`yardConsole.ts` holds a browser-local address rather than a setting, because
+`yardConsole.ts` also names the other door out of the console, YouTube Studio,
+because the two are offered together - in the queue's toolbar on a laptop and
+in the overflow menu on a phone - and a constant two components each declare
+is two constants. The address itself is browser-local rather than a setting, because
 the console runs on the satellite in the room, on a private network this app
 cannot see or reach. It is a property of where the operator is standing, not of
 the deployment, so it belongs in their browser and not in Secret Manager beside

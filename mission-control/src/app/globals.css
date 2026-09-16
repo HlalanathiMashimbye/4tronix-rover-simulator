@@ -311,6 +311,19 @@
   height: calc(100dvh - var(--app-chrome) - var(--app-bottom-chrome));
 }
 
+/* Chunky, toy-like depth for kid-friendly cards and buttons (claymorphic):
+   a soft outer lift plus an inner bottom bevel, no neon glow.
+
+   @utility rather than a class in @layer utilities so md:clay exists: the
+   operator queue is a card on a laptop and a full-bleed list on a phone, and
+   a phone has no margin to spend on showing a shadow. */
+@utility clay {
+  box-shadow:
+    0 10px 24px -12px rgba(0, 0, 0, 0.55),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 @utility min-h-page {
   min-height: calc(100dvh - var(--app-chrome) - var(--app-bottom-chrome));
 }
@@ -463,14 +476,6 @@
     border-radius: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border));
   }
 
-  /* Chunky, toy-like depth for kid-friendly cards and buttons (claymorphic):
-     a soft outer lift plus an inner bottom bevel, no neon glow. */
-  .clay {
-    box-shadow:
-      0 10px 24px -12px rgba(0, 0, 0, 0.55),
-      inset 0 -3px 0 rgba(0, 0, 0, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  }
   .clay-press {
     /* The pressed-state transform gets a custom curve - the built-in
        easings are too weak to read as an intentional press. Hover/filter

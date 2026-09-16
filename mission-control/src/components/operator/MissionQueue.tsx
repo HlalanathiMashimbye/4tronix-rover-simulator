@@ -12,6 +12,7 @@ import {
 } from '@/infrastructure/persistence/operatorQueueService';
 
 import { MissionDetail } from '@/components/operator/MissionDetail';
+import { OperatorTabBar } from '@/components/operator/OperatorTabBar';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import type { Yard } from '@/core/domain/entities/Yard';
@@ -19,18 +20,7 @@ import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useRegisterSort, useSearch } from '@/contexts/SearchContext';
 import { sortMissions } from '@/core/domain/services/missionSort';
 import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
-import { readConsoleUrl, writeConsoleUrl } from '@/lib/yardConsole';
-
-/**
- * Where the operator uploads the run video.
- *
- * Not configurable, unlike the yard console: Studio is the same address for
- * everyone, and the channel it opens is whichever the operator is signed into.
- * The run station links here too, at the end of its upload step - this is the
- * same door from the other side, for an operator who is in Mission Control
- * when they realise they still have a video to put up.
- */
-const YOUTUBE_STUDIO_URL = 'https://studio.youtube.com/';
+import { readConsoleUrl, writeConsoleUrl, YOUTUBE_STUDIO_URL } from '@/lib/yardConsole';
 
 /**
  * YouTube's red, one shade off the brand value.
@@ -75,6 +65,30 @@ const YOUTUBE_RED = '#E60000';
  * every render - which is the dependency warning, not a false positive.
  */
 const SETTLED_FILTERS = ['done', 'needs-video'];
+
+/**
+ * The second line of a queue row: what is true of this mission right now.
+ *
+ * The row used to carry the raw status as a pill on every line, so a queue of
+ * twelve said "queued" twelve times and the one thing worth reading - the
+ * satellite's reason for flagging a mission - was a tooltip on a chip. The
+ * default state is the quiet one; the exceptions get the words.
+ */
+function rowStatusLine(mission: QueueMission): string {
+  if (mission.needsReview) return mission.reviewReason ?? 'Needs review';
+  switch (mission.status) {
+    case 'processing':
+      return 'Running now';
+    case 'queued':
+      return 'Waiting';
+    case 'completed':
+      return stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
+    case 'cancelled':
+      return 'Cancelled';
+    default:
+      return 'Did not finish';
+  }
+}
 
 export function MissionQueue({
   role,
@@ -156,7 +170,7 @@ function YardQueue({
   }, [missions, done]);
 
   useRegisterSearchFilters([
-    { key: 'all', label: 'All in queue', count: counts.all, icon: Layers },
+    { key: 'all', label: 'All in queue', shortLabel: 'Queue', count: counts.all, icon: Layers },
     /**
      * "Waiting" used to sit here, counting the queued missions. It was All in
      * queue minus whatever was running, and one rover runs one mission, so the
@@ -167,9 +181,9 @@ function YardQueue({
      * that happened and whose recording nobody has attached yet. That was
      * previously only reachable by opening Done and reading down it.
      */
-    { key: 'needs-video', label: 'Needs video', count: counts.needsVideo, icon: Video },
-    { key: 'processing', label: 'Running now', count: counts.processing, icon: Rocket },
-    { key: 'review', label: 'Needs review', count: counts.review, icon: AlertTriangle },
+    { key: 'needs-video', label: 'Needs video', shortLabel: 'Video', count: counts.needsVideo, icon: Video },
+    { key: 'processing', label: 'Running now', shortLabel: 'Running', count: counts.processing, icon: Rocket },
+    { key: 'review', label: 'Needs review', shortLabel: 'Review', count: counts.review, icon: AlertTriangle },
     /**
      * Where attaching a video happens. A mission leaves the queue the moment
      * it is marked complete, which is exactly when the operator goes off to
@@ -364,8 +378,8 @@ function YardQueue({
   if (missions.length === 0 && !selectedId && (done?.length ?? 0) === 0) {
     return (
       <>
-        <MobileSearch />
-        <div className="clay flex flex-1 items-center justify-center rounded-3xl border border-border/60 bg-card/60 p-8 text-center">
+        <MobileSearch layout="compact" />
+        <div className="flex flex-1 items-center justify-center p-8 text-center md:clay md:rounded-3xl md:border md:border-border/60 md:bg-card/60">
           <div className="max-w-sm space-y-2">
             <p className="font-display text-lg font-bold text-foreground">Nothing waiting</p>
             <p className="text-sm text-muted-foreground">
@@ -374,6 +388,7 @@ function YardQueue({
             </p>
           </div>
         </div>
+        <OperatorTabBar />
       </>
     );
   }
@@ -399,7 +414,7 @@ function YardQueue({
         on the screen - on an 812px phone that was most of what the mission
         pane had left. They come back with the queue. MobileSearch is already
         lg:hidden, so this changes nothing on a desktop. */}
-    {!selectedId && <MobileSearch />}
+    {!selectedId && <MobileSearch layout="compact" />}
     {/* Two panes from lg up. Below that they take turns: a queue stacked above
         a detail pane means scrolling past every mission to reach the one you
         picked, and a tablet is the device an operator actually holds. */}
@@ -407,14 +422,17 @@ function YardQueue({
         pane holds the code and the blocks, which is the thing anyone is
         actually reading. */}
     <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-    <div className={`clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-3 sm:p-5 ${
+    {/* A card on a laptop, a full-bleed list on a phone. The card's border,
+        padding and shadow were 44px of a 390px width spent on framing a list
+        whose rows are the only thing anyone is looking at. */}
+    <div className={`min-h-0 flex-1 overflow-y-auto md:clay md:rounded-3xl md:border md:border-border/60 md:bg-card/60 md:p-5 ${
       selectedId ? 'hidden lg:block' : ''
     }`}>
       {/* The console runs on the satellite in the room, on a network this app
           cannot reach, so the operator was expected to remember an address and
           type it into a second tab. The button is the door; the address is
           theirs and lives in their browser. */}
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+      <div className="mb-2 hidden flex-wrap items-center gap-2 md:flex">
         {editingConsole ? (
           <>
             <input
@@ -448,12 +466,7 @@ function YardQueue({
               className="inline-flex items-center gap-1.5 rounded-md bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground shadow-sm transition-opacity hover:opacity-90"
             >
               <SatelliteDish className="h-3.5 w-3.5" aria-hidden="true" />
-              {/* The short label is the one a phone gets. "Open operator
-                  console" plus Change plus YouTube Studio is 320px of buttons
-                  in a 343px card, so the row wrapped and cost a second line
-                  off the queue underneath it. */}
-              <span className="sm:hidden">Yard console</span>
-              <span className="hidden sm:inline">Open operator console</span>
+              Open operator console
             </a>
             <button
               type="button"
@@ -477,15 +490,16 @@ function YardQueue({
           target="_blank"
           rel="noopener noreferrer"
           style={{ backgroundColor: YOUTUBE_RED }}
-          aria-label="YouTube Studio"
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90 sm:px-3"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
         >
           <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-          <span className="hidden sm:inline">YouTube Studio</span>
+          YouTube Studio
         </a>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* The laptop's heading. On a phone the tab bar already names the view
+          and carries its count. */}
+      <div className="hidden items-center gap-2 md:flex">
         <Radio className="h-4 w-4 animate-pulse text-primary" />
         <h2 className="font-display text-sm font-bold text-foreground">
           {searching
@@ -505,9 +519,7 @@ function YardQueue({
               : visible.length === source.length
                 ? `${source.length}`
                 : `${visible.length} of ${source.length}`}
-            {/* The yard is already named in the header, and on a phone
-                repeating it here wrapped this heading onto a second line. */}
-            <span className="hidden sm:inline"> at {yardName}</span>)
+            {' '}at {yardName})
           </span>
         </h2>
       </div>
@@ -521,9 +533,12 @@ function YardQueue({
         </p>
       )}
 
-      <ol className="mt-3 grid gap-2">
+      {/* Dividers on a phone, spaced cards from md: a 390px list has no
+          margin to give to gaps between rows. */}
+      <ol className="mt-1 divide-y divide-border/50 md:mt-3 md:grid md:gap-2 md:divide-y-0">
         {visible.map((mission, index) => {
           const isSelected = selectedId === mission.id;
+          const running = mission.status === 'processing';
 
           return (
             <li key={mission.id}>
@@ -532,53 +547,57 @@ function YardQueue({
                   buttons on screen at once, the row's and the mission pane's.
                   Everything done to a mission now happens in the pane, and the
                   chevron is how the row says it opens. A real button, so the
-                  queue works from a keyboard too. */}
+                  queue works from a keyboard too.
+
+                  Two lines, one row. Name on the first, what is true of it on
+                  the second, one leading disc and one trailing chevron: the
+                  list-item shape both platforms' guidelines arrive at, because
+                  four things laid across 390px truncate the only one that
+                  matters. 56px tall, which is the whole target. */}
               <button
                 type="button"
                 onClick={() => setSelectedId(mission.id)}
                 aria-current={isSelected ? 'true' : undefined}
-                className={`flex w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border px-3.5 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+                className={`flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/60 md:rounded-2xl md:border md:px-3.5 md:py-3 ${
                   isSelected
-                    ? 'border-primary/60 bg-primary/5'
-                    : 'border-border/50 bg-background/40 hover:border-border'
+                    ? 'bg-primary/5 md:border-primary/60'
+                    : 'hover:bg-background/60 md:border-border/50 md:bg-background/40 md:hover:border-border'
                 }`}
               >
-                {/* Hidden on a phone. It repeats what the row's position
-                    already says, and its 20px was coming out of the mission
-                    name, which is the only handle an operator has: at 375px
-                    "Crater Crawler" was rendering as "Crater...". */}
-                <span className="hidden w-5 shrink-0 text-xs font-semibold text-muted-foreground sm:block">
-                  {index + 1}
-                </span>
-
+                {/* Position in the queue. It is the number a child at the
+                    desk is asking about, and while a mission runs the disc
+                    spins instead: "running" is the one state the position
+                    does not already say. */}
                 <span
-                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    mission.status === 'processing'
-                      ? 'bg-primary/15 text-primary'
-                      : 'bg-muted text-muted-foreground'
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    running ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {mission.status === 'processing' && (
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                  )}
-                  {mission.status}
+                  {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Running" /> : index + 1}
                 </span>
 
                 {/* The mission name is the only handle, and the only one
                     needed: a child says "mine is Rock Lover" and the operator
                     finds that row without learning anything about them. */}
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                  {mission.name || 'Untitled mission'}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {mission.name || 'Untitled mission'}
+                  </span>
+                  <span
+                    className={`block truncate text-xs ${
+                      mission.needsReview
+                        ? 'font-medium text-amber-600'
+                        : running
+                          ? 'font-medium text-primary'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
+                    {rowStatusLine(mission)}
+                  </span>
                 </span>
 
                 {mission.needsReview && (
-                  <span
-                    title={mission.reviewReason ?? 'Flagged for review'}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-600"
-                  >
-                    <AlertTriangle className="h-3 w-3" />
-                    review
-                  </span>
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" aria-label="Needs review" />
                 )}
 
                 <ChevronRight
@@ -594,7 +613,7 @@ function YardQueue({
       </ol>
     </div>
 
-    <div className={`clay min-h-0 rounded-3xl border border-border/60 bg-card/60 p-3 sm:p-5 ${
+    <div className={`min-h-0 md:clay md:rounded-3xl md:border md:border-border/60 md:bg-card/60 md:p-5 ${
       selectedId ? '' : 'hidden lg:block'
     }`}>
       {/* Beside the button that caused it. This used to render at the top of
@@ -625,6 +644,10 @@ function YardQueue({
       />
     </div>
     </div>
+
+    {/* Choosing a view also closes an open mission. Below lg the panes take
+        turns, so a tab that only changed the hidden list would look broken. */}
+    <OperatorTabBar onSelect={() => setSelectedId(null)} />
     </>
   );
 }
