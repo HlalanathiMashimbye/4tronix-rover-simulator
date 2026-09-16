@@ -13,10 +13,11 @@ look strange until you know what is causing them.
             the cloud                                    the venue LAN
    ┌─────────────────────────┐                    ┌─────────────────────────┐
    │     Mission Control     │  the mission, by   │     Yard satellite      │
-   │  Next.js on Cloud Run   │  copy and paste    │  Flask on a Pi, :3001   │
+   │  Next.js on Cloud Run   │  the operator's    │  Flask on a Pi, :3001   │
    │  learner app, operator  │───────────────────►│  run station, editor,   │
-   │  console, video linker  │                    │  TV monitor, camera,    │
-   │                         │◄───────────────────│  recordings             │
+   │  console, video linker  │  browser, on the   │  TV monitor, camera,    │
+   │                         │  venue LAN         │  recordings             │
+   │                         │◄───────────────────│                         │
    └────────────┬────────────┘ the video, by way  └────────────┬────────────┘
                 │              of YouTube                      │ LAN, HTTP
                 ▼                                              ▼
@@ -27,19 +28,25 @@ look strange until you know what is causing them.
    │  Resend, for email      │                    │                         │
    └─────────────────────────┘                    └─────────────────────────┘
 
-   Both arrows across the middle are an operator. No network path joins them.
+   Both arrows across the middle pass through the operator's hands. No
+   server-to-server path joins the two sides.
 ```
 
 The loop, end to end:
 
 1. A learner submits a mission. Mission Control stores it in Firestore.
-2. An operator signed in at `/operator` sees it arrive in their yard's live
-   queue and presses **Copy**: the mission's Python, with its name and id in
-   `# Mission:` and `# MissionID:` header comments.
-3. They paste it into the satellite's run station (`/run/`) and press
-   **Send**. The station starts recording, waits a second so the first move
-   is on camera, then posts the code to the rover's queue with the mission id
-   in its params.
+2. An operator signed in at `/operator`, standing on the venue LAN, sees it
+   arrive in their yard's live queue. The console reads the satellite's
+   `/api/status` from the operator's browser and shows three yard checks:
+   camera, rover, recording. **Send to Rover** stays locked until all three
+   pass.
+3. Send navigates the browser to the satellite's run station (`/run/`) with
+   the mission in the URL (`handoff=automatic`, id, name and code). The
+   station starts recording, waits a second so the first move is on camera,
+   then posts the code to the rover's queue with the mission id in its
+   params. **Copy** remains as the fallback: the mission's Python with its
+   name and id in `# Mission:` and `# MissionID:` header comments, pasted
+   into the station by hand.
 4. The rover runs it and records the outcome in its history, mission id
    included. The satellite's `mission_watcher` sees the run finish and closes
    the recording, `<mission>__<yard>__<UTC stamp>.mp4`.
@@ -56,11 +63,14 @@ The loop, end to end:
 | Yard Pi | The run station, tablet editor, TV monitor, camera and recordings | `yard/satellite/web_server.py` |
 | Rover Pi | The instruction queue and the motors | `yard/rover/rover_server.py` |
 
-**Why nothing joins the cloud and the yard.** The satellite is on mobile data
-behind carrier NAT: no inbound port, no tunnel. Mission Control is HTTPS, the
-yard is plain HTTP, so even a reachable satellite could not be called from a
-Mission Control page without a mixed-content failure. The satellite could
-reach out instead, and it used to, by mirroring Firestore. That put Firebase
+**Why no server joins the cloud and the yard.** The satellite is on mobile
+data behind carrier NAT: no inbound port, no tunnel. The one bridge is the
+operator's browser, a device on the venue LAN with a cloud page open: it can
+fetch the satellite's plain-HTTP status and navigate to the run station,
+though browsers make even that grudging (Safari wants a local-network
+permission, and the console says so when that is the reason a yard check
+failed). The satellite could reach out instead, and it used to, by mirroring
+Firestore. That put Firebase
 credentials on a box on venue wifi, and a sync thread and a read quota behind
 a yard that has to work offline anyway, mostly to feed an operator console
 Mission Control now provides.
@@ -164,8 +174,12 @@ the sign-in form without a session, the console with one.
   `/operator`, and it is marked `noindex`, so curious children do not wander
   in. The session check is what keeps them out.
 - **The queue** is a live Firestore listener for the operator's yard
-  (`infrastructure/persistence/operatorQueueService.ts`), and **Copy** writes
-  the payload the run station reads (`lib/missionClipboard.ts`).
+  (`infrastructure/persistence/operatorQueueService.ts`). **Send to Rover**
+  (`components/operator/AutomaticDispatch.tsx`) runs the yard checks against
+  the satellite's `/api/status` and hands the mission to the run station in
+  the URL; **Copy** (`lib/missionClipboard.ts`) writes the same payload to
+  the clipboard as the fallback; `test_mission_import.py` keeps the yard's
+  parsing of that clipboard payload in agreement with what this emits.
 - **Desk actions only.** Complete, cancel, log another run, attach or remove a
   video, resolve a review, and feedback, decided in `missionBookkeeping.ts`
   and applied through the Admin SDK in `api/operator/missions/[id]/route.ts`.
@@ -212,7 +226,7 @@ venue wifi does protects nothing on a box whose job is to run without it.
 | Path | For |
 |---|---|
 | `/` | Station hub |
-| `/run/` | The operator's run station: paste a mission, send it, take the video |
+| `/run/` | The operator's run station: receives the mission from the console's Send (or a paste), sends it to the rover, takes the video |
 | `/code/` | The tablet's Blockly and Python editor |
 | `/monitor/` | The TV: camera feed and the rover's queue |
 | `/settings` | Health, recordings, and the tunables (`/status` redirects here) |

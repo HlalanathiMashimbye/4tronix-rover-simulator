@@ -1,13 +1,9 @@
 # Paste-ready prompt
 
 Copy everything between the rules into Claude. Self-contained: assumes no repo
-access.
-
-> **Out of date on the yard.** The prompt below describes the August 2026
-> system, including the satellite's operator console, SQLite mirror and sync
-> worker, none of which exists any more. A diagram generated from it today
-> would be wrong about the yard. Check it against
-> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) before reusing it.
+access. Regenerated 16 September 2026 from
+[`docs/ARCHITECTURE.md`](../ARCHITECTURE.md); the yard band now matches the
+system as it is, not the retired mirror-and-sync design the August prompt drew.
 
 ---
 
@@ -23,9 +19,17 @@ shrink it.
 
 "Mission Control" is an educational robotics platform. School learners write or
 block-build Python that drives a physical 4tronix M.A.R.S. rover at a science
-centre. A cloud web app collects missions, an operator at the venue dispatches
-them to the real rover, the run is filmed and published back to the learner. The
-venue network is frequently offline, so the yard runs offline-first.
+centre. A cloud web app collects missions; an operator at the venue dispatches
+them to the rover; the run is filmed and the video published back to the
+learner. The venue network is frequently offline, so the yard runs
+offline-first: nothing on the run path leaves the LAN.
+
+**The one idea the drawing must carry:** no network path joins the cloud and
+the yard. No server calls a server across that line, and nothing syncs. The
+only bridge is the operator's browser, a device physically standing on the
+venue LAN while signed in to the cloud console. It carries each mission across
+by navigation, and the video comes back by way of YouTube. If a reader takes
+away one thing, it is that boundary and the person straddling it.
 
 ## Layout
 
@@ -37,9 +41,10 @@ boundary rules are the heaviest lines on the page.
 TITLE
 BAND A   PUBLIC INTERNET / GOOGLE CLOUD
 ════ TRUST BOUNDARY: internet  |  venue LAN, frequently offline ════
-BAND B   VENUE LAN: yard satellite (mro.local)
+         (the operator's browser is drawn ON this rule)
+BAND B   VENUE LAN: yard satellite (mro.local:3001)
 ──── DEVICE BOUNDARY: physical actuation ────
-BAND C   ROVER (marspi.local) + hardware
+BAND C   ROVER (marspi.local:8523) + hardware
 BAND D   PLATFORM & DELIVERY  (one slim strip)
 ```
 
@@ -55,53 +60,72 @@ BAND D   PLATFORM & DELIVERY  (one slim strip)
 
 ## Band A: cloud
 
-**A1 Learner devices** (small, far left). Desktop browser, tablet browser, TV
-monitor. Icons with one-word labels, no body text.
+**A1 Learner devices** (small, far left). Desktop browser, tablet browser.
+Icons with one-word labels, no body text.
 
-**A2 Mission Control Hub**, Next.js 16 / React 19 / TypeScript, on Cloud Run.
-One container holding **four stacked strata**, with a single arrow down the left
-edge labelled "dependencies point inward". One line per stratum, no more:
+**A2 Mission Control**, Next.js on Cloud Run. One container holding **four
+stacked strata**, with a single arrow down the left edge labelled "dependencies
+point inward". One line per stratum, no more:
 
-1. **Presentation** `src/app`, `src/components` : Blockly and Monaco editors,
-   2D canvas simulator, public mission feed
-2. **API routes** `src/app/api` : `/api/missions`, `/api/learners`, Zod
-   validation at the edge
-3. **Core domain** `src/core` : Mission and Learner entities, `IMissionRepository`
-   and `IEmailSender` ports, MissionService, AllowlistService
+1. **Presentation** `src/app`, `src/components` : learner app, Blockly and
+   Python editors, 2D simulator, operator console at `/operator`
+2. **API routes** `src/app/api` : missions, operator desk actions, session
+   exchange, Zod validation at the edge
+3. **Core** `src/core` : Mission, MissionRun, Learner entities; safety rules
+   (allowlist, speed and time ceilings); `IMissionReader` / `IMissionWriter` /
+   `IMissionBookkeeping` ports
 4. **Infrastructure** `src/infrastructure` : FirestoreMissionRepository,
-   firebase-admin, ResendEmailSender, code allowlist analyzer
+   split composition roots (`container.server` privileged, `container.browser`
+   rules-bound), Resend, YouTube
 
 **A3 Managed services** (right column, lighter fill and a dashed left edge to
 read as external). One line each:
-- **Firestore** : `missions` (world readable), `learners`,
-  `learners/{id}/private` (Admin SDK only), `users`
-- **Firebase Auth** : operator sign-in, custom claims
+- **Firestore** : missions, runs, learners; browser reads guarded by rules
+- **Firebase Auth** : operator and admin sign-in, role as a custom claim
 - **Resend** : learner status email
-- **YouTube Data API** : links a published clip to its mission
+- **YouTube Data API** : finds the uploaded run video by its `MissionID:` line
+- **Cloud Scheduler** : calls `/api/cron/youtube-link` every 15 minutes
+
+## The trust boundary, and the operator's browser
+
+Draw **the operator's browser as one node sitting on the boundary rule
+itself**, half in each world. Title: "Operator's browser, on the venue LAN".
+Body, three lines:
+
+- live mission queue for this yard (Firestore listener)
+- **yard checks** before send: camera, rover, recording, read from the
+  satellite's `/api/status` over plain HTTP
+- **Send to Rover** : navigates to the run station,
+  `/run/?handoff=automatic&missionId=...` with the mission code in the URL;
+  Copy to clipboard remains as the fallback
+
+Give it one small amber tag: `cloud page, LAN fetch : Safari may need
+local-network permission`.
 
 ## Band B: yard satellite, Flask on mro.local:3001
 
-Four columns.
+The satellite holds no cloud credential, asks for no sign-in, and talks only to
+the rover and the camera on the LAN. Three columns.
 
-**B1 Surfaces.** `/code/` tablet Blockly editor, `/monitor/` TV display,
-`/status` config and health, `/operator/` console. Four labels, no body text.
+**B1 Surfaces.** `/run/` operator run station, `/code/` tablet Blockly editor,
+`/monitor/` TV display, `/settings` health and tunables. Four labels, no body
+text.
 
-**B2 Operator console** `operator_console.py`. Flask blueprint, Firebase sign-in
-with custom claims. Actions: send to rover, mark complete, cancel, attach video.
-Add one small amber tag reading `OPERATOR_AUTH=off  event-day bypass`.
+**B2 One module per question** (the column to draw with care). Four rows, one
+short clause each:
+- `camera_state.py` : the single answer to "is the camera ready"
+- `recording_control.py` : opens and closes recordings, keyed
+  `(mission, yard)`, written `<mission>__<yard>__<UTC>.mp4`
+- `mission_watcher.py` : the only background thread; polls the rover and closes
+  the recording of any run it reports finished, reads and never dispatches
+- `recording_cleanup.py` : prunes so the SD card never fills
 
-**B3 SQLite mirror** `mission_store.py`. Draw as a database cylinder. Four table
-names only, with the two fields that matter shown inside the first:
-`mission_mirror (lock_owner, lease_expires_at)`, `outbox`, `sync_meta`,
-`conflict_log`.
+**B3 Camera.** `camera_server.py`, WebSocket on 8890, frames to the monitor
+and to `recording_control`. Small node.
 
-**B4 Background threads** (marked "async, no user waiting"). Five rows, one short
-clause each:
-- `sync_worker.py` : the only component that reaches Firestore from the yard
-- `mission_watcher.py` : polls the rover, completes only what it confirms
-- `recovery.py` : resolves missions interrupted by a restart
-- `satellite_identity.py` : holds the mission lease for this yard
-- `camera_control.py` : starts and restarts the camera stream
+Do not draw a database, an outbox, a sync worker or an operator console in this
+band. The yard stores nothing but video files and settings, and that absence is
+the design.
 
 ## Band C: rover, marspi.local:8523
 
@@ -110,37 +134,40 @@ Left to right, as a pipeline:
 - **`rover_server.py`** Flask : `/queue/add`, `/queue/status`, `/queue/events`
   (SSE), `/photo`
 - **`RoverQueueService`** implementing the abstract `RoverQueuePort` : FIFO
-  queue, single worker thread, sandboxed `run_python` with a wall-clock watchdog
+  queue, single worker thread
+- **`python_runner.py`** : the learner-code sandbox, traced so the stop button
+  interrupts a `while True`, wall-clock watchdog
 - **`RoverDriver`** (abstract) drawn above its two implementations,
-  `FakeRoverDriver` and `RealRoverDriver`, as a small explicit inheritance fork.
-  Keep this fork visually clean, it is the one place the drawing should show a
-  class relationship.
-- **Hardware** : 4tronix M.A.R.S. rover on a Raspberry Pi Zero (motors, 16 servo
-  channels, LEDs, ultrasonic). Separate node: Pi AI Camera IMX500 on a Raspberry
-  Pi 5, WebSocket on 8890.
+  `FakeRoverDriver` and `RealRoverDriver`, as a small explicit inheritance
+  fork. Keep this fork visually clean, it is the one place the drawing should
+  show a class relationship.
+- **Hardware** : 4tronix M.A.R.S. rover on a Raspberry Pi (motors, servo
+  steering, mast camera, ultrasonic)
+
+Alongside the fork, one quiet caption: `mission_validator.py` and `limits.py`
+gate every queued program (speed and time ceilings, calls the rover cannot
+make).
+
+Do not place any physics model in this band. The rover runs no physics; the
+simulator is the same queue and drivers with `FakeRoverDriver` underneath, and
+the simulation a learner sees is rendered by compiled TypeScript
+(`roversim`, five modules built from `mission-control/src/lib`) served from the
+satellite's static assets.
 
 ## Band D: platform and delivery
 
 One slim horizontal strip, drawn as a left-to-right chain, small type:
-Terraform (GCS remote state) to GitHub Actions to Artifact Registry to Cloud Run
-(staging and prod) to Secret Manager, with Workload Identity Federation tagged
-"OIDC, no JSON keys" at the end.
-
-At the right of the same strip, a small dashed group labelled "dev and simulation,
-same code paths, no hardware": `legacy/simulator/roversimui.py` (PyQt6 viewer),
-`legacy/simulator/roversimulator.py` (drop-in for the real rover module), `rover_physics.py`
-(deprecated four-wheel steering model, kept for reference only), `dev-launcher.js`,
-Jest, pytest. Greyscale, roughly 60% opacity.
-
-Do not place any physics model inside the rover band. The rover service runs no
-physics module of its own; the simulation is rendered by compiled TypeScript in
-the satellite's static assets.
+Terraform (GCS remote state) to GitHub Actions (five required checks:
+mission-control, rover, satellite, browser tests, Firestore rules) to Artifact
+Registry to Cloud Run (staging and prod) to Secret Manager, with Workload
+Identity Federation tagged "OIDC, no JSON keys" at the end.
 
 ## Edges
 
-Three types only, distinguished by dash pattern so the drawing survives greyscale.
-**Do not draw a legend for them.** Instead label the handful of edges that cross a
-band with their protocol, set in a small paper-coloured pill.
+Three types only, distinguished by dash pattern so the drawing survives
+greyscale. **Do not draw a legend for them.** Instead label the handful of
+edges that cross a band with their protocol, set in a small paper-coloured
+pill.
 
 - **Solid 2px, filled arrowhead** : synchronous request, caller waits
 - **Dashed 6-4** : background or scheduled work, nobody waiting
@@ -149,32 +176,40 @@ band with their protocol, set in a small paper-coloured pill.
 Plus one exception: the driver-to-hardware edge is a **thick 4px green arrow**
 labelled "physical actuation".
 
-Draw roughly these edges and no more. Extra edges are the main cause of clutter:
+Draw roughly these edges and no more. Extra edges are the main cause of
+clutter:
 
-- learner devices to hub API (solid, "HTTPS")
-- learner devices to Firestore (solid, "direct read, public feed")
-- hub infrastructure to Firestore and to Resend (solid)
-- `sync_worker` to Firestore, as **two** dashed arrows labelled
-  "1. push outbox" then "2. pull incremental", with the ordering visible
-- operator console to `mission_store` (solid), and `mission_store` to
-  `sync_worker` (dashed)
-- operator console to rover `/queue/add` (solid, "dispatch")
+- learner devices to Mission Control (solid, "HTTPS")
+- learner browser to Firestore (stream, "live feed, rules-guarded")
+- Mission Control infrastructure to Firestore, Resend, YouTube (solid)
+- Cloud Scheduler to Mission Control (dashed, "cron, shared secret")
+- operator's browser to Firestore (stream, "live queue")
+- operator's browser to Mission Control API (solid, "desk actions")
+- operator's browser to satellite `/api/status` (solid, "yard checks, HTTP")
+- operator's browser to `/run/` (solid, **"Send to Rover: mission in the
+  URL"** ; this is the arrow that crosses the trust boundary, make it read as
+  the bridge)
+- run station to rover `/queue/add` (solid, "dispatch, mission id in params")
+- camera to `/monitor/` and to `recording_control` (stream, "WS 8890")
+- `mission_watcher` to rover `/queue/status` (dashed, "read only"), then
+  `mission_watcher` to `recording_control` (dashed, "close on finish")
 - rover `/queue/events` to satellite to `/monitor/` browser (stream, one
   continuous run labelled "SSE")
-- camera to `/monitor/` (stream, "WS 8890")
-- `mission_watcher` to rover `/queue/status` (dashed, "read only")
-- operator console to hub `/api/missions/[id]/notify` (dashed, "best effort")
 - `RoverQueueService` to `RoverDriver` to hardware (physical actuation)
+- operator's browser up to YouTube (dashed, "video uploaded by hand"), then
+  YouTube Data API back to Firestore by way of the cron route (dashed,
+  "auto-link"). These two carry the video back across the boundary; let them
+  arc over the rule rather than pass through the satellite.
 
-Never cross two edges without an arc hop. Draw bidirectional relationships as two
-separate arrows.
+Never cross two edges without an arc hop. Draw bidirectional relationships as
+two separate arrows.
 
 ## Visual system
 
 - Warm paper ground `#FAF7F2`, ink `#1A1D21` for all text and structure.
-- Band accents only as a thin top rule and a small header chip, never as a large
-  fill: cloud indigo `#3B4CCA`, yard teal `#0E7C7B`, rover forest `#2F6B3A`,
-  platform slate `#475569`.
+- Band accents only as a thin top rule and a small header chip, never as a
+  large fill: cloud indigo `#3B4CCA`, yard teal `#0E7C7B`, rover forest
+  `#2F6B3A`, platform slate `#475569`.
 - Node fills are paper or 4% ink. No gradients, no shadows, no 3D, no emoji.
   Depth comes from border weight and whitespace.
 - One typeface (system UI stack). Band headers 20px bold uppercase with letter
@@ -184,27 +219,31 @@ separate arrows.
 - 8px grid, 8px node radius, 12px container radius.
 - Support both colour schemes via CSS custom properties on the SVG: light by
   default, plus `@media (prefers-color-scheme: dark)` and
-  `:root[data-theme="dark"]` / `:root[data-theme="light"]` overrides using ground
-  `#12100E` and ink `#F2EFE9`.
-- Wrap the SVG in a container with `overflow-x: auto` and `max-width: 100%` so the
-  page never scrolls horizontally.
+  `:root[data-theme="dark"]` / `:root[data-theme="light"]` overrides using
+  ground `#12100E` and ink `#F2EFE9`.
+- Wrap the SVG in a container with `overflow-x: auto` and `max-width: 100%` so
+  the page never scrolls horizontally.
 
 ## Deliverable
 
 One HTML file, one inline SVG, one `<style>` block. Title it "Mission Control:
-system architecture". Small "as of August 2026" stamp in a corner. No Mermaid, no
-diagramming library, no raster image.
+system architecture". Small "as of September 2026" stamp in a corner. No
+Mermaid, no diagramming library, no raster image.
 
 ---
 
 ## Notes for you, not for the prompt
 
-- Complexity is carried by [design-decisions.md](design-decisions.md), not by the
-  drawing. What the diagram does instead is show structure that *is* the
-  complexity: the abstract driver above its two implementations, the ordered
-  push-then-pull pair of arrows, the lease fields named inside the mirror table.
-  Shown, not annotated.
-- If the first pass is still tight, cut band D's dev rail first, then the
-  `/status` surface, then the collection list inside Firestore. In that order.
-- Keep [diagram-spec.md](diagram-spec.md) beside the output. When the system
-  changes, edit the spec, regenerate, diff the SVG.
+- The load-bearing change since the August diagram: the yard's console, SQLite
+  mirror and sync worker are gone, and the operator moved into Mission
+  Control. The bridge is now the operator's browser and its Send-to-Rover
+  handoff. The drawing shows that by placing one node on the boundary rule;
+  everything else follows from it.
+- If the first pass is still tight, cut band D first, then `/settings` and
+  `recording_cleanup.py`, then the collection list inside Firestore. In that
+  order.
+- [diagram-spec.md](diagram-spec.md) still specifies the August drawing and is
+  kept for its reasoning about form (boundaries, edge grammar, density). This
+  prompt, generated from [`ARCHITECTURE.md`](../ARCHITECTURE.md), is the
+  current content. When the system changes, edit ARCHITECTURE.md first,
+  regenerate this prompt from it, diff the SVG.
