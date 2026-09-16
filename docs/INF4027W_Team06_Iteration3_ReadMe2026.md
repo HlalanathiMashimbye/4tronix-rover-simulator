@@ -73,6 +73,9 @@ The hosted site at https://marsyard.labs.ws skips all of this.
 | Yard satellite (pytest) | `cd yard/satellite && python -m pytest tests -q` | 296 |
 | Rover server (pytest) | `python -m pytest yard/rover -q` | 298 |
 
+Counts are for `main`. On `feat/challenges` the Jest suite is 916 passing and
+7 todo; the Python suites are the same on both branches.
+
 CI (`.github/workflows/ci.yml`) runs five checks on every push: Mission Control
 lint, build and tests; rover; satellite; browser tests (Playwright); and
 Firestore rules against the emulator.
