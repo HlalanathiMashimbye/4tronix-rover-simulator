@@ -14,7 +14,20 @@ import { yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
  * fixed for the session now, so this states the fact and, when clicked, says
  * what to do about it rather than looking inert.
  */
-export function YardChip({ yard }: { yard: Yard | null }) {
+export function YardChip({
+  yard,
+  /**
+   * The same control with the pill taken off, for the phone header's meta
+   * line. Below sm the console's header has one row to spend, so where the
+   * operator is signed in reads as text there rather than as a third chip -
+   * still tappable, because "why can I not switch yards" is asked on a phone
+   * at an event as often as anywhere else.
+   */
+  compact = false,
+}: {
+  yard: Yard | null;
+  compact?: boolean;
+}) {
   const [explaining, setExplaining] = useState(false);
 
   if (!yard) {
@@ -35,10 +48,14 @@ export function YardChip({ yard }: { yard: Yard | null }) {
         type="button"
         onClick={() => setExplaining((open) => !open)}
         aria-expanded={explaining}
-        className="clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70"
+        className={
+          compact
+            ? 'inline-flex min-w-0 items-center gap-1 text-[11px] font-medium text-muted-foreground'
+            : 'clay inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-primary/70'
+        }
       >
-        <MapPin className="h-3.5 w-3.5 text-primary" />
-        {yardLabelOf(yard)}
+        <MapPin className={compact ? 'h-3 w-3 shrink-0 text-primary' : 'h-3.5 w-3.5 text-primary'} />
+        <span className={compact ? 'truncate' : undefined}>{yardLabelOf(yard)}</span>
       </button>
 
       {explaining && (

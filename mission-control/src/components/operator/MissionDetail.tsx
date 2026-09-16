@@ -58,16 +58,23 @@ export function MissionDetail({
           <button
             type="button"
             onClick={onBack}
-            className="mb-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-primary lg:hidden"
+            // -ml-1.5 and the padding give it a 40px target without spending
+            // a row on it: below lg this is the only way back to the queue.
+            className="-ml-1.5 mb-0.5 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-primary lg:hidden"
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="h-4 w-4" />
             Back to the queue
           </button>
         )}
-        <h2 className="font-display text-lg font-bold text-foreground">
+        <h2 className="truncate font-display text-lg font-bold text-foreground">
           {mission.name || 'Untitled mission'}
         </h2>
-        <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">{mission.id}</p>
+        {/* The document id is for a bug report, not for the operator's job.
+            It keeps its line where there is height to spare and goes on a
+            phone, where that line is one queue row. */}
+        <p className="mt-0.5 hidden truncate font-mono text-[11px] text-muted-foreground sm:block">
+          {mission.id}
+        </p>
       </header>
 
       {/* Sending first: it is what an operator opens a queued mission to do,

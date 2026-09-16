@@ -6,7 +6,7 @@ export default function MissionPage() {
     // See MissionVideoClient for the full reasoning: pinned to the viewport
     // from md up, free to grow on a phone where the panels stack and a fixed
     // 100vh clips the simulator out of reach.
-    <main className="relative px-3 py-1.5 md:h-[calc(100dvh-var(--app-chrome))] md:overflow-hidden">
+    <main className="relative px-3 py-1.5 md:h-page md:overflow-hidden">
       {/* flex-col, not space-y: the workspace below sizes itself from what is
           left after this header, rather than the grid guessing at how tall the
           chrome above it is. */}

@@ -46,7 +46,16 @@ roverCommandHelp.ts   help text per rover command, for editor hovers
 missionRuns.ts        which runs a learner can actually watch
 missionClipboard.ts   what every Copy button puts on the clipboard
 yardConsole.ts        where this operator's yard console lives
+appSurfaces.ts        which surface of the app a path belongs to
 ```
+
+`appSurfaces.ts` exists so the navbar can drop the learner's floating Create
+Mission button on the operator console without naming the operator route.
+`__tests__/unit/operator-route-hidden.test.ts` fails on the string appearing in
+`Navbar.tsx` at all, deliberately: a link added in a hurry and a path compared
+in a hurry read the same in a diff. Its own filename avoids the substring for
+the same reason - an import of `@/lib/operatorSurface` would have reintroduced
+it into every file that imported it.
 
 `yardConsole.ts` holds a browser-local address rather than a setting, because
 the console runs on the satellite in the room, on a private network this app

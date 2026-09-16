@@ -25,6 +25,7 @@ import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
+import { isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 
 const NAV_ITEMS = [
@@ -67,6 +68,17 @@ export function Navbar() {
     [dismiss]
   );
 
+  /**
+   * The learner's floating action button is not a control an operator can use,
+   * and on a phone it is fixed over the corner the console's own panes end in:
+   * it sat on top of the last queue row and on top of the mission pane's code.
+   * The tabs beside it still get them back to the learner site.
+   *
+   * The route is named in lib/appSurfaces.ts rather than here - see the
+   * note there for why this file must not contain the string.
+   */
+  const onOperatorSurface = isOperatorSurface(pathname);
+
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
     return pathname === path || pathname.startsWith(path + '/');
@@ -88,14 +100,14 @@ export function Navbar() {
   return (
     <>
       {/* Divider is an inset shadow (not border-b) so the bar stays exactly 64px
-          tall, matching the h-[calc(100dvh-var(--app-chrome))] page mains (no 1px overflow). */}
+          tall, matching the h-page mains below (no 1px overflow). */}
       {/* The fill alone cannot separate this from the page: in Paper & Ink the
           card and the background are ~2% apart in lightness (0.99 vs 0.966),
           which measured 1.13:1 - not a band, just a smudge. A hairline plus a
           soft shadow underneath is what actually reads as a raised bar, and it
           works in both themes without touching the palette. The shadow is an
           OUTER one so the bar stays exactly 64px and the page mains below
-          (h-[calc(100dvh-var(--app-chrome))]) do not overflow by a pixel. */}
+          (h-page) do not overflow by a pixel. */}
       <nav className="sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)]">
         {/* Use a balanced three-column layout so the search sits in the true
             visual center of the navbar, with the brand and action cluster
@@ -237,13 +249,15 @@ export function Navbar() {
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
           rather than the row's flat tabs. */}
-      <Link
-        href="/mission"
-        aria-label="Create Mission"
-        className="clay clay-press fixed bottom-14 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
-      >
-        <Plus className="h-6 w-6" strokeWidth={2.5} />
-      </Link>
+      {!onOperatorSurface && (
+        <Link
+          href="/mission"
+          aria-label="Create Mission"
+          className="clay clay-press fixed bottom-14 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
+        >
+          <Plus className="h-6 w-6" strokeWidth={2.5} />
+        </Link>
+      )}
 
       <NotificationModal
         isOpen={isNotificationOpen}

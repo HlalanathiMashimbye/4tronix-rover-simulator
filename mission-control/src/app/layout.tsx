@@ -158,8 +158,10 @@ export default function RootLayout({
               <SearchProvider>
               <EnvironmentBanner />
               <Navbar />
-              {/* pb on mobile keeps content clear of the fixed bottom tab bar */}
-              <div id={PAGE_AREA_ID} className="pb-16 md:pb-0">
+              {/* Keeps content clear of the fixed bottom tab bar. The same
+                  token the full-height pages subtract, so the padding here and
+                  the height there cannot disagree - see .h-page. */}
+              <div id={PAGE_AREA_ID} className="pb-[var(--app-bottom-chrome)]">
                 <PageTransition>{children}</PageTransition>
               </div>
               {/* Measures the id above and publishes it as --app-chrome, which
