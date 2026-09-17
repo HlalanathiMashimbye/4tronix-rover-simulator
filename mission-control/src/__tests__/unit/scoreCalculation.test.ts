@@ -11,10 +11,16 @@ describe('scoreCalculation', () => {
   describe('getChallengePoints', () => {
     it('returns correct points for known challenges', () => {
       expect(getChallengePoints('platform-orientation')).toBe(50);
-      expect(getChallengePoints('first-mission')).toBe(100);
       expect(getChallengePoints('basic-movement')).toBe(150);
       expect(getChallengePoints('loop-structures')).toBe(200);
+      expect(getChallengePoints('draw-a-square-blocks')).toBe(225);
       expect(getChallengePoints('draw-a-square')).toBe(250);
+    });
+
+    it('keeps the points of a retired challenge, so earned scores do not drop', () => {
+      // Create Your First Mission left the track; learners who finished it
+      // must not fall to the default on their next recalculated total.
+      expect(getChallengePoints('first-mission')).toBe(100);
     });
 
     it('returns default points for unknown challenges', () => {
@@ -45,12 +51,12 @@ describe('scoreCalculation', () => {
       const allChallenges = [
         'platform-orientation',
         'explore-the-platform',
-        'first-mission',
         'basic-movement',
         'loop-structures',
+        'draw-a-square-blocks',
         'draw-a-square',
       ];
-      const expected = 50 + 75 + 100 + 150 + 200 + 250;
+      const expected = 50 + 75 + 150 + 200 + 225 + 250;
       expect(calculateScore(allChallenges)).toBe(expected);
     });
 
