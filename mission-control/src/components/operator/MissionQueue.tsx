@@ -511,9 +511,12 @@ function YardQueue({
         {/* Outside the branch above, so editing the console address does not
             make the other door disappear. */}
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* Beside the door it is about. Grey when uploads are being checked,
-              amber when they are not, which is when it has to be seen. */}
-          <YouTubeLinkStatus status={youtubeLink} className={youtubeLink?.state === 'on-schedule' ? 'hidden 2xl:inline' : ''} />
+          {/* Beside the door it is about, where the toolbar is wide enough. */}
+          {youtubeLink && (
+            <div className="hidden 2xl:block">
+              <YouTubeLinkStatus status={youtubeLink} />
+            </div>
+          )}
           <a
             href={YOUTUBE_STUDIO_URL}
             target="_blank"
@@ -525,6 +528,16 @@ function YardQueue({
             YouTube Studio
           </a>
         </div>
+
+        {/* Below 2xl the toolbar has no room for it on the same line, and
+            hiding it there hid it on every laptop. A short row of its own, under
+            the button it is about, costs one line of small text: less than a
+            status nobody can see. */}
+        {youtubeLink && (
+          <div className="flex basis-full justify-end 2xl:hidden" data-testid="youtube-link-status-row">
+            <YouTubeLinkStatus status={youtubeLink} />
+          </div>
+        )}
       </div>
 
       {/* The laptop's heading. On a phone the tab bar already names the view

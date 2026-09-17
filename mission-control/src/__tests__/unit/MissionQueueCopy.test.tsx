@@ -287,3 +287,32 @@ describe('the operator console gives the mission pane its height', () => {
     expect(grid.className).toContain('1.15fr');
   });
 });
+
+describe('whether uploads are being checked', () => {
+  it('shows on a laptop, not only on a very wide screen', async () => {
+    /**
+     * The line was `hidden 2xl:inline` to keep the toolbar on one line, which
+     * hid it on every laptop an operator actually uses. Below 2xl it now has a
+     * row of its own; the inline copy is the 2xl one.
+     */
+    const { forgetSharedReading } = jest.requireActual('@/hooks/useYouTubeLinkStatus');
+    forgetSharedReading();
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, lastCheckedAt: new Date().toISOString(), intervalMinutes: 15 }),
+    }) as unknown as typeof fetch;
+
+    try {
+      render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+      const row = await screen.findByTestId('youtube-link-status-row');
+      expect(row).toHaveTextContent(/Uploads checked .* · next /);
+      // Visible at every width below 2xl: nothing on it hides it by default.
+      expect(row.className.split(' ')).not.toContain('hidden');
+      expect(row.className).toContain('2xl:hidden');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
