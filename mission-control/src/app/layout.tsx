@@ -9,6 +9,7 @@ import { MilestoneTracker } from "@/components/layout/MilestoneTracker";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
+import { ChallengeProgressProvider } from "@/contexts/ChallengeProgressContext";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { PostHogAnalytics } from "@/components/analytics/PostHogAnalytics";
 import { resolveAppUrl } from "@/infrastructure/config/appUrl";
@@ -156,6 +157,7 @@ export default function RootLayout({
             <LearnerProvider>
               {/* Wraps Navbar AND the page: the navbar renders the search UI
                   while each page publishes what is searchable. */}
+              <ChallengeProgressProvider>
               <SearchProvider>
               <EnvironmentBanner />
               <Navbar />
@@ -172,6 +174,7 @@ export default function RootLayout({
                   Level 1 challenges can ask a learner to go and look at one. */}
               <MilestoneTracker />
               </SearchProvider>
+              </ChallengeProgressProvider>
             </LearnerProvider>
           </ThemeProvider>
         </PostHogAnalytics>
