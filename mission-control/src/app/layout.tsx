@@ -6,6 +6,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
 import { MilestoneTracker } from "@/components/layout/MilestoneTracker";
+import { ActiveChallengeReminder } from "@/components/challenges/ActiveChallengeReminder";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
@@ -173,6 +174,7 @@ export default function RootLayout({
               {/* Renders nothing; records which pages have been opened so the
                   Level 1 challenges can ask a learner to go and look at one. */}
               <MilestoneTracker />
+              <ActiveChallengeReminder />
               </SearchProvider>
               </ChallengeProgressProvider>
             </LearnerProvider>
