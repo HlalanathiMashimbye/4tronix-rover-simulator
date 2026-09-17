@@ -17,17 +17,19 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { adminMissionRepository } from '@/infrastructure/container.server';
+import { nanoid } from 'nanoid';
+
+import { adminMissionRepository, notificationService } from '@/infrastructure/container.server';
+import type { Mission } from '@/core/domain/entities/Mission';
 import {
   claimedMissions,
-  runToLink,
+  planVideoLink,
   watchUrl,
 } from '@/core/domain/services/youtubeLinking';
 import {
   fetchRecentUploads,
   YouTubeNotConfiguredError,
 } from '@/infrastructure/youtube/channelUploads';
-import { decideAttachVideo } from '@/core/domain/services/missionBookkeeping';
 import { readSetting } from '@/infrastructure/config/runtimeSettingsStore';
 import { isDue, lastCheckedAt, recordChecked } from '@/infrastructure/persistence/pollState';
 
@@ -91,46 +93,49 @@ export async function POST(request: NextRequest) {
 
   const repository = adminMissionRepository();
   const linked: string[] = [];
+  const completed: string[] = [];
   const skipped: Array<{ missionId: string; reason: string }> = [];
 
   for (const claim of claims) {
     try {
       const runs = await repository.findRuns(claim.missionId);
-      // When the video named its yard, that IS the answer. runToLink is the
-      // fallback for a video that only named a mission, and it guesses:
-      // most-recently-completed-without-a-video attaches Cape Town's footage
-      // to Durban's run whenever the two finish close together.
-      const run = claim.yardId
-        ? runs.find((r) => r.yardId === claim.yardId && !r.youtubeUrl) ?? null
-        : runToLink(runs);
-      if (!run) {
-        skipped.push({ missionId: claim.missionId, reason: 'nothing to link' });
+
+      // Planned from the runs first, which is all an ordinary poll needs. The
+      // mission is read only when the video is about to complete it, or there
+      // is no run to go on: once per mission, not once per poll.
+      let plan = planVideoLink(claim, runs, undefined);
+      let mission: Mission | null = null;
+      if (plan.kind === 'needs-mission' || (plan.kind === 'link' && plan.completes)) {
+        mission = await repository.findById(claim.missionId);
+        if (mission?.deleted) mission = null;
+        plan = planVideoLink(claim, runs, mission);
+      }
+      if (plan.kind !== 'link') {
+        skipped.push({ missionId: claim.missionId, reason: plan.kind === 'skip' ? plan.reason : 'nothing to link' });
         continue;
       }
 
-      // The same decision the operator's own attach goes through, so an
-      // automatic link cannot land somewhere a manual one would be refused.
-      // runToLink already established this run is completed, so runStatus is
-      // the honest field to hand over; missionStatus mirrors it because a
-      // roll-up cannot disagree with the only run we are considering.
-      const decision = decideAttachVideo({
-        runStatus: run.status,
-        missionStatus: run.status,
-        needsReview: run.needsReview ?? false,
-      });
-      if (!decision.ok) {
-        skipped.push({ missionId: claim.missionId, reason: decision.error });
-        continue;
-      }
-
-      await repository.applyBookkeeping(claim.missionId, run.runId, run.yardId, {
-        status: decision.change.status,
-        clearsReview: decision.change.clearsReview,
+      await repository.applyBookkeeping(claim.missionId, plan.runId ?? nanoid(), plan.yardId, {
+        status: plan.completes ? 'completed' : null,
+        // Completing settles a review, as an operator's completion does: a
+        // video of the run answers the question the flag was asking.
+        clearsReview: plan.completes,
         youtubeUrl: watchUrl(claim.videoId),
         decidedAt: new Date().toISOString(),
         decidedBy: 'youtube-auto-link',
       });
       linked.push(claim.missionId);
+      if (plan.completes) completed.push(claim.missionId);
+
+      // The same email an operator's completion sends. Best effort and after
+      // the write: a Resend outage must not undo a mission the video closed.
+      if (plan.completes && mission) {
+        try {
+          await notificationService().notifyStatusChange({ ...mission, status: 'completed' }, 'completed');
+        } catch (error) {
+          console.error(`[youtube-link] Could not email the learner for ${claim.missionId}:`, error);
+        }
+      }
     } catch (error) {
       // One bad mission must not stop the rest of the batch: the next poll
       // will try it again, and the others are already linked by then.
@@ -144,6 +149,7 @@ export async function POST(request: NextRequest) {
     checked: videos.length,
     linked: linked.length,
     missions: linked,
+    completed,
     skipped,
   });
 }

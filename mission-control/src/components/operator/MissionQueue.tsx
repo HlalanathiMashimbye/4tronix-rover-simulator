@@ -12,6 +12,7 @@ import {
 } from '@/infrastructure/persistence/operatorQueueService';
 
 import { MissionDetail } from '@/components/operator/MissionDetail';
+import { useRoverReportedCompletions } from '@/hooks/useRoverReportedCompletions';
 import { OperatorTabBar } from '@/components/operator/OperatorTabBar';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
@@ -347,6 +348,17 @@ function YardQueue({
 
     return unsubscribe;
   }, [yardId]);
+
+  // The rover says when a run finished; the open console records it.
+  useRoverReportedCompletions({
+    yardId,
+    missions,
+    onCompleted: (mission) => {
+      const message = `Marked ${mission.name || 'a mission'} complete: the rover reported it finished.`;
+      setFlash(message);
+      window.setTimeout(() => setFlash((f) => (f === message ? null : f)), 6000);
+    },
+  });
 
   if (error) {
     return (

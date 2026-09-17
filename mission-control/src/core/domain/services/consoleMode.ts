@@ -40,7 +40,7 @@ export function isHandledAutomatically(action: OperatorAction, mode: ConsoleMode
 export function automatedReason(action: OperatorAction): string {
   switch (action) {
     case 'complete':
-      return 'The rover reports when it has finished, so this is recorded for you.';
+      return 'The rover reports when it has finished, and a found video marks it too, so this is usually recorded for you.';
     case 'attach-video':
       return 'Uploads are matched to their mission by the MissionID in the description.';
     default:

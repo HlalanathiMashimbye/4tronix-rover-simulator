@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, Copy, Loader2, Rocket, WifiOff, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
-import { readConsoleUrl } from '@/lib/yardConsole';
+import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 import { missionClipboardText } from '@/lib/missionClipboard';
 
 type CheckKey = 'camera' | 'rover' | 'recording';
@@ -77,13 +77,6 @@ function readChecks(status: YardStatus): CheckResult[] {
  */
 const LIVE_CHECK_INTERVAL_MS = 15_000;
 
-function statusUrl(consoleUrl: string): string {
-  const url = new URL(consoleUrl);
-  url.pathname = '/api/status';
-  url.search = '';
-  return url.toString();
-}
-
 /**
  * How long to wait for the satellite before calling the yard offline.
  *
@@ -102,37 +95,6 @@ const PERMISSION_PROMPT_TIMEOUT_MS = 120_000;
 
 /** Why the yard did not answer, which decides what the operator is told to do. */
 type Unreachable = 'offline' | 'permission-denied' | 'browser-cannot';
-
-type LocalNetworkPermission = PermissionStatus | 'unsupported';
-
-/**
- * This browser's local network access permission for the page.
- *
- * Chromium browsers (Chrome, Edge) ask before an https page may call a device
- * on the local network, such as the satellite, and only then let the request
- * through. Safari and Firefox have no such permission and simply block it.
- * Chrome has used both names, so each is tried; an unknown name throws.
- */
-async function localNetworkPermission(): Promise<LocalNetworkPermission> {
-  if (!navigator.permissions?.query) return 'unsupported';
-  for (const name of ['local-network', 'local-network-access']) {
-    try {
-      return await navigator.permissions.query({ name: name as PermissionName });
-    } catch {
-      // Not a permission this browser knows; try the next name.
-    }
-  }
-  return 'unsupported';
-}
-
-/**
- * Whether the browser itself stops this page from calling the satellite: an
- * https page may not fetch an http address unless a local network permission
- * lets it, and a browser without that permission never will.
- */
-function browserBlocksYard(consoleUrl: string): boolean {
-  return window.location.protocol === 'https:' && new URL(consoleUrl).protocol === 'http:';
-}
 
 /**
  * The satellite's status response, or why this browser could not get one.
@@ -161,7 +123,7 @@ async function reachYard(): Promise<Response | Unreachable> {
   }
 
   try {
-    return await fetch(statusUrl(consoleUrl), { cache: 'no-store', signal: controller.signal });
+    return await fetch(yardApiUrl('/api/status', consoleUrl), { cache: 'no-store', signal: controller.signal });
   } catch {
     if (permission !== 'unsupported' && permission.state === 'denied') return 'permission-denied';
     if (permission === 'unsupported' && browserBlocksYard(consoleUrl)) return 'browser-cannot';

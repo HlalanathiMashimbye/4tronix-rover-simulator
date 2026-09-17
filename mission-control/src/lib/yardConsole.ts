@@ -76,3 +76,49 @@ export function writeConsoleUrl(raw: string | null | undefined): string {
   }
   return url ?? DEFAULT_CONSOLE_URL;
 }
+
+/**
+ * An address on the satellite's own API, such as `/api/status`, beside the
+ * console this browser is pointed at.
+ */
+export function yardApiUrl(path: string, consoleUrl: string = readConsoleUrl()): string {
+  const url = new URL(consoleUrl);
+  url.pathname = path;
+  url.search = '';
+  return url.toString();
+}
+
+export type LocalNetworkPermission = PermissionStatus | 'unsupported';
+
+/**
+ * This browser's local network access permission for the page.
+ *
+ * Chromium browsers (Chrome, Edge) ask before an https page may call a device
+ * on the local network, such as the satellite, and only then let the request
+ * through. Safari and Firefox have no such permission and simply block it.
+ * Chrome has used both names, so each is tried; an unknown name throws.
+ *
+ * Here rather than in one component because two things now call the yard from
+ * Mission Control, the send checks and the completion listener, and both must
+ * refuse to reach for it in a way that would pop a prompt nobody asked for.
+ */
+export async function localNetworkPermission(): Promise<LocalNetworkPermission> {
+  if (!navigator.permissions?.query) return 'unsupported';
+  for (const name of ['local-network', 'local-network-access']) {
+    try {
+      return await navigator.permissions.query({ name: name as PermissionName });
+    } catch {
+      // Not a permission this browser knows; try the next name.
+    }
+  }
+  return 'unsupported';
+}
+
+/**
+ * Whether the browser itself stops this page from calling the satellite: an
+ * https page may not fetch an http address unless a local network permission
+ * lets it, and a browser without that permission never will.
+ */
+export function browserBlocksYard(consoleUrl: string): boolean {
+  return window.location.protocol === 'https:' && new URL(consoleUrl).protocol === 'http:';
+}

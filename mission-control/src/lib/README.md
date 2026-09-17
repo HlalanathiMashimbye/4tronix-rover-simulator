@@ -45,7 +45,7 @@ missionDuration.ts    a human label for how long a run took
 roverCommandHelp.ts   help text per rover command, for editor hovers
 missionRuns.ts        which runs a learner can actually watch
 missionClipboard.ts   what every Copy button puts on the clipboard
-yardConsole.ts        where this operator's yard console lives
+yardConsole.ts        where this operator's yard console lives, and whether this browser may reach it
 appSurfaces.ts        which surface of the app a path belongs to
 ```
 
