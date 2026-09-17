@@ -59,6 +59,20 @@ export function useChallengeProgress() {
     [progress],
   );
 
+  const isChallengeStartedFn = useCallback(
+    (challengeId: ChallengeId) => progress.currentStepByChallenge?.[challengeId] !== undefined,
+    [progress],
+  );
+
+  const saveCurrentStep = useCallback(async (challengeId: ChallengeId, stepIndex: number) => {
+    const learnerId = getLearnerID();
+    await challengeProgressService().saveCurrentStep(learnerId, challengeId, stepIndex);
+    setProgress((prev) => ({
+      ...prev,
+      currentStepByChallenge: { ...prev.currentStepByChallenge, [challengeId]: stepIndex },
+    }));
+  }, []);
+
   /** Returns the level id that just unlocked, if this completion caused one to. */
   const completeChallenge = useCallback(async (challengeId: ChallengeId): Promise<ChallengeLevelId | null> => {
     const learnerId = getLearnerID();
@@ -89,7 +103,9 @@ export function useChallengeProgress() {
     loading,
     isLevelUnlocked: isLevelUnlockedFn,
     isChallengeComplete: isChallengeCompleteFn,
+    isChallengeStarted: isChallengeStartedFn,
     completeChallenge,
+    saveCurrentStep,
     completedCount: progress.completions.length,
     totalCount: totalChallengeCount(CHALLENGE_LEVELS),
   };

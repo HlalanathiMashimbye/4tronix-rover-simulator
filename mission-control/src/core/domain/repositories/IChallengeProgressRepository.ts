@@ -14,4 +14,7 @@ export interface IChallengeProgressRepository {
 
   /** Idempotent: completing an already-complete challenge again is a no-op. */
   markChallengeComplete(learnerId: string, challengeId: ChallengeId, completedAt: string): Promise<void>;
+
+  /** Persist which step the learner last reached in a challenge. */
+  saveCurrentStep(learnerId: string, challengeId: ChallengeId, stepIndex: number): Promise<void>;
 }

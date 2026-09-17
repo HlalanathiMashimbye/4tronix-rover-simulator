@@ -46,9 +46,10 @@ interface FinishResult {
 export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const router = useRouter();
   const { query, activeFilter } = useSearch();
-  const { completeChallenge } = useChallengeProgress();
+  const { progress, loading: progressLoading, completeChallenge, saveCurrentStep } = useChallengeProgress();
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [stepRestored, setStepRestored] = useState(false);
   const [loadMoreCalled, setLoadMoreCalled] = useState(false);
   // Undefined until MissionFeed reports it - see ChallengeCheckEvaluator's
   // feedHasMore doc: undefined must NOT be treated as "nothing more to
@@ -64,6 +65,22 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   useEffect(() => {
     setMilestones(readMilestones());
   }, []);
+
+  useEffect(() => {
+    if (progressLoading || stepRestored) return;
+    const savedStep = progress.currentStepByChallenge?.[challenge.id];
+    if (savedStep !== undefined && savedStep < challenge.steps.length) {
+      setStepIndex(savedStep);
+    } else {
+      saveCurrentStep(challenge.id, 0);
+    }
+    setStepRestored(true);
+  }, [progressLoading, stepRestored, challenge.id, challenge.steps.length, progress, saveCurrentStep]);
+
+  const advanceStep = (newIndex: number) => {
+    setStepIndex(newIndex);
+    saveCurrentStep(challenge.id, newIndex);
+  };
 
   const [generatedCode, setGeneratedCode] = useState('');
   const [blocklyState, setBlocklyState] = useState('');
@@ -142,8 +159,8 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         checks={step.checks}
         results={results}
         finishLabel={FINISH_LABEL[challenge.workspaceKind]}
-        onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
-        onNext={() => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1))}
+        onBack={() => advanceStep(Math.max(0, stepIndex - 1))}
+        onNext={() => advanceStep(Math.min(challenge.steps.length - 1, stepIndex + 1))}
         onFinish={handleFinish}
         finishing={finishing}
       />

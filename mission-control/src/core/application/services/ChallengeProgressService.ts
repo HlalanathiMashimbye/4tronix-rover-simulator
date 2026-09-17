@@ -61,4 +61,8 @@ export class ChallengeProgressService {
 
     return { progress: after, justUnlockedLevelId: justUnlocked?.id ?? null };
   }
+
+  async saveCurrentStep(learnerId: string, challengeId: ChallengeId, stepIndex: number): Promise<void> {
+    await this.repository.saveCurrentStep(learnerId, challengeId, stepIndex);
+  }
 }

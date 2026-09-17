@@ -15,7 +15,7 @@ import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
  * no state of its own beyond the loading flag the hook already exposes.
  */
 export function ChallengesHub() {
-  const { loading, isLevelUnlocked, isChallengeComplete, completedCount, totalCount } =
+  const { loading, isLevelUnlocked, isChallengeComplete, isChallengeStarted, completedCount, totalCount } =
     useChallengeProgress();
   const reduceMotion = useReducedMotion();
 
@@ -56,6 +56,7 @@ export function ChallengesHub() {
               level={level}
               unlocked={isLevelUnlocked(level.id)}
               isChallengeComplete={isChallengeComplete}
+              isChallengeStarted={isChallengeStarted}
             />
           </StaggeredEntrance>
         ))}
@@ -68,10 +69,12 @@ function LevelCard({
   level,
   unlocked,
   isChallengeComplete,
+  isChallengeStarted,
 }: {
   level: ChallengeLevel;
   unlocked: boolean;
   isChallengeComplete: (challengeId: (typeof level.challengeIds)[number]) => boolean;
+  isChallengeStarted: (challengeId: (typeof level.challengeIds)[number]) => boolean;
 }) {
   const challenges = level.challengeIds.map((id) => CHALLENGES[id]);
   const allComplete = challenges.every((c) => isChallengeComplete(c.id));
@@ -133,7 +136,7 @@ function LevelCard({
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-buzz" />
               ) : unlocked ? (
                 <span className="shrink-0 rounded-full bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground">
-                  Start
+                  {isChallengeStarted(challenge.id) ? 'Continue' : 'Start'}
                 </span>
               ) : (
                 <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
