@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Lightbulb,
+  PartyPopper,
+} from 'lucide-react';
 import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
 
 interface ChallengeInstructionsPanelProps {
@@ -61,17 +69,16 @@ const CODE_CONTAINS_LABELS: Record<string, string> = {
   'rover.setServo(0,': 'Point the mast',
 };
 
+const EXIT_MS = 200;
+
 /**
- * Top banner: the current step's title and instructions, a bulb icon for
- * hints/checks (mobile-friendly popover), and Back/Next buttons. Next is gated
- * on the step's own checks having passed - a learner cannot skip ahead of a
- * step they have not actually completed.
+ * Slim persistent bar with step navigation, plus a slide-down drawer for
+ * instructions, target checks and hints. The drawer overlays the workspace
+ * instead of eating its vertical space, so the simulator/editor stays
+ * full-height on both desktop and mobile.
  *
- * This banner used to carry CAPS/CSTA curriculum pills. They are gone because
- * nobody on the team can vouch for the mapping, and the readable half of it
- * (capsSubject) sat in a `title` tooltip, which does not exist on touch - so
- * the only part a learner ever saw was a code like "CSTA 2-AP-12". See
- * infrastructure/config/challenges.ts for the fuller reasoning.
+ * Plain CSS transitions, not Motion's AnimatePresence - see NotificationModal
+ * for the known bug with the exact React 19 / Next 16 / motion combination.
  */
 export function ChallengeInstructionsPanel({
   step,
@@ -89,114 +96,148 @@ export function ChallengeInstructionsPanel({
   onFinish,
   finishing,
 }: ChallengeInstructionsPanelProps) {
-  const [hintOpen, setHintOpen] = useState(false);
-  const hintRef = useRef<HTMLDivElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setDrawerOpen(false);
+  }, [stepIndex]);
+
+  useEffect(() => {
+    if (drawerOpen) {
+      setMounted(true);
+      const raf = requestAnimationFrame(() => setVisible(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setVisible(false);
+    const timer = setTimeout(() => setMounted(false), EXIT_MS);
+    return () => clearTimeout(timer);
+  }, [drawerOpen]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
     function handleClickOutside(event: MouseEvent) {
-      if (hintRef.current && !hintRef.current.contains(event.target as Node)) {
-        setHintOpen(false);
+      if (panelRef.current && !panelRef.current.contains(event.target as Node)) {
+        setDrawerOpen(false);
       }
     }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [drawerOpen]);
 
-    if (hintOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [hintOpen]);
   return (
-    <div className="panel flex flex-col gap-3 overflow-y-auto border border-border/60 bg-card/40 p-4 clay shrink-0">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-        <div className="flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
-            Step {stepIndex + 1} of {totalSteps}
-          </p>
-          <h2 className="font-display text-lg font-bold text-foreground">{step.title}</h2>
+    <div className="relative z-30 shrink-0" ref={panelRef}>
+      {/* Slim bar: step counter, title, toggle, navigation */}
+      <div className="panel flex items-center gap-2 border border-border/60 bg-card/40 px-3 py-2 clay">
+        <p className="shrink-0 text-xs font-bold uppercase tracking-[0.12em] text-primary">
+          {stepIndex + 1}/{totalSteps}
+        </p>
 
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{step.instructions}</p>
-        </div>
+        <span className="mx-0.5 h-4 w-px shrink-0 bg-border/60" />
 
-        <div className="flex gap-2 md:flex-col md:shrink-0">
-          <div className="relative" ref={hintRef}>
-            <button
-              onClick={() => setHintOpen(!hintOpen)}
-              className="clay-press flex items-center justify-center rounded-xl border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold text-foreground hover:bg-card/70 md:w-24"
-              title="View target checks and hints"
-            >
-              <Lightbulb className="h-4 w-4" />
-            </button>
-            {hintOpen && (
-              <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-border/60 bg-card p-4 shadow-lg">
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      Target checks
-                    </h3>
-                    <ul className="mt-2 space-y-2">
-                      {checks.map((check, index) => {
-                        const done = results[index] ?? false;
-                        return (
-                          <li key={index} className="flex items-start gap-2 text-sm">
-                            {done ? (
-                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
-                            ) : (
-                              <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                            )}
-                            <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
-                              {describeCheck(check)}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
+        <h2 className="min-w-0 flex-1 truncate font-display text-sm font-bold text-foreground">
+          {step.title}
+        </h2>
 
-                  {step.hints && step.hints.length > 0 && (
-                    <div className="border-t border-border/60 pt-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                        Hints
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {step.hints.map((hint, i) => (
-                          <li key={i}>• {hint}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+        <button
+          onClick={() => setDrawerOpen(!drawerOpen)}
+          className={`clay-press flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold transition-colors ${
+            drawerOpen
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : 'border-border/60 bg-card/50 text-foreground hover:bg-card/70'
+          }`}
+        >
+          <Lightbulb className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{drawerOpen ? 'Close' : 'Instructions'}</span>
+          <ChevronDown
+            className={`h-3 w-3 transition-transform duration-200 ${drawerOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
 
+        <div className="flex shrink-0 gap-1.5">
           <button
             onClick={onBack}
             disabled={!canGoBack}
-            className="clay-press flex items-center justify-center gap-1 rounded-xl border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-24"
+            className="clay-press flex items-center justify-center rounded-xl border border-border/60 bg-card/50 p-1.5 text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back
           </button>
           {isFinalStep ? (
             <button
               onClick={onFinish}
               disabled={!allStepChecksPass || finishing}
-              className="clay clay-press flex items-center justify-center gap-1 rounded-xl bg-gradient-mars px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-28"
+              className="clay clay-press flex items-center gap-1 rounded-xl bg-gradient-mars px-3 py-1.5 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <PartyPopper className="h-4 w-4" />
-              {finishing ? 'Finishing…' : finishLabel}
+              <PartyPopper className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">{finishing ? 'Finishing…' : finishLabel}</span>
             </button>
           ) : (
             <button
               onClick={onNext}
               disabled={!canGoNext}
-              className="clay clay-press flex items-center justify-center gap-1 rounded-xl bg-gradient-mars px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-24"
+              className="clay clay-press flex items-center justify-center rounded-xl bg-gradient-mars p-1.5 text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Next
               <ChevronRight className="h-4 w-4" />
             </button>
           )}
         </div>
       </div>
+
+      {/* Slide-down drawer */}
+      {mounted && (
+        <div
+          className={`absolute left-0 right-0 top-full z-20 mt-1 max-h-[min(35vh,240px)] overflow-y-auto rounded-xl border border-border/60 bg-card px-3 py-2.5 shadow-xl clay transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+            visible ? 'translate-y-0 opacity-100' : '-translate-y-2 opacity-0'
+          }`}
+        >
+          <div className="space-y-2">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">{step.title}</h3>
+              <p className="mt-0.5 whitespace-pre-line text-xs leading-relaxed text-muted-foreground">
+                {step.instructions}
+              </p>
+            </div>
+
+            <div className="border-t border-border/60 pt-2">
+              <h4 className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                Target checks
+              </h4>
+              <ul className="mt-1.5 space-y-1.5">
+                {checks.map((check, index) => {
+                  const done = results[index] ?? false;
+                  return (
+                    <li key={index} className="flex items-start gap-1.5 text-xs">
+                      {done ? (
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-buzz" />
+                      ) : (
+                        <Circle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
+                        {describeCheck(check)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+
+            {step.hints && step.hints.length > 0 && (
+              <div className="border-t border-border/60 pt-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  Hints
+                </p>
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {step.hints.map((hint, i) => (
+                    <li key={i}>• {hint}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

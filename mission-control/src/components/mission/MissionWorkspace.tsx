@@ -16,7 +16,9 @@ import { simulateCommands } from '@/lib/simulateCommands';
 import { resolveYardId } from '@/infrastructure/config/yard';
 import { consumeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
 import { ROVER_WORKSPACE_STORAGE_KEY } from '@/components/mission/BlocklyEditor';
+import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 import { Sparkles } from 'lucide-react';
+import type { ChallengeId } from '@/core/domain/entities/Challenge';
 
 interface TrajectoryPoint {
   x: number;
@@ -44,6 +46,7 @@ const SPLIT_DEFAULT = 60;
 
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
+  const { isChallengeComplete } = useChallengeProgress();
   const searchParams = useSearchParams();
   const initialMode = (searchParams.get('mode') as EditorMode) || 'manual';
   const initialCode = searchParams.get('code') ?? '';
@@ -329,7 +332,7 @@ export function MissionWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-      {importedFromChallenge && (
+      {importedFromChallenge && !isChallengeComplete(importedFromChallenge.id as ChallengeId) && (
         <div className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
           <Sparkles className="h-4 w-4 shrink-0" />
           Imported from Challenge: {importedFromChallenge.title}

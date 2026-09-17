@@ -57,6 +57,13 @@ class MockChallengeProgressRepository implements IChallengeProgressRepository {
       completions: [...this.progress.completions, { challengeId, completedAt }],
     };
   }
+
+  async saveCurrentStep(_learnerId: string, challengeId: ChallengeId, stepIndex: number): Promise<void> {
+    this.progress = {
+      ...this.progress,
+      currentStepByChallenge: { ...this.progress.currentStepByChallenge, [challengeId]: stepIndex },
+    };
+  }
 }
 
 describe('ChallengeProgressService', () => {

@@ -47,4 +47,13 @@ export class FirestoreChallengeProgressRepository implements IChallengeProgressR
     // easily as an update to one LearnerContext already created.
     await setDoc(doc(this.db, 'learners', learnerId), { progress: next }, { merge: true });
   }
+
+  async saveCurrentStep(learnerId: string, challengeId: ChallengeId, stepIndex: number): Promise<void> {
+    const current = await this.getProgress(learnerId);
+    const next: ChallengeProgress = {
+      ...current,
+      currentStepByChallenge: { ...current.currentStepByChallenge, [challengeId]: stepIndex },
+    };
+    await setDoc(doc(this.db, 'learners', learnerId), { progress: next }, { merge: true });
+  }
 }
