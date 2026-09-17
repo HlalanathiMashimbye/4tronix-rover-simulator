@@ -50,7 +50,11 @@ export function MissionRuns({
   const [url, setUrl] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
-  const automated = isHandledAutomatically('complete', mode);
+  // In auto, completion and linking videos normally happen by themselves. The
+  // run controls still show: a wrong link, a run logged twice, or a video the
+  // linker never found are exceptions, and hiding the controls left an
+  // operator with no way to fix any of them.
+  const automated = isHandledAutomatically('attach-video', mode);
   const mine = runs.filter((r) => r.yardId === yardId);
 
   async function send(
@@ -102,8 +106,7 @@ export function MissionRuns({
         <button
           type="button"
           onClick={() => send('another-run', 'another-run', {}, 'Logged another run.')}
-          disabled={pending !== null || automated}
-          title={automated ? automatedReason('complete') : undefined}
+          disabled={pending !== null}
           className="inline-flex items-center gap-1 rounded-lg border border-border/60 px-2 py-1 text-[11px] font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {pending === 'another-run' ? (
@@ -153,7 +156,7 @@ export function MissionRuns({
                   <span className="text-[11px] text-muted-foreground">no video</span>
                 )}
 
-                {ours && !automated && (
+                {ours && (
                   <span className="ml-auto flex items-center gap-1">
                     <button
                       type="button"
@@ -161,6 +164,7 @@ export function MissionRuns({
                         setEditing(editing === run.runId ? null : run.runId);
                         setUrl(run.youtubeUrl ?? '');
                       }}
+                      title={automated && !run.youtubeUrl ? automatedReason('attach-video') : undefined}
                       className="rounded px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
                     >
                       {run.youtubeUrl ? 'Replace' : 'Add video'}
