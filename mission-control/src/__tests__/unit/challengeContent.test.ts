@@ -25,6 +25,7 @@ import {
   type ChallengeEvalContext,
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { parseRoverCode } from '@/lib/parseRoverCode';
+import { workspaceToPython } from '@/lib/roverBlockly';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { simulateCommands } from '@/lib/simulateCommands';
@@ -104,9 +105,15 @@ describe('Level 1 covers the platform, not just the feed', () => {
     expect(level1.challengeIds.length).toBeGreaterThan(1);
   });
 
-  it('asks the learner to send a mission before Level 2 unlocks', () => {
-    const checks = level1.challengeIds.flatMap((id) => CHALLENGES[id].steps).flatMap((s) => s.checks);
-    expect(checks.some((c) => c.kind === 'mission-created')).toBe(true);
+  it('ends with the learner driving the rover, not with a form', () => {
+    /**
+     * Level 1 used to end with Create Your First Mission: open Create Mission,
+     * then send a mission, which opens it anyway. Basic Rover Movement replaces
+     * it, and ends by carrying the learner's own blocks into Create Mission.
+     */
+    const last = CHALLENGES[level1.challengeIds[level1.challengeIds.length - 1]];
+    expect(last.id).toBe('basic-movement');
+    expect(last.workspaceKind).toBe('blockly-sim');
   });
 
   it('every page a challenge names actually exists', () => {
@@ -130,6 +137,118 @@ describe('Level 1 covers the platform, not just the feed', () => {
       expect({ path: check, exists: existsSync(join(appDir, segment)) })
         .toEqual({ path: check, exists: true });
     }
+  });
+});
+
+describe('the track adds one idea at a time', () => {
+  it('runs movement, then loops, then a square in blocks, then the square in Python', () => {
+    const order = [...CHALLENGE_LEVELS]
+      .sort((a, b) => a.id - b.id)
+      .flatMap((level) => level.challengeIds)
+      .filter((id) => CHALLENGES[id].workspaceKind !== 'embedded-platform');
+
+    expect(order).toEqual(['basic-movement', 'loop-structures', 'draw-a-square-blocks', 'draw-a-square']);
+    expect(CHALLENGES['draw-a-square-blocks'].workspaceKind).toBe('blockly-sim');
+  });
+});
+
+/**
+ * Blocks built the way a learner builds them, run through the real generator.
+ * Mock blocks rather than a Blockly workspace, as roverBlockly.test.ts does:
+ * workspaceToPython only walks fields, inputs and next links.
+ */
+type Fields = Record<string, string | number>;
+interface MockBlock {
+  type: string;
+  _next: MockBlock | null;
+  getFieldValue(name: string): string | number | undefined;
+  getInputTargetBlock(name: string): MockBlock | null;
+  getNextBlock(): MockBlock | null;
+}
+
+function block(type: string, fields: Fields = {}, inputs: Record<string, MockBlock> = {}): MockBlock {
+  const b: MockBlock = {
+    type,
+    _next: null,
+    getFieldValue: (n) => fields[n],
+    getInputTargetBlock: (n) => inputs[n] ?? null,
+    getNextBlock: () => b._next,
+  };
+  return b;
+}
+
+function chain(...blocks: MockBlock[]): MockBlock {
+  for (let i = 0; i < blocks.length - 1; i++) blocks[i]._next = blocks[i + 1];
+  return blocks[0];
+}
+
+/** The Python a canvas holding these blocks under the uplink hat generates. */
+function pythonFor(body: MockBlock): string {
+  const hat = block('rover_on_receive', {}, { DO: body });
+  return workspaceToPython({ getTopBlocks: () => [hat] });
+}
+
+function stepOf(id: ChallengeId, stepId: string) {
+  const step = CHALLENGES[id].steps.find((s) => s.id === stepId);
+  if (!step) throw new Error(`${id} has no step ${stepId}`);
+  return step;
+}
+
+describe('the Level 2 loop is about repeating, and only repeating', () => {
+  const inside = stepOf('loop-structures', 'drive-inside-loop');
+
+  it('passes with one Move Forward inside a Repeat block', () => {
+    const code = pythonFor(block('rover_repeat', { TIMES: 3 }, { DO: block('rover_forward', { TIME: 5 }) }));
+    expect(stepChecksPass(inside.checks, contextFor(code))).toBe(true);
+  });
+
+  it('does not pass for the same blocks stacked by hand', () => {
+    const code = pythonFor(
+      chain(block('rover_forward', { TIME: 5 }), block('rover_forward', { TIME: 5 }), block('rover_forward', { TIME: 5 })),
+    );
+    expect(stepChecksPass(inside.checks, contextFor(code))).toBe(false);
+  });
+});
+
+describe('the Level 2 square is built from blocks and actually closes', () => {
+  const square = pythonFor(
+    block(
+      'rover_repeat',
+      { TIMES: 4 },
+      { DO: chain(block('rover_forward', { TIME: 5 }), block('rover_spin_right', { DEGREES: 90 })) },
+    ),
+  );
+
+  it.each(
+    CHALLENGES['draw-a-square-blocks'].steps
+      .filter((step) => step.checks.length > 0)
+      .map((step) => [step.id, step] as const),
+  )('step %s passes for the square its instructions describe', (_id, step) => {
+    expect(stepChecksPass(step.checks, contextFor(square))).toBe(true);
+  });
+
+  it('drives back to roughly where it started', () => {
+    const points = simulateCommands(parseRoverCode(square));
+    const start = points[0];
+    const end = points[points.length - 1];
+
+    expect(Math.abs(end.heading - start.heading)).toBeGreaterThan(330);
+    expect(Math.abs(end.heading - start.heading)).toBeLessThan(390);
+
+    const drift = Math.hypot(end.x - start.x, end.y - start.y);
+    const sideLength = Math.max(...points.map((p) => Math.hypot(p.x - start.x, p.y - start.y)));
+    expect(drift).toBeLessThan(sideLength * 0.5);
+  });
+
+  it('does not pass for three sides', () => {
+    const threeSides = pythonFor(
+      block(
+        'rover_repeat',
+        { TIMES: 3 },
+        { DO: chain(block('rover_forward', { TIME: 5 }), block('rover_spin_right', { DEGREES: 90 })) },
+      ),
+    );
+    expect(stepChecksPass(stepOf('draw-a-square-blocks', 'side-and-corner').checks, contextFor(threeSides))).toBe(false);
   });
 });
 

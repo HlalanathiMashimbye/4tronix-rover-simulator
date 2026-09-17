@@ -15,10 +15,15 @@
 const CHALLENGE_POINTS: Record<string, number> = {
   'platform-orientation': 50,
   'explore-the-platform': 75,
-  'first-mission': 100,
   'basic-movement': 150,
   'loop-structures': 200,
+  'draw-a-square-blocks': 225,
   'draw-a-square': 250,
+  // Retired: Create Your First Mission was removed from the track, because
+  // Basic Rover Movement already ends by sending a mission. Learners who
+  // completed it keep its points, so their leaderboard total does not drop to
+  // the default the next time they finish something.
+  'first-mission': 100,
 };
 
 const DEFAULT_CHALLENGE_POINTS = 50;

@@ -13,9 +13,9 @@ export type ChallengeLevelId = 1 | 2 | 3;
 export type ChallengeId =
   | 'platform-orientation'
   | 'explore-the-platform'
-  | 'first-mission'
   | 'basic-movement'
   | 'loop-structures'
+  | 'draw-a-square-blocks'
   | 'draw-a-square';
 
 /**
@@ -76,7 +76,7 @@ export interface ChallengeStep {
 }
 
 /**
- * 'blockly-sim': the Blockly visual canvas + rover simulator (Level 2).
+ * 'blockly-sim': the Blockly visual canvas + rover simulator (Levels 1 and 2).
  * 'monaco-sim': the Monaco Python text editor + rover simulator (Level 3) -
  * the same shapes Level 2 builds from blocks, written out by hand, so a
  * learner crosses from blocks to text on a task whose outcome they already

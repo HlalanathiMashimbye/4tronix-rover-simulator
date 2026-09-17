@@ -38,27 +38,38 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 1,
     title: 'Getting Started',
-    description: 'Find your way around, see what else is here, and send your first mission.',
+    description: 'Find your way around, see what else is here, and drive your first mission with blocks.',
     // Three small challenges rather than one. A learner who finishes the feed
     // tour has not seen History, the leaderboard, or Create Mission - the
     // level used to declare the platform learnt on the strength of a search
     // box - and a single long challenge pays out once, at the end, which is
     // where people give up.
-    challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission'],
+    //
+    // The third is Basic Rover Movement, not a separate "send your first
+    // mission" challenge. That one had two steps, open Create Mission and send
+    // a mission, and sending already opens it; Basic Rover Movement ends by
+    // carrying the learner's own blocks into Create Mission to send, so a
+    // learner's first mission is one they built rather than an empty form.
+    challengeIds: ['platform-orientation', 'explore-the-platform', 'basic-movement'],
   },
   {
     id: 2,
-    title: 'Blockly Rover Commands',
+    title: 'Loops and Shapes',
     // Jezero is explained here, once, rather than repeated into each challenge
     // summary below - the level is the smallest place that covers both of them.
+    //
+    // Loops first, on their own, then a square that needs one. Each challenge
+    // adds exactly one idea to the last: movement (Level 1), repeating it
+    // (loops), combining a move and a turn inside the repeat (square), then the
+    // same square typed as Python (Level 3).
     description:
-      "Build rover missions out of blocks at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
-    challengeIds: ['basic-movement', 'loop-structures'],
+      "Make your blocks repeat, then use a loop to drive a square at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
+    challengeIds: ['loop-structures', 'draw-a-square-blocks'],
   },
   {
     id: 3,
     title: 'Python Rover Commands',
-    description: 'Leave the blocks behind and type the same missions out as real Python.',
+    description: 'Leave the blocks behind and type the same square out as real Python.',
     challengeIds: ['draw-a-square'],
   },
 ];
@@ -141,43 +152,11 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
-  'first-mission': {
-    id: 'first-mission',
-    levelId: 1,
-    title: 'Create Your First Mission',
-    summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
-    workspaceKind: 'embedded-platform',
-    scorePoints: 100,
-    steps: [
-      {
-        id: 'open-create-mission',
-        title: 'Open Create Mission',
-        instructions:
-          'Open Create Mission from the navigation bar. Your mission already has a name - something like "Jolly Crater Rover" - picked for you from a fixed list of words. You cannot type your own, and there is a button to roll a different one if you do not like it. Have a look, then come back.',
-        hints: [
-          'Names come from a word list rather than a text box so that nothing a stranger typed can appear on a page other children read.',
-        ],
-        checks: [{ kind: 'route-visited', path: '/mission' }],
-      },
-      {
-        id: 'send-a-mission',
-        title: 'Send it to the queue',
-        instructions:
-          'Now write a short mission - a couple of movement blocks is plenty - press Run to watch it in the simulator, then send it to the queue. Your work stays in the editor if you wander off and come back, so you cannot lose it by accident. After you send it you will be asked for an email address: that is optional, and it is how you get told when a real rover has run your code and the video is ready.',
-        hints: [
-          'The send button only wakes up once you have simulated the code you are about to send.',
-          'No email means no notification, not a rejected mission - you would just check History yourself.',
-        ],
-        checks: [{ kind: 'mission-created' }],
-      },
-    ],
-  },
-
   'basic-movement': {
     id: 'basic-movement',
-    levelId: 2,
+    levelId: 1,
     title: 'Basic Rover Movement',
-    summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
+    summary: 'Move forward and turn using blocks, then send your first mission to a real rover.',
     workspaceKind: 'blockly-sim',
     scorePoints: 150,
     steps: [
@@ -186,7 +165,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         title: 'Drive forward',
         instructions:
           'From the Movement category, drag a "Move Forward" block onto the canvas and snap it under the uplink block. Press Run to simulate it.',
-        hints: ['The uplink block ("When mission received") is already on the canvas - blocks snap underneath it, not beside it.'],
+        hints: ['The uplink block ("On uplink") is already on the canvas - blocks snap underneath it, not beside it.'],
         checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
       },
       {
@@ -194,6 +173,51 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         title: 'Add a turn',
         instructions: 'Snap a "Spin Right" block on underneath, then press Run again.',
         checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
+      },
+      {
+        // What Create Your First Mission used to explain now sits where the
+        // learner actually sends: the picked-for-you name and the optional
+        // email are both on the page this step carries them to.
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions:
+          'Happy with your mission? Press "Finish & Export" to carry it into Create Mission, then send it to the queue. Your mission already has a name picked for you from a word list, and you can roll a different one. After you send it you will be asked for an email address: that is optional, and it is how you get told when a real rover has run your code and the video is ready.',
+        hints: [
+          'Names come from a word list rather than a text box so that nothing a stranger typed can appear on a page other children read.',
+          'No email means no notification, not a rejected mission - you would just check History yourself.',
+        ],
+        checks: [],
+      },
+    ],
+  },
+
+  'loop-structures': {
+    id: 'loop-structures',
+    levelId: 2,
+    title: 'Loop Structures & Repeat Logic',
+    summary: 'Drive further with one Repeat block instead of stacking the same block by hand.',
+    workspaceKind: 'blockly-sim',
+    scorePoints: 200,
+    steps: [
+      {
+        id: 'add-repeat',
+        title: 'Use a Repeat block',
+        instructions:
+          'From the Control category, drag a "Repeat" block onto the canvas, snap it under the uplink block, and set it to repeat 3 times.',
+        checks: [{ kind: 'code-contains', pattern: 'for _ in range(' }],
+      },
+      {
+        // Only a move inside the loop. The turn comes in the next challenge,
+        // so this one is about repeating and nothing else.
+        id: 'drive-inside-loop',
+        title: 'Drive inside the loop',
+        instructions:
+          'Place one "Move Forward" block INSIDE the Repeat block, then press Run. The rover drives three times as far, from one block.',
+        hints: ['Drop the block into the notch inside the Repeat block, not underneath it.'],
+        checks: [
+          { kind: 'code-contains', pattern: 'for _ in range(' },
+          { kind: 'trajectory-outcome', outcome: 'moved-forward' },
+        ],
       },
       {
         id: 'export',
@@ -204,28 +228,39 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
-  'loop-structures': {
-    id: 'loop-structures',
+  /**
+   * The square, in blocks, before Level 3 asks for it in Python. Blocks turn
+   * in degrees, so the corner is simply 90 here; the Python version has no
+   * degrees command and makes the learner tune a sleep instead. Building the
+   * shape where the corner is easy is what makes that later step about the
+   * typing rather than the geometry.
+   */
+  'draw-a-square-blocks': {
+    id: 'draw-a-square-blocks',
     levelId: 2,
-    title: 'Loop Structures & Repeat Logic',
-    summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
+    title: 'Draw a Square with Blocks',
+    summary: 'Put a move and a turn inside a Repeat block to drive a square.',
     workspaceKind: 'blockly-sim',
-    scorePoints: 200,
+    scorePoints: 225,
     steps: [
       {
-        id: 'add-repeat',
-        title: 'Use a Repeat block',
+        id: 'repeat-four',
+        title: 'Four sides',
         instructions:
-          'From the Control category, drag a "Repeat" block onto the canvas and set it to repeat 4 times.',
-        checks: [{ kind: 'code-contains', pattern: 'for _ in range(' }],
+          'A square has four sides. Snap a "Repeat" block under the uplink block and set it to repeat 4 times.',
+        checks: [{ kind: 'code-contains', pattern: 'for _ in range(4)' }],
       },
       {
-        id: 'drive-inside-loop',
-        title: 'Drive inside the loop',
+        id: 'side-and-corner',
+        title: 'One side and one corner',
         instructions:
-          'Place a "Move Forward" block and a "Spin Right" block INSIDE the repeat block, then press Run - the rover should trace a shape instead of a straight line.',
-        hints: ['Drop the driving blocks into the notch inside the Repeat block, not underneath it.'],
+          'Inside the Repeat block, put a "Move Forward" block and then a "Spin Right" block set to 90 degrees. Press Run - the rover should drive a square and end up back where it started.',
+        hints: [
+          'Both blocks go inside the Repeat block, one under the other.',
+          'If the shape does not close, check the Spin Right block says 90.',
+        ],
         checks: [
+          { kind: 'code-contains', pattern: 'for _ in range(4)' },
           { kind: 'trajectory-outcome', outcome: 'moved-forward' },
           { kind: 'trajectory-outcome', outcome: 'spun-right' },
         ],
@@ -233,7 +268,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
       {
         id: 'export',
         title: 'Send it to a real rover',
-        instructions: 'Happy with your mission? Press "Finish & Export" to carry it into Create Mission.',
+        instructions: 'Happy with your square? Press "Finish & Export" to carry it into Create Mission.',
         checks: [],
       },
     ],
