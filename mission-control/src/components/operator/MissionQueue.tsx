@@ -158,6 +158,19 @@ function YardQueue({
   const [consoleUrl, setConsoleUrl] = useState<string>('');
   const [editingConsole, setEditingConsole] = useState(false);
   useEffect(() => setConsoleUrl(readConsoleUrl()), []);
+  // Coming back from the yard console. Send to Rover hands the console
+  // `/operator?mission=<id>` as the way back, so the mission the operator sent
+  // is open again rather than the queue with nothing selected. The parameter
+  // is dropped once read, so choosing another mission and refreshing does not
+  // reopen this one.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const returning = url.searchParams.get('mission');
+    if (!returning) return;
+    setSelectedId(returning);
+    url.searchParams.delete('mission');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }, []);
   const [done, setDone] = useState<QueueMission[] | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 

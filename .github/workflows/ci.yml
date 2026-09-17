@@ -125,7 +125,8 @@ jobs:
         working-directory: yard/satellite
         run: python -m pytest tests -q
 
-  # The two browser-driven files (test_blockly_codegen, test_status_page) are
+  # The browser-driven files (test_blockly_codegen, test_status_page,
+  # test_mission_control_return) are
   # skipped by tests/conftest.py whenever playwright is absent, and
   # requirements-test.txt deliberately leaves it out so a plain `pytest tests`
   # works anywhere. The consequence was that they ran on nobody's machine
@@ -171,4 +172,4 @@ jobs:
 
       - name: Run browser tests
         working-directory: yard/satellite
-        run: python -m pytest tests/test_blockly_codegen.py tests/test_status_page.py -q
+        run: python -m pytest tests/test_blockly_codegen.py tests/test_status_page.py tests/test_mission_control_return.py -q

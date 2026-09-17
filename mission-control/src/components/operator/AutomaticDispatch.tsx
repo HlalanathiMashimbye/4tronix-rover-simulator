@@ -324,6 +324,10 @@ export function AutomaticDispatch({
         missionId: mission.id,
         missionName: mission.name || '',
         code: mission.code,
+        // Where the console's "Mission Control" link returns to: this mission,
+        // open, rather than Mission Control's home page, which is the learner
+        // feed. The console only follows it back to this origin.
+        returnTo: `${window.location.origin}/operator?mission=${encodeURIComponent(mission.id)}`,
       }).toString();
       window.setTimeout(() => navigate(target.toString()), 1500);
     } catch (caught) {

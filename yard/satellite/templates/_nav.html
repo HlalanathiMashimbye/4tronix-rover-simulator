@@ -20,11 +20,15 @@
      dispatch there, run and film here - and the return trip used to mean
      typing a URL on a tablet. A plain anchor, not window.history.back():
      the operator usually arrived by handoff URL or bookmark, so "back" in
-     history terms is rarely Mission Control at all. #}
-  <a class="mc-back" href="{{ mission_control_url }}" title="Back to Mission Control">
+     history terms is rarely Mission Control at all.
+     It goes to the operator console, not Mission Control's home page, which
+     is the learner feed; mc-return.js narrows it to the mission the operator
+     sent, when Mission Control said which. #}
+  <a class="mc-back" href="{{ mission_control_back_url }}" data-mission-control="{{ mission_control_url }}" title="Back to Mission Control">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
     <span>Mission Control</span>
   </a>
+  <script src="/static/mc-return.js"></script>
   <a class="brand" href="/">
     <span class="brand-mark"></span>
     <span class="brand-txt"><b>Mars Yard</b><small>Satellite Console</small></span>
