@@ -320,3 +320,30 @@ describe('whether uploads are being checked', () => {
     }
   });
 });
+
+describe('coming back from the yard console', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('opens the mission the operator sent', async () => {
+    window.history.replaceState(null, '', '/operator?mission=m1');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const row = await screen.findByRole('button', { name: /rock lover/i });
+    await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'));
+    // Dropped once read, so a refresh after choosing another mission does not
+    // reopen this one.
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens nothing when it did not come back from the yard', async () => {
+    window.history.replaceState(null, '', '/operator');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const row = await screen.findByRole('button', { name: /rock lover/i });
+    expect(row).not.toHaveAttribute('aria-current', 'true');
+  });
+});

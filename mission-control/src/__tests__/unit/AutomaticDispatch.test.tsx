@@ -108,6 +108,8 @@ describe('Automatic Route dispatch', () => {
     expect(target.searchParams.get('yardId')).toBe('curiosity');
     expect(target.searchParams.get('missionId')).toBe('m1');
     expect(target.searchParams.get('code')).toBe(mission.code);
+    // The console's back link returns to this mission, open, on this origin.
+    expect(target.searchParams.get('returnTo')).toBe(`${window.location.origin}/operator?mission=m1`);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://curiosity.local:3001/api/status',
       expect.objectContaining({ cache: 'no-store' }),

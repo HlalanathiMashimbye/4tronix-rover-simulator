@@ -150,6 +150,7 @@ try:  # pragma: no cover - trivial import probe
 except ImportError:
     collect_ignore.append('test_blockly_codegen.py')
     collect_ignore.append('test_status_page.py')
+    collect_ignore.append('test_mission_control_return.py')
 
 # requirements-test.txt deliberately excludes opencv-python/numpy to keep CI
 # light (recording_control.py imports them lazily for exactly this reason);

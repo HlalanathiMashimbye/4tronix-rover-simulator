@@ -145,7 +145,12 @@ def _console_chrome():
     A per-route render_template argument would have to be repeated in five
     places and forgotten in the sixth.
     """
-    return {'mission_control_url': MISSION_CONTROL_URL}
+    return {
+        'mission_control_url': MISSION_CONTROL_URL,
+        # The operator console, not the hub's home page: that is the learner
+        # feed, and an operator pressing "back" was never there.
+        'mission_control_back_url': MISSION_CONTROL_URL.rstrip('/') + '/operator',
+    }
 
 
 @app.route('/')

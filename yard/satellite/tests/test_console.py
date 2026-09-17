@@ -450,3 +450,14 @@ def test_tunables_still_refuse_a_setting_they_do_not_know(client, missions):
     assert resp.status_code == 400
 
 
+
+
+def test_the_way_back_goes_to_the_operator_console_not_the_learner_feed(client):
+    """Mission Control's home page is the learner feed. An operator who sent a
+    mission from the console and pressed back landed there, somewhere they had
+    never been."""
+    page = client.get('/run/').get_data(as_text=True)
+    back = page.split('class="mc-back"', 1)[1].split('>', 1)[0]
+    assert 'href="https://marsyard.labs.ws/operator"' in back
+    assert 'data-mission-control="https://marsyard.labs.ws"' in back
+    assert '/static/mc-return.js' in page
