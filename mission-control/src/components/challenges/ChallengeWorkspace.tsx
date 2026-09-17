@@ -148,7 +148,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         finishing={finishing}
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
+      <div className="relative isolate flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
         <div className="min-h-0 flex-1">
           <ChallengeCenterPanel
             challenge={challenge}
