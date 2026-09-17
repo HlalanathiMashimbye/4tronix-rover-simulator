@@ -509,14 +509,10 @@ function YardQueue({
         )}
 
         {/* Outside the branch above, so editing the console address does not
-            make the other door disappear. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* Beside the door it is about, where the toolbar is wide enough. */}
-          {youtubeLink && (
-            <div className="hidden 2xl:block">
-              <YouTubeLinkStatus status={youtubeLink} />
-            </div>
-          )}
+            make the other door disappear. The upload checker's status hangs
+            directly under the button it is about, no wider than it: one glance
+            answers "will my upload be picked up" without a row of its own. */}
+        <div className="ml-auto flex shrink-0 flex-col items-end gap-0.5" data-testid="youtube-studio-door">
           <a
             href={YOUTUBE_STUDIO_URL}
             target="_blank"
@@ -527,17 +523,8 @@ function YardQueue({
             <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
             YouTube Studio
           </a>
+          <YouTubeLinkStatus status={youtubeLink} className="self-center" />
         </div>
-
-        {/* Below 2xl the toolbar has no room for it on the same line, and
-            hiding it there hid it on every laptop. A short row of its own, under
-            the button it is about, costs one line of small text: less than a
-            status nobody can see. */}
-        {youtubeLink && (
-          <div className="flex basis-full justify-end 2xl:hidden" data-testid="youtube-link-status-row">
-            <YouTubeLinkStatus status={youtubeLink} />
-          </div>
-        )}
       </div>
 
       {/* The laptop's heading. On a phone the tab bar already names the view

@@ -27,30 +27,33 @@ export function YouTubeLinkStatus({
 }) {
   if (!status) return null;
 
+  // Short, because it sits under the YouTube Studio button and is no wider
+  // than it. The last check is one hover away rather than on the line.
   if (status.state === 'on-schedule') {
     return (
-      <span className={`text-[11px] text-muted-foreground ${className}`}>
-        Uploads checked {clockTime(status.lastCheckedAt)} · next {clockTime(status.nextCheckAt)}
+      <span
+        title={`Uploads last checked ${clockTime(status.lastCheckedAt)}`}
+        className={`text-[10px] leading-tight text-muted-foreground ${className}`}
+      >
+        Next check {clockTime(status.nextCheckAt)}
+        <span className="sr-only">. Uploads last checked {clockTime(status.lastCheckedAt)}</span>
       </span>
     );
   }
 
-  const text =
-    status.state === 'never'
-      ? 'Uploads not checked yet'
-      : `Uploads last checked ${clockTime(status.lastCheckedAt)}`;
+  const text = status.state === 'never' ? 'Not checked yet' : `Check missed ${clockTime(status.expectedAt)}`;
   const detail =
     status.state === 'never'
       ? `YouTube has never been read for new uploads. ${WHERE_TO_LOOK}`
-      : `A check was due at ${clockTime(status.expectedAt)} and has not happened. ${WHERE_TO_LOOK}`;
+      : `Uploads were last checked at ${clockTime(status.lastCheckedAt)}, and the check due at ${clockTime(status.expectedAt)} has not happened. ${WHERE_TO_LOOK}`;
 
   return (
     <span
       role="status"
       title={detail}
-      className={`inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 ${className}`}
+      className={`inline-flex items-center gap-1 text-[10px] font-semibold leading-tight text-amber-700 dark:text-amber-400 ${className}`}
     >
-      <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden="true" />
       {text}
       <span className="sr-only">. {detail}</span>
     </span>
