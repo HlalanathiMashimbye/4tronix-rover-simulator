@@ -13,6 +13,8 @@ import {
 
 import { MissionDetail } from '@/components/operator/MissionDetail';
 import { useRoverReportedCompletions } from '@/hooks/useRoverReportedCompletions';
+import { useYouTubeLinkStatus } from '@/hooks/useYouTubeLinkStatus';
+import { YouTubeLinkStatus } from '@/components/operator/YouTubeLinkStatus';
 import { OperatorTabBar } from '@/components/operator/OperatorTabBar';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
@@ -349,6 +351,8 @@ function YardQueue({
     return unsubscribe;
   }, [yardId]);
 
+  const youtubeLink = useYouTubeLinkStatus();
+
   // The rover says when a run finished; the open console records it.
   useRoverReportedCompletions({
     yardId,
@@ -506,16 +510,21 @@ function YardQueue({
 
         {/* Outside the branch above, so editing the console address does not
             make the other door disappear. */}
-        <a
-          href={YOUTUBE_STUDIO_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ backgroundColor: YOUTUBE_RED }}
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
-        >
-          <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-          YouTube Studio
-        </a>
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* Beside the door it is about. Grey when uploads are being checked,
+              amber when they are not, which is when it has to be seen. */}
+          <YouTubeLinkStatus status={youtubeLink} className={youtubeLink?.state === 'on-schedule' ? 'hidden 2xl:inline' : ''} />
+          <a
+            href={YOUTUBE_STUDIO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ backgroundColor: YOUTUBE_RED }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            YouTube Studio
+          </a>
+        </div>
       </div>
 
       {/* The laptop's heading. On a phone the tab bar already names the view

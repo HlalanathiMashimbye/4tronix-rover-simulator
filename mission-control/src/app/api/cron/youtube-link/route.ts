@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
   // Recorded once the channel has actually been read, so a YouTube outage
   // does not consume the interval and leave the next real check waiting.
-  await recordChecked();
+  await recordChecked(new Date(), interval);
 
   const claims = claimedMissions(videos);
   if (claims.length === 0) {
