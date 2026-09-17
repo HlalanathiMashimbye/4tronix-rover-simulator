@@ -33,19 +33,21 @@ afterEach(() => {
 });
 
 describe('the status line', () => {
-  it('is quiet grey text naming the last and next check when uploads are being checked', () => {
+  it('is short grey text naming the next check, with the last one a hover away', () => {
     const last = new Date('2026-09-17T13:00:10Z');
     const next = new Date('2026-09-17T13:15:00Z');
     render(<YouTubeLinkStatus status={{ state: 'on-schedule', lastCheckedAt: last, nextCheckAt: next }} />);
 
-    expect(screen.getByText(`Uploads checked ${clockTime(last)} · next ${clockTime(next)}`)).toBeInTheDocument();
+    const line = screen.getByText(`Next check ${clockTime(next)}`);
+    expect(line).toHaveAttribute('title', `Uploads last checked ${clockTime(last)}`);
+    expect(line).toHaveTextContent(`Uploads last checked ${clockTime(last)}`);
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('warns, and says where to look, when the channel has never been read', () => {
     render(<YouTubeLinkStatus status={{ state: 'never' }} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Uploads not checked yet');
+    expect(screen.getByRole('status')).toHaveTextContent('Not checked yet');
     expect(screen.getByRole('status')).toHaveTextContent(/API key and channel in Settings/);
   });
 
@@ -54,8 +56,8 @@ describe('the status line', () => {
     const expected = new Date('2026-09-17T13:15:00Z');
     render(<YouTubeLinkStatus status={{ state: 'overdue', lastCheckedAt: last, expectedAt: expected }} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent(`Uploads last checked ${clockTime(last)}`);
-    expect(screen.getByRole('status')).toHaveTextContent(`due at ${clockTime(expected)}`);
+    expect(screen.getByRole('status')).toHaveTextContent(`Check missed ${clockTime(expected)}`);
+    expect(screen.getByRole('status')).toHaveTextContent(`last checked at ${clockTime(last)}`);
   });
 });
 

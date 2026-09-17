@@ -14,7 +14,7 @@
  * it: this is the path that still works when the venue's internet does not.
  */
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 
 const subscribeToYardQueue = jest.fn();
 
@@ -285,5 +285,38 @@ describe('the operator console gives the mission pane its height', () => {
     const grid = container.querySelector('[class*="lg:grid-cols-"]')!;
     expect(grid.className).toContain('0.85fr');
     expect(grid.className).toContain('1.15fr');
+  });
+});
+
+describe('whether uploads are being checked', () => {
+  it('sits directly under the YouTube Studio button, at every width', async () => {
+    /**
+     * It was `hidden 2xl:inline`, which hid it on every laptop, and then a row
+     * of its own across the toolbar, which read as bolted on. It belongs to
+     * the button, so it hangs under it.
+     */
+    const { forgetSharedReading } = jest.requireActual('@/hooks/useYouTubeLinkStatus');
+    forgetSharedReading();
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, lastCheckedAt: new Date().toISOString(), intervalMinutes: 15 }),
+    }) as unknown as typeof fetch;
+
+    try {
+      render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+      const door = await screen.findByTestId('youtube-studio-door');
+      const status = await within(door).findByText(/Next check/);
+      const button = within(door).getByRole('link', { name: /youtube studio/i });
+
+      expect(button.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Nothing between here and the door hides it at any breakpoint.
+      for (let el: HTMLElement | null = status; el && el !== door.parentElement; el = el.parentElement) {
+        expect(el.className.split(' ')).not.toContain('hidden');
+      }
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });

@@ -509,11 +509,10 @@ function YardQueue({
         )}
 
         {/* Outside the branch above, so editing the console address does not
-            make the other door disappear. */}
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {/* Beside the door it is about. Grey when uploads are being checked,
-              amber when they are not, which is when it has to be seen. */}
-          <YouTubeLinkStatus status={youtubeLink} className={youtubeLink?.state === 'on-schedule' ? 'hidden 2xl:inline' : ''} />
+            make the other door disappear. The upload checker's status hangs
+            directly under the button it is about, no wider than it: one glance
+            answers "will my upload be picked up" without a row of its own. */}
+        <div className="ml-auto flex shrink-0 flex-col items-end gap-0.5" data-testid="youtube-studio-door">
           <a
             href={YOUTUBE_STUDIO_URL}
             target="_blank"
@@ -524,6 +523,7 @@ function YardQueue({
             <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
             YouTube Studio
           </a>
+          <YouTubeLinkStatus status={youtubeLink} className="self-center" />
         </div>
       </div>
 
