@@ -17,6 +17,8 @@ import {
 import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { SignOutButton } from '@/components/operator/SignOutButton';
 import { YardChip } from '@/components/operator/YardChip';
+import { YouTubeLinkStatus } from '@/components/operator/YouTubeLinkStatus';
+import { useYouTubeLinkStatus } from '@/hooks/useYouTubeLinkStatus';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { Yard } from '@/core/domain/entities/Yard';
 import { readConsoleUrl, YOUTUBE_STUDIO_URL } from '@/lib/yardConsole';
@@ -49,6 +51,7 @@ export function OperatorMobileBar({
   // In an effect, not the initialiser: this renders on the server too.
   const [consoleUrl, setConsoleUrl] = useState<string>('');
   useEffect(() => setConsoleUrl(readConsoleUrl()), []);
+  const youtubeLink = useYouTubeLinkStatus();
 
   return (
     <div className="flex h-13 shrink-0 items-center gap-2 md:hidden">
@@ -85,7 +88,10 @@ export function OperatorMobileBar({
           className={menuItemClass}
         >
           <Play className="h-4 w-4 fill-current text-muted-foreground" />
-          YouTube Studio
+          <span className="flex flex-col">
+            YouTube Studio
+            <YouTubeLinkStatus status={youtubeLink} />
+          </span>
         </a>
 
         {isAdmin && (

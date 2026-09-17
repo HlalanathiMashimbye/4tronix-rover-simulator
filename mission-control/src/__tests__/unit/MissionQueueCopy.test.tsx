@@ -104,7 +104,10 @@ describe('a queued mission', () => {
       await openMission();
       await screen.findByRole('button', { name: /send to rover/i });
 
-      expect(fetchSpy).not.toHaveBeenCalled();
+      // The console reads the upload checker's status on its own; that is not
+      // the yard, and not a send.
+      const calls = fetchSpy.mock.calls.map(([url]) => String(url));
+      expect(calls.filter((url) => url !== '/api/operator/youtube-link')).toEqual([]);
     } finally {
       global.fetch = originalFetch;
     }

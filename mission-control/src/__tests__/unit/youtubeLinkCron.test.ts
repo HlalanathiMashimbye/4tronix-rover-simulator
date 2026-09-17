@@ -20,10 +20,10 @@ jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
 // The throttle's state. Defaulted to "never checked", so every test below is
 // about linking rather than about being due.
 const lastCheckedAt = jest.fn(async () => null);
-const recordChecked = jest.fn(async () => {});
+const recordChecked = jest.fn(async (..._args: unknown[]) => {});
 jest.mock('@/infrastructure/persistence/pollState', () => ({
   lastCheckedAt: () => lastCheckedAt(),
-  recordChecked: () => recordChecked(),
+  recordChecked: (...args: unknown[]) => recordChecked(...args),
   isDue: jest.requireActual('@/infrastructure/persistence/pollState').isDue,
 }));
 
@@ -87,6 +87,15 @@ describe('POST /api/cron/youtube-link', () => {
   });
 
   describe('linking', () => {
+    it('records the interval with the check, for the operator console to read', async () => {
+      // The status line says when the next check is, which depends on this.
+      fetchRecentUploads.mockResolvedValue([]);
+
+      await POST(request('right-secret'));
+
+      expect(recordChecked).toHaveBeenCalledWith(expect.any(Date), 15);
+    });
+
     it('costs no Firestore read when no upload names a mission', async () => {
       fetchRecentUploads.mockResolvedValue([
         { videoId: 'v1', description: 'a holiday video' },
