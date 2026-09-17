@@ -470,7 +470,7 @@ function YardQueue({
           cannot reach, so the operator was expected to remember an address and
           type it into a second tab. The button is the door; the address is
           theirs and lives in their browser. */}
-      <div className="mb-2 hidden flex-wrap items-center gap-2 md:flex">
+      <div className="mb-5 hidden flex-wrap items-center gap-2 md:flex">
         {editingConsole ? (
           <>
             <input
@@ -525,7 +525,10 @@ function YardQueue({
             make the other door disappear. The upload checker's status hangs
             directly under the button it is about, no wider than it: one glance
             answers "will my upload be picked up" without a row of its own. */}
-        <div className="ml-auto flex shrink-0 flex-col items-end gap-0.5" data-testid="youtube-studio-door">
+        {/* The status hangs below the button out of the flow, so the button
+            lines up with Open operator console instead of being lifted by the
+            text under it; mb-5 on the toolbar leaves it room. */}
+        <div className="relative ml-auto shrink-0" data-testid="youtube-studio-door">
           <a
             href={YOUTUBE_STUDIO_URL}
             target="_blank"
@@ -536,7 +539,9 @@ function YardQueue({
             <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
             YouTube Studio
           </a>
-          <YouTubeLinkStatus status={youtubeLink} className="self-center" />
+          <div className="absolute left-1/2 top-full mt-0.5 flex -translate-x-1/2 whitespace-nowrap">
+            <YouTubeLinkStatus status={youtubeLink} />
+          </div>
         </div>
       </div>
 

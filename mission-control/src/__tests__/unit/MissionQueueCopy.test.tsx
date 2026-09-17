@@ -311,6 +311,11 @@ describe('whether uploads are being checked', () => {
       const button = within(door).getByRole('link', { name: /youtube studio/i });
 
       expect(button.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Out of the flow, so it cannot make the door taller than the Open
+      // operator console button beside it: when it was a flex column the
+      // YouTube button sat higher than its neighbour.
+      expect(status.closest('.absolute')).not.toBeNull();
+      expect(door.className.split(' ')).not.toContain('flex-col');
       // Nothing between here and the door hides it at any breakpoint.
       for (let el: HTMLElement | null = status; el && el !== door.parentElement; el = el.parentElement) {
         expect(el.className.split(' ')).not.toContain('hidden');
