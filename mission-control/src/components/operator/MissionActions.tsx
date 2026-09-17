@@ -42,9 +42,9 @@ export function MissionActions({
   yardId: string;
   isAdmin: boolean;
   /**
-   * Manual until the platform is doing this itself. In auto the bookkeeping
-   * actions grey out and say why, rather than vanishing and leaving an
-   * operator wondering where the button went.
+   * Manual until the platform is doing this itself. In auto, Mark complete
+   * asks before overriding what the platform records, rather than vanishing
+   * or greying out and leaving a mission nobody can close.
    */
   mode?: ConsoleMode;
   onResult: (message: string) => void;
@@ -53,6 +53,12 @@ export function MissionActions({
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // In auto the platform records completion itself, so pressing it by hand is
+  // an override. It asks first, rather than being greyed out: when the rover's
+  // report never arrives and no video is uploaded, a greyed button left the
+  // mission open with no way to close it.
+  const [confirmingComplete, setConfirmingComplete] = useState(false);
+  const completeIsOverride = isHandledAutomatically('complete', mode);
 
   const settled = mission.status === 'completed' || mission.status === 'cancelled';
 
@@ -148,13 +154,11 @@ export function MissionActions({
               icon={<Check className="h-3 w-3" />}
               label="Mark complete"
               busy={pending === 'complete'}
-              disabled={isHandledAutomatically('complete', mode)}
-              title={
-                isHandledAutomatically('complete', mode)
-                  ? automatedReason('complete')
-                  : undefined
+              disabled={confirmingComplete}
+              title={completeIsOverride ? automatedReason('complete') : undefined}
+              onClick={() =>
+                completeIsOverride ? setConfirmingComplete(true) : run('complete', 'complete')
               }
-              onClick={() => run('complete', 'complete')}
             />
             <ActionButton
               icon={<X className="h-3 w-3" />}
@@ -186,6 +190,26 @@ export function MissionActions({
           </div>
         )}
       </div>
+
+      {confirmingComplete && !settled && (
+        <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+          <p className="text-xs font-semibold text-foreground">Mark it complete yourself?</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            This is normally recorded for you: when the rover reports the run finished, or when
+            its video is uploaded. Only mark it yourself if you saw the run finish. The learner
+            is emailed that their mission ran.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <ActionButton
+              icon={<Check className="h-3 w-3" />}
+              label="Mark complete anyway"
+              busy={pending === 'complete'}
+              onClick={() => run('complete', 'complete').then(() => setConfirmingComplete(false))}
+            />
+            <ActionButton label="Keep waiting" onClick={() => setConfirmingComplete(false)} />
+          </div>
+        </div>
+      )}
 
       {/* Cancel is bookkeeping, and saying so is the whole reason it is safe to
           offer on a running mission. An operator who thinks this stops a rover

@@ -14,6 +14,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
 jest.mock('@/lib/yardConsole', () => ({
+  ...jest.requireActual('@/lib/yardConsole'),
   readConsoleUrl: () => 'http://curiosity.local:3001/run/',
 }));
 

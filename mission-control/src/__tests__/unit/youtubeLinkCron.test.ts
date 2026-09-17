@@ -3,11 +3,14 @@
  */
 
 const findRuns = jest.fn();
+const findById = jest.fn();
 const applyBookkeeping = jest.fn();
 const fetchRecentUploads = jest.fn();
+const notifyStatusChange = jest.fn();
 
 jest.mock('@/infrastructure/container.server', () => ({
-  adminMissionRepository: () => ({ findRuns, applyBookkeeping }),
+  adminMissionRepository: () => ({ findRuns, findById, applyBookkeeping }),
+  notificationService: () => ({ notifyStatusChange }),
 }));
 
 jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
@@ -209,6 +212,119 @@ describe('POST /api/cron/youtube-link', () => {
       expect(body.linked).toBe(0);
       expect(applyBookkeeping).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('a found video completes a mission nobody closed', () => {
+  /**
+   * The operator forgot, or their console was closed when the rover reported.
+   * The video is still proof the run happened, and used to be ignored because
+   * the linker only attached to runs already marked complete.
+   */
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env = { ...originalEnv, CRON_SECRET: 'right-secret' };
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    findById.mockResolvedValue({ id: 'm1', name: 'Rock Lover', status: 'queued', yardId: 'curiosity' });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('completes an open run and attaches its video in one write', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'queued' }]);
+
+    const body = await (await POST(request('right-secret'))).json();
+
+    expect(body).toMatchObject({ linked: 1, completed: ['m1'] });
+    expect(applyBookkeeping).toHaveBeenCalledWith('m1', 'r-1', 'curiosity', expect.objectContaining({
+      status: 'completed',
+      clearsReview: true,
+      youtubeUrl: 'https://www.youtube.com/watch?v=abc',
+      decidedBy: 'youtube-auto-link',
+    }));
+  });
+
+  it('emails the learner, as an operator completing it would', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'queued' }]);
+
+    await POST(request('right-secret'));
+
+    expect(notifyStatusChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1', status: 'completed' }), 'completed');
+  });
+
+  it('still records the completion when the email fails', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'queued' }]);
+    notifyStatusChange.mockRejectedValue(new Error('Resend is down'));
+
+    const body = await (await POST(request('right-secret'))).json();
+
+    expect(applyBookkeeping).toHaveBeenCalled();
+    expect(body.completed).toEqual(['m1']);
+  });
+
+  it('creates the run when the mission never had one, at the yard the video names', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([]);
+
+    await POST(request('right-secret'));
+
+    expect(applyBookkeeping).toHaveBeenCalledWith('m1', expect.any(String), 'curiosity', expect.objectContaining({
+      status: 'completed',
+    }));
+  });
+
+  it('does not read the mission to attach a video to a run already complete', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', description: 'MissionID: m1' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'completed' }]);
+
+    await POST(request('right-secret'));
+
+    expect(findById).not.toHaveBeenCalled();
+    expect(notifyStatusChange).not.toHaveBeenCalled();
+    expect(applyBookkeeping).toHaveBeenCalledWith('m1', 'r-1', 'curiosity', expect.objectContaining({ status: null }));
+  });
+
+  it('leaves a cancelled run alone: a video does not overrule the operator', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'cancelled' }]);
+
+    const body = await (await POST(request('right-secret'))).json();
+
+    expect(body.linked).toBe(0);
+    expect(applyBookkeeping).not.toHaveBeenCalled();
+  });
+
+  it('leaves a cancelled mission with no run alone', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([]);
+    findById.mockResolvedValue({ id: 'm1', status: 'cancelled', yardId: 'curiosity' });
+
+    const body = await (await POST(request('right-secret'))).json();
+
+    expect(body.linked).toBe(0);
+    expect(applyBookkeeping).not.toHaveBeenCalled();
+  });
+
+  it('does not complete a deleted mission', async () => {
+    fetchRecentUploads.mockResolvedValue([{ videoId: 'abc', title: 'm1__curiosity', description: '' }]);
+    findRuns.mockResolvedValue([{ runId: 'r-1', yardId: 'curiosity', status: 'queued' }]);
+    findById.mockResolvedValue({ id: 'm1', status: 'queued', yardId: 'curiosity', deleted: true });
+
+    const body = await (await POST(request('right-secret'))).json();
+
+    expect(body.linked).toBe(0);
+    expect(applyBookkeeping).not.toHaveBeenCalled();
   });
 });
 
