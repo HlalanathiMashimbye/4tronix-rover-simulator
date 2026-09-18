@@ -5,12 +5,9 @@ import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
-import { MilestoneTracker } from "@/components/layout/MilestoneTracker";
-import { ActiveChallengeReminder } from "@/components/challenges/ActiveChallengeReminder";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
-import { ChallengeProgressProvider } from "@/contexts/ChallengeProgressContext";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { PostHogAnalytics } from "@/components/analytics/PostHogAnalytics";
 import { resolveAppUrl } from "@/infrastructure/config/appUrl";
@@ -158,7 +155,6 @@ export default function RootLayout({
             <LearnerProvider>
               {/* Wraps Navbar AND the page: the navbar renders the search UI
                   while each page publishes what is searchable. */}
-              <ChallengeProgressProvider>
               <SearchProvider>
               <EnvironmentBanner />
               <Navbar />
@@ -171,12 +167,7 @@ export default function RootLayout({
               {/* Measures the id above and publishes it as --app-chrome, which
                   is what the full-height pages subtract from the viewport. */}
               <ChromeHeight />
-              {/* Renders nothing; records which pages have been opened so the
-                  Level 1 challenges can ask a learner to go and look at one. */}
-              <MilestoneTracker />
-              <ActiveChallengeReminder />
               </SearchProvider>
-              </ChallengeProgressProvider>
             </LearnerProvider>
           </ThemeProvider>
         </PostHogAnalytics>
