@@ -26,11 +26,8 @@
      went wrong: every full-height main measured 100dvh - navbar while the page
      area also carried 4rem of padding, so on a phone the document was 64px
      taller than the screen. The operator console spent that as a page that
-     scrolled a little and a queue whose last row sat under the tab bar.
-     The tab bar takes its height from here too, so the two cannot disagree.
-     3rem, not 4rem: at 4rem the bar spent 62px of a 812px phone on four
-     icons and their labels. */
-  --app-bottom-chrome: 3rem;
+     scrolled a little and a queue whose last row sat under the tab bar. */
+  --app-bottom-chrome: 4rem;
 
   /* 0.9rem came with the Paper & Ink palette. It lives here rather than in the
      light block because radius is not a colour-scheme concern, so this
@@ -310,7 +307,7 @@
  *
  * THE ONLY PLACE THIS SUM IS WRITTEN. Seven mains each spelled out
  * calc(100dvh - var(--app-chrome)) and every one of them was wrong below md,
- * where the tab bar takes another --app-bottom-chrome - the seventh copy is how a rule goes
+ * where the tab bar takes another 4rem - the seventh copy is how a rule goes
  * stale without anyone touching it. architecture.test.ts fails on a new one.
  *
  * @utility rather than a class in @layer utilities: Tailwind v4 only generates
