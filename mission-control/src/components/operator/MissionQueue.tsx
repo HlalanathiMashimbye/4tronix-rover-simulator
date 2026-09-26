@@ -171,11 +171,39 @@ function YardQueue({
     url.searchParams.delete('mission');
     window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
   }, []);
-  const [done, setDone] = useState<QueueMission[] | null>(null);
+  /**
+   * The settled list, tagged with the yard and page count it was read for.
+   *
+   * Tagged rather than cleared, for the same reason as `runsFor`. Asking for
+   * an older page re-attaches the listener, and clearing the list while it did
+   * blanked every row the operator was reading and threw away their scroll
+   * position, for the half second before the wider page arrived.
+   */
+  const [doneFor, setDoneFor] = useState<{
+    yardId: string;
+    pages: number;
+    missions: QueueMission[];
+    hasMore: boolean;
+  } | null>(null);
+  /** How many pages of settled missions the operator has asked for here. */
+  const [donePagesFor, setDonePagesFor] = useState<{ yardId: string; pages: number } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
   const { query, activeFilter, sort } = useSearch();
   useRegisterSort();
+
+  const searching = query.trim().length > 0;
+  // Also while searching: the settled list is what makes a finished mission
+  // findable by name, and it cannot be searched if it was never fetched.
+  const listeningToSettled = SETTLED_FILTERS.includes(activeFilter) || searching;
+  const donePages = donePagesFor?.yardId === yardId ? donePagesFor.pages : 1;
+  // Only what was read for THIS yard, and only while the view is open. Out of
+  // the view it counts as unfetched, which is what keeps "Done" from showing a
+  // stale number next to a list nobody is listening to.
+  const settled = listeningToSettled && doneFor?.yardId === yardId ? doneFor : null;
+  const done = settled?.missions ?? null;
+  const hasOlderDone = settled?.hasMore ?? false;
+  const loadingOlderDone = settled !== null && settled.pages < donePages;
 
   // The same control the learner feed uses, for the same reason: an operator
   // at a busy event is looking for one mission among a queue, and asking them
@@ -315,35 +343,29 @@ function YardQueue({
   // Only while the operator is looking at it. Completed missions accumulate
   // forever, so a listener on them is a read bill that grows with the life of
   // the project, and most console sessions never open this view.
-  const searching = query.trim().length > 0;
-
   useEffect(() => {
-    // Also while searching: the settled list is what makes a finished mission
-    // findable by name, and it cannot be searched if it was never fetched.
-    if (!SETTLED_FILTERS.includes(activeFilter) && !searching) return;
+    if (!listeningToSettled) return;
 
-    const unsubscribe = subscribeToYardCompleted(
+    return subscribeToYardCompleted(
       yardId,
-      (next) => {
-        setDone(next);
+      (next, hasMore) => {
+        setDoneFor({ yardId, pages: donePages, missions: next, hasMore });
         setError(null);
       },
       () => {
-        setDone(null);
+        setDoneFor(null);
         setError(
           'Could not load finished missions. If this yard is new, the index for this view may not be deployed yet.',
         );
       },
+      donePages,
     );
+  }, [yardId, listeningToSettled, donePages]);
 
-    // Cleared on the way OUT rather than on the way in. Clearing it in the
-    // effect body would be a setState during an effect, which costs a second
-    // render pass on every filter change and is what react-hooks flags.
-    return () => {
-      unsubscribe();
-      setDone(null);
-    };
-  }, [yardId, activeFilter, searching]);
+  const showOlderDone = () => {
+    if (loadingOlderDone) return;
+    setDonePagesFor({ yardId, pages: donePages + 1 });
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
@@ -659,6 +681,22 @@ function YardQueue({
           );
         })}
       </ol>
+
+      {/* Done only, as the learner feed shows it only on its unfiltered list.
+          Under Needs video or a search the older page may hold nothing that
+          matches, and a button that adds no rows reads as broken. */}
+      {activeFilter === 'done' && !searching && hasOlderDone && (
+        <div className="mt-4 flex justify-center pb-2">
+          <button
+            type="button"
+            onClick={showOlderDone}
+            disabled={loadingOlderDone}
+            className="clay clay-press min-h-11 rounded-xl border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loadingOlderDone ? 'Loading…' : 'Show older missions'}
+          </button>
+        </div>
+      )}
     </div>
 
     <div className={`min-h-0 md:clay md:rounded-3xl md:border md:border-border/60 md:bg-card/60 md:p-5 ${

@@ -65,9 +65,13 @@ export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'cancel
 export const QUEUE_LIMIT = 50;
 
 /**
- * Smaller than the queue on purpose. This view exists to get back to a mission
- * finished minutes ago, not to browse a yard's history, which the learner feed
- * already does properly with pagination.
+ * One page of the settled list. Smaller than the queue on purpose: the usual
+ * reason to open Done is a mission finished minutes ago, so the first page is
+ * all most sessions read.
+ *
+ * Older pages are there for the rest - a recording attached days late, a
+ * mission a teacher asks about after the event - and the operator asks for
+ * them one page at a time, like the learner feed's "Show more missions".
  */
 export const DONE_LIMIT = 25;
 
@@ -149,13 +153,29 @@ export function subscribeToYardQueue(
  * document when it attaches, and completed missions only ever accumulate, so
  * attaching this alongside the queue would add a growing read bill to every
  * console session for a view most of them never open.
+ *
+ * OLDER PAGES WIDEN THIS LISTENER; THEY ARE NOT FETCHED SEPARATELY. The learner
+ * feed pages with a cursor and one-off reads, and that looks like the thing to
+ * copy. It is not, here: attaching a recording is the operator's job on this
+ * list, and a page read once would keep showing an old mission as needing a
+ * video after they attached it, with the Needs video count still counting it.
+ * Widening costs a re-read of the pages already shown (four pages is about 250
+ * reads), which is noise next to the YouTube poll.
+ *
+ * `pages` counts pages of DONE_LIMIT, so the page size has one home. One
+ * document past them is read so the caller can be told whether anything older
+ * exists without a billed count. Soft-deleted missions are dropped after the
+ * limit, so "more" is judged on the documents Firestore returned, not on the
+ * missions that survived the filter.
  */
 export function subscribeToYardCompleted(
   yardId: string,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], hasMore: boolean) => void,
   onError: (error: Error) => void,
+  pages = 1,
 ): Unsubscribe {
   const db = getFirestoreClient();
+  const pageSize = pages * DONE_LIMIT;
 
   const q = query(
     collection(db, 'missions'),
@@ -164,10 +184,10 @@ export function subscribeToYardCompleted(
     // serves an `in` as several equality queries against it.
     where('status', 'in', SETTLED_STATUSES),
     orderBy('submittedAt', 'desc'),
-    limit(DONE_LIMIT),
+    limit(pageSize + 1),
   );
 
-  return listen(q, onMissions, onError, 'completed');
+  return listen(q, onMissions, onError, 'completed', pageSize);
 }
 
 /** One Firestore document as the console reads it. Shared by every listener
@@ -233,18 +253,22 @@ export function subscribeToMission(
 /** Shared by both list subscriptions: the same documents, read the same way. */
 function listen(
   q: Query,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], hasMore: boolean) => void,
   onError: (error: Error) => void,
   label: string,
+  /** Set when the query asked for one document past the page to detect more. */
+  pageSize?: number,
 ): Unsubscribe {
   return onSnapshot(
     q,
     (snapshot) => {
       const missions: QueueMission[] = [];
+      const hasMore = pageSize !== undefined && snapshot.docs.length > pageSize;
+      const page = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
 
       // Not named `doc`: that is now the imported Firestore helper, and
       // shadowing it here would break the next person who reaches for it.
-      for (const snap of snapshot.docs) {
+      for (const snap of page) {
         const data = snap.data();
 
         // Soft-deleted missions stay out of every view, operator included. An
@@ -255,7 +279,7 @@ function listen(
         missions.push(toQueueMission(snap.id, data));
       }
 
-      onMissions(missions);
+      onMissions(missions, hasMore);
     },
     (error) => {
       console.error(`[operator ${label}] listener failed:`, error);
