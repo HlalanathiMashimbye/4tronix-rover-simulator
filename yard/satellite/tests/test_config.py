@@ -282,13 +282,13 @@ class TestConsoleDesignSystem:
 
     def test_the_run_station_has_one_filled_action(self, client):
         """Send to rover moves a physical rover. It is the only filled button
-        on the page; Import, Download and Copy description are outlines."""
+        on the page, in Mission Control's ready-to-send green; Import,
+        Download and Copy description are Mission Control's plain button."""
+        import re
         page = client.get('/run/').get_data(as_text=True)
 
-        assert '.btn.run-primary' in page
-        assert 'background: var(--signal)' in page
-        assert '.run-desk .btn.primary' in page
-        assert 'background: transparent' in page
+        assert re.search(r'\.btn\.run-primary\s*\{[^}]*background:\s*var\(--gradient-buzz\)', page)
+        assert re.search(r'\.run-desk \.btn\.primary\s*\{[^}]*background:\s*var\(--background\)', page)
 
     def test_send_refuses_until_the_yard_is_ready(self, client):
         """It used to stay enabled while the warning underneath said not to
