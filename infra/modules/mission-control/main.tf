@@ -288,6 +288,23 @@ resource "google_cloud_run_v2_service" "mission_control" {
           cpu    = "1"
           memory = "512Mi"
         }
+
+        # Bill for the time spent serving requests, not for every hour an
+        # instance is up. The provider defaults cpu_idle to true only when
+        # `resources` is absent; setting limits, as above, silently flips it
+        # to always-allocated CPU. That is the whole Cloud Run overspend in
+        # docs/plans/prod-staging-split.md: about $68/mo against $4, half of it
+        # the prod placeholder kept awake by scanners, the rest staging kept
+        # awake by the 15-minute YouTube check.
+        #
+        # Safe for this app: no route does work after sending its response
+        # and nothing runs on a server-side timer, so throttling CPU between
+        # requests cuts nothing off.
+        cpu_idle = true
+
+        # The trade cpu_idle makes is more cold starts. A boost on startup
+        # shortens them, and is billed only while an instance is starting.
+        startup_cpu_boost = true
       }
 
       dynamic "env" {
