@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Check, Loader2, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Loader2, ShieldCheck, UserPlus, X } from 'lucide-react';
 
-import type { OperatorAccount, OperatorRole } from '@/core/domain/entities/OperatorAccount';
+import type { OperatorAccount, OperatorInvite, OperatorRole } from '@/core/domain/entities/OperatorAccount';
 
 /**
  * Granting and removing operator access, in the app.
@@ -15,13 +15,19 @@ import type { OperatorAccount, OperatorRole } from '@/core/domain/entities/Opera
  */
 export function TeamManager({
   initialAccounts,
+  initialInvites = [],
   currentUid,
+  initialEmail = '',
 }: {
   initialAccounts: OperatorAccount[];
+  initialInvites?: OperatorInvite[];
   currentUid: string;
+  /** Filled in from an access-request email's link. Nothing is granted until submitted. */
+  initialEmail?: string;
 }) {
   const [accounts, setAccounts] = useState(initialAccounts);
-  const [email, setEmail] = useState('');
+  const [invites, setInvites] = useState(initialInvites);
+  const [email, setEmail] = useState(initialEmail);
   const [role, setRole] = useState<OperatorRole>('operator');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +54,7 @@ export function TeamManager({
       }
 
       if (data.accounts) setAccounts(data.accounts);
+      if (data.invites) setInvites(data.invites);
       if (data.message) setNotice(data.message);
       if (busyKey === 'grant') setEmail('');
     } catch {
@@ -137,11 +144,60 @@ export function TeamManager({
         </div>
 
         <p className="mt-2.5 text-xs text-muted-foreground">
-          The person needs a Firebase Authentication account already. Granting
-          access does not create one, and a new role only takes effect once they
-          sign out and back in.
+          Use the address they sign in to Google with. If they have never signed
+          in, the access waits for them and applies the first time they do. For
+          someone already signed in, a new role takes effect once they sign out
+          and back in.
         </p>
       </form>
+
+      {/* Granted to an address nobody has signed in with yet. Separate from
+          the holders below because it is not access: nothing enforces from
+          it until that Google account arrives. */}
+      {invites.length > 0 && (
+        <section
+          aria-labelledby="pending-access"
+          className="clay shrink-0 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5"
+        >
+          <h2 id="pending-access" className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            Waiting for first sign-in{' '}
+            <span className="font-sans text-xs font-medium text-muted-foreground">({invites.length})</span>
+          </h2>
+          <ul className="mt-3 grid gap-2">
+            {invites.map((invite) => (
+              <li
+                key={invite.email}
+                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-dashed border-border/60 bg-background/40 px-3.5 py-3"
+              >
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                  <ShieldCheck className="h-3 w-3" />
+                  {invite.role}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{invite.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Applies when they first sign in with Google
+                    {invite.invitedBy ? ` · added by ${invite.invitedBy}` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => submit(invite.email, null, `uninvite-${invite.email}`)}
+                  disabled={busy !== null}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs font-semibold text-destructive transition-colors hover:border-destructive/70 disabled:cursor-not-allowed disabled:text-muted-foreground"
+                >
+                  {busy === `uninvite-${invite.email}` ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <X className="h-3 w-3" />
+                  )}
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Current holders */}
       <div className="clay min-h-0 flex-1 overflow-y-auto rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">

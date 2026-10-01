@@ -1,7 +1,10 @@
 import {
   changeBlocker,
+  inviteClaimant,
+  inviteKey,
   isNoOpChange,
   sortAccounts,
+  sortInvites,
   isOperatorRole,
   type OperatorAccount,
 } from '@/core/domain/entities/OperatorAccount';
@@ -161,5 +164,39 @@ describe('presentation', () => {
     expect(isOperatorRole('operator')).toBe(true);
     expect(isOperatorRole('superuser')).toBe(false);
     expect(isOperatorRole(undefined)).toBe(false);
+  });
+});
+
+describe('invites for an address that has never signed in', () => {
+  const googleToken = { email: 'Thandi@School.org ', email_verified: true, firebase: { sign_in_provider: 'google.com' } };
+
+  it('stores and compares one spelling of an email', () => {
+    // An admin types it however they type it; Google reports it lowercased.
+    expect(inviteKey('  Thandi@School.ORG ')).toBe('thandi@school.org');
+  });
+
+  it('lets a verified Google sign-in claim the invite for its address', () => {
+    expect(inviteClaimant(googleToken)).toBe('thandi@school.org');
+  });
+
+  it('never lets a password sign-in claim one', () => {
+    // A password account can be created as anyone's address before they arrive.
+    expect(inviteClaimant({ ...googleToken, firebase: { sign_in_provider: 'password' } })).toBeNull();
+  });
+
+  it('never trusts an address that is not verified', () => {
+    expect(inviteClaimant({ ...googleToken, email_verified: false })).toBeNull();
+    expect(inviteClaimant({ ...googleToken, email_verified: 'true' })).toBeNull();
+  });
+
+  it('needs an address to claim for', () => {
+    expect(inviteClaimant({ ...googleToken, email: undefined })).toBeNull();
+    expect(inviteClaimant({ ...googleToken, email: '  ' })).toBeNull();
+  });
+
+  it('lists the newest invite first', () => {
+    const older = { email: 'a@x.org', role: 'operator' as const, invitedAt: '2026-09-01T00:00:00Z', invitedBy: null };
+    const newer = { email: 'b@x.org', role: 'admin' as const, invitedAt: '2026-10-01T00:00:00Z', invitedBy: null };
+    expect(sortInvites([older, newer]).map((i) => i.email)).toEqual(['b@x.org', 'a@x.org']);
   });
 });

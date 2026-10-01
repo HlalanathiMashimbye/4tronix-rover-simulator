@@ -15,7 +15,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admin';
 import { OPERATOR_YARD_COOKIE, SESSION_COOKIE } from '@/infrastructure/auth/dal';
 import { adminYardRepository } from '@/infrastructure/container.server';
+import { claimInvite } from '@/infrastructure/auth/operatorInvites';
 import { isSelectableYard } from '@/core/domain/entities/Yard';
+import { inviteClaimant } from '@/core/domain/entities/OperatorAccount';
 
 /** Long enough to cover an event day, so nobody is signed out mid-session. */
 const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
@@ -83,8 +85,32 @@ export async function POST(request: NextRequest) {
     // not have operator access" into a silent redirect loop.
     const role = decoded.role;
     if (role !== 'operator' && role !== 'admin') {
+      // A first Google sign-in has no role yet: the account did not exist
+      // until a moment ago. If an admin invited this address, the role is
+      // written now. The token in hand was minted before it, so the browser
+      // is asked to fetch a fresh one and come back, which is a second or so
+      // rather than "sign out and in again".
+      const claimant = inviteClaimant(decoded);
+      if (claimant && (await claimInvite(decoded.uid, claimant))) {
+        return NextResponse.json(
+          { success: false, refresh: true, error: 'Access granted. Finishing sign-in.' },
+          { status: 409 },
+        );
+      }
+
+      // Named, because the admin needs to know exactly which address to add:
+      // a Google sign-in may not be the address the person thinks it is.
+      const who = typeof decoded.email === 'string' ? ` (${decoded.email})` : '';
       return NextResponse.json(
-        { success: false, error: 'This account does not have operator access' },
+        {
+          success: false,
+          // The sign-in screen offers "Ask an admin" on this code.
+          code: 'no-access',
+          email: typeof decoded.email === 'string' ? decoded.email : null,
+          error:
+            `This account${who} does not have operator access yet. Ask an admin to ` +
+            'add it under Manage access, then sign in again.',
+        },
         { status: 403 },
       );
     }

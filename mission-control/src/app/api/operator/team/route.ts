@@ -15,6 +15,8 @@
  *
  *   Auth custom claim   role=operator|admin   the store everything enforces from
  *   users/{uid}         ledger only           who granted it, when, to whom
+ *   operatorInvites     pending only          access for an address that has
+ *                                             never signed in (see OperatorInvite)
  *
  * The ledger records the granting ADMIN, which the script could not do: it
  * recorded $USER from whatever shell happened to run it.
@@ -24,6 +26,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
+import { deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import {
   changeBlocker,
@@ -48,7 +51,8 @@ function errorResponse(error: unknown) {
 export async function GET() {
   try {
     await requireAdmin();
-    return NextResponse.json({ success: true, accounts: await listOperatorAccounts() });
+    const [accounts, invites] = await Promise.all([listOperatorAccounts(), listInvites()]);
+    return NextResponse.json({ success: true, accounts, invites });
   } catch (error) {
     const known = errorResponse(error);
     if (known) return known;
@@ -101,17 +105,7 @@ export async function POST(request: NextRequest) {
     user = await auth.getUserByEmail(email.trim());
   } catch (error) {
     if ((error as { code?: string }).code === 'auth/user-not-found') {
-      // Roles are granted TO an account; they do not create one. Saying so is
-      // the difference between a two-minute fix and a confused afternoon.
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            `No account exists for ${email.trim()}. They need to be created in ` +
-            'Firebase Authentication first, then granted access here.',
-        },
-        { status: 404 },
-      );
+      return inviteResponse(email.trim(), nextRole, session.email ?? session.uid);
     }
     console.error('[operator/team] lookup failed:', error);
     return NextResponse.json({ success: false, error: 'Could not look up that account' }, { status: 500 });
@@ -133,6 +127,7 @@ export async function POST(request: NextRequest) {
       unchanged: true,
       message: `${user.email ?? user.uid} already has this access.`,
       accounts,
+      invites: await listInvites(),
     });
   }
 
@@ -163,9 +158,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // An invite for an address that has an account now is stale either way:
+    // the change above is the decision, and a leftover invite would re-grant
+    // a revoked role if this account were ever deleted and recreated.
+    await deleteInvite(email.trim());
+
     return NextResponse.json({
       success: true,
       accounts: await listOperatorAccounts(),
+      invites: await listInvites(),
       // Claims ride on the ID token, so a grant is not live until that token
       // refreshes. The UI says so; hiding it produces "it did not work" reports
       // for something that is working exactly as designed.
@@ -177,5 +178,45 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[operator/team] write failed:', error);
     return NextResponse.json({ success: false, error: 'Could not apply that change' }, { status: 500 });
+  }
+}
+
+/**
+ * Granting to an address nobody has signed in with yet.
+ *
+ * Operators sign in with Google, and their first sign-in is what creates the
+ * account, so "no account" is the normal case for a new facilitator rather
+ * than a mistake. The grant is kept as an invite and applied by the session
+ * route the first time that address signs in with Google.
+ */
+async function inviteResponse(email: string, nextRole: OperatorRole | null, invitedBy: string) {
+  try {
+    if (nextRole === null) {
+      if (!(await deleteInvite(email))) {
+        return NextResponse.json(
+          { success: false, error: `Nobody has access as ${email}, and there is no pending invite to remove.` },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({
+        success: true,
+        accounts: await listOperatorAccounts(),
+        invites: await listInvites(),
+        message: `Removed the pending access for ${email}.`,
+      });
+    }
+
+    await saveInvite(email, nextRole, invitedBy);
+    return NextResponse.json({
+      success: true,
+      accounts: await listOperatorAccounts(),
+      invites: await listInvites(),
+      message:
+        `${email} has not signed in yet. They get ${nextRole} access the first time ` +
+        'they sign in with Google using that address.',
+    });
+  } catch (error) {
+    console.error('[operator/team] invite failed:', error);
+    return NextResponse.json({ success: false, error: 'Could not save that access' }, { status: 500 });
   }
 }

@@ -12,6 +12,17 @@ const revokeRefreshTokens = jest.fn();
 const getUserByEmail = jest.fn();
 const listUsers = jest.fn();
 const docSet = jest.fn();
+const listInvites = jest.fn();
+const saveInvite = jest.fn();
+const deleteInvite = jest.fn();
+
+// The invite store is its own unit with its own Firestore collection; here it
+// is the route's decisions about WHEN to use it that are under test.
+jest.mock('@/infrastructure/auth/operatorInvites', () => ({
+  listInvites: (...a: unknown[]) => listInvites(...a),
+  saveInvite: (...a: unknown[]) => saveInvite(...a),
+  deleteInvite: (...a: unknown[]) => deleteInvite(...a),
+}));
 
 jest.mock('@/infrastructure/auth/dal', () => {
   class UnauthorizedError extends Error {}
@@ -71,6 +82,9 @@ beforeEach(() => {
   docSet.mockResolvedValue(undefined);
   setCustomUserClaims.mockResolvedValue(undefined);
   revokeRefreshTokens.mockResolvedValue(undefined);
+  listInvites.mockResolvedValue([]);
+  saveInvite.mockResolvedValue(undefined);
+  deleteInvite.mockResolvedValue(false);
 });
 
 describe('who may call it', () => {
@@ -129,17 +143,56 @@ describe('granting', () => {
     });
   });
 
-  it('explains that an account must exist first', async () => {
+  it('saves access for an address that has never signed in, to apply on their first Google sign-in', async () => {
+    // Operators sign in with Google, and the first sign-in is what creates
+    // the account. Refusing here, as this route used to, made every new
+    // facilitator sign in, get turned away, and wait for an admin.
     population([authUser('admin-uid', 'admin@rover.com', 'admin')]);
     getUserByEmail.mockRejectedValue({ code: 'auth/user-not-found' });
+    listInvites.mockResolvedValue([{ email: 'new@school.org', role: 'operator', invitedAt: 'x', invitedBy: 'admin@rover.com' }]);
 
-    const response = await post({ email: 'ghost@rover.com', role: 'operator' });
+    const response = await post({ email: 'new@school.org', role: 'operator' });
     const data = await response.json();
 
+    expect(response.status).toBe(200);
+    expect(saveInvite).toHaveBeenCalledWith('new@school.org', 'operator', 'admin@rover.com');
+    expect(setCustomUserClaims).not.toHaveBeenCalled();
+    expect(data.message).toMatch(/first time they sign in with Google/i);
+    expect(data.invites).toHaveLength(1);
+  });
+
+  it('removes a pending invite when access is revoked before they ever signed in', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin')]);
+    getUserByEmail.mockRejectedValue({ code: 'auth/user-not-found' });
+    deleteInvite.mockResolvedValue(true);
+
+    const response = await post({ email: 'new@school.org', role: null });
+
+    expect(response.status).toBe(200);
+    expect(deleteInvite).toHaveBeenCalledWith('new@school.org');
+    expect(saveInvite).not.toHaveBeenCalled();
+  });
+
+  it('says so when there is nothing to revoke at all', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin')]);
+    getUserByEmail.mockRejectedValue({ code: 'auth/user-not-found' });
+    deleteInvite.mockResolvedValue(false);
+
+    const response = await post({ email: 'nobody@school.org', role: null });
+
     expect(response.status).toBe(404);
-    // Granting a role does not create an account, and saying so is the
-    // difference between a two-minute fix and a confused afternoon.
-    expect(data.error).toMatch(/Firebase Authentication first/i);
+  });
+
+  it('clears a stale invite once the address has a real account and is granted directly', async () => {
+    // Left behind, the invite would re-grant a role an admin later revoked if
+    // the account were ever deleted and recreated.
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+
+    expect(response.status).toBe(200);
+    expect(deleteInvite).toHaveBeenCalledWith('op@school.org');
   });
 
   it('rejects a misspelled role instead of silently granting nothing', async () => {

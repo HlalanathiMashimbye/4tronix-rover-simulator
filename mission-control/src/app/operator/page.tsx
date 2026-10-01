@@ -18,11 +18,18 @@ import { OperatorMobileBar } from '@/components/operator/OperatorMobileBar';
  * unauthenticated visitor is never sent operator markup at all, rather than
  * being sent it and having the browser hide it.
  */
-export default async function OperatorPage() {
+export default async function OperatorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
   const session = await getOperatorSession();
 
   if (!session) {
-    return <OperatorSignIn yards={await yardDirectory()} />;
+    // Where to go after signing in, e.g. the grant link in an access-request
+    // email. OperatorSignIn only follows it within /operator.
+    const { next } = await searchParams;
+    return <OperatorSignIn yards={await yardDirectory()} next={typeof next === 'string' ? next : undefined} />;
   }
 
   const yard = findYardIn(await yardDirectory(), session.yardId ?? undefined) ?? null;
