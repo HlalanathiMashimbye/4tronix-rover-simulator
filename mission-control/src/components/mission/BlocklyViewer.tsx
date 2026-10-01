@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { loadBlockly } from '@/infrastructure/cdn/loadBlockly';
+import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import { defineRoverBlocks, migrateSpinBlocks } from '@/lib/roverBlockly';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
  *
- * Shares lib/loadBlockly with the editor - one script, one cache - and renders
+ * Shares infrastructure/browser/loadBlockly with the editor - one script, one cache - and renders
  * the program without a toolbox, so learners can see the blocks they will
  * remix. Pan/zoom stay on (scrollbars + wheel) but editing is off.
  */

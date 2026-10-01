@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Code2, Play } from 'lucide-react';
-import { loadBlockly } from '@/infrastructure/cdn/loadBlockly';
+import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import {
   defineRoverBlocks,
   migrateSpinBlocks,
@@ -55,8 +55,8 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   const [overBudget, setOverBudget] = useState<number | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
-  // Loading (and the Monaco/AMD conflict that used to make this silently
-  // render an empty canvas) is handled in lib/loadBlockly.
+  // Loading is owned by infrastructure/browser/loadBlockly, which the mission
+  // page has usually already started in the background.
   useEffect(() => {
     let cancelled = false;
     loadBlockly()
