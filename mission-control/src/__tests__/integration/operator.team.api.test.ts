@@ -15,6 +15,11 @@ const docSet = jest.fn();
 const listInvites = jest.fn();
 const saveInvite = jest.fn();
 const deleteInvite = jest.fn();
+const sendEmail = jest.fn();
+
+jest.mock('@/infrastructure/email/resend-client', () => ({
+  ResendEmailSender: jest.fn().mockImplementation(() => ({ send: (...a: unknown[]) => sendEmail(...a) })),
+}));
 
 // The invite store is its own unit with its own Firestore collection; here it
 // is the route's decisions about WHEN to use it that are under test.
@@ -85,6 +90,7 @@ beforeEach(() => {
   listInvites.mockResolvedValue([]);
   saveInvite.mockResolvedValue(undefined);
   deleteInvite.mockResolvedValue(false);
+  sendEmail.mockResolvedValue(undefined);
 });
 
 describe('who may call it', () => {
@@ -340,5 +346,65 @@ describe('the account list', () => {
     const data = await (await GET()).json();
 
     expect(data.accounts[0].grantedBy).toBeUndefined();
+  });
+});
+
+describe('telling the person they were let in', () => {
+  it('emails someone who is granted access, with a link to sign in', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const [to, subject, html] = sendEmail.mock.calls[0];
+    expect(to).toBe('op@school.org');
+    expect(subject).toMatch(/operator access/i);
+    expect(html).toContain('/operator');
+    expect(data.message).toMatch(/emailed/i);
+  });
+
+  it('emails someone given access before their first sign-in too', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin')]);
+    getUserByEmail.mockRejectedValue({ code: 'auth/user-not-found' });
+
+    await post({ email: 'new@school.org', role: 'admin' });
+
+    expect(sendEmail).toHaveBeenCalledWith('new@school.org', expect.stringMatching(/admin access/i), expect.any(String));
+  });
+
+  it('does not email when nothing changed', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org', 'operator')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org', 'operator'));
+
+    await post({ email: 'op@school.org', role: 'operator' });
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('does not email someone whose access was removed', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org', 'operator')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org', 'operator'));
+
+    await post({ email: 'op@school.org', role: null });
+
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('still grants the access when the email cannot be sent', async () => {
+    // The access is already written; failing here would have the admin grant it twice.
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+    sendEmail.mockRejectedValue(new Error('resend down'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(setCustomUserClaims).toHaveBeenCalled();
+    expect(data.message).not.toMatch(/emailed/i);
   });
 });

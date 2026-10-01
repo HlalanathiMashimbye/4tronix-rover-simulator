@@ -14,9 +14,9 @@
  * NEXT_PUBLIC_APP_URL remains as a fallback for local dev and for any image
  * built before APP_URL was wired up.
  */
-export function resolveAppUrl(): string {
+export function resolveAppUrl(fallback = 'http://localhost:3000'): string {
   const configured = process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL;
   const value = configured?.trim();
 
-  return value ? value.replace(/\/+$/, '') : 'http://localhost:3000';
+  return value ? value.replace(/\/+$/, '') : fallback;
 }

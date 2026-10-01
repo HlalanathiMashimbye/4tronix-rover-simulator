@@ -27,6 +27,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 import { deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
+import { ResendEmailSender } from '@/infrastructure/email/resend-client';
+import { buildAccessGrantedEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import {
   changeBlocker,
@@ -59,6 +62,24 @@ export async function GET() {
 
     console.error('[operator/team] list failed:', error);
     return NextResponse.json({ success: false, error: 'Could not load the team' }, { status: 500 });
+  }
+}
+
+/**
+ * Tell the person they have been let in.
+ *
+ * Never fails the grant: the access is already written, and an admin told
+ * "could not apply that change" over an email hiccup would grant it twice.
+ * Returns whether it went, so the admin's confirmation can say so.
+ */
+async function emailGrant(to: string, role: OperatorRole, origin: string): Promise<boolean> {
+  try {
+    const { subject, html } = buildAccessGrantedEmail(role, `${resolveAppUrl(origin)}/operator`);
+    await new ResendEmailSender().send(to, subject, html);
+    return true;
+  } catch (error) {
+    console.error('[operator/team] grant email failed:', error);
+    return false;
   }
 }
 
@@ -105,7 +126,7 @@ export async function POST(request: NextRequest) {
     user = await auth.getUserByEmail(email.trim());
   } catch (error) {
     if ((error as { code?: string }).code === 'auth/user-not-found') {
-      return inviteResponse(email.trim(), nextRole, session.email ?? session.uid);
+      return inviteResponse(email.trim(), nextRole, session.email ?? session.uid, request.nextUrl.origin);
     }
     console.error('[operator/team] lookup failed:', error);
     return NextResponse.json({ success: false, error: 'Could not look up that account' }, { status: 500 });
@@ -158,6 +179,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Only a grant is announced. A removal is usually deliberate and is not
+    // something to explain to the person by email.
+    const emailed =
+      nextRole !== null && user.email ? await emailGrant(user.email, nextRole, request.nextUrl.origin) : false;
+
     // An invite for an address that has an account now is stale either way:
     // the change above is the decision, and a leftover invite would re-grant
     // a revoked role if this account were ever deleted and recreated.
@@ -173,7 +199,7 @@ export async function POST(request: NextRequest) {
       message:
         nextRole === null
           ? `Access removed for ${user.email ?? user.uid}. They have been signed out.`
-          : `${user.email ?? user.uid} is now ${nextRole}. They need to sign out and back in for it to take effect.`,
+          : `${user.email ?? user.uid} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}They need to sign out and back in for it to take effect.`,
     });
   } catch (error) {
     console.error('[operator/team] write failed:', error);
@@ -189,7 +215,7 @@ export async function POST(request: NextRequest) {
  * than a mistake. The grant is kept as an invite and applied by the session
  * route the first time that address signs in with Google.
  */
-async function inviteResponse(email: string, nextRole: OperatorRole | null, invitedBy: string) {
+async function inviteResponse(email: string, nextRole: OperatorRole | null, invitedBy: string, origin: string) {
   try {
     if (nextRole === null) {
       if (!(await deleteInvite(email))) {
@@ -207,13 +233,15 @@ async function inviteResponse(email: string, nextRole: OperatorRole | null, invi
     }
 
     await saveInvite(email, nextRole, invitedBy);
+    const emailed = await emailGrant(email, nextRole, origin);
     return NextResponse.json({
       success: true,
       accounts: await listOperatorAccounts(),
       invites: await listInvites(),
       message:
         `${email} has not signed in yet. They get ${nextRole} access the first time ` +
-        'they sign in with Google using that address.',
+        'they sign in with Google using that address.' +
+        (emailed ? ' They have been emailed.' : ''),
     });
   } catch (error) {
     console.error('[operator/team] invite failed:', error);

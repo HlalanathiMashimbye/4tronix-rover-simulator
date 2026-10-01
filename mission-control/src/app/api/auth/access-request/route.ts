@@ -21,15 +21,10 @@ import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/per
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { isOperatorRole } from '@/core/domain/entities/OperatorAccount';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
-
-/** Where the grant link points: the configured app URL, else this request's own origin. */
-function appOrigin(request: NextRequest): string {
-  const configured = (process.env.APP_URL ?? process.env.NEXT_PUBLIC_APP_URL)?.trim();
-  return configured ? configured.replace(/\/+$/, '') : request.nextUrl.origin;
-}
 
 export async function POST(request: NextRequest) {
   let body: unknown;
@@ -81,7 +76,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const grantUrl = `${appOrigin(request)}/operator/team?grant=${encodeURIComponent(email)}`;
+    const grantUrl = `${resolveAppUrl(request.nextUrl.origin)}/operator/team?grant=${encodeURIComponent(email)}`;
     const { subject, html } = buildAccessRequestEmail(email, grantUrl);
     const sender = new ResendEmailSender();
     const results = await Promise.allSettled(admins.map((a) => sender.send(a.email!, subject, html)));

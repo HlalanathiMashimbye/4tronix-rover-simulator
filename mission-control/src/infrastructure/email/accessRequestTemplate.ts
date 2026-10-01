@@ -41,3 +41,35 @@ export function buildAccessRequestEmail(requesterEmail: string, grantUrl: string
     `,
   };
 }
+
+/**
+ * Sent to the person once an admin has let them in.
+ *
+ * Without it, someone who asked for access was told "sign in again once an
+ * admin approves" and then had to guess when that was.
+ */
+export function buildAccessGrantedEmail(role: 'operator' | 'admin', signInUrl: string) {
+  const href = escapeHtml(signInUrl);
+  const what = role === 'admin' ? 'admin' : 'operator';
+
+  return {
+    subject: `You have ${what} access to Mission Control`,
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #1f1f1f;">
+        <h2 style="font-size: 20px; margin: 0 0 12px;">You're in</h2>
+        <p style="font-size: 15px; line-height: 1.5; margin: 0 0 16px;">
+          An admin has given you <strong>${what}</strong> access to Mission Control. Sign in with
+          Google using this email address to start running missions.
+        </p>
+        <p style="margin: 0 0 20px;">
+          <a href="${href}" style="display: inline-block; background: #1f1f1f; color: #ffffff; text-decoration: none; font-weight: 700; padding: 12px 20px; border-radius: 12px;">
+            Sign in
+          </a>
+        </p>
+        <p style="font-size: 13px; line-height: 1.5; color: #666; margin: 0;">
+          If you were already signed in, sign out and back in for the access to take effect.
+        </p>
+      </div>
+    `,
+  };
+}
