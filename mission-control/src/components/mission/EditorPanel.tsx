@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { preconnect } from 'react-dom';
 import { useReducedMotion } from 'motion/react';
 import { Gamepad2, Blocks, Code2, AlertTriangle } from 'lucide-react';
 import { ManualControlRealtime } from '@/components/mission/ManualControlRealtime';
@@ -7,6 +9,11 @@ import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import { prefetchBlockly } from '@/infrastructure/browser/loadBlockly';
+import { prefetchMonaco } from '@/infrastructure/browser/prefetchMonaco';
+
+/** Where the Python editor comes from (@monaco-editor/react's default). */
+const MONACO_CDN = 'https://cdn.jsdelivr.net';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
 
@@ -57,6 +64,14 @@ export function EditorPanel({
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
 
+  // The Blocks and Python tabs each used to start downloading their editor
+  // only when clicked, which is most of why opening them took seconds. Blockly
+  // is fetched while the page is idle; Monaco on the first sign of interest in
+  // its tab (see prefetchMonaco), with the connection to its CDN opened now
+  // because the handshake is a large share of a cold load.
+  preconnect(MONACO_CDN);
+  useEffect(() => prefetchBlockly(), []);
+
   return (
     <div className="panel flex h-full flex-col gap-1.5 overflow-hidden border border-border/60 bg-card/40 clay">
       {/* Editor mode tabs */}
@@ -67,6 +82,8 @@ export function EditorPanel({
             <button
               key={mode}
               onClick={() => onEditorModeChange(mode)}
+              onPointerEnter={mode === 'code' ? prefetchMonaco : undefined}
+              onFocus={mode === 'code' ? prefetchMonaco : undefined}
               aria-pressed={active}
               className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-2 text-sm font-bold transition-colors ${
                 active
