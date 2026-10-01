@@ -223,3 +223,34 @@ describe('asking an admin when the account has no access', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('Google is the way in; email and password is the fallback', () => {
+  it('puts Google first and keeps the password fields out of the way', () => {
+    render(<OperatorSignIn yards={YARDS} />);
+
+    expect(googleButton()).toBeInTheDocument();
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+  });
+
+  it('shows the email and password form when asked', () => {
+    render(<OperatorSignIn yards={YARDS} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /use email and password/i }));
+
+    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /use email and password/i })).not.toBeInTheDocument();
+  });
+
+  it('opens the password form when Google says the address already uses a password', async () => {
+    signInWithPopup.mockRejectedValue({ code: 'auth/account-exists-with-different-credential' });
+    render(<OperatorSignIn yards={YARDS} />);
+    chooseYard();
+
+    await act(async () => fireEvent.click(googleButton()));
+
+    expect(await screen.findByLabelText(/password/i)).toBeInTheDocument();
+  });
+});
