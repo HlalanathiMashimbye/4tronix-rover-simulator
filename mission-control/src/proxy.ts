@@ -41,7 +41,12 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  return NextResponse.redirect(new URL('/operator', request.url));
+  // Remember where they were going, so a link into the console (the grant
+  // link in an access-request email) survives signing in. The sign-in page
+  // only follows it back within /operator.
+  const target = new URL('/operator', request.url);
+  target.searchParams.set('next', request.nextUrl.pathname + (request.nextUrl.search ?? ''));
+  return NextResponse.redirect(target);
 }
 
 export const config = {

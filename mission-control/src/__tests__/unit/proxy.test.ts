@@ -46,7 +46,10 @@ describe('operator proxy', () => {
     const res = proxy(request('/operator/missions/abc123'));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('https://marsyard.labs.ws/operator');
+    const location = new URL(res.headers.get('location')!);
+    expect(location.origin + location.pathname).toBe('https://marsyard.labs.ws/operator');
+    // Kept, so a link into the console (an access-request email) survives sign-in.
+    expect(location.searchParams.get('next')).toBe('/operator/missions/abc123');
   });
 
   it('covers both the pages and the API in its matcher', () => {
