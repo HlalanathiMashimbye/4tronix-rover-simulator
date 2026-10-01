@@ -50,6 +50,7 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
   const [error, setError] = useState<string | null>(null);
   // Which way in is running, so only that button says it is working.
   const [busy, setBusy] = useState<'password' | 'google' | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [noAccess, setNoAccess] = useState<{ user: User; email: string | null } | null>(null);
   const [request, setRequest] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -170,6 +171,8 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
         return;
       }
       const code = (err as { code?: string })?.code;
+      // The message points at the email and password fields, so show them.
+      if (code === 'auth/account-exists-with-different-credential') setShowPassword(true);
       // Closing the chooser is changing your mind, not an error.
       if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
         setError(messageFor(err));
@@ -212,34 +215,6 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
         <div className="mt-6 grid gap-4">
           <label className="grid gap-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Email
-            </span>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="username"
-              required
-              className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Password
-            </span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
-            />
-          </label>
-
-          <label className="grid gap-1.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Which yard are you at?
             </span>
             {options.length === 1 ? (
@@ -271,34 +246,73 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
             </span>
           </label>
 
-          <button
-            type="submit"
-            disabled={busy !== null || !email || !password || !yardId}
-            className="clay-press mt-1 h-11 rounded-lg bg-gradient-mars font-display text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {busy === 'password' ? 'Signing in…' : 'Sign in'}
-          </button>
-
-          <div className="flex items-center gap-3 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            <span className="h-px flex-1 bg-border/70" />
-            or
-            <span className="h-px flex-1 bg-border/70" />
-          </div>
-
-          {/* Needs the yard like the password route does: the session is for
-              a yard, whichever way the person proved who they are. Styled to
-              Google's sign-in button guidance - the full-colour G on a plain
-              surface with a neutral border - so it reads as Google's door
-              rather than one of ours. */}
+          {/* The way in. Google is how operators sign in: it is what Manage
+              access grants to, what an access request is sent as, and it needs
+              no password to be issued or reset. So it is the one large button
+              on the card. Styled to Google's sign-in guidance - the full-colour
+              G on a plain surface - so it reads as Google's door. It needs the
+              yard like the password route does: the session is for a yard,
+              whichever way the person proved who they are. */}
           <button
             type="button"
             onClick={handleGoogle}
             disabled={busy !== null || !yardId}
-            className="clay-press flex h-11 items-center justify-center gap-2.5 rounded-lg border border-border bg-background text-sm font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+            className="clay clay-press flex h-12 items-center justify-center gap-3 rounded-xl border border-border bg-background text-[15px] font-semibold text-foreground transition-colors hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <GoogleMark className="h-[18px] w-[18px]" />
+            <GoogleMark className="h-5 w-5" />
             {busy === 'google' ? 'Signing in…' : 'Continue with Google'}
           </button>
+
+          {/* Email and password is only for accounts created by hand in
+              Firebase Authentication, so it waits behind a link rather than
+              asking every operator for a password they do not have. */}
+          {showPassword ? (
+            <div className="grid gap-4 border-t border-border/60 pt-4">
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Email
+              </span>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="username"
+                required
+                className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
+              />
+            </label>
+
+            <label className="grid gap-1.5">
+              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Password
+              </span>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                className="h-11 rounded-lg border border-border/60 bg-background/70 px-3 text-sm text-foreground outline-none transition focus:border-primary/70"
+              />
+            </label>
+
+            <button
+              type="submit"
+              disabled={busy !== null || !email || !password || !yardId}
+              className="clay-press mt-1 h-11 rounded-lg bg-gradient-mars font-display text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy === 'password' ? 'Signing in…' : 'Sign in'}
+            </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPassword(true)}
+              className="justify-self-center text-xs font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+            >
+              Use email and password instead
+            </button>
+          )}
         </div>
       </form>
 
