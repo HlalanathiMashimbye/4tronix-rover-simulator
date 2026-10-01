@@ -318,7 +318,7 @@ export function AutomaticDispatch({
       setShowRocketFeedback(true);
       const target = new URL(readConsoleUrl());
       target.pathname = '/run/';
-      target.search = new URLSearchParams({
+      const params = new URLSearchParams({
         handoff: 'automatic',
         yardId,
         missionId: mission.id,
@@ -328,7 +328,14 @@ export function AutomaticDispatch({
         // open, rather than Mission Control's home page, which is the learner
         // feed. The console only follows it back to this origin.
         returnTo: `${window.location.origin}/operator?mission=${encodeURIComponent(mission.id)}`,
-      }).toString();
+      });
+      // The theme on screen right now, so the console opens in it. The console
+      // is on another address and cannot read the operator's choice from here;
+      // without this it falls back to the laptop's setting, which is wrong for
+      // anyone who picked the other theme in Mission Control.
+      const theme = document.documentElement.getAttribute('data-theme');
+      if (theme === 'light' || theme === 'dark') params.set('theme', theme);
+      target.search = params.toString();
       window.setTimeout(() => navigate(target.toString()), 1500);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not check the satellite.');

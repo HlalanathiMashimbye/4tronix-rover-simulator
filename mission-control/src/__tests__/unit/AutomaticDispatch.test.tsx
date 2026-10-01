@@ -116,6 +116,43 @@ describe('Automatic Route dispatch', () => {
     );
   }, 10000);
 
+  describe('the console opens in the theme the operator is looking at', () => {
+    /**
+     * The console is on another address, so it cannot read the theme the
+     * operator picked here. Without this it follows the laptop's setting,
+     * which is the other theme for anyone who switched in Mission Control.
+     */
+    async function sendWith(theme: string | null) {
+      if (theme) document.documentElement.setAttribute('data-theme', theme);
+      else document.documentElement.removeAttribute('data-theme');
+      global.fetch = jest.fn().mockResolvedValue(answer(status()));
+      const navigate = mount();
+
+      await checkYard();
+      await waitFor(() => expect(sendButton()).toBeEnabled());
+      fireEvent.click(sendButton());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+      });
+
+      return new URL(navigate.mock.calls[0][0]).searchParams.get('theme');
+    }
+
+    afterEach(() => document.documentElement.removeAttribute('data-theme'));
+
+    it('hands over light', async () => {
+      expect(await sendWith('light')).toBe('light');
+    }, 10000);
+
+    it('hands over dark', async () => {
+      expect(await sendWith('dark')).toBe('dark');
+    }, 10000);
+
+    it('hands over nothing when no theme is set, so the console follows the laptop', async () => {
+      expect(await sendWith(null)).toBeNull();
+    }, 10000);
+  });
+
   it('does not send when the yard stopped being ready between the check and the press', async () => {
     global.fetch = jest.fn()
       .mockResolvedValueOnce(answer(status()))

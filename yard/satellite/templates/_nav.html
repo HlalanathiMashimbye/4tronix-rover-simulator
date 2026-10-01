@@ -36,16 +36,17 @@
   <button class="navtoggle" id="navToggle" type="button" aria-expanded="false" aria-controls="topnav" aria-label="Menu">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
   </button>
+  {# Icon and label per link, as Mission Control's nav draws them. #}
   <nav class="topnav" id="topnav">
-    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}>Home</a>
+    <a href="/"{% if nav_active == 'home' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</a>
     {# No Queue item: running a mission here is copy, paste, run, which is the
        Code station. The Firestore-backed queue needed a sign-in and an
        internet connection to show anything, on a box that has to work without
        either. #}
-    <a href="/code/"{% if nav_active == 'code' %} class="active"{% endif %}>Code</a>
-    <a href="/run/"{% if nav_active == 'run' %} class="active"{% endif %}>Run</a>
-    <a href="/monitor/"{% if nav_active == 'monitor' %} class="active"{% endif %}>Monitor</a>
-    <a href="/settings"{% if nav_active == 'status' %} class="active"{% endif %}>Settings</a>
+    <a href="/code/"{% if nav_active == 'code' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Code</a>
+    <a href="/run/"{% if nav_active == 'run' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="6 3 20 12 6 21 6 3"/></svg>Run</a>
+    <a href="/monitor/"{% if nav_active == 'monitor' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>Monitor</a>
+    <a href="/settings"{% if nav_active == 'status' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Settings</a>
   </nav>
   <div class="topbar-right">
     <span class="sys" id="sysRover"><span class="sys-dot"></span><span class="sys-txt">Rover&hellip;</span></span>

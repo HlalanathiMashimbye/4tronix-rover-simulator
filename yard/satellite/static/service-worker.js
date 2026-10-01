@@ -1,9 +1,10 @@
 // Rover Code Service Worker
 /**
- * Bumped from v1 because the asset list changed. The old cache held a CDN URL
- * that no page ever requested, so it must be discarded rather than reused.
+ * Bumped whenever the asset list changes, so an install with the old list is
+ * discarded rather than reused. v2 dropped a CDN URL no page ever requested;
+ * v3 added yard-theme.css.
  */
-const CACHE_NAME = 'rover-code-v2';
+const CACHE_NAME = 'rover-code-v3';
 
 /**
  * Everything /code/ needs to open with no connection.
@@ -17,6 +18,9 @@ const CACHE_NAME = 'rover-code-v2';
 const STATIC_ASSETS = [
     '/code/',
     '/static/yard-base.css',
+    // yard-base.css imports the palette from here. Without it an offline
+    // tablet gets the layout with none of the colours.
+    '/static/yard-theme.css',
     '/static/vendor/blockly/blockly.min.js',
     '/static/roversim/roverBlockly.js',
     '/static/roversim/parseRoverCode.js',
