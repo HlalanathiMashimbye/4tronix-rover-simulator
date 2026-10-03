@@ -13,21 +13,9 @@ import {
   type SimulationCommand,
 } from '@/lib/roverBlockly';
 import { blocklyInjectOptions } from '@/components/mission/blocklyInjectOptions';
+import { RunningBlockOverlay, useRunningBlockMarks } from '@/components/mission/runningBlockMarks';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
-
-/** Where the run markers sit over the canvas, in px from its top-left. */
-interface LoopMark {
-  key: string;
-  left: number;
-  top: number;
-  /** "2 / 3": which pass of the Repeat is running. */
-  label: string;
-}
-interface RunMarks {
-  step: { left: number; top: number } | null;
-  loops: LoopMark[];
-}
 
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -354,96 +342,9 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     };
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
 
-  // Light up the running block, and any Repeat it is inside. Our own classes
-  // rather than Blockly's highlightBlock, because the two jobs look different:
-  // the step pops and glows, the Repeat around it gets a moving dashed edge so
-  // it reads as "going round". globals.css owns both, and drops the motion
-  // under prefers-reduced-motion. Ids are checked first because a block can
-  // be deleted without changing the generated Python, so the highlight
-  // survives the edit that removed its block.
-  //
-  // Keyed as JSON, not joined with commas: Blockly's generated ids draw from
-  // a character set that includes the comma, so a split came apart mid-id and
-  // only the Repeat, whose id happened to have none, ever lit up. The passes
-  // are in the key too, so a one-block loop pops again on every pass.
-  const highlightKey = JSON.stringify([highlight?.blockIds ?? [], highlight?.passes ?? []]);
-  const [marks, setMarks] = useState<RunMarks | null>(null);
-
-  useEffect(() => {
-    const workspace = workspaceRef.current;
-    const host = blocklyDivRef.current;
-    if (!isInitialized || !workspace || !host) return;
-    const [ids, passes] = JSON.parse(highlightKey) as [string[], { pass: number; of: number }[]];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lit: { block: any; className: string }[] = [];
-    ids.forEach((id, i) => {
-      const block = workspace.getBlockById(id);
-      if (!block) return;
-      const className = i === ids.length - 1 ? 'rover-running-step' : 'rover-running-loop';
-      // Restart the pop when the same block runs again on the next pass:
-      // removing and re-adding a class in one tick does not replay a CSS
-      // animation, a forced reflow in between does.
-      block.removeClass(className);
-      void block.getSvgRoot()?.getBoundingClientRect();
-      block.addClass(className);
-      lit.push({ block, className });
-    });
-
-    // THE SPOTLIGHT. Everything not running dims, so the running block is
-    // the one bright thing on the canvas. A green outline on its own was easy
-    // to miss on a busy program ("the green thingy is boring").
-    host.classList.toggle('roverSpotlight', lit.length > 0);
-
-    // The tag beside the running block and the pass count on each loop are
-    // HTML over the canvas, so they are measured from the blocks and
-    // re-measured whenever the canvas scrolls, zooms or changes.
-    const measure = () => {
-      const frame = host.getBoundingClientRect();
-      // Only the block's own shape: its svg group also contains every block
-      // stacked after it.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rectOf = (block: any) => block.getSvgRoot()?.querySelector(':scope > .blocklyPath')?.getBoundingClientRect();
-      const stepBlock = lit.find((l) => l.className === 'rover-running-step')?.block;
-      const stepRect = stepBlock && rectOf(stepBlock);
-      setMarks({
-        step: stepRect
-          ? { left: stepRect.right - frame.left + 6, top: stepRect.top - frame.top + Math.min(stepRect.height, 40) / 2 }
-          : null,
-        loops: lit
-          .filter((l) => l.className === 'rover-running-loop')
-          .map((l, i) => {
-            const rect = rectOf(l.block);
-            const pass = passes[i];
-            return rect && pass
-              ? { key: l.block.id, left: rect.right - frame.left - 4, top: rect.top - frame.top - 8, label: `${pass.pass} / ${pass.of}` }
-              : null;
-          })
-          .filter((m): m is LoopMark => m !== null),
-      });
-    };
-
-    let raf: number | null = null;
-    const remeasure = () => {
-      if (raf !== null) return;
-      raf = requestAnimationFrame(() => {
-        raf = null;
-        measure();
-      });
-    };
-    if (lit.length > 0) {
-      measure();
-      workspace.addChangeListener(remeasure);
-    } else {
-      setMarks(null);
-    }
-
-    return () => {
-      lit.forEach(({ block, className }) => block.removeClass(className));
-      host.classList.remove('roverSpotlight');
-      workspace.removeChangeListener(remeasure);
-      if (raf !== null) cancelAnimationFrame(raf);
-    };
-  }, [highlightKey, isInitialized]);
+  // The running block's spotlight, glow, NOW tag and loop pass badges
+  // (AB#450). Shared with the read-only viewer: see runningBlockMarks.tsx.
+  const marks = useRunningBlockMarks({ workspaceRef, hostRef: blocklyDivRef, highlight, ready: isInitialized });
 
   if (loadError) {
     return (
@@ -542,20 +443,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           className={`h-full w-full min-h-0 overflow-hidden${phone ? ' roverBlocklyPhone' : ''}`}
           style={{ width: '100%' }}
         />
-        {marks?.step && (
-          // Glides from block to block (transition in globals.css), so a
-          // learner can follow the program with their eye, not just spot it.
-          <div className="roverNowTag" style={{ left: marks.step.left, top: marks.step.top }} aria-hidden="true">
-            <Play className="h-2.5 w-2.5" fill="currentColor" />
-            now
-          </div>
-        )}
-        {marks?.loops.map((loop) => (
-          <div key={loop.key} className="roverPassBadge" style={{ left: loop.left, top: loop.top }}>
-            <span className="sr-only">Repeat pass </span>
-            {loop.label}
-          </div>
-        ))}
+        <RunningBlockOverlay marks={marks} />
       </div>
     </div>
   );

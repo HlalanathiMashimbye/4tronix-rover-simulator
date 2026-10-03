@@ -48,3 +48,17 @@ const BUILD_PATH = '/mission';
 export function isBuildSurface(pathname: string): boolean {
   return pathname === BUILD_PATH || pathname.startsWith(`${BUILD_PATH}/`);
 }
+
+const MISSION_VIEW_PREFIX = '/missions/';
+
+/**
+ * Whether a path is one mission's own page (not the feed of them).
+ *
+ * Laid out like Create Mission on a phone (AB#455): player docked at the top,
+ * the code filling the rest, no page scroll. The tab bar and floating Create
+ * Mission button sat over its blocks, and the page header already has the way
+ * back, so the navbar drops them here too.
+ */
+export function isMissionViewSurface(pathname: string): boolean {
+  return pathname.startsWith(MISSION_VIEW_PREFIX) && pathname.length > MISSION_VIEW_PREFIX.length;
+}

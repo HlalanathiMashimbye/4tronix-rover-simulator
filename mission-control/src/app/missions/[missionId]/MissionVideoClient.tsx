@@ -8,8 +8,8 @@ import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
-import { parseRoverCode } from '@/lib/parseRoverCode';
-import { simulateCommands } from '@/lib/simulateCommands';
+import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
+import type { CommandSource } from '@/lib/roverBlockly';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
 import { SplitPane } from '@/components/ui/SplitPane';
@@ -20,6 +20,7 @@ import { missionClipboardText } from '@/lib/missionClipboard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
+import { CodeLines } from '@/components/mission/CodeLines';
 
 
 export default function MissionVideoClient({
@@ -46,10 +47,10 @@ export default function MissionVideoClient({
 
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
-  const simTrajectory = useMemo(
-    () => (mission ? simulateCommands(parseRoverCode(mission.code)) : []),
-    [mission]
-  );
+  // From the blocks where there are blocks, so it knows which block is which.
+  const simTrajectory = useMissionTrajectory(mission);
+  /** What the simulation is running, lit up in the code like the editor (AB#450). */
+  const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
 
   // Real runs come FIRST, which is the point: a child needs to see that an
   // actual rover drove their code. See lib/missionRuns for the reasoning.
@@ -125,6 +126,18 @@ export default function MissionVideoClient({
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
 
+  // Remix into the workspace: carry blocks for block-built missions,
+  // otherwise the Python, and open the matching editor mode.
+  const remix = () => {
+    if (mission.blocklyState) {
+      localStorage.setItem('roverWorkspace', mission.blocklyState);
+      router.push('/mission?mode=blockly');
+    } else {
+      localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
+      router.push('/mission?mode=code');
+    }
+  };
+
   const copyCode = async () => {
     // The same payload the operator queue copies. This button used to write
     // bare mission.code, which pasted into the run station as an anonymous
@@ -139,15 +152,16 @@ export default function MissionVideoClient({
   };
 
   return (
-    // Pinned to the viewport from md up, where the panels sit side by side and
-    // a page that never scrolls is the point. On a phone they stack, so a
-    // fixed 100vh with overflow-hidden CLIPPED the second panel entirely - the
-    // blocks and the code were rendered, just unreachable, with no scrollbar to
-    // hint that anything was below.
-    <main className="px-3 py-2 md:h-page md:overflow-hidden">
+    // Pinned to the viewport at every size, like Create Mission (AB#455). On a
+    // phone this used to stack the panels and scroll, with the tab bar and the
+    // floating button on top of the blocks. Now the player docks at the top
+    // and the code takes the rest (.workspaceSplitGrid--fixed in globals.css).
+    // It once clipped the code entirely under overflow-hidden; the fix then
+    // was to let it scroll, the fix now is a layout that fits.
+    <main data-surface="mission" className="h-page overflow-hidden px-3 py-2">
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
-        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <div className="flex shrink-0 items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2.5">
             <Link href="/" className="shrink-0 text-muted-foreground transition-colors hover:text-primary" aria-label="Back to the feed">
               <ArrowLeft className="h-5 w-5" />
@@ -180,6 +194,17 @@ export default function MissionVideoClient({
               {dateLabel}
             </span>
           </div>
+          {/* In the header, like Run in the editor: the one thing to do next
+              on this page. It was a card under the code, a whole row of a
+              phone screen. */}
+          <button
+            onClick={remix}
+            title="Tweak the code and run your own version"
+            className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
+          >
+            <Zap className="h-3.5 w-3.5" fill="currentColor" />
+            Remix
+          </button>
         </div>
 
         {/* Fixed at 60/40, video to code, and the number came from the
@@ -217,17 +242,9 @@ export default function MissionVideoClient({
                 onSelect={setSelectedRunId}
                 missionName={missionName}
                 trajectory={simTrajectory}
+                onSimSourceChange={setRunningSource}
               />
-              {/* One row, three facts, label beside value rather than above
-                  it. As three stacked cards this was 49px of a column that had
-                  236px less player in it than the code panel beside it. These
-                  are glanced at once, so they do not need the height. */}
-              <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-0.5 rounded-xl border border-border/60 bg-card/50 px-3 py-1.5">
-                <Stat label="Status" value={discoveryStatus} />
-                <Stat label="Duration" value={duration} mono />
-                <Stat label="Built with" value={hasBlocks ? 'Blocks' : 'Python'} />
-              </div>
-              {/* Under the stats, where a learner looks after watching. One
+              {/* Under the player, where a learner looks after watching. One
                   line, so the leftover height goes to the player instead. */}
               <OperatorFeedback runs={missionRuns} />
             </div>
@@ -268,62 +285,34 @@ export default function MissionVideoClient({
                     </span>
                   </div>
                 )}
-                <button
-                  onClick={copyCode}
-                  className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
+                <div className="flex items-center gap-2">
+                  {/* How long it runs, beside the code that decides it. Status
+                      and "built with" are already said by the badge and the
+                      Blocks/Python switch. */}
+                  <span className="font-mono text-[11px] text-muted-foreground" title="How long it runs">
+                    {duration}
+                  </span>
+                  <button
+                    onClick={copyCode}
+                    className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
               </div>
               {showBlocks ? (
                 <div className="min-h-0 flex-1">
-                  <BlocklyViewer state={mission.blocklyState!} />
+                  <BlocklyViewer state={mission.blocklyState!} highlight={runningSource} />
                 </div>
               ) : (
-                <pre className="min-h-0 flex-1 overflow-auto p-4 text-xs leading-relaxed text-foreground">
-                  <code>{mission.code.trim() || '# No code'}</code>
-                </pre>
+                <CodeLines code={mission.code} highlight={runningSource} />
               )}
             </div>
 
-            <div className="flex shrink-0 items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 to-transparent px-4 py-3">
-              <div className="min-w-0">
-                <h3 className="font-display text-sm font-bold text-foreground">Like this mission?</h3>
-                <p className="truncate text-xs text-muted-foreground">Remix it: tweak the code and run your own version.</p>
-              </div>
-              <button
-                onClick={() => {
-                  // Remix into the workspace: carry blocks for block-built missions,
-                  // otherwise the Python, and open the matching editor mode.
-                  if (mission.blocklyState) {
-                    localStorage.setItem('roverWorkspace', mission.blocklyState);
-                    router.push('/mission?mode=blockly');
-                  } else {
-                    localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
-                    router.push('/mission?mode=code');
-                  }
-                }}
-                className="clay clay-press inline-flex shrink-0 items-center gap-2 rounded-2xl bg-gradient-mars px-4 py-2.5 font-display text-sm font-bold text-primary-foreground"
-              >
-                <Zap className="h-4 w-4" fill="currentColor" />
-                Remix
-              </button>
-            </div>
             </div>
           }
         />
       </div>
     </main>
-  );
-}
-
-function Stat({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <span className="flex items-baseline gap-1.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <span className={`text-xs font-bold text-foreground ${mono ? 'font-mono' : ''}`}>{value}</span>
-    </span>
   );
 }

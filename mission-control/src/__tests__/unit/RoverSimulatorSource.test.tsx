@@ -83,6 +83,15 @@ describe('reporting what is running', () => {
     expect(onSourceChange).toHaveBeenLastCalledWith(null);
   });
 
+  it('clears when it leaves the screen, so no block stays lit for a hidden run', async () => {
+    const onSourceChange = jest.fn();
+    const { unmount } = render(<RoverSimulator trajectory={trajectory} isPlaying editorMode="code" onSourceChange={onSourceChange} />);
+    await runFrames(4);
+    expect(onSourceChange).toHaveBeenLastCalledWith(FIRST);
+    unmount();
+    expect(onSourceChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('reports nothing for manual driving, which has no program', async () => {
     const onSourceChange = jest.fn();
     render(<RoverSimulator trajectory={trajectory} isPlaying editorMode="manual" onSourceChange={onSourceChange} />);
