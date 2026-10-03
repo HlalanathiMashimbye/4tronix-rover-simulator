@@ -374,6 +374,7 @@ export function MissionWorkspace() {
           simulator={<RoverSimulator {...simulatorProps} bare />}
           submitBar={submitBar}
           onRun={() => runEditorRef.current?.()}
+          editorKind={editorMode === 'code' ? 'code' : 'blocks'}
           launchOpen={launchOpen}
           onLaunchOpenChange={setLaunchOpen}
           runningText={runningLineText(currentCode, highlight)}

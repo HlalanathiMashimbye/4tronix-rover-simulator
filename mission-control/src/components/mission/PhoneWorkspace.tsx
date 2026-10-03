@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Maximize2, Minimize2, Pencil, Play } from 'lucide-react';
+import { Blocks, ChevronLeft, Code2, Maximize2, Minimize2, Play } from 'lucide-react';
 import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
 import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
 
@@ -45,6 +45,8 @@ interface PhoneWorkspaceProps {
   submitBar?: React.ReactNode;
   /** Runs the active editor's program in the simulator. */
   onRun: () => void;
+  /** Which editor the launch view returns to, for its button's words. */
+  editorKind: 'blocks' | 'code';
   /** The launch view, owned by MissionWorkspace so a successful send can close it. */
   launchOpen: boolean;
   onLaunchOpenChange: (open: boolean) => void;
@@ -55,7 +57,7 @@ interface PhoneWorkspaceProps {
   runningText?: string | null;
 }
 
-export function PhoneWorkspace({ editor, simulator, submitBar, onRun, launchOpen, onLaunchOpenChange, runningText = null }: PhoneWorkspaceProps) {
+export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind, launchOpen, onLaunchOpenChange, runningText = null }: PhoneWorkspaceProps) {
   const [simExpanded, setSimExpanded] = useState(false);
   const keyboard = useOnScreenKeyboard();
   // Drive has no launch view: nothing to submit.
@@ -83,7 +85,11 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, launchOpen
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5">
+    // data-launch drives the move between editing and launching in
+    // globals.css (.phoneWorkspace): the simulator grows, the launch controls
+    // slide up, the editor slides away, and back. Everything stays mounted so
+    // there is something to animate, and what is off screen is inert.
+    <div data-launch={launching} className="phoneWorkspace flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center justify-between gap-2">
         <Link
           href="/"
@@ -98,12 +104,14 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, launchOpen
 
         {submitBar &&
           (launching ? (
+            // Says where it goes, not what it does: "Edit" left a learner
+            // unsure whether they would lose the run they were watching.
             <button
               onClick={() => onLaunchOpenChange(false)}
               className="clay clay-press flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground"
             >
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
+              {editorKind === 'code' ? <Code2 className="h-3.5 w-3.5" /> : <Blocks className="h-3.5 w-3.5" />}
+              {editorKind === 'code' ? 'Back to code' : 'Back to blocks'}
             </button>
           ) : (
             <button
@@ -127,7 +135,7 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, launchOpen
         data-launch={launching}
         // The outer radius, not panel-inner's: the strip sits beside the editor
         // card as a sibling, not inside it, and the two read as one family.
-        className="phoneSimStrip relative shrink-0 overflow-hidden rounded-2xl border border-border"
+        className="phoneSimStrip relative overflow-hidden rounded-2xl border border-border"
       >
         {simulator}
         {launching ? null : keyboard.open ? (
@@ -149,13 +157,15 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, launchOpen
         )}
       </div>
 
-      {launching && (
-        <section aria-label="Send your mission" className="phoneLaunch shrink-0">
-          {submitBar}
-        </section>
+      {submitBar && (
+        <div className="phoneLaunchSlot" inert={!launching}>
+          <section aria-label="Send your mission" aria-hidden={!launching} className="phoneLaunch">
+            {submitBar}
+          </section>
+        </div>
       )}
 
-      <div hidden={launching} className="min-h-0 flex-1">
+      <div className="phoneEditorSlot" inert={launching} aria-hidden={launching}>
         {editor}
       </div>
     </div>

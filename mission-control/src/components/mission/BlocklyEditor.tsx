@@ -243,7 +243,32 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     // a full Blockly svgResize (workspace metrics + toolbox/flyout layout)
     // ran on every one of those frames for the whole drag.
     let rafId: number | null = null;
+    // NEVER MEASURE A HIDDEN CANVAS. The phone's launch view collapses the
+    // editor to nothing while the simulator plays (AB#455), and a Blockly
+    // workspace resized to zero keeps its scroll position for a zero-sized
+    // viewport: back in the editor, the program sat in the top-left corner.
+    // So below a usable size this stops resizing altogether, and when the
+    // canvas comes back it recentres once it has finished growing, measured
+    // as no resize for a moment rather than a guess at the animation's length.
+    let collapsed = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
+      const height = blocklyDivRef.current?.clientHeight ?? 0;
+      if (height < 40) {
+        collapsed = true;
+        return;
+      }
+      if (collapsed) {
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+          settleTimer = null;
+          collapsed = false;
+          const workspace = workspaceRef.current;
+          if (!workspace) return;
+          window.Blockly.svgResize(workspace);
+          workspace.scrollCenter();
+        }, 120);
+      }
       if (rafId !== null) return;
       rafId = requestAnimationFrame(() => {
         rafId = null;
@@ -267,6 +292,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       window.removeEventListener('resize', handleResize);
       resizeObserver?.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
+      if (settleTimer) clearTimeout(settleTimer);
 
       if (workspaceRef.current === workspace) {
         workspace.dispose();

@@ -140,6 +140,7 @@ describe('the docked layout', () => {
         simulator={<div data-testid="simulator" />}
         submitBar={<div data-testid="submit-bar" />}
         onRun={onRun}
+        editorKind="blocks"
         launchOpen={false}
         onLaunchOpenChange={onLaunchOpenChange}
         {...overrides}
@@ -151,8 +152,7 @@ describe('the docked layout', () => {
   it('shows the simulator and the editor at the same time while editing', () => {
     renderWorkspace();
     expect(screen.getByTestId('simulator')).toBeInTheDocument();
-    expect(screen.getByTestId('editor')).toBeVisible();
-    expect(screen.queryByTestId('submit-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('editor').parentElement).not.toHaveAttribute('inert');
   });
 
   it('enlarges the simulator on request, and shrinks it back', () => {
@@ -177,23 +177,35 @@ describe('the docked layout', () => {
     expect(screen.getByTestId('simulator')).toBeInTheDocument();
   });
 
-  it('keeps the editor mounted while launching, so the program and its Run survive', () => {
+  it('keeps the editor mounted but out of reach while launching, so the program and its Run survive', () => {
     renderWorkspace({ launchOpen: true });
     const editor = screen.getByTestId('editor');
     expect(editor).toBeInTheDocument();
-    expect(editor).not.toBeVisible();
+    // Collapsed by CSS so it can animate away, and inert so a keyboard or
+    // screen reader cannot wander into an editor nobody can see.
+    expect(editor.parentElement).toHaveAttribute('inert');
   });
 
-  it('goes back to editing from the launch view', () => {
+  it('says where the way back goes, for blocks and for code', () => {
     const { onLaunchOpenChange } = renderWorkspace({ launchOpen: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to blocks' }));
     expect(onLaunchOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('says Back to code from the Python tab', () => {
+    renderWorkspace({ launchOpen: true, editorKind: 'code' });
+    expect(screen.getByRole('button', { name: 'Back to code' })).toBeInTheDocument();
+  });
+
+  it('keeps the launch controls out of reach while editing', () => {
+    renderWorkspace();
+    expect(screen.getByTestId('submit-bar').closest('.phoneLaunchSlot')).toHaveAttribute('inert');
   });
 
   it('has neither Run nor a launch view in Drive mode, which has no program', () => {
     renderWorkspace({ submitBar: undefined, launchOpen: true });
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Send your mission' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('editor')).toBeVisible();
+    expect(screen.getByTestId('editor').parentElement).not.toHaveAttribute('inert');
   });
 });

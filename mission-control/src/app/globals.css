@@ -924,46 +924,86 @@
 /*
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
- * The docked simulator takes 30% of the screen so the blocks keep most of it,
- * and grows to 62% when the learner wants a proper look. dvh, not vh: mobile
- * Safari's vh includes the strip under the URL bar, which is exactly the
- * clipping this layout exists to get rid of. Height is animated because the
- * canvas inside redraws on resize anyway, and a jump reads as a glitch.
+ * Editing: the docked simulator takes 30% of the screen so the blocks keep
+ * most of it, and grows to 62% when the learner wants a proper look.
+ * Launching (after Run): the simulator takes everything the launch controls
+ * leave, the controls rise in under it and the editor sinks away; Back to
+ * blocks plays it in reverse.
+ *
+ * Sized with FLEX, not height, because the launch size is "whatever is
+ * left", which height cannot express and flex can interpolate: flex-grow and
+ * flex-basis both animate, so the simulator glides between a fixed share and
+ * the remainder. The launch controls use the grid 0fr-to-1fr trick, the one
+ * way to animate to their natural height. dvh, not vh: mobile Safari's vh
+ * includes the strip under the URL bar, which is the clipping this layout
+ * exists to get rid of.
  */
+.phoneWorkspace {
+  --phone-move: 420ms var(--ease-drawer);
+}
 .phoneSimStrip {
-  height: 30dvh;
-  transition: height 320ms var(--ease-drawer);
+  flex: 0 0 30dvh;
+  min-height: 0;
+  transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  height: 62dvh;
+  flex-basis: 62dvh;
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
 .phoneSimStrip[data-keyboard="true"] {
-  height: 2.25rem;
+  flex-basis: 2.25rem;
 }
-/* The launch view: the simulator takes whatever the checks, the name and
-   Submit below it leave. Last, so it wins over the editing sizes. */
-.phoneSimStrip[data-launch="true"] {
+.phoneWorkspace[data-launch="true"] .phoneSimStrip {
   flex: 1 1 0;
-  height: auto;
-  min-height: 0;
-}
-/* The launch controls slide up into place as the simulator grows. */
-.phoneLaunch {
-  animation: phone-launch-in 320ms var(--ease-drawer);
-}
-@keyframes phone-launch-in {
-  from { transform: translateY(24px); opacity: 0; }
-  to { transform: none; opacity: 1; }
 }
 
+.phoneLaunchSlot {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneLaunchSlot {
+  grid-template-rows: 1fr;
+}
+.phoneLaunch {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 260ms ease, transform var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneLaunch {
+  opacity: 1;
+  transform: none;
+  /* After the simulator has started to grow, so the eye follows it up. */
+  transition-delay: 80ms;
+}
+
+.phoneEditorSlot {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-top: 0.375rem;
+  transition: flex var(--phone-move), opacity 220ms ease, transform var(--phone-move), margin var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneEditorSlot {
+  flex: 0 0 0;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(40px);
+  overflow: hidden;
+}
+.phoneSimStrip,
+.phoneLaunchSlot {
+  margin-top: 0.375rem;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .phoneSimStrip,
-  .phoneLaunch {
+  .phoneLaunchSlot,
+  .phoneLaunch,
+  .phoneEditorSlot {
     transition: none;
-    animation: none;
   }
 }
 
