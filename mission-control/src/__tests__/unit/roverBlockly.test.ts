@@ -302,6 +302,30 @@ describe('which blocks each command came from', () => {
     ]);
   });
 
+  it('says which pass of the Repeat each command belongs to', () => {
+    const forward = block('rover_forward', { TIME: 1 });
+    const repeat = block('rover_repeat', { TIMES: 3 }, { DO: forward });
+
+    expect(workspaceToCommands(workspace(onReceive(repeat))).map((c) => c.source?.passes)).toEqual([
+      [{ pass: 1, of: 3 }],
+      [{ pass: 2, of: 3 }],
+      [{ pass: 3, of: 3 }],
+    ]);
+  });
+
+  it('gives a loop inside a loop both passes, outer first, matching the Repeat ids', () => {
+    const stop = block('rover_stop');
+    const inner = block('rover_repeat', { TIMES: 2 }, { DO: stop });
+    const outer = block('rover_repeat', { TIMES: 2 }, { DO: inner });
+
+    expect(workspaceToCommands(workspace(onReceive(outer))).map((c) => c.source?.passes)).toEqual([
+      [{ pass: 1, of: 2 }, { pass: 1, of: 2 }],
+      [{ pass: 1, of: 2 }, { pass: 2, of: 2 }],
+      [{ pass: 2, of: 2 }, { pass: 1, of: 2 }],
+      [{ pass: 2, of: 2 }, { pass: 2, of: 2 }],
+    ]);
+  });
+
   it('names both Repeats for a loop inside a loop, outer first', () => {
     const stop = block('rover_stop');
     const inner = block('rover_repeat', { TIMES: 1 }, { DO: stop });

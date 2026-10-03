@@ -16,6 +16,19 @@ import { blocklyInjectOptions } from '@/components/mission/blocklyInjectOptions'
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
+/** Where the run markers sit over the canvas, in px from its top-left. */
+interface LoopMark {
+  key: string;
+  left: number;
+  top: number;
+  /** "2 / 3": which pass of the Repeat is running. */
+  label: string;
+}
+interface RunMarks {
+  step: { left: number; top: number } | null;
+  loops: LoopMark[];
+}
+
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange?: (code: string) => void;
@@ -325,12 +338,16 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   //
   // Keyed as JSON, not joined with commas: Blockly's generated ids draw from
   // a character set that includes the comma, so a split came apart mid-id and
-  // only the Repeat, whose id happened to have none, ever lit up.
-  const blockIdsKey = JSON.stringify(highlight?.blockIds ?? []);
+  // only the Repeat, whose id happened to have none, ever lit up. The passes
+  // are in the key too, so a one-block loop pops again on every pass.
+  const highlightKey = JSON.stringify([highlight?.blockIds ?? [], highlight?.passes ?? []]);
+  const [marks, setMarks] = useState<RunMarks | null>(null);
+
   useEffect(() => {
     const workspace = workspaceRef.current;
-    if (!isInitialized || !workspace) return;
-    const ids = JSON.parse(blockIdsKey) as string[];
+    const host = blocklyDivRef.current;
+    if (!isInitialized || !workspace || !host) return;
+    const [ids, passes] = JSON.parse(highlightKey) as [string[], { pass: number; of: number }[]];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const lit: { block: any; className: string }[] = [];
     ids.forEach((id, i) => {
@@ -345,8 +362,62 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       block.addClass(className);
       lit.push({ block, className });
     });
-    return () => lit.forEach(({ block, className }) => block.removeClass(className));
-  }, [blockIdsKey, isInitialized]);
+
+    // THE SPOTLIGHT. Everything not running dims, so the running block is
+    // the one bright thing on the canvas. A green outline on its own was easy
+    // to miss on a busy program ("the green thingy is boring").
+    host.classList.toggle('roverSpotlight', lit.length > 0);
+
+    // The tag beside the running block and the pass count on each loop are
+    // HTML over the canvas, so they are measured from the blocks and
+    // re-measured whenever the canvas scrolls, zooms or changes.
+    const measure = () => {
+      const frame = host.getBoundingClientRect();
+      // Only the block's own shape: its svg group also contains every block
+      // stacked after it.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rectOf = (block: any) => block.getSvgRoot()?.querySelector(':scope > .blocklyPath')?.getBoundingClientRect();
+      const stepBlock = lit.find((l) => l.className === 'rover-running-step')?.block;
+      const stepRect = stepBlock && rectOf(stepBlock);
+      setMarks({
+        step: stepRect
+          ? { left: stepRect.right - frame.left + 6, top: stepRect.top - frame.top + Math.min(stepRect.height, 40) / 2 }
+          : null,
+        loops: lit
+          .filter((l) => l.className === 'rover-running-loop')
+          .map((l, i) => {
+            const rect = rectOf(l.block);
+            const pass = passes[i];
+            return rect && pass
+              ? { key: l.block.id, left: rect.right - frame.left - 4, top: rect.top - frame.top - 8, label: `${pass.pass} / ${pass.of}` }
+              : null;
+          })
+          .filter((m): m is LoopMark => m !== null),
+      });
+    };
+
+    let raf: number | null = null;
+    const remeasure = () => {
+      if (raf !== null) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        measure();
+      });
+    };
+    if (lit.length > 0) {
+      measure();
+      workspace.addChangeListener(remeasure);
+    } else {
+      setMarks(null);
+    }
+
+    return () => {
+      lit.forEach(({ block, className }) => block.removeClass(className));
+      host.classList.remove('roverSpotlight');
+      workspace.removeChangeListener(remeasure);
+      if (raf !== null) cancelAnimationFrame(raf);
+    };
+  }, [highlightKey, isInitialized]);
 
   if (loadError) {
     return (
@@ -445,6 +516,20 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           className={`h-full w-full min-h-0 overflow-hidden${phone ? ' roverBlocklyPhone' : ''}`}
           style={{ width: '100%' }}
         />
+        {marks?.step && (
+          // Glides from block to block (transition in globals.css), so a
+          // learner can follow the program with their eye, not just spot it.
+          <div className="roverNowTag" style={{ left: marks.step.left, top: marks.step.top }} aria-hidden="true">
+            <Play className="h-2.5 w-2.5" fill="currentColor" />
+            now
+          </div>
+        )}
+        {marks?.loops.map((loop) => (
+          <div key={loop.key} className="roverPassBadge" style={{ left: loop.left, top: loop.top }}>
+            <span className="sr-only">Repeat pass </span>
+            {loop.label}
+          </div>
+        ))}
       </div>
     </div>
   );
