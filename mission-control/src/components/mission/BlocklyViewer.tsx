@@ -19,7 +19,21 @@ import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
  * shows which block drives which move. On a phone the zoom buttons go and two
  * fingers zoom instead, as in the editor: they sat on top of the program.
  */
-export function BlocklyViewer({ state, highlight = null }: { state: string; highlight?: CommandSource | null }) {
+export function BlocklyViewer({
+  state,
+  highlight = null,
+  fit = false,
+}: {
+  state: string;
+  highlight?: CommandSource | null;
+  /**
+   * Scale the whole program into view instead of centring it at the set
+   * zoom. For the operator console, where the panel is short and the job is
+   * to check the program end to end: centred, a tall program showed its
+   * middle, with the On uplink block and the first steps cut off.
+   */
+  fit?: boolean;
+}) {
   const divRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const workspaceRef = useRef<any>(null);
@@ -55,9 +69,12 @@ export function BlocklyViewer({ state, highlight = null }: { state: string; high
       readOnly: true,
       renderer: 'zelos',
       move: { drag: true, scrollbars: true, wheel: true },
+      // No zoom buttons on a phone (two fingers instead) or when fitted (the
+      // program is already sized to the panel, and in the operator's narrow
+      // panel the buttons sat on top of it). The wheel still zooms.
       zoom: phone
         ? { controls: false, wheel: false, pinch: true, startScale: 0.75, maxScale: 2, minScale: 0.3 }
-        : { controls: true, wheel: true, startScale: 0.9, maxScale: 2.5, minScale: 0.3 },
+        : { controls: !fit, wheel: true, startScale: 0.9, maxScale: 2.5, minScale: 0.3 },
     });
     workspaceRef.current = workspace;
 
@@ -73,7 +90,15 @@ export function BlocklyViewer({ state, highlight = null }: { state: string; high
       // off to one side opened showing empty canvas and the learner had to
       // hunt for it. scrollCenter (not zoomToFit) keeps the scale the viewer
       // was configured with and only moves the viewport.
-      workspace.scrollCenter();
+      if (fit) {
+        workspace.zoomToFit();
+        // Never larger than the editor would show it: a two-block program
+        // fitted to a big panel would be comically large.
+        if (workspace.getScale() > 1) workspace.setScale(1);
+        workspace.scrollCenter();
+      } else {
+        workspace.scrollCenter();
+      }
       setReady(true);
     });
 
@@ -84,7 +109,7 @@ export function BlocklyViewer({ state, highlight = null }: { state: string; high
     };
     // phone is read once at inject, like the editor's options; a change of
     // layout re-injects.
-  }, [loaded, state, phone]);
+  }, [loaded, state, phone, fit]);
 
   if (loadError) {
     return (

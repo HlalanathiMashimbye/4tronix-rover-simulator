@@ -7,7 +7,7 @@
  * written, BEFORE the controls that send it. The decision comes first.
  */
 
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, fireEvent } from '@testing-library/react';
 
 let reportSource: (source: unknown) => void = () => {};
 jest.mock('@/components/operator/MissionPreview', () => ({
@@ -62,4 +62,23 @@ it('lights the code as the preview runs it', () => {
     'rover.forward(60)',
     'time.sleep(2)',
   ]);
+});
+
+it('says there is more below the decision, takes the operator there, and steps aside', () => {
+  // The record (Mark complete, runs, video) is below the fold so the
+  // simulator and blocks can be big enough to judge by. That must not be a
+  // secret.
+  const scrollIntoView = jest.fn();
+  Element.prototype.scrollIntoView = scrollIntoView;
+  const { container } = renderDetail();
+  const cue = screen.getByRole('button', { name: /scroll for actions, runs and video/i });
+
+  fireEvent.click(cue);
+  expect(scrollIntoView).toHaveBeenCalled();
+  expect(scrollIntoView.mock.contexts[0]).toContainElement(screen.getByTestId('actions'));
+
+  const panel = container.firstElementChild as HTMLElement;
+  Object.defineProperty(panel, 'scrollTop', { configurable: true, value: 200 });
+  fireEvent.scroll(panel);
+  expect(cue).toHaveAttribute('aria-hidden', 'true');
 });

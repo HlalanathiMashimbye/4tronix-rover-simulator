@@ -1,11 +1,11 @@
 'use client';
 
-import { ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { CodeLines } from '@/components/mission/CodeLines';
 import { MissionPreview } from '@/components/operator/MissionPreview';
@@ -46,6 +46,10 @@ export function MissionDetail({
 }) {
   // What the preview's simulation is running, lit up in the code beside it.
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
+  // Whether the operator has scrolled past the first screen, so the cue
+  // pointing at the record below can step aside.
+  const [scrolledDown, setScrolledDown] = useState(false);
+  const recordRef = useRef<HTMLDivElement>(null);
 
   if (!mission) {
     return (
@@ -59,13 +63,17 @@ export function MissionDetail({
   }
 
   return (
-    // ONE SCREEN, SENDING ALWAYS IN VIEW. The operator opens a mission to
-    // decide and send: preview and code share whatever height is left, the
-    // dispatch row sits directly under them, and the record of the mission
-    // (actions, runs, video) gets a capped scroll area of its own below. It
-    // was one long column, and on a laptop Send to Rover was below the fold.
-    // overflow-y-auto stays only as a safety valve for absurdly short windows.
-    <div className="@container flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
+    // THE FIRST SCREEN IS THE DECISION. The header, the preview and the code
+    // at a size worth looking at, and the yard checks with Send to Rover at
+    // its foot, fill exactly the panel's height; the record of the mission
+    // (Mark complete, the runs, the video) is below the fold, with a cue that
+    // says so. Squeezing everything into one screen without scrolling made
+    // the simulator and the blocks too cramped to judge a mission by.
+    <div
+      className="@container h-full min-h-0 overflow-y-auto"
+      onScroll={(event) => setScrolledDown(event.currentTarget.scrollTop > 40)}
+    >
+    <div className="flex min-h-full flex-col gap-3">
       {/* ONE ROW: the way back, the name, the id. They were three stacked
           lines with a whole row of nothing beside "Back to the queue". The
           back button is an arrow with its words as its label, and only below
@@ -95,7 +103,7 @@ export function MissionDetail({
           when the pane is wide enough (a container query, because this pane's
           width is not the window's), stacked when it is not. The code lights
           up as the preview plays, as it does in the editor. */}
-      <div className="grid min-h-[240px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3 @2xl:grid-cols-2 @2xl:grid-rows-1">
+      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
         <MissionPreview key={mission.id} mission={mission} onSourceChange={setRunningSource} />
@@ -107,7 +115,7 @@ export function MissionDetail({
           </h3>
           {mission.blocklyState ? (
             <div className="min-h-0 flex-1">
-              <BlocklyViewer key={mission.id} state={mission.blocklyState} highlight={runningSource} />
+              <BlocklyViewer key={mission.id} state={mission.blocklyState} highlight={runningSource} fit />
             </div>
           ) : (
             <CodeLines code={mission.code ?? ''} highlight={runningSource} />
@@ -123,7 +131,25 @@ export function MissionDetail({
         </div>
       )}
 
-      <div className="flex max-h-[35%] min-h-0 shrink flex-col gap-3 overflow-y-auto">
+      {/* The way to everything below the fold, so it is never a secret that
+          there is more. Fades once the operator has scrolled. Not worded
+          "Mark complete": that is the name of the button it leads to, and
+          two buttons answering to one name confuse a screen reader. */}
+      <button
+        type="button"
+        onClick={() => recordRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+        aria-hidden={scrolledDown}
+        tabIndex={scrolledDown ? -1 : 0}
+        className={`-mt-0.5 flex shrink-0 items-center justify-center gap-1.5 self-center rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-opacity duration-200 hover:bg-primary/15 ${
+          scrolledDown ? 'pointer-events-none opacity-0' : 'opacity-100'
+        }`}
+      >
+        <ArrowDown className="h-4 w-4 text-primary motion-safe:animate-bounce" />
+        Scroll for actions, runs and video
+      </button>
+    </div>
+
+      <div ref={recordRef} className="flex scroll-mt-2 flex-col gap-3 pb-2 pt-4">
       <MissionActions
         mission={mission}
         yardId={yardId}
