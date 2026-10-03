@@ -34,7 +34,10 @@ export function MissionPreview({
 
   return (
     <section aria-label="What it will do" className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
-      <h3 className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      {/* Not in a narrow panel (a phone): the verdict moves onto the
+          simulator and the findings to one line, so the simulator keeps the
+          height. Container queries on MissionDetail's panel, not the window. */}
+      <h3 className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground @max-md:hidden">
         What it will do
         <span className={`rounded-full px-2 py-0.5 text-[10px] tracking-[0.12em] ${VERDICT_CLASS[worst]}`}>{VERDICT_LABEL[worst]}</span>
       </h3>
@@ -50,9 +53,15 @@ export function MissionPreview({
           bare
           onSourceChange={onSourceChange}
         />
+        <span
+          aria-hidden="true"
+          className={`absolute left-2 top-2 z-20 hidden rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm @max-md:block ${VERDICT_ON_ARENA_CLASS[worst]}`}
+        >
+          {VERDICT_LABEL[worst]}
+        </span>
       </div>
 
-      <ul className="shrink-0 space-y-1 px-3 py-2.5 text-xs">
+      <ul className="shrink-0 space-y-1 px-3 py-2.5 text-xs @max-md:hidden">
         {findings.map((finding) => {
           const Icon = ICON[finding.level];
           return (
@@ -61,6 +70,19 @@ export function MissionPreview({
               <span className={finding.level === 'ok' ? 'text-muted-foreground' : 'font-medium text-foreground'}>
                 {finding.message}
               </span>
+            </li>
+          );
+        })}
+      </ul>
+      {/* The same findings in a couple of words each, on one line, for a
+          narrow panel. The full sentence is each one's tooltip. */}
+      <ul aria-hidden="true" className="hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px] @max-md:flex">
+        {findings.map((finding) => {
+          const Icon = ICON[finding.level];
+          return (
+            <li key={finding.id} title={finding.message} className="flex items-center gap-1">
+              <Icon className={`h-3 w-3 shrink-0 ${ICON_CLASS[finding.level]}`} />
+              <span className={finding.level === 'ok' ? 'text-muted-foreground' : 'font-semibold text-foreground'}>{finding.short}</span>
             </li>
           );
         })}
@@ -76,6 +98,13 @@ const ICON_CLASS: Record<FindingLevel, string> = {
   ok: 'text-buzz',
 };
 const VERDICT_LABEL: Record<FindingLevel, string> = { stop: 'Fix first', warn: 'Look first', ok: 'Looks fine' };
+/** Solid, for the badge laid over the simulator's sand, where the tinted
+ *  header colours above were too faint to read. */
+const VERDICT_ON_ARENA_CLASS: Record<FindingLevel, string> = {
+  stop: 'bg-destructive text-white',
+  warn: 'bg-amber-500 text-white',
+  ok: 'bg-emerald-600 text-white',
+};
 const VERDICT_CLASS: Record<FindingLevel, string> = {
   stop: 'bg-destructive/15 text-destructive',
   warn: 'bg-amber-500/15 text-amber-600',

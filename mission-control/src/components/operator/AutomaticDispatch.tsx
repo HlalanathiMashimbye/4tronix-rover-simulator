@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bot, Camera, Check, Copy, Loader2, Rocket, Video, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Bot, Camera, Check, Copy, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
@@ -369,7 +369,9 @@ export function AutomaticDispatch({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 id="automatic-dispatch-title" className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-foreground">
           <Rocket className="h-4 w-4 text-primary" />
-          Yard checks
+          {/* Words only where there is room: in a phone's panel the icons
+              and Send to Rover need the row. */}
+          <span className="@max-md:sr-only">Yard checks</span>
         </h3>
         <p id="automatic-dispatch-help" className="sr-only">
           {live
@@ -458,18 +460,24 @@ export function AutomaticDispatch({
               screen readers: an operator needs to see that it is blocked and
               what to press, and reads the steps once. */}
           <div className="min-w-0 flex-1" title={UNREACHABLE_MESSAGES[unreachable].body}>
-            <h4 className="truncate text-xs font-bold text-foreground">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
+            {/* Wraps in a phone's panel rather than losing its end: "is
+                blocked" is the part that says what is wrong. */}
+            <h4 className="truncate text-xs font-bold text-foreground @max-md:whitespace-normal @max-md:leading-tight">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
             <p className="sr-only">{UNREACHABLE_MESSAGES[unreachable].body}</p>
           </div>
           <div className="flex shrink-0 gap-2">
+            {/* Short on a phone, so the warning's title still fits beside
+                them; the accessible names stay whole. */}
             <button
               type="button"
               onClick={copyCode}
               disabled={!mission.code}
+              aria-label={copied ? 'Copied' : 'Copy for the run station'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy for the run station'}
+              <span className="@max-md:hidden">{copied ? 'Copied' : 'Copy for the run station'}</span>
+              <span className="hidden @max-md:inline">{copied ? 'Copied' : 'Copy'}</span>
             </button>
             {/* Trying again cannot change which browser this is. */}
             {unreachable !== 'browser-cannot' && (
@@ -477,9 +485,12 @@ export function AutomaticDispatch({
                 type="button"
                 onClick={() => readYard(false)}
                 disabled={checking}
-                className="rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
+                aria-label="Try again"
+                title="Try again"
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
               >
-                Try again
+                <RotateCcw className="hidden h-3.5 w-3.5 @max-md:block" aria-hidden="true" />
+                <span className="@max-md:hidden">Try again</span>
               </button>
             )}
           </div>

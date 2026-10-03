@@ -31,6 +31,8 @@ export interface PreviewFinding {
   id: 'code' | 'moves' | 'edge' | 'duration';
   level: FindingLevel;
   message: string;
+  /** The same in a couple of words, for a phone's one-line summary. */
+  short: string;
   /** Seconds into the run, for a finding that happens at a moment. */
   atSeconds?: number;
 }
@@ -47,12 +49,13 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
           id: 'code',
           level: 'stop',
           message: `${problems.length} problem${problems.length === 1 ? '' : 's'} in the code. Line ${problems[0].line}: ${problems[0].message}`,
+          short: `Code: line ${problems[0].line}`,
         }
-      : { id: 'code', level: 'ok', message: 'The code checks out' },
+      : { id: 'code', level: 'ok', message: 'The code checks out', short: 'Code OK' },
   );
 
   if (!movesTheRover(code)) {
-    findings.push({ id: 'moves', level: 'warn', message: 'It never moves the rover' });
+    findings.push({ id: 'moves', level: 'warn', message: 'It never moves the rover', short: 'Never moves' });
   }
 
   const hit = trajectory.findIndex((point) => point.hitWall);
@@ -62,18 +65,19 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
           id: 'edge',
           level: 'warn',
           message: `Reaches the edge of the simulator's yard at ${formatSeconds(hit * STEP_SECONDS)}`,
+          short: `Edge at ${formatSeconds(hit * STEP_SECONDS)}`,
           atSeconds: hit * STEP_SECONDS,
         }
-      : { id: 'edge', level: 'ok', message: "Stays inside the simulator's yard" },
+      : { id: 'edge', level: 'ok', message: "Stays inside the simulator's yard", short: 'Stays inside' },
   );
 
   const duration = calculatePythonDuration(code);
   findings.push(
     duration > MISSION_MAX_DURATION_SECONDS
-      ? { id: 'duration', level: 'stop', message: `Runs ${formatSeconds(duration)}, over the ${MISSION_MAX_DURATION_SECONDS}s limit` }
+      ? { id: 'duration', level: 'stop', message: `Runs ${formatSeconds(duration)}, over the ${MISSION_MAX_DURATION_SECONDS}s limit`, short: `${formatSeconds(duration)}, too long` }
       : duration < MISSION_MIN_DURATION_SECONDS
-        ? { id: 'duration', level: 'warn', message: `Only runs ${formatSeconds(duration)}` }
-        : { id: 'duration', level: 'ok', message: `Runs ${formatSeconds(duration)}` },
+        ? { id: 'duration', level: 'warn', message: `Only runs ${formatSeconds(duration)}`, short: `Only ${formatSeconds(duration)}` }
+        : { id: 'duration', level: 'ok', message: `Runs ${formatSeconds(duration)}`, short: formatSeconds(duration) },
   );
 
   // Worst first, so the line an operator reads first is the one that matters.
