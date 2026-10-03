@@ -798,18 +798,21 @@
  *     not), and pops each time it starts;
  *   - a "now" tag beside it glides from block to block, and each Repeat wears
  *     a "2 / 3" badge for its pass (both drawn in BlocklyEditor.tsx).
+ * .blocklyBlock, not .blocklyDraggable: every block carries the first, but a
+ * read-only viewer's blocks (a mission's page, the operator preview) are not
+ * draggable, and the spotlight silently dimmed nothing there.
  * Paths only, never the block's <g>: that carries Blockly's position as a
  * transform attribute, and blocks nest inside each other's groups, so an
  * opacity or transform there would hit every block stacked below too.
  */
-.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyPath {
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyPath {
   opacity: 0.28;
   transition: opacity 250ms ease;
 }
-.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyText,
-.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyField,
-.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyEditableField,
-.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyNonEditableField {
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyText,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyField,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyEditableField,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyNonEditableField {
   opacity: 0.45;
 }
 .rover-running-step > .blocklyPath {

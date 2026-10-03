@@ -75,11 +75,11 @@ describe('reporting what is running', () => {
     render(<RoverSimulator trajectory={trajectory} isPlaying editorMode="code" onSourceChange={onSourceChange} />);
 
     await runFrames(4);
-    fireEvent.click(screen.getByText('Pause'));
+    fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
     await runFrames(50);
     expect(onSourceChange).toHaveBeenLastCalledWith(FIRST);
 
-    fireEvent.click(screen.getByText('Reset'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
     expect(onSourceChange).toHaveBeenLastCalledWith(null);
   });
 

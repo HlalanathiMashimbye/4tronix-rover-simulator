@@ -28,6 +28,9 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToMission: () => () => {},
 }));
 
+// The preview plays the mission in the simulator; these tests are about the
+// lists and the record, so it stays out of the way like the viewer below.
+jest.mock('@/components/operator/MissionPreview', () => ({ MissionPreview: () => null }));
 jest.mock('@/components/mission/BlocklyViewer', () => ({
   BlocklyViewer: () => <div data-testid="blockly" />,
 }));

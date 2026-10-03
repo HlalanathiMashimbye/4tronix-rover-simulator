@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import type { Mission } from '@/core/domain/entities/Mission';
 import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { defineRoverBlocks, migrateSpinBlocks, workspaceToCommands } from '@/lib/roverBlockly';
@@ -20,7 +19,16 @@ import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
  * stands. The two describe the same program: the Python was generated from
  * these blocks when the mission was sent.
  */
-export function useMissionTrajectory(mission: Mission | null): TrajectoryPoint[] {
+/**
+ * The two fields this reads, so a learner's Mission and the operator
+ * console's lighter QueueMission can both be simulated.
+ */
+interface SimulatableMission {
+  code: string;
+  blocklyState?: string | null;
+}
+
+export function useMissionTrajectory(mission: SimulatableMission | null): TrajectoryPoint[] {
   const fromPython = useMemo(() => (mission ? simulateCommands(parseRoverCode(mission.code)) : []), [mission]);
   const [fromBlocks, setFromBlocks] = useState<{ state: string; trajectory: TrajectoryPoint[] } | null>(null);
   const state = mission?.blocklyState ?? null;
