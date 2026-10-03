@@ -25,7 +25,7 @@ import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
-import { isOperatorSurface } from '@/lib/appSurfaces';
+import { isBuildSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 
 const NAV_ITEMS = [
@@ -83,6 +83,8 @@ export function Navbar() {
    * note there for why this file must not contain the string.
    */
   const onOperatorSurface = isOperatorSurface(pathname);
+  // The build page on a phone is a full-screen tool; see isBuildSurface.
+  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname);
 
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
@@ -218,7 +220,7 @@ export function Navbar() {
           button below instead: an action and a destination should not look
           alike. feat/challenges adds a fourth slot back here, a Challenges
           tab - see docs/challenges-branch.md. */}
-      {!onOperatorSurface && (
+      {!hidePhoneChrome && (
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
@@ -260,7 +262,7 @@ export function Navbar() {
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
           rather than the row's flat tabs. */}
-      {!onOperatorSurface && (
+      {!hidePhoneChrome && (
         <Link
           href="/mission"
           aria-label="Create Mission"

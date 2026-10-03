@@ -55,7 +55,9 @@ Mission button on the operator console without naming the operator route.
 `Navbar.tsx` at all, deliberately: a link added in a hurry and a path compared
 in a hurry read the same in a diff. Its own filename avoids the substring for
 the same reason - an import of `@/lib/operatorSurface` would have reintroduced
-it into every file that imported it.
+it into every file that imported it. It also answers whether a path is the
+build page, which on a phone drops the tab bar and that same button so the
+workspace can have the whole screen.
 
 `yardConsole.ts` also names the other door out of the console, YouTube Studio,
 because the two are offered together - in the queue's toolbar on a laptop and
