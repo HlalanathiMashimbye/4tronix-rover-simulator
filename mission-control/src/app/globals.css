@@ -942,19 +942,28 @@
 .phoneSimStrip[data-keyboard="true"] {
   height: 2.25rem;
 }
+/* The launch view: the simulator takes whatever the checks, the name and
+   Submit below it leave. Last, so it wins over the editing sizes. */
+.phoneSimStrip[data-launch="true"] {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 0;
+}
+/* The launch controls slide up into place as the simulator grows. */
+.phoneLaunch {
+  animation: phone-launch-in 320ms var(--ease-drawer);
+}
+@keyframes phone-launch-in {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
 
-.sendSheet {
-  transform: translateY(100%);
-  transition: transform 260ms var(--ease-drawer);
-}
-.sendSheet[data-visible="true"] {
-  transform: translateY(0);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .phoneSimStrip,
-  .sendSheet {
+  .phoneLaunch {
     transition: none;
+    animation: none;
   }
 }
 
