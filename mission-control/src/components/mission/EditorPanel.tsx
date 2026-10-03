@@ -129,7 +129,7 @@ export function EditorPanel({
           />
         )}
         {editorMode === 'blockly' && <BlocklyEditor key={isPhone ? 'phone' : 'desktop'} phone={isPhone} onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={isPhone ? undefined : onShowAsPython} highlight={highlight} onRegisterRun={onRegisterRun} />}
-        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} onRegisterRun={onRegisterRun} hideRun={isPhone} />}
+        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} onRegisterRun={onRegisterRun} phone={isPhone} />}
       </div>
 
     </div>
