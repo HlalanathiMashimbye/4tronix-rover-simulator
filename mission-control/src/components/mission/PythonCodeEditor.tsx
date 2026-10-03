@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState, useRef } from 'react';
-import Editor from '@monaco-editor/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { EditorState, type StateEffect } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { indentUnit, bracketMatching } from '@codemirror/language';
+import { closeBrackets, completionKeymap } from '@codemirror/autocomplete';
+import { setDiagnostics } from '@codemirror/lint';
+import { python } from '@codemirror/lang-python';
 import { AlertTriangle, Play } from 'lucide-react';
 import { type CommandSource, type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { checkLearnerCode, type CodeProblem } from '@/core/domain/safety/learnerCodeCheck';
-import {
-  ROVER_COMMAND_HELP,
-  commandAt,
-  helpAsMarkdown,
-} from '@/lib/roverCommandHelp';
+import { roverPythonExtensions, setRunningLines } from '@/components/mission/roverPythonEditor';
 
-interface MonacoCodeEditorProps {
+interface PythonCodeEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange?: (code: string) => void;
   /** The Python the learner's blocks produce, if they have built any. */
@@ -20,6 +22,14 @@ interface MonacoCodeEditorProps {
   /** What the simulator is running right now (AB#450). */
   highlight?: CommandSource | null;
 }
+
+/**
+ * Where the draft is kept. Still named for Monaco on purpose: renaming it
+ * would hand every returning learner an empty editor, and the mission page's
+ * Remix button and Show as Python write to this key too. Not exported: those
+ * would then import this module, and with it the whole editor.
+ */
+const PYTHON_DRAFT_KEY = 'rover_monaco_code';
 
 // The real rover API: speed is 0-100, and you control how long a move lasts
 // with time.sleep() then rover.stop() - exactly what the blocks generate.
@@ -68,18 +78,21 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null }: MonacoCodeEditorProps) {
+export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [editorReady, setEditorReady] = useState(false);
-  // Monaco editor + namespace instances (provided untyped by the editor lib).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const editorRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const monacoRef = useRef<any>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<EditorView | null>(null);
+  // The latest callback, read by the editor's update listener, which is
+  // created once and would otherwise keep calling the first render's.
+  const onCodeChangeRef = useRef(onCodeChange);
+  useEffect(() => {
+    onCodeChangeRef.current = onCodeChange;
+  });
 
   useEffect(() => {
-    const saved = localStorage.getItem('rover_monaco_code');
+    if (!hostRef.current) return;
+    const saved = localStorage.getItem(PYTHON_DRAFT_KEY);
 
     // SHOW THE BLOCKS' PYTHON WHEN THERE IS NOTHING TO LOSE.
     //
@@ -96,98 +109,45 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     const untouched = !saved || saved.trim() === DEFAULT_CODE.trim();
     const initialCode = untouched && blocklyCode.trim() ? blocklyCode : saved || DEFAULT_CODE;
 
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration of editor contents from storage or the block workspace
-    setCode(initialCode);
+    const view = new EditorView({
+      parent: hostRef.current,
+      state: EditorState.create({
+        doc: initialCode,
+        extensions: [
+          lineNumbers(),
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          drawSelection(),
+          history(),
+          bracketMatching(),
+          closeBrackets(),
+          python(),
+          indentUnit.of('    '),
+          EditorView.lineWrapping,
+          keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap, indentWithTab]),
+          roverPythonExtensions(),
+          EditorView.updateListener.of((update) => {
+            if (!update.docChanged) return;
+            const next = update.state.doc.toString();
+            setCode(next);
+            localStorage.setItem(PYTHON_DRAFT_KEY, next);
+            setError(null);
+            onCodeChangeRef.current?.(next);
+          }),
+        ],
+      }),
+    });
+    viewRef.current = view;
 
-    if (onCodeChange) {
-      onCodeChange(initialCode);
-    }
+    setCode(initialCode);
+    onCodeChangeRef.current?.(initialCode);
+
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount to hydrate
   }, []);
-
-
-  // Monaco's own internal services (tokenization, model disposal, etc.) use
-  // a "Canceled" sentinel error for work that gets interrupted - normally
-  // swallowed internally, but disposing the editor externally (switching
-  // away from this tab, which unmounts it) races one of those in-flight
-  // operations often enough to leak an unhandled rejection. This is
-  // Monaco/vscode's own long-documented pattern, not application code we can
-  // add a try/catch around - narrowly matches on the exact message so it
-  // can't mask an unrelated real rejection.
-  useEffect(() => {
-    const handleRejection = (event: PromiseRejectionEvent) => {
-      if (event.reason?.message === 'Canceled') {
-        event.preventDefault();
-      }
-    };
-    window.addEventListener('unhandledrejection', handleRejection);
-    return () => window.removeEventListener('unhandledrejection', handleRejection);
-  }, []);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco editor/namespace instances from @monaco-editor/react onMount
-  const handleEditorDidMount = (editor: any, monaco: any) => {
-    editorRef.current = editor;
-    monacoRef.current = monaco;
-    setEditorReady(true);
-  };
-
-  /**
-   * Teach the commands where the learner meets them.
-   *
-   * A child writing Python rather than dragging blocks had nothing at all:
-   * rover.reverse(60) with no hint that reverse means backwards, or that 60 is
-   * a speed rather than a distance. Hovering explains a command; typing offers
-   * the list with the same words. Same source as the block comments, so the two
-   * halves of the app never explain the same command differently.
-   */
-  useEffect(() => {
-    const monaco = monacoRef.current;
-    if (!editorReady || !monaco) return;
-
-    const hover = monaco.languages.registerHoverProvider('python', {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco model/position types
-      provideHover(model: any, position: any) {
-        const name = commandAt(
-          model.getLineContent(position.lineNumber),
-          position.column,
-        );
-        const markdown = name && helpAsMarkdown(name);
-        return markdown ? { contents: [{ value: markdown }] } : null;
-      },
-    });
-
-    const completion = monaco.languages.registerCompletionItemProvider('python', {
-      triggerCharacters: ['.'],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Monaco model/position types
-      provideCompletionItems(model: any, position: any) {
-        const word = model.getWordUntilPosition(position);
-        const range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn,
-        };
-
-        return {
-          suggestions: Object.entries(ROVER_COMMAND_HELP).map(([name, help]) => ({
-            label: name,
-            kind: monaco.languages.CompletionItemKind.Function,
-            detail: help.summary,
-            documentation: { value: helpAsMarkdown(name) ?? help.summary },
-            insertText: help.example,
-            range,
-          })),
-        };
-      },
-    });
-
-    // Disposed on unmount, or switching tabs twice would register the provider
-    // again and show every suggestion doubled.
-    return () => {
-      hover.dispose();
-      completion.dispose();
-    };
-  }, [editorReady]);
 
   /**
    * THE REAL RULES, not a second opinion.
@@ -209,78 +169,46 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
    */
   const validationErrors: CodeProblem[] = useMemo(() => checkLearnerCode(code), [code]);
 
-  // Monaco's own squiggles, which are what put the problem ON the line rather
-  // than in a list underneath it. Separate from the calculation above because
-  // this one genuinely is a side effect on something outside React, and it has
-  // to wait for the editor to exist.
+  // The squiggles, which are what put the problem ON the line rather than in
+  // a list underneath it. A side effect on something outside React, so it
+  // lives here rather than in the calculation above.
   useEffect(() => {
-    if (!editorReady || !editorRef.current || !monacoRef.current) return;
-
-    const model = editorRef.current.getModel();
-    if (!model) return;
-
-    monacoRef.current.editor.setModelMarkers(
-      model,
-      'rover-validator',
-      validationErrors.map((err) => ({
-        startLineNumber: err.line,
-        startColumn: 1,
-        endLineNumber: err.line,
-        endColumn: model.getLineMaxColumn(err.line),
-        message: err.message,
-        severity: monacoRef.current.MarkerSeverity.Error,
-      })),
+    const view = viewRef.current;
+    if (!view) return;
+    const doc = view.state.doc;
+    view.dispatch(
+      setDiagnostics(
+        view.state,
+        validationErrors
+          .filter((err) => err.line >= 1 && err.line <= doc.lines)
+          .map((err) => {
+            const line = doc.line(err.line);
+            return { from: line.from, to: line.to, severity: 'error' as const, message: err.message };
+          }),
+      ),
     );
-  }, [validationErrors, editorReady]);
+  }, [validationErrors]);
 
-  // Light up the running lines (AB#450). A whole-line decoration rather than
-  // a selection, so it does not move the learner's cursor or fight their
-  // typing; and kept in one collection so each frame replaces the last.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runningLinesRef = useRef<any>(null);
+  // Light up the running lines (AB#450). Editor state rather than a selection,
+  // so it does not move the learner's cursor or fight their typing.
   const fromLine = highlight?.fromLine;
   const toLine = highlight?.toLine ?? fromLine;
   useEffect(() => {
-    const editor = editorRef.current;
-    if (!editorReady || !editor) return;
-    runningLinesRef.current ??= editor.createDecorationsCollection();
-    if (!fromLine || !toLine) {
-      runningLinesRef.current.clear();
-      return;
+    const view = viewRef.current;
+    if (!view) return;
+    const range = fromLine && toLine ? { from: fromLine, to: toLine } : null;
+    const effects: StateEffect<unknown>[] = [setRunningLines.of(range)];
+    if (range && range.from <= view.state.doc.lines) {
+      effects.push(EditorView.scrollIntoView(view.state.doc.line(range.from).from, { y: 'nearest' }));
     }
-    runningLinesRef.current.set([
-      {
-        range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: toLine, endColumn: 1 },
-        options: { isWholeLine: true, className: 'rover-running-line' },
-      },
-      // The margin marker goes on the first line only: one arrow per command,
-      // not one per line of it.
-      {
-        range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: fromLine, endColumn: 1 },
-        options: { linesDecorationsClassName: 'rover-running-marker' },
-      },
-    ]);
-    editor.revealLinesInCenterIfOutsideViewport(fromLine, toLine);
-  }, [fromLine, toLine, editorReady]);
-
-  const handleCodeChange = (value: string | undefined) => {
-    const newCode = value || '';
-    setCode(newCode);
-    localStorage.setItem('rover_monaco_code', newCode);
-    setError(null);
-
-    // Notify parent of code change
-    if (onCodeChange) {
-      onCodeChange(newCode);
-    }
-  };
+    view.dispatch({ effects });
+  }, [fromLine, toLine]);
 
   const insertSnippet = (snippet: string) => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    const selection = editor.getSelection();
-    editor.executeEdits('palette', [{ range: selection, text: snippet, forceMoveMarkers: true }]);
-    editor.focus();
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch(view.state.replaceSelection(snippet));
+    view.focus();
   };
 
   const handleRun = () => {
@@ -353,28 +281,7 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-border">
-        <Editor
-          height="100%"
-          defaultLanguage="python"
-          value={code}
-          onChange={handleCodeChange}
-          onMount={handleEditorDidMount}
-          theme="vs-dark"
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: 'on',
-            scrollBeyondLastLine: false,
-            automaticLayout: true,
-            tabSize: 4,
-            wordWrap: 'on',
-          }}
-        />
-      </div>
+      <div ref={hostRef} className="rover-python-editor min-h-0 flex-1 overflow-hidden rounded-xl border border-border" />
     </div>
   );
 }
-
-// parseRoverCode lives in @/lib/parseRoverCode so the mission detail page can
-// re-simulate a stored mission from its code too.

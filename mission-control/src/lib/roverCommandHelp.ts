@@ -132,17 +132,6 @@ export const ROVER_COMMAND_HELP: Record<string, CommandHelp> = {
   },
 };
 
-/** The help text as Markdown, for a Monaco hover or completion. */
-export function helpAsMarkdown(name: string): string | null {
-  const help = ROVER_COMMAND_HELP[name];
-  if (!help) return null;
-
-  const parts = [`**${name}**`, '', help.summary];
-  if (help.argument) parts.push('', help.argument);
-  parts.push('', '```python', help.example, '```');
-  return parts.join('\n');
-}
-
 /**
  * The command name at a position in a line, if there is one.
  *
