@@ -45,3 +45,22 @@
   outline: 2px solid rgba(255, 255, 255, 0.85);
   outline-offset: 1px;
 }
+
+/* Phone: the panel shares the screen with the docked simulator, so these are
+   ordinary phone buttons rather than 70px slabs. One line each, so a long
+   label cannot double a button's height. */
+@media (max-width: 767px) {
+  .block {
+    padding: 9px 12px;
+    font-size: 14px;
+    white-space: nowrap;
+    border-radius: 12px;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+  }
+  .block::after {
+    bottom: -6px;
+    height: 6px;
+    width: 28px;
+    left: 16px;
+  }
+}

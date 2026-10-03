@@ -856,6 +856,38 @@
   50% { transform: translateX(2px); }
 }
 
+/*
+ * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
+ *
+ * The docked simulator takes 30% of the screen so the blocks keep most of it,
+ * and grows to 62% when the learner wants a proper look. dvh, not vh: mobile
+ * Safari's vh includes the strip under the URL bar, which is exactly the
+ * clipping this layout exists to get rid of. Height is animated because the
+ * canvas inside redraws on resize anyway, and a jump reads as a glitch.
+ */
+.phoneSimStrip {
+  height: 30dvh;
+  transition: height 320ms var(--ease-drawer);
+}
+.phoneSimStrip[data-expanded="true"] {
+  height: 62dvh;
+}
+
+.sendSheet {
+  transform: translateY(100%);
+  transition: transform 260ms var(--ease-drawer);
+}
+.sendSheet[data-visible="true"] {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneSimStrip,
+  .sendSheet {
+    transition: none;
+  }
+}
+
 /* The Python editor's hover and autocomplete help card. */
 .rover-help {
   max-width: 280px;

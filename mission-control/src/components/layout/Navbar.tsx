@@ -85,6 +85,8 @@ export function Navbar() {
   const onOperatorSurface = isOperatorSurface(pathname);
   // The build page on a phone is a full-screen tool; see isBuildSurface.
   const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname);
+  // Including this top bar: the build page brings its own slimmer one with a
+  // way back, and the 64px is a fifth of what the blocks get on a phone.
 
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
@@ -117,7 +119,7 @@ export function Navbar() {
           (h-page) do not overflow by a pixel. */}
       <nav
         className={`sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)] ${
-          onOperatorSurface ? 'hidden md:block' : ''
+          hidePhoneChrome ? 'hidden md:block' : ''
         }`}
       >
         {/* Use a balanced three-column layout so the search sits in the true

@@ -389,7 +389,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   }
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
+    <div ref={containerRef} className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
       {/* The buttons are ONE GROUP, pinned right.
           Adding "Show as Python" as a third child of a justify-between row made
           it the middle item, so it parked in the centre of whatever space was
@@ -408,7 +408,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
             <button
               onClick={onShowAsPython}
               title="See the Python your blocks make"
-              className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:border-primary/70"
+              className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl border border-border/70 bg-card px-2.5 py-1.5 text-xs font-semibold md:px-3 md:py-2 text-foreground transition-colors hover:border-primary/70"
             >
               <Code2 className="h-3.5 w-3.5 text-primary" />
               Show as Python
@@ -416,7 +416,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           )}
           <button
             onClick={handleRun}
-            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
           >
             <Play className="h-3.5 w-3.5" fill="currentColor" />
             Run blocks
