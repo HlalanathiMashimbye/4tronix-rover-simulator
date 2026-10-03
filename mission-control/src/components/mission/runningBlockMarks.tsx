@@ -16,6 +16,9 @@ import type { CommandSource } from '@/lib/roverBlockly';
  * codebase keeps paying for. globals.css owns how it looks.
  */
 
+/** Roughly how wide the "now" tag renders, to keep it inside the canvas. */
+const NOW_TAG_WIDTH = 60;
+
 /** Where the run markers sit over the canvas, in px from its top-left. */
 interface LoopMark {
   key: string;
@@ -96,8 +99,14 @@ export function useRunningBlockMarks({
       const stepBlock = lit.find((l) => l.className === 'rover-running-step')?.block;
       const stepRect = stepBlock && rectOf(stepBlock);
       setMarks({
+        // Beside the block when there is room, otherwise pulled back inside
+        // the canvas: a wide block in a narrow panel (the operator console)
+        // pushed the tag off the right edge, half of it cut away.
         step: stepRect
-          ? { left: stepRect.right - frame.left + 6, top: stepRect.top - frame.top + Math.min(stepRect.height, 40) / 2 }
+          ? {
+              left: Math.min(stepRect.right - frame.left + 6, frame.width - NOW_TAG_WIDTH - 4),
+              top: stepRect.top - frame.top + Math.min(stepRect.height, 40) / 2,
+            }
           : null,
         loops: lit
           .filter((l) => l.className === 'rover-running-loop')

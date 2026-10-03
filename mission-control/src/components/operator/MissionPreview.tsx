@@ -33,14 +33,16 @@ export function MissionPreview({
   const worst = findings[0]?.level ?? 'ok';
 
   return (
-    <section aria-label="What it will do" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
+    <section aria-label="What it will do" className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
       <h3 className="flex shrink-0 items-center justify-between gap-2 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
         What it will do
         <span className={`rounded-full px-2 py-0.5 text-[10px] tracking-[0.12em] ${VERDICT_CLASS[worst]}`}>{VERDICT_LABEL[worst]}</span>
       </h3>
 
-      {/* 4:3, the simulator's own yard, so it is drawn without letterboxing. */}
-      <div className="relative aspect-[4/3] w-full shrink-0">
+      {/* Whatever height the panel leaves, not a fixed 4:3: a fixed shape
+          pushed Send to Rover below the fold on a laptop. The simulator
+          letterboxes its yard inside any box. */}
+      <div className="relative min-h-[120px] w-full flex-1">
         <RoverSimulator
           trajectory={trajectory}
           isPlaying
