@@ -359,8 +359,14 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
               onClick={() => setHelpOpen((open) => !open)}
               aria-label={helpOpen ? 'Hide rover commands' : 'Show rover commands'}
               aria-expanded={helpOpen}
-              className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded transition-colors [@media(hover:hover)]:hover:bg-[#2a2d2e] ${
-                helpOpen ? 'text-[#e2c08d]' : 'text-[#858585]'
+              // A call to action while closed, in the app's mission orange: a
+              // muted icon in the editor's grey was never found, and the
+              // commands behind it are the first thing a new learner needs.
+              // Quiet once open, where it is only a close button.
+              className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-colors ${
+                helpOpen
+                  ? 'text-[#858585] [@media(hover:hover)]:hover:bg-[#2a2d2e]'
+                  : 'bg-primary/20 text-primary ring-1 ring-primary/50 [@media(hover:hover)]:hover:bg-primary/30'
               }`}
             >
               {helpOpen ? <X className="h-3.5 w-3.5" /> : <Lightbulb className="h-3.5 w-3.5" />}
