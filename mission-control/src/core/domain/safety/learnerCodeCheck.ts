@@ -29,7 +29,7 @@ import {
 } from '@/core/domain/safety/rover-command-allowlist';
 
 export interface CodeProblem {
-  /** 1-based, so it can go straight to a Monaco marker. */
+  /** 1-based, matching the line numbers the Python editor shows. */
   line: number;
   message: string;
 }

@@ -11,7 +11,6 @@
 import {
   ROVER_COMMAND_HELP,
   commandAt,
-  helpAsMarkdown,
 } from '@/lib/roverCommandHelp';
 import { ROVER_COMMAND_ALLOWLIST } from '@/core/domain/safety/rover-command-allowlist';
 
@@ -56,18 +55,6 @@ describe('what the learner is told', () => {
     for (const [name, help] of Object.entries(ROVER_COMMAND_HELP)) {
       expect(help.example).toContain(name.split('.').pop() as string);
     }
-  });
-
-  it('renders as markdown with the name, the meaning and an example', () => {
-    const markdown = helpAsMarkdown('rover.reverse');
-
-    expect(markdown).toContain('**rover.reverse**');
-    expect(markdown).toContain('Drive backwards');
-    expect(markdown).toContain('```python');
-  });
-
-  it('returns nothing for a command it has no words for', () => {
-    expect(helpAsMarkdown('rover.teleport')).toBeNull();
   });
 });
 

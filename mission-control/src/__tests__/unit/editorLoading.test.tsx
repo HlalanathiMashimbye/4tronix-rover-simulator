@@ -8,7 +8,7 @@
  * Opening Blocks or Python took about 3.7s on a good connection, because each
  * editor started downloading from a third-party CDN only once its tab was
  * clicked. Blockly now comes from our own bundle and is fetched while the page
- * is idle; Monaco is warmed the moment the Python tab is pointed at. These
+ * is idle; the Python editor is warmed the moment its tab is pointed at. These
  * pin both halves, and that Blockly never goes back to a CDN <script>, which
  * also ran a version (13.2.0) nothing in this repo was tested against.
  */
@@ -20,11 +20,6 @@ const fakeBlockly = { VERSION: '12.5.1' };
 jest.mock('blockly', () => ({ __esModule: true, default: fakeBlockly }));
 
 const loaderInit = jest.fn();
-jest.mock('@monaco-editor/react', () => ({
-  __esModule: true,
-  default: () => null,
-  loader: { init: (...a: unknown[]) => loaderInit(...a) },
-}));
 
 beforeEach(() => {
   jest.resetModules();
@@ -74,24 +69,24 @@ describe('loadBlockly', () => {
   });
 });
 
-describe('prefetchMonaco', () => {
+describe('warming the Python editor', () => {
   it('warms the editor once, however many times the tab is pointed at', async () => {
     loaderInit.mockResolvedValue({});
-    const { prefetchMonaco } = await import('@/infrastructure/browser/prefetchMonaco');
+    const { warmOnce } = await import('@/components/mission/loadPythonEditor');
 
-    prefetchMonaco();
-    prefetchMonaco();
+    warmOnce(loaderInit);
+    warmOnce(loaderInit);
 
     expect(loaderInit).toHaveBeenCalledTimes(1);
   });
 
   it('tries again later if the warm-up failed', async () => {
     loaderInit.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({});
-    const { prefetchMonaco } = await import('@/infrastructure/browser/prefetchMonaco');
+    const { warmOnce } = await import('@/components/mission/loadPythonEditor');
 
-    prefetchMonaco();
+    warmOnce(loaderInit);
     await act(async () => {});
-    prefetchMonaco();
+    warmOnce(loaderInit);
 
     expect(loaderInit).toHaveBeenCalledTimes(2);
   });

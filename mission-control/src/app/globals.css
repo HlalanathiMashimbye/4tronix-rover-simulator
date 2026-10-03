@@ -828,9 +828,9 @@
 
 /*
  * The same on the Python editor's running lines (always the dark theme). The
- * band sweeps in from the left as each command starts - Monaco rebuilds the
- * decoration's element when it moves, so this replays per command for free -
- * and a marker in the margin points at it.
+ * band sweeps in from the left as each command starts - the class arrives on
+ * a line as the command reaches it, which replays the animation - and a
+ * marker beside the line number points at it.
  */
 .rover-running-line {
   background: linear-gradient(90deg, rgb(34 197 94 / 0.35), rgb(34 197 94 / 0.12)) no-repeat;
@@ -839,7 +839,8 @@
 }
 .rover-running-marker::before {
   content: '\25B6';
-  display: block;
+  float: left;
+  margin-right: 4px;
   color: #22c55e;
   font-size: 10px;
   line-height: inherit;
@@ -852,6 +853,36 @@
 @keyframes rover-marker-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
+}
+
+/* The Python editor's hover and autocomplete help card. */
+.rover-help {
+  max-width: 280px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.rover-help p {
+  margin-top: 4px;
+}
+.rover-help code {
+  display: block;
+  margin-top: 6px;
+  color: #dcdcaa;
+}
+
+/*
+ * iOS Safari zooms the whole page into any field under 16px when it is
+ * tapped, and a learner on a phone then has to pinch back out after every
+ * edit. Desktop keeps the denser 14px Monaco had.
+ */
+.rover-python-editor .cm-editor {
+  font-size: 14px;
+}
+@media (pointer: coarse) {
+  .rover-python-editor .cm-editor {
+    font-size: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

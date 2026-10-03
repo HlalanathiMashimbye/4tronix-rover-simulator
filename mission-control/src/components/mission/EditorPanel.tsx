@@ -1,20 +1,23 @@
 'use client';
 
 import { useEffect } from 'react';
-import { preconnect } from 'react-dom';
+import dynamic from 'next/dynamic';
 import { useReducedMotion } from 'motion/react';
 import { Gamepad2, Blocks, Code2, AlertTriangle } from 'lucide-react';
 import { ManualControlRealtime } from '@/components/mission/ManualControlRealtime';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
-import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { prefetchBlockly } from '@/infrastructure/browser/loadBlockly';
-import { prefetchMonaco } from '@/infrastructure/browser/prefetchMonaco';
+import { loadPythonEditor, prefetchPythonEditor } from '@/components/mission/loadPythonEditor';
 
-/** Where the Python editor comes from (@monaco-editor/react's default). */
-const MONACO_CDN = 'https://cdn.jsdelivr.net';
+// Its own chunk, fetched when the Python tab is wanted (see loadPythonEditor).
+// Client-only: the editor measures and edits the DOM it is given.
+const PythonCodeEditor = dynamic(() => loadPythonEditor().then((m) => m.PythonCodeEditor), {
+  ssr: false,
+  loading: () => <div className="h-full animate-pulse rounded-xl border border-border bg-[#1e1e1e]" />,
+});
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
 
@@ -63,10 +66,8 @@ export function EditorPanel({
 
   // The Blocks and Python tabs each used to start downloading their editor
   // only when clicked, which is most of why opening them took seconds. Blockly
-  // is fetched while the page is idle; Monaco on the first sign of interest in
-  // its tab (see prefetchMonaco), with the connection to its CDN opened now
-  // because the handshake is a large share of a cold load.
-  preconnect(MONACO_CDN);
+  // is fetched while the page is idle; the Python editor on the first sign of
+  // interest in its tab (see loadPythonEditor).
   useEffect(() => prefetchBlockly(), []);
 
   return (
@@ -79,8 +80,8 @@ export function EditorPanel({
             <button
               key={mode}
               onClick={() => onEditorModeChange(mode)}
-              onPointerEnter={mode === 'code' ? prefetchMonaco : undefined}
-              onFocus={mode === 'code' ? prefetchMonaco : undefined}
+              onPointerEnter={mode === 'code' ? prefetchPythonEditor : undefined}
+              onFocus={mode === 'code' ? prefetchPythonEditor : undefined}
               aria-pressed={active}
               className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-2 text-sm font-bold transition-colors ${
                 active
@@ -117,7 +118,7 @@ export function EditorPanel({
           />
         )}
         {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} highlight={highlight} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} />}
+        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} />}
       </div>
 
     </div>
