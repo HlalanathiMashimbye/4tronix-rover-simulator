@@ -14,8 +14,8 @@
  * - the navbar drops its phone chrome on it, and keeps it on the feed;
  * - the phone layout is decided in one hook that follows the md breakpoint;
  * - the docked layout shows the simulator and the editor together, expands
- *   the simulator on request, and keeps Send in a sheet that says whether
- *   the mission is ready before it is opened.
+ *   the simulator on request, and has ONE top-bar button: Run until the
+ *   program has been watched, then Send, which opens the launch sheet.
  *
  * That the page does not scroll is layout, which jsdom cannot measure; it
  * was checked in a browser at 360x640, 375x667, 390x844 and 412x915.
@@ -37,7 +37,8 @@ import { isBuildSurface } from '@/lib/appSurfaces';
 import { Navbar } from '@/components/layout/Navbar';
 import { SearchProvider } from '@/contexts/SearchContext';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
-import { useIsPhoneLayout, PHONE_QUERY } from '@/hooks/useIsPhoneLayout';
+import { renderToString } from 'react-dom/server';
+import { useIsPhoneLayout, usePhoneLayout, PHONE_QUERY } from '@/hooks/useIsPhoneLayout';
 
 describe('the build surface', () => {
   it('is the Create Mission page', () => {
@@ -108,23 +109,43 @@ describe('deciding the phone layout', () => {
   it('agrees with the md breakpoint the CSS uses', () => {
     expect(PHONE_QUERY).toBe('(max-width: 767px)');
   });
+
+  it('is unknown on the server, so neither layout is sent to a phone', () => {
+    // The server used to render the desktop layout, which a phone painted
+    // before any JavaScript ran: the wrong layout flashed up first.
+    matches = true;
+    function Probe() {
+      return <span>{String(usePhoneLayout())}</span>;
+    }
+    expect(renderToString(<Probe />)).toContain('null');
+  });
+
+  it('reads as not a phone where matchMedia does not exist, rather than crashing', () => {
+    // @ts-expect-error - simulating a browser without it
+    delete window.matchMedia;
+    const { result } = renderHook(() => useIsPhoneLayout());
+    expect(result.current).toBe(false);
+  });
 });
 
 describe('the docked layout', () => {
   function renderWorkspace(overrides: Partial<React.ComponentProps<typeof PhoneWorkspace>> = {}) {
     const onSendOpenChange = jest.fn();
+    const onRun = jest.fn();
     render(
       <PhoneWorkspace
         editor={<div data-testid="editor" />}
         simulator={<div data-testid="simulator" />}
         submitBar={<div data-testid="submit-bar" />}
+        onRun={onRun}
+        watched={false}
         sendReady={false}
         sendOpen={false}
         onSendOpenChange={onSendOpenChange}
         {...overrides}
       />,
     );
-    return { onSendOpenChange };
+    return { onSendOpenChange, onRun };
   }
 
   it('shows the simulator and the editor at the same time', () => {
@@ -142,8 +163,17 @@ describe('the docked layout', () => {
     expect(screen.getByRole('button', { name: 'Enlarge the simulator' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('keeps the launch controls in a sheet that Send opens', () => {
-    const { onSendOpenChange } = renderWorkspace();
+  it('offers Run, not Send, until the program has been watched', () => {
+    const { onRun, onSendOpenChange } = renderWorkspace({ watched: false });
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(onRun).toHaveBeenCalled();
+    expect(onSendOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('becomes Send once watched, which opens the launch sheet', () => {
+    const { onSendOpenChange } = renderWorkspace({ watched: true });
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('submit-bar')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(onSendOpenChange).toHaveBeenCalledWith(true);
@@ -157,12 +187,13 @@ describe('the docked layout', () => {
   });
 
   it('says whether the mission is ready before the sheet is opened', () => {
-    renderWorkspace({ sendReady: true });
+    renderWorkspace({ watched: true, sendReady: true });
     expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-ready', 'true');
   });
 
-  it('offers no Send in Drive mode, which has nothing to send', () => {
+  it('offers neither in Drive mode, which has no program', () => {
     renderWorkspace({ submitBar: undefined });
     expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
   });
 });

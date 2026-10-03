@@ -13,6 +13,7 @@ import { type CommandSource, type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { checkLearnerCode, type CodeProblem } from '@/core/domain/safety/learnerCodeCheck';
 import { roverPythonExtensions, setRunningLines } from '@/components/mission/roverPythonEditor';
+import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
 
 interface PythonCodeEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -21,15 +22,12 @@ interface PythonCodeEditorProps {
   blocklyCode?: string;
   /** What the simulator is running right now (AB#450). */
   highlight?: CommandSource | null;
+  /** Hands this editor's Run up, for a Run button outside it. */
+  onRegisterRun?: (run: (() => void) | null) => void;
+  /** Drop the Run button, for a layout that has its own (the phone's top bar). */
+  hideRun?: boolean;
 }
 
-/**
- * Where the draft is kept. Still named for Monaco on purpose: renaming it
- * would hand every returning learner an empty editor, and the mission page's
- * Remix button and Show as Python write to this key too. Not exported: those
- * would then import this module, and with it the whole editor.
- */
-const PYTHON_DRAFT_KEY = 'rover_monaco_code';
 
 // The real rover API: speed is 0-100, and you control how long a move lasts
 // with time.sleep() then rover.stop() - exactly what the blocks generate.
@@ -78,7 +76,7 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null }: PythonCodeEditorProps) {
+export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, hideRun = false }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -227,8 +225,17 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     }
   };
 
+  // Re-registered every render: handleRun reads this render's code.
+  useEffect(() => {
+    onRegisterRun?.(handleRun);
+    return () => onRegisterRun?.(null);
+  });
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
+      {/* Not when the layout runs from its own button: on a phone both the
+          hint and Run would leave only an empty row behind. */}
+      {!hideRun && (
       <div className="flex items-center justify-between gap-2">
         {/* Hidden at phone width, as the Blocks tab's hint is: it wraps to
             two lines there, and the tab name already says it. */}
@@ -243,6 +250,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
           Run code
         </button>
       </div>
+      )}
 
       {/* Insert-on-click command palette (doubles as the cheat sheet). Tap a
           chip to drop the real rover code at the cursor. */}
