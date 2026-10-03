@@ -382,6 +382,11 @@ export function RoverSimulator({
       </div>
 
       {hasTrajectory && (
+        // ONE ROW, like a video player: play/pause, the scrubber, reset. They
+        // were two full-width buttons under the scrubber, 45px of a frame that
+        // is mostly there to show the rover, for two actions that each need a
+        // thumb's width. Icons with labels for screen readers; the shapes are
+        // the ones every player uses.
         <div
           className={
             bare
@@ -389,49 +394,40 @@ export function RoverSimulator({
               // of a 207px frame, so the picture shrank the moment you switched
               // from the video of the real run to the simulation of it. A video's
               // own controls overlay its picture; so do these.
-              ? 'absolute inset-x-0 bottom-0 z-10 flex flex-col gap-1.5 bg-gradient-to-t from-black/75 via-black/45 to-transparent px-3 pb-2.5 pt-6'
-              : 'flex shrink-0 flex-col gap-1.5'
+              ? 'absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-2.5 pb-2 pt-5'
+              : 'flex shrink-0 items-center gap-2'
           }
         >
+          {!isManual && (
+            <button
+              onClick={handlePlayPause}
+              aria-label={isPaused ? 'Play' : 'Pause'}
+              className={`clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                isPaused ? 'bg-gradient-mars text-primary-foreground' : bare ? 'bg-white/90 text-gray-900' : 'border border-border bg-secondary text-foreground'
+              }`}
+            >
+              {isPaused ? <PlayIcon /> : <PauseIcon />}
+            </button>
+          )}
           <input
             type="range"
             min={0}
             max={Math.max(0, trajectory.length - 1)}
             value={Math.min(Math.max(0, hud.frame - 1), Math.max(0, trajectory.length - 1))}
             onChange={(e) => handleScrub(parseInt(e.target.value))}
-            className="h-1.5 w-full cursor-pointer accent-primary"
+            className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary"
             aria-label="Scrub simulation frame"
           />
-          <div className="flex items-center gap-2">
-            {!isManual && (
-              <button
-                onClick={handlePlayPause}
-                className={`clay-press flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-colors ${
-                  isPaused
-                    ? 'bg-gradient-mars text-primary-foreground'
-                    : 'border border-border bg-secondary text-foreground'
-                }`}
-              >
-                {isPaused ? (
-                  <>
-                    <PlayIcon /> Play
-                  </>
-                ) : (
-                  <>
-                    <PauseIcon /> Pause
-                  </>
-                )}
-              </button>
-            )}
-            <button
-              onClick={handleReset}
-              className={`clay-press flex items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold text-foreground transition-colors ${
-                isManual ? 'w-full' : 'flex-1'
-              }`}
-            >
-              <ResetIcon /> Reset
-            </button>
-          </div>
+          <button
+            onClick={handleReset}
+            aria-label="Reset"
+            title="Reset"
+            className={`clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+              bare ? 'bg-black/45 text-white' : 'border border-border bg-card text-foreground'
+            }`}
+          >
+            <ResetIcon />
+          </button>
         </div>
       )}
 
