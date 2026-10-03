@@ -59,29 +59,34 @@ export function MissionDetail({
   }
 
   return (
+    // ONE SCREEN, SENDING ALWAYS IN VIEW. The operator opens a mission to
+    // decide and send: preview and code share whatever height is left, the
+    // dispatch row sits directly under them, and the record of the mission
+    // (actions, runs, video) gets a capped scroll area of its own below. It
+    // was one long column, and on a laptop Send to Rover was below the fold.
+    // overflow-y-auto stays only as a safety valve for absurdly short windows.
     <div className="@container flex h-full min-h-0 flex-col gap-3 overflow-y-auto">
-      <header className="shrink-0">
+      {/* ONE ROW: the way back, the name, the id. They were three stacked
+          lines with a whole row of nothing beside "Back to the queue". The
+          back button is an arrow with its words as its label, and only below
+          lg, where the panes take turns. The id is for a bug report, not the
+          operator's job, so it trails the name and goes on a phone. */}
+      <header className="flex shrink-0 items-center gap-1.5">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            // -ml-1.5 and the padding give it a 40px target without spending
-            // a row on it: below lg this is the only way back to the queue.
-            className="-ml-1.5 mb-0.5 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-primary lg:hidden"
+            aria-label="Back to the queue"
+            title="Back to the queue"
+            className="-ml-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-primary lg:hidden"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Back to the queue
+            <ArrowLeft className="h-5 w-5" />
           </button>
         )}
-        <h2 className="truncate font-display text-lg font-bold text-foreground">
+        <h2 className="min-w-0 truncate font-display text-lg font-bold text-foreground">
           {mission.name || 'Untitled mission'}
         </h2>
-        {/* The document id is for a bug report, not for the operator's job.
-            It keeps its line where there is height to spare and goes on a
-            phone, where that line is one queue row. */}
-        <p className="mt-0.5 hidden truncate font-mono text-[11px] text-muted-foreground sm:block">
-          {mission.id}
-        </p>
+        <p className="hidden shrink-0 font-mono text-[11px] text-muted-foreground sm:block">{mission.id}</p>
       </header>
 
       {/* WHAT IT WILL DO, BESIDE WHAT WAS WRITTEN. The decision comes before
@@ -90,18 +95,18 @@ export function MissionDetail({
           when the pane is wide enough (a container query, because this pane's
           width is not the window's), stacked when it is not. The code lights
           up as the preview plays, as it does in the editor. */}
-      <div className="grid shrink-0 gap-3 @2xl:grid-cols-2">
+      <div className="grid min-h-[240px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3 @2xl:grid-cols-2 @2xl:grid-rows-1">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
         <MissionPreview key={mission.id} mission={mission} onSourceChange={setRunningSource} />
 
-        <section className="flex min-h-[260px] flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
           <h3 className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
             <Code2 className="h-3.5 w-3.5" />
             What the learner wrote
           </h3>
           {mission.blocklyState ? (
-            <div className="min-h-[220px] flex-1">
+            <div className="min-h-0 flex-1">
               <BlocklyViewer key={mission.id} state={mission.blocklyState} highlight={runningSource} />
             </div>
           ) : (
@@ -113,9 +118,12 @@ export function MissionDetail({
       {/* Then sending: it is what an operator opens a queued mission to do,
           and the record actions below it are what they do afterwards. */}
       {mode === 'auto' && (
-        <AutomaticDispatch mission={mission} yardId={yardId} />
+        <div className="shrink-0">
+          <AutomaticDispatch mission={mission} yardId={yardId} />
+        </div>
       )}
 
+      <div className="flex max-h-[35%] min-h-0 shrink flex-col gap-3 overflow-y-auto">
       <MissionActions
         mission={mission}
         yardId={yardId}
@@ -144,6 +152,7 @@ export function MissionDetail({
           Watch the run
         </a>
       )}
+      </div>
     </div>
   );
 }

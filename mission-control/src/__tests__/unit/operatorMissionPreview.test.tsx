@@ -30,11 +30,23 @@ const mission = {
   status: 'queued' as const,
 };
 
-function renderDetail() {
+function renderDetail(onBack?: () => void) {
   return render(
-    <MissionDetail mission={mission} runs={[]} yards={[]} yardId="curiosity" isAdmin={false} mode="auto" onResult={() => {}} />,
+    <MissionDetail mission={mission} runs={[]} yards={[]} yardId="curiosity" isAdmin={false} mode="auto" onResult={() => {}} onBack={onBack} />,
   );
 }
+
+it('puts the way back, the name and the id on one row', () => {
+  // Three stacked lines, one of them mostly empty, cost the preview a row.
+  const onBack = jest.fn();
+  renderDetail(onBack);
+  const back = screen.getByRole('button', { name: 'Back to the queue' });
+  const title = screen.getByRole('heading', { name: 'Rock Lover' });
+  expect(back.parentElement).toBe(title.parentElement);
+  expect(title.parentElement).toHaveTextContent('m1');
+  back.click();
+  expect(onBack).toHaveBeenCalled();
+});
 
 it('shows what it will do before the controls that send it', () => {
   renderDetail();
