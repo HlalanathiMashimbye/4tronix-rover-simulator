@@ -14,8 +14,10 @@
  * - the navbar drops its phone chrome on it, and keeps it on the feed;
  * - the phone layout is decided in one hook that follows the md breakpoint;
  * - the docked layout shows the simulator and the editor together, expands
- *   the simulator on request, and has ONE top-bar button: Run until the
- *   program has been watched, then Send, which opens the launch sheet.
+ *   the simulator on request, and Run opens the launch view: the simulator,
+ *   the checks, the name and Submit. Submitting used to sit behind a Send
+ *   button that only appeared after a full watch, and on a phone nobody
+ *   found it - there was no way to submit a mission.
  *
  * That the page does not scroll is layout, which jsdom cannot measure; it
  * was checked in a browser at 360x640, 375x667, 390x844 and 412x915.
@@ -130,7 +132,7 @@ describe('deciding the phone layout', () => {
 
 describe('the docked layout', () => {
   function renderWorkspace(overrides: Partial<React.ComponentProps<typeof PhoneWorkspace>> = {}) {
-    const onSendOpenChange = jest.fn();
+    const onLaunchOpenChange = jest.fn();
     const onRun = jest.fn();
     render(
       <PhoneWorkspace
@@ -138,20 +140,19 @@ describe('the docked layout', () => {
         simulator={<div data-testid="simulator" />}
         submitBar={<div data-testid="submit-bar" />}
         onRun={onRun}
-        watched={false}
-        sendReady={false}
-        sendOpen={false}
-        onSendOpenChange={onSendOpenChange}
+        editorKind="blocks"
+        launchOpen={false}
+        onLaunchOpenChange={onLaunchOpenChange}
         {...overrides}
       />,
     );
-    return { onSendOpenChange, onRun };
+    return { onLaunchOpenChange, onRun };
   }
 
-  it('shows the simulator and the editor at the same time', () => {
+  it('shows the simulator and the editor at the same time while editing', () => {
     renderWorkspace();
     expect(screen.getByTestId('simulator')).toBeInTheDocument();
-    expect(screen.getByTestId('editor')).toBeInTheDocument();
+    expect(screen.getByTestId('editor').parentElement).not.toHaveAttribute('inert');
   });
 
   it('enlarges the simulator on request, and shrinks it back', () => {
@@ -163,37 +164,48 @@ describe('the docked layout', () => {
     expect(screen.getByRole('button', { name: 'Enlarge the simulator' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('offers Run, not Send, until the program has been watched', () => {
-    const { onRun, onSendOpenChange } = renderWorkspace({ watched: false });
-    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+  it('runs the program and opens the launch view in one press', () => {
+    const { onRun, onLaunchOpenChange } = renderWorkspace();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(onRun).toHaveBeenCalled();
-    expect(onSendOpenChange).not.toHaveBeenCalled();
+    expect(onLaunchOpenChange).toHaveBeenCalledWith(true);
   });
 
-  it('becomes Send once watched, which opens the launch sheet', () => {
-    const { onSendOpenChange } = renderWorkspace({ watched: true });
+  it('shows the checks, name and Submit in the launch view, beside the simulator', () => {
+    renderWorkspace({ launchOpen: true });
+    expect(screen.getByRole('region', { name: 'Send your mission' })).toContainElement(screen.getByTestId('submit-bar'));
+    expect(screen.getByTestId('simulator')).toBeInTheDocument();
+  });
+
+  it('keeps the editor mounted but out of reach while launching, so the program and its Run survive', () => {
+    renderWorkspace({ launchOpen: true });
+    const editor = screen.getByTestId('editor');
+    expect(editor).toBeInTheDocument();
+    // Collapsed by CSS so it can animate away, and inert so a keyboard or
+    // screen reader cannot wander into an editor nobody can see.
+    expect(editor.parentElement).toHaveAttribute('inert');
+  });
+
+  it('says where the way back goes, for blocks and for code', () => {
+    const { onLaunchOpenChange } = renderWorkspace({ launchOpen: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to blocks' }));
+    expect(onLaunchOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('says Back to code from the Python tab', () => {
+    renderWorkspace({ launchOpen: true, editorKind: 'code' });
+    expect(screen.getByRole('button', { name: 'Back to code' })).toBeInTheDocument();
+  });
+
+  it('keeps the launch controls out of reach while editing', () => {
+    renderWorkspace();
+    expect(screen.getByTestId('submit-bar').closest('.phoneLaunchSlot')).toHaveAttribute('inert');
+  });
+
+  it('has neither Run nor a launch view in Drive mode, which has no program', () => {
+    renderWorkspace({ submitBar: undefined, launchOpen: true });
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('submit-bar')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(onSendOpenChange).toHaveBeenCalledWith(true);
-  });
-
-  it('shows the sheet when open, and closes it on Escape', () => {
-    const { onSendOpenChange } = renderWorkspace({ sendOpen: true });
-    expect(screen.getByRole('dialog', { name: 'Send your mission' })).toContainElement(screen.getByTestId('submit-bar'));
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(onSendOpenChange).toHaveBeenCalledWith(false);
-  });
-
-  it('says whether the mission is ready before the sheet is opened', () => {
-    renderWorkspace({ watched: true, sendReady: true });
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveAttribute('data-ready', 'true');
-  });
-
-  it('offers neither in Drive mode, which has no program', () => {
-    renderWorkspace({ submitBar: undefined });
-    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Send your mission' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('editor').parentElement).not.toHaveAttribute('inert');
   });
 });

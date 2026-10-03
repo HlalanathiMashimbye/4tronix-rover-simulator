@@ -87,10 +87,9 @@ describe('the docked layout while typing', () => {
         simulator={<div data-testid="simulator" />}
         submitBar={<div />}
         onRun={() => {}}
-        watched={false}
-        sendReady={false}
-        sendOpen={false}
-        onSendOpenChange={() => {}}
+        editorKind="blocks"
+        launchOpen={false}
+        onLaunchOpenChange={() => {}}
         runningText={runningText}
       />,
     );

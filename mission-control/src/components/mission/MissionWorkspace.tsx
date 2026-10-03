@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
@@ -14,7 +14,6 @@ import { SplitPane } from '@/components/ui/SplitPane';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
-import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
@@ -89,8 +88,8 @@ export function MissionWorkspace() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [missionSentOpen, setMissionSentOpen] = useState(false);
-  /** The phone layout's Send sheet. Owned here so a successful send can close it. */
-  const [sendSheetOpen, setSendSheetOpen] = useState(false);
+  /** The phone layout's launch view. Owned here so a successful send can close it. */
+  const [launchOpen, setLaunchOpen] = useState(false);
   // null on the server and during hydration: see usePhoneLayout for why
   // neither layout renders until this is known.
   const phoneLayout = usePhoneLayout();
@@ -279,7 +278,7 @@ export function MissionWorkspace() {
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
 
       setSubmitSuccess(true);
-      setSendSheetOpen(false);
+      setLaunchOpen(false);
       setMissionName(generateRandomMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
@@ -313,12 +312,6 @@ export function MissionWorkspace() {
 
   // Not "has a run happened" but "has THIS been watched" - see watchedCode.
   const hasRunSimulation = watchedCode !== null && watchedCode === currentCode;
-  // The same rule the launch button applies, read here only so the phone's
-  // Send button can show the answer before its sheet is opened.
-  const sendReady = useMemo(
-    () => runPreFlightChecks(currentCode, { hasRunSimulation }).ready,
-    [currentCode, hasRunSimulation],
-  );
 
   const editorPanel = (
     <EditorPanel
@@ -381,10 +374,9 @@ export function MissionWorkspace() {
           simulator={<RoverSimulator {...simulatorProps} bare />}
           submitBar={submitBar}
           onRun={() => runEditorRef.current?.()}
-          watched={hasRunSimulation}
-          sendReady={sendReady}
-          sendOpen={sendSheetOpen}
-          onSendOpenChange={setSendSheetOpen}
+          editorKind={editorMode === 'code' ? 'code' : 'blocks'}
+          launchOpen={launchOpen}
+          onLaunchOpenChange={setLaunchOpen}
           runningText={runningLineText(currentCode, highlight)}
         />
       ) : (
