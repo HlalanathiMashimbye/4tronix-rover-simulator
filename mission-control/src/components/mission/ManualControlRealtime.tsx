@@ -206,15 +206,20 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-3 p-4">
+    // On a phone this shares the screen with the docked simulator (AB#455),
+    // so the buttons compact and two things go: the keyboard hint, which a
+    // touch screen has no use for, and Reset position, which the simulator's
+    // own Reset already does. Before this, half the buttons were clipped off
+    // the bottom with no way to reach them.
+    <div className="flex h-full w-full flex-col gap-2 p-3 md:gap-3 md:p-4">
       <div>
-        <h3 className="font-display text-lg font-bold text-foreground">Tap a block to drive</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="font-display text-base font-bold text-foreground md:text-lg">Tap a block to drive</h3>
+        <p className="hidden text-xs text-muted-foreground md:block">
           These are the same blocks you code with. Tap one to run it.
         </p>
       </div>
 
-      <div className="grid flex-1 content-start grid-cols-2 gap-x-4 gap-y-6">
+      <div className="grid flex-1 content-start grid-cols-2 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-6">
         {BLOCKS.map((block) => (
           <button
             key={block.command}
@@ -234,7 +239,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="hidden items-center justify-between gap-2 md:flex">
         <button
           onClick={handleReset}
           className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary"

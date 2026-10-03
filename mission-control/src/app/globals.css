@@ -294,11 +294,13 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
-/* The operator console does not render the learner's tab bar below md
-   (Navbar.tsx) and lays its own inside the page instead, so there is no
-   fixed chrome to keep clear of. Read from the attribute the operator layout
-   sets rather than from the route, so the CSS never learns the path. */
-:root:has([data-surface="operator"]) { --app-bottom-chrome: 0px; }
+/* The operator console and the build page do not render the learner's tab
+   bar below md (Navbar.tsx; the operator console lays its own inside the
+   page), so there is no fixed chrome to keep clear of. Read from the
+   attribute each surface sets rather than from the route, so the CSS never
+   learns the path. */
+:root:has([data-surface="operator"]),
+:root:has([data-surface="build"]) { --app-bottom-chrome: 0px; }
 
 /*
  * A page that fills what is left of the viewport, chrome at both ends
@@ -691,33 +693,32 @@
   border-radius: 999px;
 }
 
-/* Phones only. The grid is sized to one viewport height, which is right when
-   the panels sit side by side and fine on a tablet, but on a phone they stack
-   - so two panels shared ~690px, leaving Blockly and the simulator about 340px
-   each. Let the column grow and the page scroll instead: a phone scrolls
-   anyway, and half a screen of Blockly is not usable.
+/* Phones only.
+
+   Create Mission used to let this grid grow on a phone, with a 70vh floor per
+   stacked panel, and let the page scroll. That made blocks and the simulator
+   two separate screens: you could never watch the rover and the program
+   together, and a drag on the block canvas fought the page's own scroll.
+   It now fits one screen like every other size (AB#455), the build panel
+   taking the larger share because it is where the work happens.
+
+   The mission VIEW (the fixed variant) still grows and scrolls: its panels are
+   a 16:9 player, a stats row and the code, which read top to bottom.
 
    Deliberately max-width 767px and not the lg breakpoint the columns use:
    tablets are the device the yard runs on, and their layout is already good. */
 @media (max-width: 767px) {
-  .workspaceSplitGrid {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .workspaceSplitGrid--fixed {
     height: auto;
     max-height: none;
     /* Not a flexible track down here: the parent column is auto-height and the
-       page scrolls, so the grid takes its children's height (the 70vh floors
-       below) rather than being squeezed into a remainder. */
+       page scrolls, so the grid takes its children's height rather than being
+       squeezed into a remainder. */
     flex: 0 0 auto;
-  }
-
-  /* The 70vh floor is for Create Mission, where both stacked panels are things
-     you work inside - Blockly and the simulator - and neither is usable at
-     half a screen. The mission VIEW is the fixed variant, and its panels are a
-     16:9 player, a stats row and one line of feedback: about 300px of content
-     that the floor stretched to 568px, putting a screenful of empty page
-     between the operator's comment and the code. A floor that guarantees a
-     minimum is wrong on a panel that already knows its own height. */
-  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
-    min-height: 70vh;
   }
 
   /* The code panel still needs a floor, just a smaller one: it is flex-1
@@ -792,56 +793,121 @@
 }
 
 /*
- * What the simulator is running (AB#450).
+ * What the simulator is running (AB#450), on the block canvas.
  *
- * The step pops in, then breathes with a soft glow, so a child's eye is pulled
- * to it every time the rover starts something new. The Repeat around it gets
- * a dashed edge that keeps moving, which is the loop going round. Animated on
- * .blocklyPath only: the block's own <g> carries Blockly's position as a
- * transform attribute, and a CSS transform there would throw it across the
- * canvas. Fixed colours because the canvas is white in both themes.
+ * Built to be unmissable, after a green outline proved easy to overlook on a
+ * busy program:
+ *   - the SPOTLIGHT: every block not running fades back, so the running one is
+ *     the single bright thing on the canvas;
+ *   - the running block gets a thick yellow edge with a warm glow (yellow
+ *     rather than green: it reads as "now" against every category colour, and
+ *     the glow carries it on the white canvas where a yellow line alone would
+ *     not), and pops each time it starts;
+ *   - a "now" tag beside it glides from block to block, and each Repeat wears
+ *     a "2 / 3" badge for its pass (both drawn in BlocklyEditor.tsx).
+ * Paths only, never the block's <g>: that carries Blockly's position as a
+ * transform attribute, and blocks nest inside each other's groups, so an
+ * opacity or transform there would hit every block stacked below too.
  */
+.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyPath {
+  opacity: 0.28;
+  transition: opacity 250ms ease;
+}
+.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyText,
+.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyField,
+.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyEditableField,
+.roverSpotlight .blocklyDraggable:not(.rover-running-step):not(.rover-running-loop) > .blocklyNonEditableField {
+  opacity: 0.45;
+}
 .rover-running-step > .blocklyPath {
-  stroke: #22c55e !important;
-  stroke-width: 4px !important;
+  stroke: #ffc800 !important;
+  stroke-width: 5px !important;
+  filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95));
   animation:
     rover-step-pop 600ms cubic-bezier(0.22, 1, 0.36, 1),
     rover-step-glow 3.5s ease-in-out 600ms infinite;
 }
 .rover-running-loop > .blocklyPath {
-  stroke: #22c55e !important;
+  stroke: #ffc800 !important;
   stroke-width: 3px !important;
   stroke-dasharray: 10 6;
   animation: rover-loop-march 1.8s linear infinite;
 }
 @keyframes rover-step-pop {
-  from { stroke-width: 8px; filter: drop-shadow(0 0 12px rgb(34 197 94 / 0.85)); }
-  to { stroke-width: 4px; filter: drop-shadow(0 0 4px rgb(34 197 94 / 0.6)); }
+  from { stroke-width: 10px; filter: drop-shadow(0 0 16px rgb(255 170 0 / 1)); }
+  to { stroke-width: 5px; filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95)); }
 }
 @keyframes rover-step-glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgb(34 197 94 / 0.6)); }
-  50% { filter: drop-shadow(0 0 8px rgb(34 197 94 / 0.85)); }
+  0%, 100% { filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95)); }
+  50% { filter: drop-shadow(0 0 13px rgb(255 170 0 / 1)); }
 }
 @keyframes rover-loop-march {
   to { stroke-dashoffset: -16; }
 }
 
+/* The "now" tag: a pointer pinned to the running block's right edge, gliding
+   to the next block as the program moves on. */
+.roverNowTag {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  background: #ffc800;
+  color: #1f2937;
+  font: 800 11px/1.2 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  transition: left 320ms cubic-bezier(0.22, 1, 0.36, 1), top 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* The tag's arrow, pointing back at the block. */
+.roverNowTag::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left-width: 0;
+  border-right-color: #ffc800;
+}
+/* The Repeat's pass, on its top-right corner. */
+.roverPassBadge {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #1f2937;
+  color: #ffc800;
+  border: 2px solid #ffc800;
+  font: 800 11px/1.3 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
 /*
- * The same on the Python editor's running lines (always the dark theme). The
+ * The same on the Python editor's running lines (always the dark theme), in
+ * the same yellow, so "running now" is one colour across both editors. The
  * band sweeps in from the left as each command starts - the class arrives on
  * a line as the command reaches it, which replays the animation - and a
  * marker beside the line number points at it.
  */
 .rover-running-line {
-  background: linear-gradient(90deg, rgb(34 197 94 / 0.35), rgb(34 197 94 / 0.12)) no-repeat;
-  box-shadow: inset 3px 0 0 #22c55e;
+  background: linear-gradient(90deg, rgb(255 200 0 / 0.28), rgb(255 200 0 / 0.08)) no-repeat;
+  box-shadow: inset 3px 0 0 #ffc800;
   animation: rover-line-sweep 600ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .rover-running-marker::before {
   content: '\25B6';
   float: left;
   margin-right: 4px;
-  color: #22c55e;
+  color: #ffc800;
   font-size: 10px;
   line-height: inherit;
   animation: rover-marker-nudge 1.8s ease-in-out infinite;
@@ -853,6 +919,43 @@
 @keyframes rover-marker-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
+}
+
+/*
+ * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
+ *
+ * The docked simulator takes 30% of the screen so the blocks keep most of it,
+ * and grows to 62% when the learner wants a proper look. dvh, not vh: mobile
+ * Safari's vh includes the strip under the URL bar, which is exactly the
+ * clipping this layout exists to get rid of. Height is animated because the
+ * canvas inside redraws on resize anyway, and a jump reads as a glitch.
+ */
+.phoneSimStrip {
+  height: 30dvh;
+  transition: height 320ms var(--ease-drawer);
+}
+.phoneSimStrip[data-expanded="true"] {
+  height: 62dvh;
+}
+/* Typing: one line, whatever the strip was. Declared after expanded so it
+   wins over it. */
+.phoneSimStrip[data-keyboard="true"] {
+  height: 2.25rem;
+}
+
+.sendSheet {
+  transform: translateY(100%);
+  transition: transform 260ms var(--ease-drawer);
+}
+.sendSheet[data-visible="true"] {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneSimStrip,
+  .sendSheet {
+    transition: none;
+  }
 }
 
 /* The Python editor's hover and autocomplete help card. */
@@ -872,33 +975,31 @@
 }
 
 /*
- * iOS Safari zooms the whole page into any field under 16px when it is
- * tapped, and a learner on a phone then has to pinch back out after every
- * edit. Desktop keeps the denser 14px Monaco had.
+ * Smaller on a phone, where a whole program has to fit a narrow column. Not
+ * 16px, which is what stops iOS Safari zooming the page on tap: that zoom is
+ * prevented directly instead (infrastructure/browser/iosInputZoom.ts), because
+ * 16px code was too big to read a program by.
  */
 .rover-python-editor .cm-editor {
   font-size: 14px;
 }
 @media (pointer: coarse) {
   .rover-python-editor .cm-editor {
-    font-size: 16px;
+    font-size: 13px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .roverNowTag,
+  .roverSpotlight .blocklyPath {
+    transition: none;
+  }
   .rover-running-step > .blocklyPath,
   .rover-running-loop > .blocklyPath,
   .rover-running-line,
   .rover-running-marker::before {
     animation: none;
   }
-}
-
-.blocklyToolboxDiv {
-  background-color: #f8fafc !important;
-  border-right: 1px solid #e2e8f0 !important;
-  min-width: 140px !important;
-  width: min(28vw, 176px) !important;
 }
 
 .blocklyToolboxCategory {
@@ -909,20 +1010,90 @@
   font-weight: 600 !important;
 }
 
+/*
+ * The category strip along the bottom of the block editor on a phone
+ * (blocklyInjectOptions.ts, AB#455). One row of chips that scrolls sideways if the
+ * categories ever outgrow the width, rather than wrapping into a second row
+ * of canvas lost.
+ */
+.roverBlocklyPhone .blocklyToolbox {
+  padding: 3px 4px !important;
+  border-top: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+/* The workspace scrollbars sat over the program as grey pills. A finger
+   drags the canvas to pan, so on a phone they are only in the way. */
+.roverBlocklyPhone .blocklyMainWorkspaceScrollbar {
+  display: none;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryGroup {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+/* Blockly marks each category with an 8px inline left border in its colour.
+   Dropped here: the icon wears the colour instead. Equal-width chips, so the
+   five share the strip rather than crowding to one side. */
+.roverBlocklyPhone .blocklyToolboxCategoryContainer {
+  flex: 1 1 0;
+  min-width: 52px;
+}
+.roverBlocklyPhone .blocklyToolboxCategory {
+  white-space: nowrap;
+  /* Blockly pins a category row to 22px for a one-line label; an icon over
+     a label needs its own height, or the label is clipped by the strip. */
+  height: auto !important;
+  line-height: 1.2 !important;
+  padding: 4px 2px !important;
+  border-left-width: 0 !important;
+  border-radius: 8px;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/*
+ * The category icons on the phone strip (PHONE_TOOLBOX in
+ * blocklyInjectOptions.ts), drawn on the empty icon span Blockly renders
+ * in each category. Masks rather than <img> or an icon font: the
+ * shape comes from the SVG, the colour from background-color, so each icon
+ * wears its category's colour and turns white when its category is open.
+ * Shapes are Lucide's (ISC licence), the set the rest of the app uses.
+ */
+.roverBlocklyPhone .blocklyTreeRowContentContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.roverBlocklyPhone [id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+  display: block !important;
+  width: 20px;
+  height: 20px;
+  background-color: var(--cat);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+/* Blockly fills an open category's chip with its colour, so the icon and
+   label turn white on it. */
+.roverBlocklyPhone .blocklyToolboxSelected .blocklyTreeRowContentContainer > span:first-child {
+  background-color: #fff;
+}
+.roverBlocklyPhone .blocklyToolboxSelected .blocklyToolboxCategoryLabel {
+  color: #fff;
+}
+.roverBlocklyPhone #roverCat-uplink { --cat: #FF6D00; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/%3E%3Cpath d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Cpath d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/%3E%3Cpath d='M19.1 4.9C23 8.8 23 15.1 19.1 19'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-move { --cat: #2196F3; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 9 2 12 5 15'/%3E%3Cpolyline points='9 5 12 2 15 5'/%3E%3Cpolyline points='15 19 12 22 9 19'/%3E%3Cpolyline points='19 9 22 12 19 15'/%3E%3Cline x1='2' x2='22' y1='12' y2='12'/%3E%3Cline x1='12' x2='12' y1='2' y2='22'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-mast { --cat: #00897B; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-lights { --cat: #673AB7; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-control { --cat: #FF9800; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E"); }
+
 .blocklyFlyoutBackground {
   fill: #f1f5f9 !important;
   fill-opacity: 1 !important;
-}
-
-.blocklyTreeRow {
-  color: #334155 !important;
-  cursor: pointer;
-  padding: 1px 6px !important;
-}
-
-.blocklyTreeLabel {
-  color: #1e293b !important;
-  font-size: 11px !important;
 }
 
 .blocklyText {

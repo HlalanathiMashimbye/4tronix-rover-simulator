@@ -164,7 +164,17 @@ describe('how tall a full-height page is', () => {
     // sits above a dead 64px band; without the attribute the rule is inert.
     expect(read('app/operator/layout.tsx')).toMatch(/data-surface="operator"/);
     const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
-    expect(css).toMatch(/:has\(\[data-surface="operator"\]\)\s*\{[^}]*--app-bottom-chrome:\s*0px/);
+    // [^{]* allows the rule to be shared in a selector list.
+    expect(css).toMatch(/:has\(\[data-surface="operator"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
+  });
+
+  it('drops it on the build page too, where the tab bar is gone on a phone', () => {
+    // Same pairing for Create Mission (AB#455): the navbar stops rendering
+    // the tab bar there, so keeping its 4rem clear would leave a dead band
+    // under the block canvas.
+    expect(read('app/mission/page.tsx')).toMatch(/data-surface="build"/);
+    const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
+    expect(css).toMatch(/:has\(\[data-surface="build"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
   });
 
 });
