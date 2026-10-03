@@ -791,6 +791,23 @@
   fill: #ffffff !important;
 }
 
+/*
+ * The block the simulator is running (AB#450). Blockly's default highlight is
+ * only its emboss filter, which every block already has, so on its own it
+ * changes nothing anyone can see. Green because the story asks for it, and a
+ * fixed colour because the canvas is white in both themes.
+ */
+.blocklyHighlighted > .blocklyPath {
+  stroke: #22c55e !important;
+  stroke-width: 4px !important;
+}
+
+/* The same, on the Python editor's running lines (always the dark theme). */
+.rover-running-line {
+  background: rgb(34 197 94 / 0.25);
+  box-shadow: inset 3px 0 0 #22c55e;
+}
+
 .blocklyToolboxDiv {
   background-color: #f8fafc !important;
   border-right: 1px solid #e2e8f0 !important;

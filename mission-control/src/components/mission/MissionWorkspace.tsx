@@ -11,25 +11,9 @@ import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
 import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
-import { simulateCommands } from '@/lib/simulateCommands';
+import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
-
-interface TrajectoryPoint {
-  x: number;
-  y: number;
-  heading: number;
-  speedL: number;
-  speedR: number;
-  servos: Record<string, number>;
-  hitWall?: boolean;
-}
-
-type SimulationCommand = {
-  command: string;
-  speed?: number;
-  duration?: number;
-  degrees?: number;
-};
 
 // Bounds of the build/simulator split, as a percentage given to the build
 // side. Owned here rather than in EditorPanel so the divider clamps to the
@@ -61,6 +45,15 @@ export function MissionWorkspace() {
    * tick away on the next keystroke and putting it back restores it.
    */
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
+  /** The part of the program the simulator's playhead is on (AB#450). */
+  const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
+  /**
+   * Only while the editor still holds the program that was run. Once the
+   * learner edits, the block ids and line numbers describe code that is no
+   * longer there, and lighting up line 4 of a different program is a lie.
+   * Derived rather than cleared in an effect so no edit path can forget it.
+   */
+  const highlight = simulatedCode !== null && simulatedCode === currentCode ? runningSource : null;
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [missionSentOpen, setMissionSentOpen] = useState(false);
@@ -298,6 +291,7 @@ export function MissionWorkspace() {
             blocklyCode={blocklyCode}
             onShowAsPython={handleShowAsPython}
             onBlocklyStateChange={setBlocklyState}
+            highlight={highlight}
           />
         }
         right={
@@ -307,6 +301,7 @@ export function MissionWorkspace() {
             onReset={handleResetSimulation}
             editorMode={editorMode}
             resetVersion={manualResetVersion}
+            onSourceChange={setRunningSource}
             // Name and launch live under the simulator so the block canvas
             // keeps the full height of its own column. Drive mode is excluded:
             // it has no code to send, and the simulator is on screen in every

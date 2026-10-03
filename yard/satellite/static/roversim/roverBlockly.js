@@ -620,6 +620,8 @@ export const LED_COUNT = 4;
  */
 export function workspaceToCommands(workspace) {
     const commands = [];
+    // The Repeat blocks the current block sits inside, outermost first.
+    const loops = [];
     function processChain(block, out) {
         while (block) {
             processOne(block, out);
@@ -627,6 +629,17 @@ export function workspaceToCommands(workspace) {
         }
     }
     function processOne(block, out) {
+        const before = out.length;
+        emit(block, out);
+        // Tag here, once, rather than in every case below. A Repeat's own pushes
+        // are its body's commands, already tagged with the right block, so only
+        // untagged commands are ours.
+        for (let i = before; i < out.length; i++) {
+            if (!out[i].source)
+                out[i].source = { blockIds: [...loops, block.id] };
+        }
+    }
+    function emit(block, out) {
         switch (block.type) {
             case 'rover_on_receive':
                 processChain(block.getInputTargetBlock('DO'), out);
@@ -693,9 +706,14 @@ export function workspaceToCommands(workspace) {
             case 'rover_repeat': {
                 const times = Number(block.getFieldValue('TIMES'));
                 const loop = [];
+                loops.push(block.id);
                 processChain(block.getInputTargetBlock('DO'), loop);
+                loops.pop();
+                // Copies, not the same objects pushed N times: each pass is its own
+                // stretch of playback, and sharing objects would let a later change
+                // to one pass silently change all of them.
                 for (let i = 0; i < times; i++)
-                    out.push(...loop);
+                    out.push(...loop.map((c) => ({ ...c })));
                 break;
             }
             // mast / photo / distance still have no 2D-sim effect

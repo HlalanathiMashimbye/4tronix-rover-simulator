@@ -11,6 +11,7 @@ import {
   mergeUplinkHats,
   workspaceToPython,
   workspaceToCommands,
+  type CommandSource,
   type SimulationCommand,
 } from '@/lib/roverBlockly';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
@@ -22,6 +23,8 @@ interface BlocklyEditorProps {
   onBlocklyStateChange?: (state: string) => void;
   /** Switch to the Python tab, showing what these blocks generate. */
   onShowAsPython?: () => void;
+  /** What the simulator is running right now (AB#450). */
+  highlight?: CommandSource | null;
 }
 
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
@@ -32,7 +35,7 @@ interface BlocklyEditorProps {
 // to write this key before the component mounts.
 const STORAGE_KEY = 'roverWorkspace';
 
-export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange , onShowAsPython }: BlocklyEditorProps) {
+export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
@@ -324,6 +327,25 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       workspace.removeChangeListener(listener);
     };
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
+
+  // Light up the running block, and any Repeat it is inside. Blockly's own
+  // highlight is the tool for this ("used to visually mark blocks currently
+  // being executed"); globals.css turns it green. Ids are checked first
+  // because a block can be deleted without changing the generated Python, so
+  // the highlight survives, and Blockly throws on an id it does not have.
+  //
+  // Keyed as JSON, not joined with commas: Blockly's generated ids draw from
+  // a character set that includes the comma, so a split came apart mid-id and
+  // only the Repeat, whose id happened to have none, ever lit up.
+  const blockIdsKey = JSON.stringify(highlight?.blockIds ?? []);
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!isInitialized || !workspace) return;
+    workspace.highlightBlock(null);
+    for (const id of JSON.parse(blockIdsKey) as string[]) {
+      if (workspace.getBlockById(id)) workspace.highlightBlock(id, true);
+    }
+  }, [blockIdsKey, isInitialized]);
 
   if (loadError) {
     return (

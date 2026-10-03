@@ -11,16 +11,8 @@ import {
   LIGHT_SIM_PALETTE,
   type SimLayout,
 } from '@/lib/roverSimRender';
-
-interface TrajectoryPoint {
-  x: number;
-  y: number;
-  heading: number;
-  speedL: number;
-  speedR: number;
-  servos: Record<string, number>;
-  hitWall?: boolean;
-}
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import type { CommandSource } from '@/lib/roverBlockly';
 
 interface RoverSimulatorProps {
   trajectory: TrajectoryPoint[];
@@ -47,6 +39,13 @@ interface RoverSimulatorProps {
    * two ways, so they get the same shape.
    */
   bare?: boolean;
+  /**
+   * Told which part of the program the playhead is on, so the editor can light
+   * it up (AB#450). null when nothing is running: before the first frame,
+   * after the last one, and after a reset. A pause keeps the highlight, so a
+   * learner can stop on a step and look at what caused it.
+   */
+  onSourceChange?: (source: CommandSource | null) => void;
 }
 
 export function RoverSimulator({
@@ -57,6 +56,7 @@ export function RoverSimulator({
   resetVersion = 0,
   footer,
   bare = false,
+  onSourceChange,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -65,6 +65,19 @@ export function RoverSimulator({
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
   const sizeRef = useRef<SimLayout & { dpr: number }>({ w: 0, h: 0, s: 1, ox: 0, oy: 0, dpr: 1 });
+
+  // Read through a ref so a parent passing a fresh callback each render does
+  // not restart the playback loop, whose effect depends on syncHud.
+  const onSourceChangeRef = useRef(onSourceChange);
+  const lastSourceRef = useRef<CommandSource | null>(null);
+  useEffect(() => {
+    onSourceChangeRef.current = onSourceChange;
+  });
+  const reportSource = useCallback((source: CommandSource | null) => {
+    if (source === lastSourceRef.current) return;
+    lastSourceRef.current = source;
+    onSourceChangeRef.current?.(source);
+  }, []);
 
   const { theme } = useTheme();
   const isManual = editorMode === 'manual';
@@ -155,9 +168,12 @@ export function RoverSimulator({
     const traj = trajRef.current;
     if (traj.length === 0) {
       setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, hitWall: false });
+      reportSource(null);
       return;
     }
     const playhead = isManual ? traj.length - 1 : playheadRef.current;
+    // Manual driving has no program to point at.
+    reportSource(isManual ? null : traj[Math.round(playhead)]?.source ?? null);
     const st = interpolate(traj, playhead);
     setHud({
       x: st.x,
@@ -167,7 +183,7 @@ export function RoverSimulator({
       total: traj.length,
       hitWall: !!st.hitWall,
     });
-  }, [isManual]);
+  }, [isManual, reportSource]);
 
   // A fresh non-manual run starts from the beginning and plays.
   //
@@ -212,6 +228,8 @@ export function RoverSimulator({
         rafRef.current = requestAnimationFrame(tick);
       } else {
         rafRef.current = null;
+        // Finished. The rover is parked, so nothing is running any more.
+        reportSource(null);
       }
     };
 
@@ -233,7 +251,7 @@ export function RoverSimulator({
     // That is why it looked intermittent. Editing the code usually changes the
     // frame count, which hid the bug; re-running the same program, or any edit
     // that kept the same duration, exposed it.
-  }, [isManual, isPaused, isPlaying, trajectory, drawScene, syncHud]);
+  }, [isManual, isPaused, isPlaying, trajectory, drawScene, syncHud, reportSource]);
 
   // Manual mode is live: keep the rover on the newest point as it streams in.
   useEffect(() => {
