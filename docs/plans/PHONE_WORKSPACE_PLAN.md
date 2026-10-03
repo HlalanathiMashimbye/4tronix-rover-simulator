@@ -9,6 +9,21 @@ Board: this is the prerequisite for **AB#455** (finish challenges on a phone).
 Put `Refs AB#455` in every PR title and commit. Stack the PRs, one per phase,
 each on the previous branch.
 
+## Status (3 Oct 2026)
+
+- **Phases 1, 2 and 4 shipped together** in one PR (`feat/phone-shell-ab455`).
+  Phase 1 alone squeezed the simulator to 0px and pushed Send off the
+  screen, so it could not ship on its own, and Send needed the sheet.
+- **Deviation from phase 2:** Run was NOT lifted into the top bar. Each
+  editor keeps its own Run button, and the mode tabs stay in `EditorPanel`;
+  the top bar holds back and Send only. It fits all four sizes, and keeping
+  one Run per editor avoided a cross-component run channel. Revisit only if
+  phase 3 needs the height.
+- Also done early: Python snippet chips as one scrolling row (phase 5 item
+  2), and smaller phone buttons across the workspace, at the product owner's
+  request.
+- **Next:** phase 3 (Blockly for thumbs), then phase 5 (keyboard + devices).
+
 ## The problem, measured
 
 `/mission` at 375x812 (iPhone-sized), Blocks mode, before this work:
