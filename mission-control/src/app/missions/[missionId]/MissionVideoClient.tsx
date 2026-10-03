@@ -1,5 +1,6 @@
 "use client";
 
+import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
@@ -298,7 +299,7 @@ export default function MissionVideoClient({
                     localStorage.setItem('roverWorkspace', mission.blocklyState);
                     router.push('/mission?mode=blockly');
                   } else {
-                    localStorage.setItem('rover_monaco_code', mission.code);
+                    localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
                     router.push('/mission?mode=code');
                   }
                 }}

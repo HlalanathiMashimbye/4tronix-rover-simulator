@@ -1,7 +1,7 @@
 /**
  * Which surface of the app a path belongs to.
  *
- * One function so far, and the file is named for the question rather than the
+ * The file is named for the question rather than the
  * answer on purpose: an import of `@/lib/operatorSurface` would itself put the
  * substring "/operator" into whichever file imported it, which is exactly what
  * the check below refuses to allow in the navbar.
@@ -30,4 +30,21 @@ export function isOperatorSurface(pathname: string): boolean {
   // learner page silently losing its Create Mission button is the kind of
   // thing nobody reports.
   return pathname === OPERATOR_PREFIX || pathname.startsWith(`${OPERATOR_PREFIX}/`);
+}
+
+const BUILD_PATH = '/mission';
+
+/**
+ * Whether a path is where a learner builds a mission.
+ *
+ * On a phone that page is a full-screen tool (AB#455): the learner's tab bar
+ * and floating Create Mission button cost 128px of a 667px screen there, and
+ * the button sat over the block canvas, offering to create the mission the
+ * learner was already creating. The navbar drops both on this surface.
+ *
+ * Exact segment match, not startsWith: '/missions' is the feed, a different
+ * page that keeps its tab bar.
+ */
+export function isBuildSurface(pathname: string): boolean {
+  return pathname === BUILD_PATH || pathname.startsWith(`${BUILD_PATH}/`);
 }

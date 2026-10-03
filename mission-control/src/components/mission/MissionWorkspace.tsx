@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
@@ -11,9 +11,14 @@ import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
 import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
+import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
+import { RoverSimulator } from '@/components/mission/RoverSimulator';
+import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
+import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
+import { carryBlocksToPython, showBlocksAsPython } from '@/infrastructure/browser/pythonDraft';
 
 // Bounds of the build/simulator split, as a percentage given to the build
 // side. Owned here rather than in EditorPanel so the divider clamps to the
@@ -21,6 +26,16 @@ import { resolveYardId } from '@/infrastructure/config/yard';
 const SPLIT_MIN = 35;
 const SPLIT_MAX = 75;
 const SPLIT_DEFAULT = 60;
+
+/**
+ * The code of the line the simulator is running, for the phone's one-line
+ * strip while the keyboard is up. Python only: a block has no line of its
+ * own to quote, and its highlight on the canvas already says which it is.
+ */
+function runningLineText(code: string, source: CommandSource | null): string | null {
+  if (!source?.fromLine) return null;
+  return code.split('\n')[source.fromLine - 1]?.trim() || null;
+}
 
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
@@ -45,6 +60,23 @@ export function MissionWorkspace() {
    * tick away on the next keystroke and putting it back restores it.
    */
   const [simulatedCode, setSimulatedCode] = useState<string | null>(null);
+  /**
+   * The exact code the learner has WATCHED to the end, which is what Send
+   * waits for and what "You have watched it" checks. simulatedCode is set the
+   * moment Run is pressed, and pressing Run is not watching: with Run and Send
+   * on the same button on a phone, a double tap would otherwise launch a
+   * mission nobody had seen. Same code-not-boolean reasoning as above.
+   */
+  const [watchedCode, setWatchedCode] = useState<string | null>(null);
+  /**
+   * The active editor's own Run, registered by the editor. The phone's top
+   * bar calls it, so there is one Run per editor however many buttons lead
+   * to it (the editors hide their own button on a phone).
+   */
+  const runEditorRef = useRef<(() => void) | null>(null);
+  const registerRun = useCallback((run: (() => void) | null) => {
+    runEditorRef.current = run;
+  }, []);
   /** The part of the program the simulator's playhead is on (AB#450). */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
   /**
@@ -57,6 +89,11 @@ export function MissionWorkspace() {
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [missionSentOpen, setMissionSentOpen] = useState(false);
+  /** The phone layout's Send sheet. Owned here so a successful send can close it. */
+  const [sendSheetOpen, setSendSheetOpen] = useState(false);
+  // null on the server and during hydration: see usePhoneLayout for why
+  // neither layout renders until this is known.
+  const phoneLayout = usePhoneLayout();
   // True between opening the email prompt and the learner answering it either
   // way. A ref, not state: nothing renders from it, and it must be readable by
   // the effect below in the same tick the prompt closes.
@@ -109,6 +146,7 @@ export function MissionWorkspace() {
   // Switching editor mode starts a clean simulator: clear the previous run's
   // trajectory so, e.g., Manual starts from an empty canvas.
   const handleEditorModeChange = useCallback((mode: EditorMode) => {
+    if (mode === 'code' && editorMode === 'blockly') carryBlocksToPython(blocklyCode);
     setEditorMode(mode);
     setTrajectory([]);
     setIsPlaying(false);
@@ -116,11 +154,12 @@ export function MissionWorkspace() {
     // The cleared canvas is no longer a run of anything, so the submit gate
     // closes with it.
     setSimulatedCode(null);
+    setWatchedCode(null);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-  }, []);
+  }, [editorMode, blocklyCode]);
 
   /**
    * Take the blocks' Python to the Python tab and show it.
@@ -132,7 +171,7 @@ export function MissionWorkspace() {
    */
   const handleShowAsPython = useCallback(() => {
     if (blocklyCode.trim()) {
-      localStorage.setItem('rover_monaco_code', blocklyCode);
+      showBlocksAsPython(blocklyCode);
       setCurrentCode(blocklyCode);
     }
     setEditorMode('code');
@@ -188,6 +227,7 @@ export function MissionWorkspace() {
     setTrajectory([]);
     setIsPlaying(false);
     setSimulatedCode(null);
+    setWatchedCode(null);
   }, [editorMode]);
 
   const handleSubmitToQueue = async () => {
@@ -239,6 +279,7 @@ export function MissionWorkspace() {
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
 
       setSubmitSuccess(true);
+      setSendSheetOpen(false);
       setMissionName(generateRandomMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
@@ -270,61 +311,100 @@ export function MissionWorkspace() {
     }
   }, [showEmailPrompt]);
 
+  // Not "has a run happened" but "has THIS been watched" - see watchedCode.
+  const hasRunSimulation = watchedCode !== null && watchedCode === currentCode;
+  // The same rule the launch button applies, read here only so the phone's
+  // Send button can show the answer before its sheet is opened.
+  const sendReady = useMemo(
+    () => runPreFlightChecks(currentCode, { hasRunSimulation }).ready,
+    [currentCode, hasRunSimulation],
+  );
+
+  const editorPanel = (
+    <EditorPanel
+      editorMode={editorMode}
+      onEditorModeChange={handleEditorModeChange}
+      error={error}
+      onManualTrajectory={handleManualTrajectory}
+      onResetSimulation={handleResetSimulation}
+      manualResetVersion={manualResetVersion}
+      onGenerateCommands={runSimulation}
+      onCodeChange={setCurrentCode}
+      onBlocklyCode={setBlocklyCode}
+      blocklyCode={blocklyCode}
+      onShowAsPython={handleShowAsPython}
+      onBlocklyStateChange={setBlocklyState}
+      highlight={highlight}
+      onRegisterRun={registerRun}
+    />
+  );
+
+  // Drive mode is excluded: it has no code to send.
+  const submitBar =
+    editorMode === 'manual' ? undefined : (
+      <MissionSubmitBar
+        missionName={missionName}
+        onMissionNameChange={setMissionName}
+        onSubmit={handleSubmitToQueue}
+        submitting={submitting}
+        submitSuccess={submitSuccess}
+        currentCode={currentCode}
+        hasRunSimulation={hasRunSimulation}
+      />
+    );
+
+  const simulatorProps = {
+    trajectory,
+    isPlaying,
+    onReset: handleResetSimulation,
+    editorMode,
+    resetVersion: manualResetVersion,
+    onSourceChange: setRunningSource,
+    // Records the code that was RUN, not whatever is in the editor now: an
+    // edit made while the rover was still moving has not been watched.
+    onFinished: () => setWatchedCode(simulatedCode),
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-      <SplitPane
-        ariaLabel="Resize build and simulator panels"
-        defaultSplit={SPLIT_DEFAULT}
-        minSplit={SPLIT_MIN}
-        maxSplit={SPLIT_MAX}
-        left={
-          <EditorPanel
-            editorMode={editorMode}
-            onEditorModeChange={handleEditorModeChange}
-            error={error}
-            onManualTrajectory={handleManualTrajectory}
-            onResetSimulation={handleResetSimulation}
-            manualResetVersion={manualResetVersion}
-            onGenerateCommands={runSimulation}
-            onCodeChange={setCurrentCode}
-            onBlocklyCode={setBlocklyCode}
-            blocklyCode={blocklyCode}
-            onShowAsPython={handleShowAsPython}
-            onBlocklyStateChange={setBlocklyState}
-            highlight={highlight}
-          />
-        }
-        right={
-          <SimulationPanel
-            trajectory={trajectory}
-            isPlaying={isPlaying}
-            onReset={handleResetSimulation}
-            editorMode={editorMode}
-            resetVersion={manualResetVersion}
-            onSourceChange={setRunningSource}
-            // Name and launch live under the simulator so the block canvas
-            // keeps the full height of its own column. Drive mode is excluded:
-            // it has no code to send, and the simulator is on screen in every
-            // mode.
-            footer={
-              editorMode === 'manual' ? undefined : (
-                <MissionSubmitBar
-                  missionName={missionName}
-                  onMissionNameChange={setMissionName}
-                  onSubmit={handleSubmitToQueue}
-                  submitting={submitting}
-                  submitSuccess={submitSuccess}
-                  currentCode={currentCode}
-                  // Not "has a run happened" but "has THIS been run" - see
-                  // simulatedCode. An empty program is excluded so that
-                  // clearing the editor cannot leave a stale tick behind.
-                  hasRunSimulation={simulatedCode !== null && simulatedCode === currentCode}
-                />
-              )
-            }
-          />
-        }
-      />
+      {phoneLayout === null ? (
+        // What the server sends. Neutral at every size, so a phone never
+        // paints the desktop layout before the phone one replaces it.
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          Loading workspace...
+        </div>
+      ) : phoneLayout ? (
+        <PhoneWorkspace
+          editor={editorPanel}
+          // Bare: the strip is the frame, and its controls overlay the arena
+          // as they do in the run player.
+          simulator={<RoverSimulator {...simulatorProps} bare />}
+          submitBar={submitBar}
+          onRun={() => runEditorRef.current?.()}
+          watched={hasRunSimulation}
+          sendReady={sendReady}
+          sendOpen={sendSheetOpen}
+          onSendOpenChange={setSendSheetOpen}
+          runningText={runningLineText(currentCode, highlight)}
+        />
+      ) : (
+        <SplitPane
+          ariaLabel="Resize build and simulator panels"
+          defaultSplit={SPLIT_DEFAULT}
+          minSplit={SPLIT_MIN}
+          maxSplit={SPLIT_MAX}
+          left={editorPanel}
+          right={
+            <SimulationPanel
+              {...simulatorProps}
+              // Name and launch live under the simulator so the block canvas
+              // keeps the full height of its own column. The simulator is on
+              // screen in every mode.
+              footer={submitBar}
+            />
+          }
+        />
+      )}
 
       <MissionSentDialog
         open={missionSentOpen}

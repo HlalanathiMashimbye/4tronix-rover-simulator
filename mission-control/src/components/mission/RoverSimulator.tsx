@@ -46,6 +46,12 @@ interface RoverSimulatorProps {
    * learner can stop on a step and look at what caused it.
    */
   onSourceChange?: (source: CommandSource | null) => void;
+  /**
+   * The run has been watched to its last frame, by playing or by scrubbing
+   * there. This, not pressing Run, is what "You have watched it" means: a
+   * learner could otherwise press Run and Send in the same second.
+   */
+  onFinished?: () => void;
 }
 
 export function RoverSimulator({
@@ -57,6 +63,7 @@ export function RoverSimulator({
   footer,
   bare = false,
   onSourceChange,
+  onFinished,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -69,9 +76,11 @@ export function RoverSimulator({
   // Read through a ref so a parent passing a fresh callback each render does
   // not restart the playback loop, whose effect depends on syncHud.
   const onSourceChangeRef = useRef(onSourceChange);
+  const onFinishedRef = useRef(onFinished);
   const lastSourceRef = useRef<CommandSource | null>(null);
   useEffect(() => {
     onSourceChangeRef.current = onSourceChange;
+    onFinishedRef.current = onFinished;
   });
   const reportSource = useCallback((source: CommandSource | null) => {
     if (source === lastSourceRef.current) return;
@@ -230,6 +239,7 @@ export function RoverSimulator({
         rafRef.current = null;
         // Finished. The rover is parked, so nothing is running any more.
         reportSource(null);
+        onFinishedRef.current?.();
       }
     };
 
@@ -276,6 +286,9 @@ export function RoverSimulator({
     playheadRef.current = value;
     drawScene();
     syncHud();
+    // Dragging to the end is watching to the end, as far as the learner is
+    // concerned: they have seen where the rover finishes.
+    if (!isManual && value >= trajRef.current.length - 1) onFinishedRef.current?.();
   };
 
   const handlePlayPause = () => {

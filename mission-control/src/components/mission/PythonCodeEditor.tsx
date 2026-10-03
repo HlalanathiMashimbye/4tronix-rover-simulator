@@ -8,11 +8,13 @@ import { indentUnit, bracketMatching } from '@codemirror/language';
 import { closeBrackets, completionKeymap } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
 import { python } from '@codemirror/lang-python';
-import { AlertTriangle, Play } from 'lucide-react';
+import { AlertTriangle, Lightbulb, Play, X } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type CommandSource, type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { checkLearnerCode, type CodeProblem } from '@/core/domain/safety/learnerCodeCheck';
 import { roverPythonExtensions, setRunningLines } from '@/components/mission/roverPythonEditor';
+import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
 
 interface PythonCodeEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -21,15 +23,15 @@ interface PythonCodeEditorProps {
   blocklyCode?: string;
   /** What the simulator is running right now (AB#450). */
   highlight?: CommandSource | null;
+  /** Hands this editor's Run up, for a Run button outside it. */
+  onRegisterRun?: (run: (() => void) | null) => void;
+  /**
+   * The phone variant: no Run row (the top bar has Run), and the snippet chips
+   * tucked behind a help button instead of taking a row of their own.
+   */
+  phone?: boolean;
 }
 
-/**
- * Where the draft is kept. Still named for Monaco on purpose: renaming it
- * would hand every returning learner an empty editor, and the mission page's
- * Remix button and Show as Python write to this key too. Not exported: those
- * would then import this module, and with it the whole editor.
- */
-const PYTHON_DRAFT_KEY = 'rover_monaco_code';
 
 // The real rover API: speed is 0-100, and you control how long a move lasts
 // with time.sleep() then rover.stop() - exactly what the blocks generate.
@@ -78,8 +80,11 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null }: PythonCodeEditorProps) {
+export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
+  /** The phone's snippet tray, behind the help button. */
+  const [helpOpen, setHelpOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
   const [error, setError] = useState<string | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -227,36 +232,53 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     }
   };
 
+  // Re-registered every render: handleRun reads this render's code.
+  useEffect(() => {
+    onRegisterRun?.(handleRun);
+    return () => onRegisterRun?.(null);
+  });
+
+  const snippetChips = SNIPPETS.map((item) => (
+    <button
+      key={item.label}
+      onClick={() => insertSnippet(item.code)}
+      title={`Insert ${item.label} code`}
+      className="clay-press inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border/60 bg-card/50 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.colour }} />
+      {item.label}
+    </button>
+  ));
+
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
+      {/* Not when the layout runs from its own button: on a phone both the
+          hint and Run would leave only an empty row behind. */}
+      {!phone && (
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground">
+        {/* Hidden at phone width, as the Blocks tab's hint is: it wraps to
+            two lines there, and the tab name already says it. */}
+        <p className="hidden min-w-0 text-xs text-muted-foreground sm:block">
           Write Python using rover commands.
         </p>
         <button
           onClick={handleRun}
-          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+          className="clay clay-press ml-auto flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
         >
           <Play className="h-3.5 w-3.5" fill="currentColor" />
           Run code
         </button>
       </div>
+      )}
 
       {/* Insert-on-click command palette (doubles as the cheat sheet). Tap a
-          chip to drop the real rover code at the cursor. */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {SNIPPETS.map((item) => (
-          <button
-            key={item.label}
-            onClick={() => insertSnippet(item.code)}
-            title={`Insert ${item.label} code`}
-            className="clay-press inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/50 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
-          >
-            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.colour }} />
-            {item.label}
-          </button>
-        ))}
-      </div>
+          chip to drop the real rover code at the cursor. A row of its own
+          from md up; on a phone it lives behind the help button below. */}
+      {!phone && (
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          {snippetChips}
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 rounded-xl border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive">
@@ -281,7 +303,78 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
         </div>
       )}
 
-      <div ref={hostRef} className="rover-python-editor min-h-0 flex-1 overflow-hidden rounded-xl border border-border" />
+      {/* The editor frame. On a phone it carries a header bar, in the
+          editor's own colours, like a file tab in an IDE. */}
+      <div
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border ${phone ? 'bg-[#1e1e1e]' : ''}`}
+      >
+        {/* THE PHONE'S CHEAT SHEET. The chips took a whole row of a screen
+            the docked simulator already shares, so on a phone they wait
+            behind the lightbulb and slide into this bar when asked for. Part
+            of the editor rather than a card laid over it: same surface, same
+            type, so it reads as the IDE's own toolbar. A spring rather than a
+            fixed curve, so it settles like something physical; a plain fade
+            under reduced motion. It stays open while commands are tapped,
+            because a program usually needs more than one. */}
+        {phone && (
+          <div className="relative flex h-7 shrink-0 items-center overflow-hidden border-b border-[#2b2b2b] bg-[#252526] pl-2.5 pr-8 font-mono text-[11px]">
+            <AnimatePresence initial={false} mode="popLayout">
+              {helpOpen ? (
+                <motion.div
+                  key="commands"
+                  role="toolbar"
+                  aria-label="Rover commands"
+                  initial={reduceMotion ? { opacity: 0 } : { x: '60%', opacity: 0 }}
+                  animate={reduceMotion ? { opacity: 1 } : { x: 0, opacity: 1 }}
+                  exit={reduceMotion ? { opacity: 0 } : { x: '60%', opacity: 0 }}
+                  transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 420, damping: 38 }}
+                  className="-ml-1.5 flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [scrollbar-width:none]"
+                >
+                  {SNIPPETS.map((item) => (
+                    <button
+                      key={item.label}
+                      onClick={() => insertSnippet(item.code)}
+                      title={`Insert ${item.label} code`}
+                      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-1.5 py-0.5 text-[#cccccc] transition-colors active:bg-[#37373d] [@media(hover:hover)]:hover:bg-[#2a2d2e]"
+                    >
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: item.colour }} />
+                      {item.label}
+                    </button>
+                  ))}
+                </motion.div>
+              ) : (
+                <motion.span
+                  key="filename"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="text-[#969696]"
+                >
+                  mission.py
+                </motion.span>
+              )}
+            </AnimatePresence>
+            <button
+              onClick={() => setHelpOpen((open) => !open)}
+              aria-label={helpOpen ? 'Hide rover commands' : 'Show rover commands'}
+              aria-expanded={helpOpen}
+              // A call to action while closed, in the app's mission orange: a
+              // muted icon in the editor's grey was never found, and the
+              // commands behind it are the first thing a new learner needs.
+              // Quiet once open, where it is only a close button.
+              className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-colors ${
+                helpOpen
+                  ? 'text-[#858585] [@media(hover:hover)]:hover:bg-[#2a2d2e]'
+                  : 'bg-primary/20 text-primary ring-1 ring-primary/50 [@media(hover:hover)]:hover:bg-primary/30'
+              }`}
+            >
+              {helpOpen ? <X className="h-3.5 w-3.5" /> : <Lightbulb className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        )}
+        <div ref={hostRef} className="rover-python-editor min-h-0 flex-1 overflow-hidden" />
+      </div>
     </div>
   );
 }

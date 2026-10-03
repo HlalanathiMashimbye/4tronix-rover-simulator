@@ -3,15 +3,18 @@ import { Suspense } from 'react';
 
 export default function MissionPage() {
   return (
-    // See MissionVideoClient for the full reasoning: pinned to the viewport
-    // from md up, free to grow on a phone where the panels stack and a fixed
-    // 100vh clips the simulator out of reach.
-    <main className="relative px-3 py-1.5 md:h-page md:overflow-hidden">
+    // Pinned to the viewport at every size. On a phone this used to grow and
+    // scroll, which put the simulator a screen away from the blocks (AB#455).
+    // data-surface tells globals.css there is no tab bar to keep clear of
+    // here; the navbar drops it on this page (lib/appSurfaces.ts).
+    <main data-surface="build" className="relative h-page overflow-hidden px-3 py-1.5">
       {/* flex-col, not space-y: the workspace below sizes itself from what is
           left after this header, rather than the grid guessing at how tall the
           chrome above it is. */}
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-1.5">
-        <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        {/* Not on a phone: two lines of title cost the canvas ~60px there,
+            and the editor tabs below already say what this page is. */}
+        <header className="hidden shrink-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 md:flex">
           <h1 className="font-display text-xl font-bold text-foreground md:text-2xl">
             Build your <span className="text-gradient-mars">Mission</span>
           </h1>
