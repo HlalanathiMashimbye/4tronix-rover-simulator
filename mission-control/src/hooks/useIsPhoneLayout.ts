@@ -26,6 +26,9 @@ export function useIsPhoneLayout(): boolean {
   const [isPhone, setIsPhone] = useState(false);
 
   useEffect(() => {
+    // Every browser we support has it; jsdom and some embedded webviews do
+    // not, and a layout hint is no reason to take the editor down.
+    if (typeof window.matchMedia !== 'function') return;
     const query = window.matchMedia(PHONE_QUERY);
     const update = () => setIsPhone(query.matches);
     update();

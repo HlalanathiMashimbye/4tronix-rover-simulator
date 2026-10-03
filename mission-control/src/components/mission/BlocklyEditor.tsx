@@ -6,14 +6,13 @@ import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import {
   defineRoverBlocks,
   migrateSpinBlocks,
-  ROVER_TOOLBOX,
-  ROVER_MAX_INSTANCES,
   mergeUplinkHats,
   workspaceToPython,
   workspaceToCommands,
   type CommandSource,
   type SimulationCommand,
 } from '@/lib/roverBlockly';
+import { blocklyInjectOptions } from '@/components/mission/blocklyInjectOptions';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
@@ -25,6 +24,13 @@ interface BlocklyEditorProps {
   onShowAsPython?: () => void;
   /** What the simulator is running right now (AB#450). */
   highlight?: CommandSource | null;
+  /**
+   * Inject the phone options (blocklyInjectOptions), read once at inject, and
+   * drop the Run row: on a phone Run lives in the top bar (onRegisterRun).
+   */
+  phone?: boolean;
+  /** Hands this editor's Run up, for a Run button outside it. */
+  onRegisterRun?: (run: (() => void) | null) => void;
 }
 
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
@@ -35,7 +41,7 @@ interface BlocklyEditorProps {
 // to write this key before the component mounts.
 const STORAGE_KEY = 'roverWorkspace';
 
-export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null }: BlocklyEditorProps) {
+export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null, phone = false, onRegisterRun }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
@@ -87,34 +93,9 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       // Register the shared rover blocks (same defs the yard uses).
       defineRoverBlocks(Blockly);
 
-      // Initialize workspace with the shared category toolbox.
-      const workspace = Blockly.inject(blocklyDivRef.current, {
-        toolbox: ROVER_TOOLBOX,
-        // The actual cap - Blockly reads maxInstances only from here, never
-        // from a toolbox content entry, so this must live on inject() itself.
-        maxInstances: ROVER_MAX_INSTANCES,
-        renderer: 'zelos',
-        zoom: {
-          controls: true,
-          wheel: true,
-          startScale: 1.0,
-          maxScale: 2.5,
-          minScale: 0.35,
-          scaleSpeed: 1.15,
-        },
-        grid: {
-          spacing: 20,
-          length: 3,
-          colour: '#ccc',
-          snap: true,
-        },
-        trashcan: true,
-        move: {
-          drag: true,
-          scrollbars: true,
-          wheel: true,
-        },
-      });
+      // Initialize workspace with the shared category toolbox. Read once:
+      // EditorPanel remounts this component when the layout changes.
+      const workspace = Blockly.inject(blocklyDivRef.current, blocklyInjectOptions(phone));
 
       workspaceRef.current = workspace;
       setIsInitialized(true);
@@ -294,6 +275,12 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     onGenerateCommands(commands);
   };
 
+  // Re-registered every render: handleRun reads this render's props.
+  useEffect(() => {
+    onRegisterRun?.(handleRun);
+    return () => onRegisterRun?.(null);
+  });
+
   // There is deliberately no custom recenter button. Blockly's own zoom-reset
   // control (the target icon above the +/- buttons, enabled by zoom.controls
   // below) already does the job: measured, it returns the scale to 1.0 AND
@@ -396,6 +383,10 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           left and drifted on its own as the panel resized. Grouping the two
           buttons and pushing the pair right with ml-auto keeps them together at
           every width; the hint text yields first, then hides. */}
+      {/* Not on a phone, where the hint has no room, Run is in the top bar and
+          the Python tab shows the blocks by itself: the row was 40px of a
+          canvas that needs every one. */}
+      {!phone && (
       <div className="flex flex-wrap items-center gap-2">
         <p className="hidden min-w-0 flex-1 truncate text-xs text-muted-foreground sm:block">
           Stack blocks inside “On uplink”, tune the numbers, then run it.
@@ -423,6 +414,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           </button>
         </div>
       </div>
+      )}
 
       {mergedNotice && (
         <div className="flex flex-shrink-0 items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2 text-xs">
@@ -448,7 +440,9 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       <div className="panel-inner relative min-h-0 flex-1 overflow-hidden border-2 border-border bg-white">
         <div
           ref={blocklyDivRef}
-          className="h-full w-full min-h-0 overflow-hidden"
+          // Scopes the phone toolbox rules in globals.css: the left-column
+          // widths there would otherwise squeeze the bottom strip.
+          className={`h-full w-full min-h-0 overflow-hidden${phone ? ' roverBlocklyPhone' : ''}`}
           style={{ width: '100%' }}
         />
       </div>

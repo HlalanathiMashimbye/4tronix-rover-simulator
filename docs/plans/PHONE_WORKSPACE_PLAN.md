@@ -22,7 +22,20 @@ each on the previous branch.
 - Also done early: Python snippet chips as one scrolling row (phase 5 item
   2), and smaller phone buttons across the workspace, at the product owner's
   request.
-- **Next:** phase 3 (Blockly for thumbs), then phase 5 (keyboard + devices).
+- **Phase 3 shipped** (`feat/phone-blockly-ab455`), with product-owner
+  changes on top of the plan:
+  - Categories are an icon strip (icon over a short label), drawn by CSS
+    on Blockly's icon span via `toolboxitemid`, because Blockly 12 ignores
+    category icon classes in a horizontal toolbox.
+  - Run DID move to the top bar after all, and the editors' Run rows and
+    Show as Python are gone on a phone. The top bar has ONE button: Run
+    until the program has been watched to the end, then Send.
+  - "Watched" now means played (or scrubbed) to the last frame, on desktop
+    too (`watchedCode` in MissionWorkspace, `onFinished` on RoverSimulator).
+  - Blocks to Python carries the blocks across unless the learner has
+    edited the draft (`infrastructure/browser/pythonDraft.ts`).
+- **Next:** phase 5 (keyboard + real devices). Also seen: on a phone the
+  desktop layout renders for a moment before hydration (see follow-ups).
 
 ## The problem, measured
 

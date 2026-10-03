@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Maximize2, Minimize2, Rocket, X } from 'lucide-react';
+import { ChevronLeft, Maximize2, Minimize2, Play, Rocket, X } from 'lucide-react';
 
 /**
  * Create Mission on a phone: the "docked sim" layout (AB#455).
  *
- *   top bar     back, Send
+ *   top bar     back, Run (then Send)
  *   sim strip   ~30% of the screen, expandable
  *   editor      everything else
  *
@@ -26,13 +26,17 @@ interface PhoneWorkspaceProps {
   simulator: React.ReactNode;
   /** The name, checklist and launch button. Absent in Drive, which sends nothing. */
   submitBar?: React.ReactNode;
+  /** Runs the active editor's program in the simulator. */
+  onRun: () => void;
+  /** Whether the program as it stands has been watched to the end. */
+  watched: boolean;
   /** Whether the pre-flight checks pass, so Send can say so before it is opened. */
   sendReady: boolean;
   sendOpen: boolean;
   onSendOpenChange: (open: boolean) => void;
 }
 
-export function PhoneWorkspace({ editor, simulator, submitBar, sendReady, sendOpen, onSendOpenChange }: PhoneWorkspaceProps) {
+export function PhoneWorkspace({ editor, simulator, submitBar, onRun, watched, sendReady, sendOpen, onSendOpenChange }: PhoneWorkspaceProps) {
   const [simExpanded, setSimExpanded] = useState(false);
 
   return (
@@ -49,25 +53,43 @@ export function PhoneWorkspace({ editor, simulator, submitBar, sendReady, sendOp
           </span>
         </Link>
 
-        {submitBar && (
-          <button
-            onClick={() => onSendOpenChange(true)}
-            data-ready={sendReady}
-            // Green once the checks pass, mission orange until then: the same
-            // signal the launch button inside gives, visible without opening it.
-            className={`clay clay-press flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-primary-foreground ${
-              sendReady ? 'bg-gradient-buzz' : 'bg-gradient-mars'
-            }`}
-          >
-            <Rocket className="h-3.5 w-3.5" />
-            Send
-          </button>
-        )}
+        {/* ONE BUTTON: Run until this program has been watched to the end,
+            then Send. Sending is only possible after watching, which the
+            checklist already asked for, and the learner never has to find a
+            second button for the next step. An edit turns it back into Run,
+            because the edited program has not been watched. The editors'
+            own Run buttons and Show as Python are gone on a phone; this and
+            the Python tab replace them. */}
+        {submitBar &&
+          (watched ? (
+            <button
+              onClick={() => onSendOpenChange(true)}
+              data-ready={sendReady}
+              // Green once the checks pass, mission orange until then: the
+              // same signal the launch button inside gives.
+              className={`clay clay-press flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold text-primary-foreground ${
+                sendReady ? 'bg-gradient-buzz' : 'bg-gradient-mars'
+              }`}
+            >
+              <Rocket className="h-3.5 w-3.5" />
+              Send
+            </button>
+          ) : (
+            <button
+              onClick={onRun}
+              className="clay clay-press flex items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background"
+            >
+              <Play className="h-3.5 w-3.5" fill="currentColor" />
+              Run
+            </button>
+          ))}
       </div>
 
       <div
         data-expanded={simExpanded}
-        className="phoneSimStrip panel-inner relative shrink-0 overflow-hidden border border-border"
+        // The outer radius, not panel-inner's: the strip sits beside the editor
+        // card as a sibling, not inside it, and the two read as one family.
+        className="phoneSimStrip relative shrink-0 overflow-hidden rounded-2xl border border-border"
       >
         {simulator}
         <button

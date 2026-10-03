@@ -942,6 +942,87 @@
   font-weight: 600 !important;
 }
 
+/*
+ * The category strip along the bottom of the block editor on a phone
+ * (blocklyInjectOptions.ts, AB#455). One row of chips that scrolls sideways if the
+ * categories ever outgrow the width, rather than wrapping into a second row
+ * of canvas lost.
+ */
+.roverBlocklyPhone .blocklyToolbox {
+  padding: 3px 4px !important;
+  border-top: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+/* The workspace scrollbars sat over the program as grey pills. A finger
+   drags the canvas to pan, so on a phone they are only in the way. */
+.roverBlocklyPhone .blocklyMainWorkspaceScrollbar {
+  display: none;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryGroup {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+/* Blockly marks each category with an 8px inline left border in its colour.
+   Dropped here: the icon wears the colour instead. Equal-width chips, so the
+   five share the strip rather than crowding to one side. */
+.roverBlocklyPhone .blocklyToolboxCategoryContainer {
+  flex: 1 1 0;
+  min-width: 52px;
+}
+.roverBlocklyPhone .blocklyToolboxCategory {
+  white-space: nowrap;
+  /* Blockly pins a category row to 22px for a one-line label; an icon over
+     a label needs its own height, or the label is clipped by the strip. */
+  height: auto !important;
+  line-height: 1.2 !important;
+  padding: 4px 2px !important;
+  border-left-width: 0 !important;
+  border-radius: 8px;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/*
+ * The category icons on the phone strip (PHONE_TOOLBOX in
+ * blocklyInjectOptions.ts), drawn on the empty icon span Blockly renders
+ * in each category. Masks rather than <img> or an icon font: the
+ * shape comes from the SVG, the colour from background-color, so each icon
+ * wears its category's colour and turns white when its category is open.
+ * Shapes are Lucide's (ISC licence), the set the rest of the app uses.
+ */
+.roverBlocklyPhone .blocklyTreeRowContentContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.roverBlocklyPhone [id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+  display: block !important;
+  width: 20px;
+  height: 20px;
+  background-color: var(--cat);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+/* Blockly fills an open category's chip with its colour, so the icon and
+   label turn white on it. */
+.roverBlocklyPhone .blocklyToolboxSelected .blocklyTreeRowContentContainer > span:first-child {
+  background-color: #fff;
+}
+.roverBlocklyPhone .blocklyToolboxSelected .blocklyToolboxCategoryLabel {
+  color: #fff;
+}
+.roverBlocklyPhone #roverCat-uplink { --cat: #FF6D00; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/%3E%3Cpath d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Cpath d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/%3E%3Cpath d='M19.1 4.9C23 8.8 23 15.1 19.1 19'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-move { --cat: #2196F3; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 9 2 12 5 15'/%3E%3Cpolyline points='9 5 12 2 15 5'/%3E%3Cpolyline points='15 19 12 22 9 19'/%3E%3Cpolyline points='19 9 22 12 19 15'/%3E%3Cline x1='2' x2='22' y1='12' y2='12'/%3E%3Cline x1='12' x2='12' y1='2' y2='22'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-mast { --cat: #00897B; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-lights { --cat: #673AB7; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E"); }
+.roverBlocklyPhone #roverCat-control { --cat: #FF9800; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E"); }
+
 .blocklyFlyoutBackground {
   fill: #f1f5f9 !important;
   fill-opacity: 1 !important;

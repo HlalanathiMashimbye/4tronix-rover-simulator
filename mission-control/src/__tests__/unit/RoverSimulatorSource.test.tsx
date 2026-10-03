@@ -91,3 +91,36 @@ describe('reporting what is running', () => {
     expect(onSourceChange).not.toHaveBeenCalledWith(SECOND);
   });
 });
+
+/**
+ * "Watched" means played to the end, not "Run was pressed" (AB#455). On a
+ * phone Run turns into Send at that moment, so firing early would let a
+ * double tap launch a mission nobody had seen.
+ */
+describe('reporting a run watched to the end', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('only once the last frame has played', async () => {
+    const onFinished = jest.fn();
+    render(<RoverSimulator trajectory={trajectory} isPlaying editorMode="code" onFinished={onFinished} />);
+
+    await runFrames(4);
+    expect(onFinished).not.toHaveBeenCalled();
+
+    await runFrames(200);
+    expect(onFinished).toHaveBeenCalledTimes(1);
+  });
+
+  it('when the learner drags to the end instead', () => {
+    const onFinished = jest.fn();
+    render(<RoverSimulator trajectory={trajectory} isPlaying={false} editorMode="code" onFinished={onFinished} />);
+    const scrubber = screen.getByLabelText('Scrub simulation frame');
+
+    fireEvent.change(scrubber, { target: { value: '3' } });
+    expect(onFinished).not.toHaveBeenCalled();
+
+    fireEvent.change(scrubber, { target: { value: String(trajectory.length - 1) } });
+    expect(onFinished).toHaveBeenCalled();
+  });
+});

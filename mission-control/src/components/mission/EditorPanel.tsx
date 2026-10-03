@@ -6,6 +6,7 @@ import { useReducedMotion } from 'motion/react';
 import { Gamepad2, Blocks, Code2, AlertTriangle } from 'lucide-react';
 import { ManualControlRealtime } from '@/components/mission/ManualControlRealtime';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
+import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
@@ -45,6 +46,8 @@ interface EditorPanelProps {
   onBlocklyStateChange?: (state: string) => void;
   /** What the simulator is running right now, to light up in the editor. */
   highlight?: CommandSource | null;
+  /** Hands the active editor's Run up, for a Run button outside the editor. */
+  onRegisterRun?: (run: (() => void) | null) => void;
 }
 
 export function EditorPanel({
@@ -61,8 +64,15 @@ export function EditorPanel({
   onShowAsPython,
   onBlocklyStateChange,
   highlight = null,
+  onRegisterRun,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
+  // Blockly reads its layout options once, at inject, so a change of layout
+  // remounts the block editor (keyed below) rather than leaving a phone with
+  // the desktop's toolbox. The workspace autosaves on every change, so the
+  // remount loses nothing. On a phone's first load this costs one mount and
+  // no inject: the hook settles before the editor's inject timer fires.
+  const isPhone = useIsPhoneLayout();
 
   // The Blocks and Python tabs each used to start downloading their editor
   // only when clicked, which is most of why opening them took seconds. Blockly
@@ -119,8 +129,8 @@ export function EditorPanel({
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} highlight={highlight} />}
-        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} />}
+        {editorMode === 'blockly' && <BlocklyEditor key={isPhone ? 'phone' : 'desktop'} phone={isPhone} onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={isPhone ? undefined : onShowAsPython} highlight={highlight} onRegisterRun={onRegisterRun} />}
+        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} onRegisterRun={onRegisterRun} hideRun={isPhone} />}
       </div>
 
     </div>
