@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { AlertTriangle, Play } from 'lucide-react';
-import { type SimulationCommand } from '@/lib/roverBlockly';
+import { type CommandSource, type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { checkLearnerCode, type CodeProblem } from '@/core/domain/safety/learnerCodeCheck';
 import {
@@ -17,6 +17,8 @@ interface MonacoCodeEditorProps {
   onCodeChange?: (code: string) => void;
   /** The Python the learner's blocks produce, if they have built any. */
   blocklyCode?: string;
+  /** What the simulator is running right now (AB#450). */
+  highlight?: CommandSource | null;
 }
 
 // The real rover API: speed is 0-100, and you control how long a move lasts
@@ -66,7 +68,7 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '' }: MonacoCodeEditorProps) {
+export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null }: MonacoCodeEditorProps) {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [editorReady, setEditorReady] = useState(false);
@@ -230,6 +232,36 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
       })),
     );
   }, [validationErrors, editorReady]);
+
+  // Light up the running lines (AB#450). A whole-line decoration rather than
+  // a selection, so it does not move the learner's cursor or fight their
+  // typing; and kept in one collection so each frame replaces the last.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runningLinesRef = useRef<any>(null);
+  const fromLine = highlight?.fromLine;
+  const toLine = highlight?.toLine ?? fromLine;
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editorReady || !editor) return;
+    runningLinesRef.current ??= editor.createDecorationsCollection();
+    if (!fromLine || !toLine) {
+      runningLinesRef.current.clear();
+      return;
+    }
+    runningLinesRef.current.set([
+      {
+        range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: toLine, endColumn: 1 },
+        options: { isWholeLine: true, className: 'rover-running-line' },
+      },
+      // The margin marker goes on the first line only: one arrow per command,
+      // not one per line of it.
+      {
+        range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: fromLine, endColumn: 1 },
+        options: { linesDecorationsClassName: 'rover-running-marker' },
+      },
+    ]);
+    editor.revealLinesInCenterIfOutsideViewport(fromLine, toLine);
+  }, [fromLine, toLine, editorReady]);
 
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';

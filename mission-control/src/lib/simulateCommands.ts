@@ -1,5 +1,5 @@
 import { RoverPhysics } from './rover-physics';
-import type { SimulationCommand } from './roverBlockly';
+import type { CommandSource, SimulationCommand } from './roverBlockly';
 
 export interface TrajectoryPoint {
   x: number;
@@ -18,6 +18,13 @@ export interface TrajectoryPoint {
    * replayed from the start to work that out.
    */
   leds: (string | null)[];
+  /**
+   * The part of the program this frame is running, for the editor to light up
+   * (AB#450). Per point for the same reason as the lamps: scrubbing back has
+   * to show what was running then. Absent on the starting point, where
+   * nothing has run yet.
+   */
+  source?: CommandSource;
 }
 
 // Match the canvas playback rate (RoverSimulator advances at 10 fps).
@@ -46,7 +53,7 @@ export function simulateCommands(commands: SimulationCommand[]): TrajectoryPoint
       // Show it for a beat, so a lights-only program is still watchable rather
       // than a single frame nobody sees.
       const steps = Math.max(1, Math.round((cmd.duration ?? 0.3) / STEP_SECONDS));
-      for (let i = 0; i < steps; i++) trajectory.push(toPoint(physics, leds));
+      for (let i = 0; i < steps; i++) trajectory.push(toPoint(physics, leds, cmd.source));
       continue;
     }
 
@@ -55,7 +62,7 @@ export function simulateCommands(commands: SimulationCommand[]): TrajectoryPoint
       physics.setCommand('stop', 0);
       for (let i = 0; i < steps; i++) {
         physics.update(STEP_SECONDS);
-        trajectory.push(toPoint(physics, leds));
+        trajectory.push(toPoint(physics, leds, cmd.source));
       }
       continue;
     }
@@ -82,25 +89,25 @@ export function simulateCommands(commands: SimulationCommand[]): TrajectoryPoint
 
     for (let i = 0; i < wholeSteps; i++) {
       physics.update(STEP_SECONDS);
-      trajectory.push(toPoint(physics, leds));
+      trajectory.push(toPoint(physics, leds, cmd.source));
     }
     // 1e-9 rather than 0: floating point leaves crumbs like 2.7755e-17 behind,
     // and a step of that length is a wasted point, not a movement.
     if (remainder > 1e-9) {
       physics.update(remainder);
-      trajectory.push(toPoint(physics, leds));
+      trajectory.push(toPoint(physics, leds, cmd.source));
     }
     // A command with no duration at all still gets one point, so 'stop' shows.
     if (wholeSteps === 0 && remainder <= 1e-9) {
       physics.update(0);
-      trajectory.push(toPoint(physics, leds));
+      trajectory.push(toPoint(physics, leds, cmd.source));
     }
   }
 
   return trajectory;
 }
 
-function toPoint(physics: RoverPhysics, leds: (string | null)[]): TrajectoryPoint {
+function toPoint(physics: RoverPhysics, leds: (string | null)[], source?: CommandSource): TrajectoryPoint {
   const s = physics.getState();
   return {
     x: s.x,
@@ -111,5 +118,6 @@ function toPoint(physics: RoverPhysics, leds: (string | null)[]): TrajectoryPoin
     servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
     hitWall: s.hitWall,
     leds: [...leds],
+    ...(source ? { source } : {}),
   };
 }

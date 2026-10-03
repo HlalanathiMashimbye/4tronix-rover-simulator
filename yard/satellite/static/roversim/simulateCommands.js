@@ -27,7 +27,7 @@ export function simulateCommands(commands) {
             // than a single frame nobody sees.
             const steps = Math.max(1, Math.round((cmd.duration ?? 0.3) / STEP_SECONDS));
             for (let i = 0; i < steps; i++)
-                trajectory.push(toPoint(physics, leds));
+                trajectory.push(toPoint(physics, leds, cmd.source));
             continue;
         }
         if (cmd.command === 'wait') {
@@ -35,7 +35,7 @@ export function simulateCommands(commands) {
             physics.setCommand('stop', 0);
             for (let i = 0; i < steps; i++) {
                 physics.update(STEP_SECONDS);
-                trajectory.push(toPoint(physics, leds));
+                trajectory.push(toPoint(physics, leds, cmd.source));
             }
             continue;
         }
@@ -59,23 +59,23 @@ export function simulateCommands(commands) {
         const remainder = durationSeconds - wholeSteps * STEP_SECONDS;
         for (let i = 0; i < wholeSteps; i++) {
             physics.update(STEP_SECONDS);
-            trajectory.push(toPoint(physics, leds));
+            trajectory.push(toPoint(physics, leds, cmd.source));
         }
         // 1e-9 rather than 0: floating point leaves crumbs like 2.7755e-17 behind,
         // and a step of that length is a wasted point, not a movement.
         if (remainder > 1e-9) {
             physics.update(remainder);
-            trajectory.push(toPoint(physics, leds));
+            trajectory.push(toPoint(physics, leds, cmd.source));
         }
         // A command with no duration at all still gets one point, so 'stop' shows.
         if (wholeSteps === 0 && remainder <= 1e-9) {
             physics.update(0);
-            trajectory.push(toPoint(physics, leds));
+            trajectory.push(toPoint(physics, leds, cmd.source));
         }
     }
     return trajectory;
 }
-function toPoint(physics, leds) {
+function toPoint(physics, leds, source) {
     const s = physics.getState();
     return {
         x: s.x,
@@ -86,5 +86,6 @@ function toPoint(physics, leds) {
         servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
         hitWall: s.hitWall,
         leds: [...leds],
+        ...(source ? { source } : {}),
     };
 }

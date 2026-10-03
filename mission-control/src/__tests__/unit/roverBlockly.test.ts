@@ -11,6 +11,7 @@ import { mergeUplinkHats, workspaceToPython, workspaceToCommands } from '@/lib/r
 type Fields = Record<string, string | number>;
 
 interface MockBlock {
+  id: string;
   type: string;
   _next: MockBlock | null;
   getFieldValue(name: string): string | number | undefined;
@@ -18,8 +19,11 @@ interface MockBlock {
   getNextBlock(): MockBlock | null;
 }
 
+let nextId = 0;
+
 function block(type: string, fields: Fields = {}, inputs: Record<string, MockBlock> = {}): MockBlock {
   const b: MockBlock = {
+    id: `${type}#${nextId++}`,
     type,
     _next: null,
     getFieldValue: (n) => fields[n],
@@ -246,6 +250,10 @@ describe('mergeUplinkHats', () => {
   });
 });
 
+/** The motion alone; sources are tested in their own block below. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const motions = (ws: any) => workspaceToCommands(ws).map(({ source: _source, ...command }) => command);
+
 describe('workspaceToCommands', () => {
   it('maps movement blocks to simulator commands at fixed speed 60', () => {
     const ws = workspace(
@@ -257,7 +265,7 @@ describe('workspaceToCommands', () => {
         )
       )
     );
-    expect(workspaceToCommands(ws)).toEqual([
+    expect(motions(ws)).toEqual([
       { command: 'forward', speed: 60, duration: 2 },
       { command: 'steerLeft', degrees: 20, speed: 60, duration: 1 },
     ]);
@@ -267,7 +275,39 @@ describe('workspaceToCommands', () => {
     const ws = workspace(
       onReceive(block('rover_repeat', { TIMES: 2 }, { DO: block('rover_stop') }))
     );
-    expect(workspaceToCommands(ws)).toEqual([{ command: 'stop' }, { command: 'stop' }]);
+    expect(motions(ws)).toEqual([{ command: 'stop' }, { command: 'stop' }]);
+  });
+});
+
+/**
+ * Which blocks to light up while each command runs (AB#450).
+ *
+ * A block inside a Repeat lights up together with the Repeat, once per pass,
+ * so a learner sees both the step and the loop driving it.
+ */
+describe('which blocks each command came from', () => {
+  it('names the block, and the Repeat around it on every pass', () => {
+    const forward = block('rover_forward', { TIME: 1 });
+    const spin = block('rover_spin_left', { DEGREES: 90 });
+    const repeat = block('rover_repeat', { TIMES: 2 }, { DO: chain(forward, spin) });
+    const stop = block('rover_stop');
+    const ws = workspace(onReceive(chain(repeat, stop)));
+
+    expect(workspaceToCommands(ws).map((c) => c.source?.blockIds)).toEqual([
+      [repeat.id, forward.id],
+      [repeat.id, spin.id],
+      [repeat.id, forward.id],
+      [repeat.id, spin.id],
+      [stop.id],
+    ]);
+  });
+
+  it('names both Repeats for a loop inside a loop, outer first', () => {
+    const stop = block('rover_stop');
+    const inner = block('rover_repeat', { TIMES: 1 }, { DO: stop });
+    const outer = block('rover_repeat', { TIMES: 1 }, { DO: inner });
+
+    expect(workspaceToCommands(workspace(onReceive(outer)))[0].source?.blockIds).toEqual([outer.id, inner.id, stop.id]);
   });
 });
 

@@ -9,6 +9,7 @@ import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { prefetchBlockly } from '@/infrastructure/browser/loadBlockly';
 import { prefetchMonaco } from '@/infrastructure/browser/prefetchMonaco';
 
@@ -16,13 +17,6 @@ import { prefetchMonaco } from '@/infrastructure/browser/prefetchMonaco';
 const MONACO_CDN = 'https://cdn.jsdelivr.net';
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
-
-type SimulationCommand = {
-  command: string;
-  speed?: number;
-  duration?: number;
-  degrees?: number;
-};
 
 // Blocks-first ordering: tap-to-drive on-ramp, then the block editor (the hero),
 // then Python for those ready for it.
@@ -46,6 +40,8 @@ interface EditorPanelProps {
   blocklyCode: string;
   onShowAsPython: () => void;
   onBlocklyStateChange?: (state: string) => void;
+  /** What the simulator is running right now, to light up in the editor. */
+  highlight?: CommandSource | null;
 }
 
 export function EditorPanel({
@@ -61,6 +57,7 @@ export function EditorPanel({
   blocklyCode,
   onShowAsPython,
   onBlocklyStateChange,
+  highlight = null,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
 
@@ -119,8 +116,8 @@ export function EditorPanel({
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} />}
+        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} highlight={highlight} />}
+        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} />}
       </div>
 
     </div>

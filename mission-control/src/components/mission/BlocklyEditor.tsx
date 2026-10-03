@@ -11,6 +11,7 @@ import {
   mergeUplinkHats,
   workspaceToPython,
   workspaceToCommands,
+  type CommandSource,
   type SimulationCommand,
 } from '@/lib/roverBlockly';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
@@ -22,6 +23,8 @@ interface BlocklyEditorProps {
   onBlocklyStateChange?: (state: string) => void;
   /** Switch to the Python tab, showing what these blocks generate. */
   onShowAsPython?: () => void;
+  /** What the simulator is running right now (AB#450). */
+  highlight?: CommandSource | null;
 }
 
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
@@ -32,7 +35,7 @@ interface BlocklyEditorProps {
 // to write this key before the component mounts.
 const STORAGE_KEY = 'roverWorkspace';
 
-export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange , onShowAsPython }: BlocklyEditorProps) {
+export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
@@ -324,6 +327,39 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       workspace.removeChangeListener(listener);
     };
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
+
+  // Light up the running block, and any Repeat it is inside. Our own classes
+  // rather than Blockly's highlightBlock, because the two jobs look different:
+  // the step pops and glows, the Repeat around it gets a moving dashed edge so
+  // it reads as "going round". globals.css owns both, and drops the motion
+  // under prefers-reduced-motion. Ids are checked first because a block can
+  // be deleted without changing the generated Python, so the highlight
+  // survives the edit that removed its block.
+  //
+  // Keyed as JSON, not joined with commas: Blockly's generated ids draw from
+  // a character set that includes the comma, so a split came apart mid-id and
+  // only the Repeat, whose id happened to have none, ever lit up.
+  const blockIdsKey = JSON.stringify(highlight?.blockIds ?? []);
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!isInitialized || !workspace) return;
+    const ids = JSON.parse(blockIdsKey) as string[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lit: { block: any; className: string }[] = [];
+    ids.forEach((id, i) => {
+      const block = workspace.getBlockById(id);
+      if (!block) return;
+      const className = i === ids.length - 1 ? 'rover-running-step' : 'rover-running-loop';
+      // Restart the pop when the same block runs again on the next pass:
+      // removing and re-adding a class in one tick does not replay a CSS
+      // animation, a forced reflow in between does.
+      block.removeClass(className);
+      void block.getSvgRoot()?.getBoundingClientRect();
+      block.addClass(className);
+      lit.push({ block, className });
+    });
+    return () => lit.forEach(({ block, className }) => block.removeClass(className));
+  }, [blockIdsKey, isInitialized]);
 
   if (loadError) {
     return (
