@@ -34,8 +34,15 @@ each on the previous branch.
     too (`watchedCode` in MissionWorkspace, `onFinished` on RoverSimulator).
   - Blocks to Python carries the blocks across unless the learner has
     edited the draft (`infrastructure/browser/pythonDraft.ts`).
-- **Next:** phase 5 (keyboard + real devices). Also seen: on a phone the
-  desktop layout renders for a moment before hydration (see follow-ups).
+- Then on the same PR: no desktop flash before hydration (usePhoneLayout is
+  null on the server) and the dead Blockly CSS removed, with a guard test.
+- **Phase 5 shipped** (`feat/phone-keyboard-ab455`): the page gives up the
+  keyboard's height and the sim collapses to a one-line status while typing;
+  code is 13px with iOS tap-zoom stopped by viewport meta (iOS only); the
+  Python snippet chips sit behind a lightbulb in an IDE-style header bar.
+- **Remaining:** the real-device check (iPhone Safari + Android Chrome), by a
+  person, recorded on the PRs. Then AB#455 proper: the challenges in this
+  shell.
 
 ## The problem, measured
 

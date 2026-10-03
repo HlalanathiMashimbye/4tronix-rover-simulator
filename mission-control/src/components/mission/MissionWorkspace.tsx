@@ -27,6 +27,16 @@ const SPLIT_MIN = 35;
 const SPLIT_MAX = 75;
 const SPLIT_DEFAULT = 60;
 
+/**
+ * The code of the line the simulator is running, for the phone's one-line
+ * strip while the keyboard is up. Python only: a block has no line of its
+ * own to quote, and its highlight on the canvas already says which it is.
+ */
+function runningLineText(code: string, source: CommandSource | null): string | null {
+  if (!source?.fromLine) return null;
+  return code.split('\n')[source.fromLine - 1]?.trim() || null;
+}
+
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
@@ -375,6 +385,7 @@ export function MissionWorkspace() {
           sendReady={sendReady}
           sendOpen={sendSheetOpen}
           onSendOpenChange={setSendSheetOpen}
+          runningText={runningLineText(currentCode, highlight)}
         />
       ) : (
         <SplitPane

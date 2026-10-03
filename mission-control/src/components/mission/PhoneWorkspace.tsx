@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, Maximize2, Minimize2, Play, Rocket, X } from 'lucide-react';
+import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
+import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
 
 /**
  * Create Mission on a phone: the "docked sim" layout (AB#455).
@@ -34,10 +36,32 @@ interface PhoneWorkspaceProps {
   sendReady: boolean;
   sendOpen: boolean;
   onSendOpenChange: (open: boolean) => void;
+  /**
+   * The line the simulator is running, for the one-line strip shown while the
+   * keyboard is up. null when nothing is running or there is no line to show.
+   */
+  runningText?: string | null;
 }
 
-export function PhoneWorkspace({ editor, simulator, submitBar, onRun, watched, sendReady, sendOpen, onSendOpenChange }: PhoneWorkspaceProps) {
+export function PhoneWorkspace({ editor, simulator, submitBar, onRun, watched, sendReady, sendOpen, onSendOpenChange, runningText = null }: PhoneWorkspaceProps) {
   const [simExpanded, setSimExpanded] = useState(false);
+  const keyboard = useOnScreenKeyboard();
+
+  // Lets the code be phone-sized: see preventIosInputZoom.
+  useEffect(() => preventIosInputZoom(), []);
+
+  // Give up the screen the keyboard covers, through the same token the tab
+  // bar uses (h-page subtracts it), so the editor ends above the keys instead
+  // of behind them. Inline on <html> because it outranks the stylesheet's
+  // zero for this surface, and is removed the moment the keyboard goes.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (keyboard.inset > 0) root.style.setProperty('--app-bottom-chrome', `${keyboard.inset}px`);
+    else root.style.removeProperty('--app-bottom-chrome');
+    return () => {
+      root.style.removeProperty('--app-bottom-chrome');
+    };
+  }, [keyboard.inset]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5">
@@ -85,21 +109,35 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, watched, s
           ))}
       </div>
 
+      {/* While the keyboard is up the strip shrinks to one line, so the
+          editor keeps the little screen that is left. The simulator stays
+          mounted and keeps playing underneath: the line it is running shows
+          here, and the highlight in the editor carries on. */}
       <div
         data-expanded={simExpanded}
+        data-keyboard={keyboard.open}
         // The outer radius, not panel-inner's: the strip sits beside the editor
         // card as a sibling, not inside it, and the two read as one family.
         className="phoneSimStrip relative shrink-0 overflow-hidden rounded-2xl border border-border"
       >
         {simulator}
-        <button
-          onClick={() => setSimExpanded((expanded) => !expanded)}
-          aria-label={simExpanded ? 'Shrink the simulator' : 'Enlarge the simulator'}
-          aria-expanded={simExpanded}
-          className="absolute right-1.5 top-1.5 z-20 rounded-lg bg-black/45 p-1.5 text-white backdrop-blur-sm"
-        >
-          {simExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
+        {keyboard.open ? (
+          <div className="absolute inset-0 z-20 flex items-center gap-2 bg-card px-3 text-xs" aria-live="polite">
+            <Play className="h-3 w-3 shrink-0 text-buzz" fill="currentColor" />
+            <span className="truncate font-mono text-foreground">
+              {runningText ?? <span className="font-sans text-muted-foreground">Simulator is hidden while you type</span>}
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={() => setSimExpanded((expanded) => !expanded)}
+            aria-label={simExpanded ? 'Shrink the simulator' : 'Enlarge the simulator'}
+            aria-expanded={simExpanded}
+            className="absolute right-1.5 top-1.5 z-20 rounded-lg bg-black/45 p-1.5 text-white backdrop-blur-sm"
+          >
+            {simExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1">{editor}</div>

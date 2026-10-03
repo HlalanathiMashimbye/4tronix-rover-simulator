@@ -872,6 +872,11 @@
 .phoneSimStrip[data-expanded="true"] {
   height: 62dvh;
 }
+/* Typing: one line, whatever the strip was. Declared after expanded so it
+   wins over it. */
+.phoneSimStrip[data-keyboard="true"] {
+  height: 2.25rem;
+}
 
 .sendSheet {
   transform: translateY(100%);
@@ -905,16 +910,17 @@
 }
 
 /*
- * iOS Safari zooms the whole page into any field under 16px when it is
- * tapped, and a learner on a phone then has to pinch back out after every
- * edit. Desktop keeps the denser 14px Monaco had.
+ * Smaller on a phone, where a whole program has to fit a narrow column. Not
+ * 16px, which is what stops iOS Safari zooming the page on tap: that zoom is
+ * prevented directly instead (infrastructure/browser/iosInputZoom.ts), because
+ * 16px code was too big to read a program by.
  */
 .rover-python-editor .cm-editor {
   font-size: 14px;
 }
 @media (pointer: coarse) {
   .rover-python-editor .cm-editor {
-    font-size: 16px;
+    font-size: 13px;
   }
 }
 
