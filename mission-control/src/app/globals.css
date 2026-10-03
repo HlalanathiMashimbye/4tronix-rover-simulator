@@ -294,11 +294,13 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
-/* The operator console does not render the learner's tab bar below md
-   (Navbar.tsx) and lays its own inside the page instead, so there is no
-   fixed chrome to keep clear of. Read from the attribute the operator layout
-   sets rather than from the route, so the CSS never learns the path. */
-:root:has([data-surface="operator"]) { --app-bottom-chrome: 0px; }
+/* The operator console and the build page do not render the learner's tab
+   bar below md (Navbar.tsx; the operator console lays its own inside the
+   page), so there is no fixed chrome to keep clear of. Read from the
+   attribute each surface sets rather than from the route, so the CSS never
+   learns the path. */
+:root:has([data-surface="operator"]),
+:root:has([data-surface="build"]) { --app-bottom-chrome: 0px; }
 
 /*
  * A page that fills what is left of the viewport, chrome at both ends
@@ -691,33 +693,32 @@
   border-radius: 999px;
 }
 
-/* Phones only. The grid is sized to one viewport height, which is right when
-   the panels sit side by side and fine on a tablet, but on a phone they stack
-   - so two panels shared ~690px, leaving Blockly and the simulator about 340px
-   each. Let the column grow and the page scroll instead: a phone scrolls
-   anyway, and half a screen of Blockly is not usable.
+/* Phones only.
+
+   Create Mission used to let this grid grow on a phone, with a 70vh floor per
+   stacked panel, and let the page scroll. That made blocks and the simulator
+   two separate screens: you could never watch the rover and the program
+   together, and a drag on the block canvas fought the page's own scroll.
+   It now fits one screen like every other size (AB#455), the build panel
+   taking the larger share because it is where the work happens.
+
+   The mission VIEW (the fixed variant) still grows and scrolls: its panels are
+   a 16:9 player, a stats row and the code, which read top to bottom.
 
    Deliberately max-width 767px and not the lg breakpoint the columns use:
    tablets are the device the yard runs on, and their layout is already good. */
 @media (max-width: 767px) {
-  .workspaceSplitGrid {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .workspaceSplitGrid--fixed {
     height: auto;
     max-height: none;
     /* Not a flexible track down here: the parent column is auto-height and the
-       page scrolls, so the grid takes its children's height (the 70vh floors
-       below) rather than being squeezed into a remainder. */
+       page scrolls, so the grid takes its children's height rather than being
+       squeezed into a remainder. */
     flex: 0 0 auto;
-  }
-
-  /* The 70vh floor is for Create Mission, where both stacked panels are things
-     you work inside - Blockly and the simulator - and neither is usable at
-     half a screen. The mission VIEW is the fixed variant, and its panels are a
-     16:9 player, a stats row and one line of feedback: about 300px of content
-     that the floor stretched to 568px, putting a screenful of empty page
-     between the operator's comment and the code. A floor that guarantees a
-     minimum is wrong on a panel that already knows its own height. */
-  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
-    min-height: 70vh;
   }
 
   /* The code panel still needs a floor, just a smaller one: it is flex-1
@@ -853,6 +854,38 @@
 @keyframes rover-marker-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
+}
+
+/*
+ * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
+ *
+ * The docked simulator takes 30% of the screen so the blocks keep most of it,
+ * and grows to 62% when the learner wants a proper look. dvh, not vh: mobile
+ * Safari's vh includes the strip under the URL bar, which is exactly the
+ * clipping this layout exists to get rid of. Height is animated because the
+ * canvas inside redraws on resize anyway, and a jump reads as a glitch.
+ */
+.phoneSimStrip {
+  height: 30dvh;
+  transition: height 320ms var(--ease-drawer);
+}
+.phoneSimStrip[data-expanded="true"] {
+  height: 62dvh;
+}
+
+.sendSheet {
+  transform: translateY(100%);
+  transition: transform 260ms var(--ease-drawer);
+}
+.sendSheet[data-visible="true"] {
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneSimStrip,
+  .sendSheet {
+    transition: none;
+  }
 }
 
 /* The Python editor's hover and autocomplete help card. */

@@ -83,7 +83,9 @@ export function EditorPanel({
               onPointerEnter={mode === 'code' ? prefetchPythonEditor : undefined}
               onFocus={mode === 'code' ? prefetchPythonEditor : undefined}
               aria-pressed={active}
-              className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-2 text-sm font-bold transition-colors ${
+              // Smaller on a phone, where these share the screen with the
+              // docked simulator.
+              className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-1.5 text-xs font-bold transition-colors md:py-2 md:text-sm ${
                 active
                   ? 'text-primary-foreground'
                   : 'border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground'

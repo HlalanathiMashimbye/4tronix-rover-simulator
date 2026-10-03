@@ -228,14 +228,16 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2.5 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 text-xs text-muted-foreground">
+        {/* Hidden at phone width, as the Blocks tab's hint is: it wraps to
+            two lines there, and the tab name already says it. */}
+        <p className="hidden min-w-0 text-xs text-muted-foreground sm:block">
           Write Python using rover commands.
         </p>
         <button
           onClick={handleRun}
-          className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3.5 py-2 text-xs font-bold text-background"
+          className="clay clay-press ml-auto flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
         >
           <Play className="h-3.5 w-3.5" fill="currentColor" />
           Run code
@@ -244,13 +246,15 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
 
       {/* Insert-on-click command palette (doubles as the cheat sheet). Tap a
           chip to drop the real rover code at the cursor. */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* One sideways-scrolling row on a phone: wrapped, these took three
+          lines of a screen the docked simulator already shares. */}
+      <div className="-mx-1 flex shrink-0 items-center gap-1.5 overflow-x-auto px-1 pb-0.5 md:mx-0 md:flex-wrap md:overflow-visible md:px-0 md:pb-0">
         {SNIPPETS.map((item) => (
           <button
             key={item.label}
             onClick={() => insertSnippet(item.code)}
             title={`Insert ${item.label} code`}
-            className="clay-press inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/50 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
+            className="clay-press inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border/60 bg-card/50 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
           >
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.colour }} />
             {item.label}
