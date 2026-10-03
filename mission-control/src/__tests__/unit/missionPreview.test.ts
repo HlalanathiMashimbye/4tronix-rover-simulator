@@ -54,3 +54,23 @@ it('puts the worst finding first, whatever order they were found in', () => {
   expect(levels).toContain('warn');
   expect(levels).toEqual([...levels].sort((a, b) => rank[a] - rank[b]));
 });
+
+describe("the phone's one-line summary", () => {
+  // A phone's panel shows each finding in a couple of words on one line,
+  // with the full sentence as its tooltip.
+  it('has a short form of every finding, short enough to share a line', () => {
+    for (const code of [SHORT_DRIVE, 'rover.forward(100)\ntime.sleep(70)\nrover.stop()\n', 'time.sleep(3)\n']) {
+      for (const finding of preview(code)) {
+        expect(finding.short.length).toBeGreaterThan(0);
+        expect(finding.short.length).toBeLessThanOrEqual(16);
+      }
+    }
+  });
+
+  it('keeps the fact that matters in the short form', () => {
+    expect(find(SHORT_DRIVE, 'duration').short).toBe('3s');
+    const edge = find('rover.forward(100)\ntime.sleep(40)\nrover.stop()\n', 'edge');
+    expect(edge.short).toBe(`Edge at ${edge.atSeconds}s`);
+    expect(find('rover.forward(6300)\ntime.sleep(2)\nrover.stop()\n', 'code').short).toBe('Code: line 1');
+  });
+});

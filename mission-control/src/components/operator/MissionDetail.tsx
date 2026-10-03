@@ -103,13 +103,17 @@ export function MissionDetail({
           when the pane is wide enough (a container query, because this pane's
           width is not the window's), stacked when it is not. The code lights
           up as the preview plays, as it does in the editor. */}
-      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1">
+      {/* Stacked in a narrow panel, the code gets a little more than the
+          preview: the preview's yard is wide and short, the program tall. */}
+      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1 @2xl:gap-3">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
         <MissionPreview key={mission.id} mission={mission} onSourceChange={setRunningSource} />
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
-          <h3 className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          {/* Not on a phone: the blocks are plainly the learner's, and the
+              row is worth more as canvas there. */}
+          <h3 className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground @max-md:hidden">
             <Code2 className="h-3.5 w-3.5" />
             What the learner wrote
           </h3>
