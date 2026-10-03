@@ -328,11 +328,13 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     };
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
 
-  // Light up the running block, and any Repeat it is inside. Blockly's own
-  // highlight is the tool for this ("used to visually mark blocks currently
-  // being executed"); globals.css turns it green. Ids are checked first
-  // because a block can be deleted without changing the generated Python, so
-  // the highlight survives, and Blockly throws on an id it does not have.
+  // Light up the running block, and any Repeat it is inside. Our own classes
+  // rather than Blockly's highlightBlock, because the two jobs look different:
+  // the step pops and glows, the Repeat around it gets a moving dashed edge so
+  // it reads as "going round". globals.css owns both, and drops the motion
+  // under prefers-reduced-motion. Ids are checked first because a block can
+  // be deleted without changing the generated Python, so the highlight
+  // survives the edit that removed its block.
   //
   // Keyed as JSON, not joined with commas: Blockly's generated ids draw from
   // a character set that includes the comma, so a split came apart mid-id and
@@ -341,10 +343,22 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   useEffect(() => {
     const workspace = workspaceRef.current;
     if (!isInitialized || !workspace) return;
-    workspace.highlightBlock(null);
-    for (const id of JSON.parse(blockIdsKey) as string[]) {
-      if (workspace.getBlockById(id)) workspace.highlightBlock(id, true);
-    }
+    const ids = JSON.parse(blockIdsKey) as string[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const lit: { block: any; className: string }[] = [];
+    ids.forEach((id, i) => {
+      const block = workspace.getBlockById(id);
+      if (!block) return;
+      const className = i === ids.length - 1 ? 'rover-running-step' : 'rover-running-loop';
+      // Restart the pop when the same block runs again on the next pass:
+      // removing and re-adding a class in one tick does not replay a CSS
+      // animation, a forced reflow in between does.
+      block.removeClass(className);
+      void block.getSvgRoot()?.getBoundingClientRect();
+      block.addClass(className);
+      lit.push({ block, className });
+    });
+    return () => lit.forEach(({ block, className }) => block.removeClass(className));
   }, [blockIdsKey, isInitialized]);
 
   if (loadError) {

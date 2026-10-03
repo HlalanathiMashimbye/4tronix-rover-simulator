@@ -253,6 +253,12 @@ export function MonacoCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
         range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: toLine, endColumn: 1 },
         options: { isWholeLine: true, className: 'rover-running-line' },
       },
+      // The margin marker goes on the first line only: one arrow per command,
+      // not one per line of it.
+      {
+        range: { startLineNumber: fromLine, startColumn: 1, endLineNumber: fromLine, endColumn: 1 },
+        options: { linesDecorationsClassName: 'rover-running-marker' },
+      },
     ]);
     editor.revealLinesInCenterIfOutsideViewport(fromLine, toLine);
   }, [fromLine, toLine, editorReady]);
