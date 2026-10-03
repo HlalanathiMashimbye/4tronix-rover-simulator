@@ -68,10 +68,9 @@ export function EditorPanel({
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
   // Blockly reads its layout options once, at inject, so a change of layout
-  // remounts the block editor (keyed below) rather than leaving a phone with
-  // the desktop's toolbox. The workspace autosaves on every change, so the
-  // remount loses nothing. On a phone's first load this costs one mount and
-  // no inject: the hook settles before the editor's inject timer fires.
+  // (rotating a tablet, resizing a window) remounts the block editor, keyed
+  // below, rather than leaving a phone with the desktop's toolbox. The
+  // workspace autosaves on every change, so the remount loses nothing.
   const isPhone = useIsPhoneLayout();
 
   // The Blocks and Python tabs each used to start downloading their editor

@@ -13,7 +13,7 @@ import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
-import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
+import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
@@ -81,7 +81,9 @@ export function MissionWorkspace() {
   const [missionSentOpen, setMissionSentOpen] = useState(false);
   /** The phone layout's Send sheet. Owned here so a successful send can close it. */
   const [sendSheetOpen, setSendSheetOpen] = useState(false);
-  const isPhone = useIsPhoneLayout();
+  // null on the server and during hydration: see usePhoneLayout for why
+  // neither layout renders until this is known.
+  const phoneLayout = usePhoneLayout();
   // True between opening the email prompt and the learner answering it either
   // way. A ref, not state: nothing renders from it, and it must be readable by
   // the effect below in the same tick the prompt closes.
@@ -355,7 +357,13 @@ export function MissionWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-      {isPhone ? (
+      {phoneLayout === null ? (
+        // What the server sends. Neutral at every size, so a phone never
+        // paints the desktop layout before the phone one replaces it.
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
+          Loading workspace...
+        </div>
+      ) : phoneLayout ? (
         <PhoneWorkspace
           editor={editorPanel}
           // Bare: the strip is the frame, and its controls overlay the arena

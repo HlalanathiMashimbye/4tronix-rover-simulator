@@ -37,7 +37,8 @@ import { isBuildSurface } from '@/lib/appSurfaces';
 import { Navbar } from '@/components/layout/Navbar';
 import { SearchProvider } from '@/contexts/SearchContext';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
-import { useIsPhoneLayout, PHONE_QUERY } from '@/hooks/useIsPhoneLayout';
+import { renderToString } from 'react-dom/server';
+import { useIsPhoneLayout, usePhoneLayout, PHONE_QUERY } from '@/hooks/useIsPhoneLayout';
 
 describe('the build surface', () => {
   it('is the Create Mission page', () => {
@@ -107,6 +108,23 @@ describe('deciding the phone layout', () => {
 
   it('agrees with the md breakpoint the CSS uses', () => {
     expect(PHONE_QUERY).toBe('(max-width: 767px)');
+  });
+
+  it('is unknown on the server, so neither layout is sent to a phone', () => {
+    // The server used to render the desktop layout, which a phone painted
+    // before any JavaScript ran: the wrong layout flashed up first.
+    matches = true;
+    function Probe() {
+      return <span>{String(usePhoneLayout())}</span>;
+    }
+    expect(renderToString(<Probe />)).toContain('null');
+  });
+
+  it('reads as not a phone where matchMedia does not exist, rather than crashing', () => {
+    // @ts-expect-error - simulating a browser without it
+    delete window.matchMedia;
+    const { result } = renderHook(() => useIsPhoneLayout());
+    expect(result.current).toBe(false);
   });
 });
 

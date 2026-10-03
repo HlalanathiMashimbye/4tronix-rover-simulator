@@ -927,13 +927,6 @@
   }
 }
 
-.blocklyToolboxDiv {
-  background-color: #f8fafc !important;
-  border-right: 1px solid #e2e8f0 !important;
-  min-width: 140px !important;
-  width: min(28vw, 176px) !important;
-}
-
 .blocklyToolboxCategory {
   background-color: transparent !important;
   color: #1e293b !important;
@@ -1026,17 +1019,6 @@
 .blocklyFlyoutBackground {
   fill: #f1f5f9 !important;
   fill-opacity: 1 !important;
-}
-
-.blocklyTreeRow {
-  color: #334155 !important;
-  cursor: pointer;
-  padding: 1px 6px !important;
-}
-
-.blocklyTreeLabel {
-  color: #1e293b !important;
-  font-size: 11px !important;
 }
 
 .blocklyText {
