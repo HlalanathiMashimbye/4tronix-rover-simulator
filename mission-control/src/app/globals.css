@@ -806,7 +806,7 @@
   stroke-width: 4px !important;
   animation:
     rover-step-pop 600ms cubic-bezier(0.22, 1, 0.36, 1),
-    rover-step-glow 2s ease-in-out 600ms infinite;
+    rover-step-glow 3.5s ease-in-out 600ms infinite;
 }
 .rover-running-loop > .blocklyPath {
   stroke: #22c55e !important;
