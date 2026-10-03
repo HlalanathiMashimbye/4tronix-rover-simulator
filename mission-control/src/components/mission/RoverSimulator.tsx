@@ -88,6 +88,16 @@ export function RoverSimulator({
     onSourceChangeRef.current?.(source);
   }, []);
 
+  // Leaving the screen is the end of the run as far as the code is concerned:
+  // a mission page swaps the simulation for a video, and a highlight left on
+  // a block by a simulator nobody can see any more reads as still running.
+  useEffect(
+    () => () => {
+      if (lastSourceRef.current !== null) onSourceChangeRef.current?.(null);
+    },
+    [],
+  );
+
   const { theme } = useTheme();
   const isManual = editorMode === 'manual';
   const [isPaused, setIsPaused] = useState(false);

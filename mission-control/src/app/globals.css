@@ -294,13 +294,14 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
-/* The operator console and the build page do not render the learner's tab
-   bar below md (Navbar.tsx; the operator console lays its own inside the
-   page), so there is no fixed chrome to keep clear of. Read from the
+/* The operator console, the build page and a mission's own page do not
+   render the learner's tab bar below md (Navbar.tsx; the operator console
+   lays its own inside the page), so there is no fixed chrome to keep clear of. Read from the
    attribute each surface sets rather than from the route, so the CSS never
    learns the path. */
 :root:has([data-surface="operator"]),
-:root:has([data-surface="build"]) { --app-bottom-chrome: 0px; }
+:root:has([data-surface="build"]),
+:root:has([data-surface="mission"]) { --app-bottom-chrome: 0px; }
 
 /*
  * A page that fills what is left of the viewport, chrome at both ends
@@ -702,8 +703,8 @@
    It now fits one screen like every other size (AB#455), the build panel
    taking the larger share because it is where the work happens.
 
-   The mission VIEW (the fixed variant) still grows and scrolls: its panels are
-   a 16:9 player, a stats row and the code, which read top to bottom.
+   The mission VIEW (the fixed variant) fits one screen too, player above
+   code: see below.
 
    Deliberately max-width 767px and not the lg breakpoint the columns use:
    tablets are the device the yard runs on, and their layout is already good. */
@@ -712,20 +713,12 @@
     grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
+  /* A mission's page (the fixed variant) docks its player at the top, at
+     its natural 16:9 height, and gives the code everything else, the same
+     shape as Create Mission. It used to grow and scroll, with a 45vh floor
+     on the code, which made the blocks a second screen down. */
   .workspaceSplitGrid--fixed {
-    height: auto;
-    max-height: none;
-    /* Not a flexible track down here: the parent column is auto-height and the
-       page scrolls, so the grid takes its children's height rather than being
-       squeezed into a remainder. */
-    flex: 0 0 auto;
-  }
-
-  /* The code panel still needs a floor, just a smaller one: it is flex-1
-     inside an auto-height row, so a two-line mission would otherwise collapse
-     it to two lines. */
-  .workspaceSplitGrid--fixed > * + * {
-    min-height: 45vh;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 }
 

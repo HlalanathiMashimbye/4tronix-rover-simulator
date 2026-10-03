@@ -168,6 +168,12 @@ describe('how tall a full-height page is', () => {
     expect(css).toMatch(/:has\(\[data-surface="operator"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
   });
 
+  it("drops it on a mission's own page, laid out like the build page on a phone", () => {
+    expect(read('app/missions/[missionId]/MissionVideoClient.tsx')).toMatch(/data-surface="mission"/);
+    const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
+    expect(css).toMatch(/:has\(\[data-surface="mission"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
+  });
+
   it('drops it on the build page too, where the tab bar is gone on a phone', () => {
     // Same pairing for Create Mission (AB#455): the navbar stops rendering
     // the tab bar there, so keeping its 4rem clear would leave a dead band

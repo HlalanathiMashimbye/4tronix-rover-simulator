@@ -25,7 +25,7 @@ import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
-import { isBuildSurface, isOperatorSurface } from '@/lib/appSurfaces';
+import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 
 const NAV_ITEMS = [
@@ -84,7 +84,7 @@ export function Navbar() {
    */
   const onOperatorSurface = isOperatorSurface(pathname);
   // The build page on a phone is a full-screen tool; see isBuildSurface.
-  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname);
+  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname) || isMissionViewSurface(pathname);
   // Including this top bar: the build page brings its own slimmer one with a
   // way back, and the 64px is a fifth of what the blocks get on a phone.
 
