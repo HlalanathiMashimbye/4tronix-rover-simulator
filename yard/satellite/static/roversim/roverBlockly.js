@@ -712,8 +712,17 @@ export function workspaceToCommands(workspace) {
                 // Copies, not the same objects pushed N times: each pass is its own
                 // stretch of playback, and sharing objects would let a later change
                 // to one pass silently change all of them.
-                for (let i = 0; i < times; i++)
-                    out.push(...loop.map((c) => ({ ...c })));
+                //
+                // Each copy also records which pass it is. Prepended, because the
+                // body's own inner Repeats have already added theirs, and passes run
+                // outermost first like the Repeat ids in blockIds.
+                for (let i = 0; i < times; i++) {
+                    const pass = { pass: i + 1, of: times };
+                    out.push(...loop.map((c) => ({
+                        ...c,
+                        source: c.source && { ...c.source, passes: [pass, ...(c.source.passes ?? [])] },
+                    })));
+                }
                 break;
             }
             // mast / photo / distance still have no 2D-sim effect
