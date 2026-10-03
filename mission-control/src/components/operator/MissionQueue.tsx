@@ -133,6 +133,8 @@ function YardQueue({
   yards: Yard[];
 }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
+  /** More missions are waiting than the queue loads; the oldest are left out. */
+  const [olderWaitingHidden, setOlderWaitingHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Which mission the detail pane is showing. Replaces the accordion: the
   // code used to push every other mission off the screen to be read.
@@ -304,6 +306,19 @@ function YardQueue({
     );
   }, [selectedId]);
 
+  /**
+   * Each waiting mission's place in arrival order, oldest visible = 1.
+   *
+   * The list shows newest first, so the row index would hand #1 to the mission
+   * that arrived last. The number is what a child at the desk asks about ("how
+   * many are before mine?"), so it keeps meaning order of arrival.
+   */
+  const arrivalPosition = useMemo(() => {
+    const positions = new Map<string, number>();
+    (missions ?? []).forEach((mission, index, all) => positions.set(mission.id, all.length - index));
+    return positions;
+  }, [missions]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -370,8 +385,9 @@ function YardQueue({
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
       yardId,
-      (next) => {
+      (next, olderHidden) => {
         setMissions(next);
+        setOlderWaitingHidden(olderHidden);
         setError(null);
       },
       () => {
@@ -643,7 +659,11 @@ function YardQueue({
                     running ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Running" /> : index + 1}
+                  {running ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Running" />
+                  ) : (
+                    (arrivalPosition.get(mission.id) ?? index + 1)
+                  )}
                 </span>
 
                 {/* The mission name is the only handle, and the only one
@@ -681,6 +701,14 @@ function YardQueue({
           );
         })}
       </ol>
+
+      {/* Never hide missions without a word: the queue loads the newest
+          QUEUE_LIMIT, and anything older is not on this screen. */}
+      {!SETTLED_FILTERS.includes(activeFilter) && !searching && olderWaitingHidden && (
+        <p role="status" className="mt-3 px-3 pb-2 text-center text-xs text-muted-foreground">
+          Older waiting missions are not shown. Cancel ones that will not run to bring them into view.
+        </p>
+      )}
 
       {/* Done only, as the learner feed shows it only on its unfiltered list.
           Under Needs video or a search the older page may hold nothing that

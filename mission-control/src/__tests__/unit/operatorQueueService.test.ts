@@ -68,12 +68,16 @@ describe('the query', () => {
 
   it('is bounded, because a listener re-reads everything on attach', () => {
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT);
+    // One past the cap, to tell the console that older ones were left out.
+    expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT + 1);
   });
 
-  it('orders oldest first, which is the order a queue is worked', () => {
+  it('orders newest first, so the cap drops the stale end and never new work', () => {
+    // It was oldest first, which hid every new mission once 50 were waiting
+    // (3 Oct 2026). The operator chooses what to run, so the order is theirs
+    // to read: see operatorQueueNewestFirst.test.tsx.
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'asc');
+    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'desc');
   });
 
   it('returns the unsubscribe handle so a yard switch tears down', () => {

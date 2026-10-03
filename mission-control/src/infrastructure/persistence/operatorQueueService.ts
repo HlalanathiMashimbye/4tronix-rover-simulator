@@ -102,31 +102,42 @@ export interface QueueMission {
 }
 
 /**
- * Subscribe to one yard's active missions.
+ * Subscribe to one yard's active missions, NEWEST FIRST.
  *
  * `onError` is not optional. A listener that fails silently renders an empty
  * queue, and an empty queue is indistinguishable from a working one with
  * nothing in it - which is exactly how a yard-id mismatch hid on the satellite.
  * The caller must be able to say "this is broken" rather than "this is quiet".
+ *
+ * WHY NEWEST FIRST. This read the oldest QUEUE_LIMIT, so once more than that
+ * were waiting, every NEW mission was cut off: on 3 Oct 2026 the 54 waiting
+ * at curiosity included untouched test missions from 11 August, and the four
+ * newest - real children's work, visible on the homepage - never reached the
+ * console. The operator chooses what to dispatch, so the order is theirs to
+ * read, not a promise; the missions most likely to matter are the recent
+ * ones, and when the cap bites it should be the stale end that drops off.
+ *
+ * `olderHidden` says when it does, so the console can say so rather than
+ * hide missions without a word. Same index as the settled list
+ * (status, yardId, submittedAt desc), so nothing new to deploy.
  */
 export function subscribeToYardQueue(
   yardId: string,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], olderHidden: boolean) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const db = getFirestoreClient();
 
-  // Matches the existing composite index (status, yardId, submittedAt), so this
-  // needs no new index. `in` fans out across the two active statuses.
   const q = query(
     collection(db, 'missions'),
     where('yardId', '==', yardId),
     where('status', 'in', ACTIVE_STATUSES),
-    orderBy('submittedAt', 'asc'),
-    limit(QUEUE_LIMIT),
+    orderBy('submittedAt', 'desc'),
+    // One past the cap, to know whether anything older was left out.
+    limit(QUEUE_LIMIT + 1),
   );
 
-  return listen(q, onMissions, onError, 'queue');
+  return listen(q, onMissions, onError, 'queue', QUEUE_LIMIT);
 }
 
 /**
