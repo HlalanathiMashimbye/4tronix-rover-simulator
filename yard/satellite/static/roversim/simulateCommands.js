@@ -1,7 +1,17 @@
 // GENERATED FILE - DO NOT EDIT.
 // Built from mission-control/src/lib by scripts/build-roversim.mjs.
 // Edit the TypeScript source and re-run `npm run build:roversim`.
-import { RoverPhysics } from './rover-physics.js';
+import { RoverPhysics, YARD } from './rover-physics.js';
+/**
+ * The first frame the physics stopped the rover, at a wall or a rock, or -1.
+ *
+ * The one definition of where a run crashes (AB#466): crashCheck builds the
+ * pre-flight check and the operator's preview on it, and the renderer marks
+ * the spot with it, so the mark on screen is the crash the checks mean.
+ */
+export function crashFrame(points) {
+    return points.findIndex((point) => point.hitWall || !!point.hitRock);
+}
 // Match the canvas playback rate (RoverSimulator advances at 10 fps).
 /** Seconds of simulated time per trajectory point. Exported so the
  * mission page can turn a trajectory length back into a duration. */
@@ -12,8 +22,10 @@ export const STEP_SECONDS = 0.1;
  * This lets a code/Blockly run animate and record locally, with no dependency
  * on a yard-side renderer.
  */
-export function simulateCommands(commands) {
-    const physics = new RoverPhysics();
+export function simulateCommands(commands, yard = YARD) {
+    // The measured yard, walls and rocks, unless told otherwise: tests of how
+    // the rover moves pass an open one so a rock is not what they measure.
+    const physics = new RoverPhysics(yard);
     // Lamps persist until something changes them, exactly like the real rover:
     // they do not go out because the next command was a drive.
     let leds = [null, null, null, null];
@@ -85,6 +97,7 @@ function toPoint(physics, leds, source) {
         speedR: s.speedR,
         servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
         hitWall: s.hitWall,
+        hitRock: s.hitRock,
         leds: [...leds],
         ...(source ? { source } : {}),
     };

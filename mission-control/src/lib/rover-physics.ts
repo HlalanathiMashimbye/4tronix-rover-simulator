@@ -96,6 +96,40 @@ export function roverToYard(rx: number, ry: number, yard: Yard = YARD): [number,
   return [yard.start.x + east, yard.start.y - north];
 }
 
+/**
+ * The rover's footprint from above, per 4tronix: 20 cm long and 18.5 cm wide,
+ * wheels included. Rocks are tested against this (AB#466), not against the
+ * centre, because it is the wheels and the nose that reach a rock first.
+ */
+const ROVER_HALF_LENGTH_CM = 10;
+const ROVER_HALF_WIDTH_CM = 9.25;
+
+/**
+ * The rock, if any, that the rover's footprint overlaps at this pose.
+ *
+ * Each rock is a circle as wide as its largest measured side: rocks are
+ * irregular and were measured as boxes from above, and a circle round the box
+ * errs towards calling a near miss a crash, which is the side to err on when
+ * the alternative is the operator rescuing a stuck rover.
+ */
+export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  const [cx, cy] = roverToYard(x, y, yard);
+  const bearing = ((yard.start.facingDegrees + heading) * Math.PI) / 180;
+  for (const rock of yard.rocks) {
+    const east = rock.x - cx;
+    const north = cy - rock.y;
+    // The rock's centre in the rover's own axes: ahead of it, and to its right.
+    const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
+    const right = east * Math.cos(bearing) - north * Math.sin(bearing);
+    // The nearest point of the footprint to it.
+    const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
+    const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
+    const radius = Math.max(rock.widthCm, rock.depthCm) / 2;
+    if (Math.hypot(ahead - nearAhead, right - nearRight) < radius) return rock;
+  }
+  return null;
+}
+
 /** The yard's frame to the rover's: the inverse of roverToYard. */
 export function yardToRover(x: number, y: number, yard: Yard = YARD): [number, number] {
   const bearing = (yard.start.facingDegrees * Math.PI) / 180;
@@ -202,6 +236,13 @@ export interface RoverState {
   speedR: number;
   servos: number[];
   hitWall: boolean;
+  /**
+   * The rock this step would have driven into, so did not (AB#466), or null.
+   * Like a wall, a rock stops the rover where it is for as long as it is
+   * driven at it; the real rover would push, climb or stall, and the operator
+   * would have to rescue it, which is what the pre-flight check exists to stop.
+   */
+  hitRock: string | null;
 }
 
 export class RoverPhysics {
@@ -218,6 +259,7 @@ export class RoverPhysics {
       speedR: 0,
       servos: new Array(16).fill(0),
       hitWall: false,
+      hitRock: null,
     };
     this.lastUpdate = Date.now();
   }
@@ -376,9 +418,13 @@ export class RoverPhysics {
       const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
       const radiansPerSecond =
         (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_RATE_CALIBRATION;
-      this.state.heading += (radiansPerSecond * dt * 180) / Math.PI;
-      // It cannot reach a wall without moving, and it did not move.
+      const heading = this.state.heading + (radiansPerSecond * dt * 180) / Math.PI;
+      // It cannot reach a wall without moving, and it did not move. It can
+      // swing a corner into a rock beside it, though.
       this.state.hitWall = false;
+      const rock = rockTouching(this.state.x, this.state.y, heading, this.yard);
+      this.state.hitRock = rock?.name ?? null;
+      if (!rock) this.state.heading = heading;
       return { ...this.state };
     }
 
@@ -393,7 +439,18 @@ export class RoverPhysics {
     // Average the results
     const newX = (xFL + xFR + xBL + xBR) / 4;
     const newY = (yFL + yFR + yBL + yBR) / 4;
-    this.state.heading = (hFL + hFR + hBL + hBR) / 4;
+    const newHeading = (hFL + hFR + hBL + hBR) / 4;
+
+    // A rock stops the step outright: the rover stays where it was, the last
+    // pose that did not overlap it. A step is a tenth of a second, under a
+    // centimetre at any speed the blocks use, so that is where it touched.
+    const rock = rockTouching(newX, newY, newHeading, this.yard);
+    this.state.hitRock = rock?.name ?? null;
+    if (rock) {
+      this.state.hitWall = false;
+      return { ...this.state };
+    }
+    this.state.heading = newHeading;
 
     // The rover cannot leave the yard. The walls are the yard's, so the clamp
     // happens in the yard's frame and the answer comes back to the rover's.
@@ -437,6 +494,7 @@ export class RoverPhysics {
       speedR: 0,
       servos: new Array(16).fill(0),
       hitWall: false,
+      hitRock: null,
     };
     this.lastUpdate = Date.now();
   }

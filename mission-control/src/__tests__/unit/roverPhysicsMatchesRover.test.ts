@@ -21,11 +21,18 @@ import {
   RoverPhysics,
   DEFAULT_STEER_DEGREES,
   spinDegreesPerSecond,
+  type Yard,
 } from '@/lib/rover-physics';
+
+/**
+ * Nothing to hit. These pin how the rover MOVES; since AB#466 the real yard's
+ * rocks stop it, and a square that clips R4 would be measuring the rock.
+ */
+const OPEN: Yard = { widthCm: 100000, depthCm: 100000, start: { x: 50000, y: 50000, facingDegrees: 0 }, rocks: [] };
 
 /** The pose a program ends in, which is what a learner is actually judged on. */
 function endPose(code: string) {
-  const trajectory = simulateCommands(parseRoverCode(code));
+  const trajectory = simulateCommands(parseRoverCode(code), OPEN);
   return trajectory[trajectory.length - 1];
 }
 
@@ -120,7 +127,7 @@ describe('spinning on the spot', () => {
       'time.sleep(1.5)',
       'rover.stop()',
     ].join('\n');
-    const trajectory = simulateCommands(parseRoverCode(code));
+    const trajectory = simulateCommands(parseRoverCode(code), OPEN);
 
     const beforeSpin = trajectory.find((p) => p.speedL < 0 && p.speedR > 0);
     const last = trajectory[trajectory.length - 1];

@@ -1,4 +1,4 @@
-import { RoverPhysics } from './rover-physics';
+import { RoverPhysics, YARD, type Yard } from './rover-physics';
 import type { CommandSource, SimulationCommand } from './roverBlockly';
 
 export interface TrajectoryPoint {
@@ -9,6 +9,8 @@ export interface TrajectoryPoint {
   speedR: number;
   servos: Record<string, number>;
   hitWall?: boolean;
+  /** The rock the rover was stopped by at this frame, if any (AB#466). */
+  hitRock?: string | null;
   /**
    * The four corner lamps at this moment, as 'r, g, b' or null for off.
    *
@@ -27,6 +29,17 @@ export interface TrajectoryPoint {
   source?: CommandSource;
 }
 
+/**
+ * The first frame the physics stopped the rover, at a wall or a rock, or -1.
+ *
+ * The one definition of where a run crashes (AB#466): crashCheck builds the
+ * pre-flight check and the operator's preview on it, and the renderer marks
+ * the spot with it, so the mark on screen is the crash the checks mean.
+ */
+export function crashFrame(points: { hitWall?: boolean; hitRock?: string | null }[]): number {
+  return points.findIndex((point) => point.hitWall || !!point.hitRock);
+}
+
 // Match the canvas playback rate (RoverSimulator advances at 10 fps).
 /** Seconds of simulated time per trajectory point. Exported so the
  * mission page can turn a trajectory length back into a duration. */
@@ -38,8 +51,10 @@ export const STEP_SECONDS = 0.1;
  * This lets a code/Blockly run animate and record locally, with no dependency
  * on a yard-side renderer.
  */
-export function simulateCommands(commands: SimulationCommand[]): TrajectoryPoint[] {
-  const physics = new RoverPhysics();
+export function simulateCommands(commands: SimulationCommand[], yard: Yard = YARD): TrajectoryPoint[] {
+  // The measured yard, walls and rocks, unless told otherwise: tests of how
+  // the rover moves pass an open one so a rock is not what they measure.
+  const physics = new RoverPhysics(yard);
   // Lamps persist until something changes them, exactly like the real rover:
   // they do not go out because the next command was a drive.
   let leds: (string | null)[] = [null, null, null, null];
@@ -117,6 +132,7 @@ function toPoint(physics: RoverPhysics, leds: (string | null)[], source?: Comman
     speedR: s.speedR,
     servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
     hitWall: s.hitWall,
+    hitRock: s.hitRock,
     leds: [...leds],
     ...(source ? { source } : {}),
   };

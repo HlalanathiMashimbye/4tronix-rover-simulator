@@ -61,6 +61,25 @@ its nose, which is what lines it up.
 The simulator draws the same mark at the same size, so what a learner sees
 under the rover on screen is what the operator sees on the floor.
 
+## Checking the crash check at the next visit
+
+Since AB#466 the simulator stops the rover at a rock (each rock a circle as
+wide as its largest measured side, the rover its 20 x 18.5 cm footprint) and
+a learner cannot send a run that hits one. Whether the real rover agrees is
+the last part of that story, and these three runs answer it. Put the rover on
+the start mark for each, paste the code into the run station, and write down
+what happened next to what the simulator says:
+
+| Run | Code | The simulator says |
+|---|---|---|
+| A, a near miss | `rover.forward(60)` `time.sleep(5)` `rover.stop()` | Passes R4, about 3 cm clear |
+| B, head on | `rover.spinLeft(60)` `time.sleep(1.4)` `rover.stop()` `rover.forward(60)` `time.sleep(4)` `rover.stop()` | Hits R4 at 2.1 s |
+| C, a glancing blow | `rover.spinLeft(60)` `time.sleep(0.7)` `rover.stop()` `rover.forward(60)` `time.sleep(4)` `rover.stop()` | Clips R4 with a front corner at 1.1 s |
+
+A disagreeing with the simulator is the most likely, and the most useful to
+know: 3 cm is about what a turn's drift and the hand placing the rover can
+add up to, so if the real rover clips R4 there, the rocks need a margin.
+
 ## Rocks
 
 All four stay where they are. Sizes are as seen from above; heights were not

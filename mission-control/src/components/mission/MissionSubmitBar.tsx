@@ -5,6 +5,7 @@ import { Rocket } from 'lucide-react';
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
+import type { Crash } from '@/core/domain/safety/crashCheck';
 
 /**
  * Checks, name and launch, in the simulator's footer slot.
@@ -33,6 +34,8 @@ interface MissionSubmitBarProps {
   currentCode: string;
   /** Whether the simulator has run the code currently in the editor. */
   hasRunSimulation: boolean;
+  /** What that run hit, from crashCheck: null for nothing (AB#466). */
+  crash?: Crash | null;
 }
 
 export function MissionSubmitBar({
@@ -43,13 +46,14 @@ export function MissionSubmitBar({
   submitSuccess,
   currentCode,
   hasRunSimulation,
+  crash,
 }: MissionSubmitBarProps) {
   // A parse of the whole program on every keystroke. Cheap enough to do plainly
   // - it is one pass over the lines - but memoised because Blockly re-reports
   // identical code on any workspace event, drag included.
   const preFlight = useMemo(
-    () => runPreFlightChecks(currentCode, { hasRunSimulation }),
-    [currentCode, hasRunSimulation],
+    () => runPreFlightChecks(currentCode, { hasRunSimulation, crash }),
+    [currentCode, hasRunSimulation, crash],
   );
 
   const hasCode = currentCode.trim().length > 0;

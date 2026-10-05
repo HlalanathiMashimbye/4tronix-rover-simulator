@@ -1,6 +1,6 @@
 'use client';
 
-import { Eye, Hourglass, Move, Timer, type LucideIcon } from 'lucide-react';
+import { Eye, Hourglass, Move, ShieldCheck, Timer, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { PreFlightCheckId, PreFlightResult } from '@/core/domain/safety/preFlightChecks';
 import {
@@ -25,6 +25,8 @@ function describeCheck(id: PreFlightCheckId): string {
       return `It runs for at least ${MISSION_MIN_DURATION_SECONDS} seconds`;
     case 'within-time-limit':
       return `It finishes within ${MISSION_MAX_DURATION_SECONDS} seconds`;
+    case 'no-crash':
+      return 'It does not hit a rock or the edge of the yard';
   }
 }
 
@@ -35,7 +37,8 @@ function describeCheck(id: PreFlightCheckId): string {
  * "Too short" sends a child looking for a longer drive block; naming the pause
  * tells them what to type.
  */
-function explainCheck(id: PreFlightCheckId, duration: number): string {
+function explainCheck(id: PreFlightCheckId, result: PreFlightResult): string {
+  const { duration, crash } = result;
   switch (id) {
     case 'simulation-run':
       return 'Press Run to try this mission in the simulator first. The rover is real and there is a queue - the simulator is where a mistake is free.';
@@ -51,6 +54,15 @@ function explainCheck(id: PreFlightCheckId, duration: number): string {
         `This mission runs for about ${Math.round(duration)} seconds, and a turn on the rover ` +
         `is ${MISSION_MAX_DURATION_SECONDS}. Shorten a drive, or repeat it fewer times.`
       );
+    case 'no-crash':
+      // Where, not just whether: the simulator marks the spot in red, and the
+      // time says which part of the program got it there.
+      if (!crash) return 'Press Run to see whether your rover hits anything.';
+      return crash.into === 'rock'
+        ? `Your rover hits a rock ${formatSeconds(crash.atSeconds)} in, and the real one would too. ` +
+            'Change the route to go round it: the red mark in the simulator shows where.'
+        : `Your rover reaches the edge of the yard ${formatSeconds(crash.atSeconds)} in. ` +
+            'Make a drive shorter, or turn before the wall: the red mark in the simulator shows where.';
   }
 }
 
@@ -66,6 +78,7 @@ const CHIP: Record<PreFlightCheckId, { icon: LucideIcon; label: string }> = {
   'rover-moves': { icon: Move, label: 'Moves' },
   'runs-long-enough': { icon: Timer, label: `${MISSION_MIN_DURATION_SECONDS}s+` },
   'within-time-limit': { icon: Hourglass, label: `Under ${MISSION_MAX_DURATION_SECONDS}s` },
+  'no-crash': { icon: ShieldCheck, label: 'No crash' },
 };
 
 /**
@@ -103,7 +116,7 @@ export function PreFlightChecklist({ result, started = true, message }: PreFligh
   const hint = !started
     ? 'Build a mission, then press Run to watch it here.'
     : firstUnmet
-      ? explainCheck(firstUnmet.id, result.duration)
+      ? explainCheck(firstUnmet.id, result)
       : null;
 
   return (
