@@ -9,7 +9,7 @@
 
 import { simulateCommands, STEP_SECONDS, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, roverToYard, yardToRover, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeCoverLayout, computeLayout, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
+import { computeFillLayout, computeLayout, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const SPEED_60_CM_PER_SECOND = 9;
@@ -106,8 +106,9 @@ describe('the yard on screen', () => {
   });
 });
 
-describe('a mission card', () => {
-  // About the size the home feed draws a cover: a wide strip.
+describe('the yard filling a wide panel', () => {
+  // About the size the home feed draws a cover: a wide strip. The mission page
+  // and the phone strip are wide too, if less so.
   const W = 320;
   const H = 140;
 
@@ -120,7 +121,7 @@ describe('a mission card', () => {
   }
 
   it('is filled edge to edge by the yard, with no bars beside it', () => {
-    const L = computeCoverLayout(W, H, drive({ command: 'forward', speed: 60, duration: 5 }));
+    const L = computeFillLayout(W, H, drive({ command: 'forward', speed: 60, duration: 5 }));
     expect(L.ox).toBeLessThanOrEqual(0);
     expect(L.oy).toBeLessThanOrEqual(0);
     expect(L.ox + YARD.widthCm * L.s).toBeGreaterThanOrEqual(W - 1e-6);
@@ -129,20 +130,34 @@ describe('a mission card', () => {
 
   it('shows the whole of a short trail', () => {
     const run = drive({ command: 'forward', speed: 60, duration: 5 });
-    const L = computeCoverLayout(W, H, run);
+    const L = computeFillLayout(W, H, run);
     for (const point of run) onCard(L, point.x, point.y);
   });
 
   it('shows where the rover finished when the trail is longer than the card', () => {
     const run = drive({ command: 'forward', speed: 60, duration: 30 });
     const end = run[run.length - 1];
-    onCard(computeCoverLayout(W, H, run), end.x, end.y);
+    onCard(computeFillLayout(W, H, run), end.x, end.y);
   });
 
   it('follows a trail to the back of the yard', () => {
     const run = drive({ command: 'reverse', speed: 60, duration: 8 });
-    const L = computeCoverLayout(W, H, run);
+    const L = computeFillLayout(W, H, run);
     for (const point of run) onCard(L, point.x, point.y);
   });
-});
 
+  it('holds still while a run that fits plays', () => {
+    const run = drive({ command: 'forward', speed: 60, duration: 5 });
+    const first = computeFillLayout(W, H, run, run[0]);
+    for (const point of run) {
+      const L = computeFillLayout(W, H, run, point);
+      expect(L.ox).toBeCloseTo(first.ox, 9);
+      expect(L.oy).toBeCloseTo(first.oy, 9);
+    }
+  });
+
+  it('follows the rover through a run too long to frame, never losing it', () => {
+    const run = drive({ command: 'forward', speed: 60, duration: 30 });
+    for (const point of run) onCard(computeFillLayout(W, H, run, point), point.x, point.y);
+  });
+});

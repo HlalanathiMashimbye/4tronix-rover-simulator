@@ -226,11 +226,10 @@ export default function MissionVideoClient({
             rendering fault, which is exactly how it was reported.
 
             Since AB#464 the yard is the measured one, 233 x 249 cm, near
-            square, and the same viewport leaves 86px each side (canvas
-            819x711). It is drawn as a walled map on the panel's own ground
-            now, not floating in grey, so it reads as a frame rather than a
-            fault. Narrowing this track would win it back at the video's
-            expense, and was left for a decision of its own.
+            square, and it FILLS the canvas instead (computeFillLayout):
+            scaled to cover, with the crop placed over the run. So no split
+            leaves bars beside it any more, and this one stays for the
+            video's sake.
 
             The 320px floor on the right track keeps the code readable, so this
             does not squeeze the editor to buy the change.

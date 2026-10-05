@@ -67,47 +67,51 @@ export function computeLayout(w, h, yard = YARD) {
     const s = Math.max(0, Math.min((w - 2 * MARGIN) / yard.widthCm, (h - 2 * MARGIN) / yard.depthCm));
     return { w, h, s, ox: (w - yard.widthCm * s) / 2, oy: (h - yard.depthCm * s) / 2, yard };
 }
-/** Room around a cover's crop for the rover's body, which the path does not include. */
-const COVER_PAD_CM = 15;
+/** Room around the crop for the rover's body, which the path does not include. */
+const FILL_PAD_CM = 15;
 /**
- * A layout that fills the canvas edge to edge, for a mission's cover (AB#464).
+ * A layout where the yard FILLS the canvas, edge to edge (AB#464).
  *
- * The yard is near square and a card is wide, so fitting all of it left a
- * thin column of floor between two bars of sand. A cover is a picture of
- * what the mission did, not a view anyone steers by, so it crops the yard
- * instead: scaled to fill, with the crop centred on the trail but never so
- * far that the rover, parked where it finished, leaves the card. It never
- * crops past a wall, which would bring the bars back.
+ * The yard is near square and almost no panel is: the cards are wide strips,
+ * the mission page and the phone strip are landscape. Fitting the whole yard
+ * left bars of empty ground beside it on every one of them. So the yard is
+ * scaled to fill and cropped, and the crop is placed for the run:
  *
- * The simulator itself keeps computeLayout and the whole yard: a learner
- * driving has to see every wall.
+ *  - Centred on the whole trail, so a run that fits is framed once and the
+ *    view holds still while it plays.
+ *  - Never so far off the rover (`at`, where it is now) that it leaves the
+ *    canvas. A trail longer than the view therefore follows the rover rather
+ *    than losing it, and a cover, where the rover is parked at the end,
+ *    keeps the end rather than the start.
+ *  - Never past a wall, which would bring the bars back.
+ *
+ * Before anything has run, it is centred on the start spot.
  */
-export function computeCoverLayout(w, h, traj, yard = YARD) {
+export function computeFillLayout(w, h, traj, at = traj[traj.length - 1], yard = YARD) {
     const s = Math.max(w / yard.widthCm, h / yard.depthCm);
     if (!(s > 0))
         return computeLayout(w, h, yard);
     const viewW = w / s;
     const viewH = h / s;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    let end = roverToYard(0, 0, yard);
+    const [nowX, nowY] = roverToYard(at?.x ?? 0, at?.y ?? 0, yard);
+    let minX = nowX, maxX = nowX, minY = nowY, maxY = nowY;
     for (const point of traj) {
-        end = roverToYard(point.x, point.y, yard);
-        minX = Math.min(minX, end[0]);
-        maxX = Math.max(maxX, end[0]);
-        minY = Math.min(minY, end[1]);
-        maxY = Math.max(maxY, end[1]);
+        const [x, y] = roverToYard(point.x, point.y, yard);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
     }
-    if (traj.length === 0)
-        [minX, maxX, minY, maxY] = [end[0], end[0], end[1], end[1]];
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    // The trail's middle, held close enough to the finish to keep it on the
-    // card. A trail longer than the card loses its start, not its end.
-    const centre = (lo, hi, view, last) => {
-        const reach = Math.max(0, view / 2 - COVER_PAD_CM);
-        return clamp((lo + hi) / 2, last - reach, last + reach);
+    // The trail's middle, held within reach of the rover. When the trail fits,
+    // its middle is always within reach of every point on it, so this only
+    // moves the view for a trail that does not fit.
+    const centre = (lo, hi, view, now) => {
+        const reach = Math.max(0, view / 2 - FILL_PAD_CM);
+        return clamp((lo + hi) / 2, now - reach, now + reach);
     };
-    const left = clamp(centre(minX, maxX, viewW, end[0]) - viewW / 2, 0, yard.widthCm - viewW);
-    const top = clamp(centre(minY, maxY, viewH, end[1]) - viewH / 2, 0, yard.depthCm - viewH);
+    const left = clamp(centre(minX, maxX, viewW, nowX) - viewW / 2, 0, yard.widthCm - viewW);
+    const top = clamp(centre(minY, maxY, viewH, nowY) - viewH / 2, 0, yard.depthCm - viewH);
     return { w, h, s, ox: -left * s, oy: -top * s, yard };
 }
 /** A point in the yard's measured frame (cm from the west and back walls) on screen. */
@@ -159,7 +163,8 @@ let terrainCache = null;
 function drawTerrain(ctx, L, P, floor) {
     // The floor photo arrives after the first frames, so having it is part of
     // the key: the yard repaints once when it lands, and not again. So is where
-    // the yard sits, because a cover crops it to its own mission's trail.
+    // the yard sits, because the crop is placed for each run, and follows the
+    // rover through one that does not fit.
     const key = `${L.w}x${L.h}@${L.s.toFixed(4)}+${L.ox.toFixed(1)},${L.oy.toFixed(1)}:${P.groundInner}:${floor ? 'photo' : 'plain'}`;
     if (terrainCache?.key !== key) {
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -244,7 +249,8 @@ function paintTerrain(ctx, L, P, floor) {
     ctx.font = '600 10px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('N', x0 + yw / 2, y0 > 14 ? y0 - 7 : y0 + 9);
+    // Inside the top edge when the back wall is cropped off or too close to it.
+    ctx.fillText('N', x0 + yw / 2, y0 > 14 ? y0 - 7 : Math.max(y0, 0) + 9);
     // Start pad at the start spot, where every run begins.
     const [hx, hy] = worldToScreen(L, 0, 0);
     ctx.strokeStyle = 'rgba(52,211,153,0.9)';

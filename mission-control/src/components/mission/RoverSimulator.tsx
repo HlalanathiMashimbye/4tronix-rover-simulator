@@ -4,13 +4,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
 import {
-  computeLayout,
+  computeFillLayout,
   drawSimFrame,
   interpolate,
   SIM_FPS,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
-  type SimLayout,
 } from '@/lib/roverSimRender';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource } from '@/lib/roverBlockly';
@@ -72,7 +71,9 @@ export function RoverSimulator({
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
-  const sizeRef = useRef<SimLayout & { dpr: number }>({ ...computeLayout(0, 0), s: 1, dpr: 1 });
+  // The canvas's size only. The layout is worked out per frame, because the
+  // yard fills the panel and its crop follows a run too long to frame whole.
+  const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   // Read through a ref so a parent passing a fresh callback each render does
   // not restart the playback loop, whose effect depends on syncHud.
@@ -128,12 +129,13 @@ export function RoverSimulator({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const L = sizeRef.current;
-    if (L.w === 0) return;
-    ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+    const { w, h, dpr } = sizeRef.current;
+    if (w === 0) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, L, traj, playhead, simPalette, floorRef.current);
+    const at = traj.length > 0 ? interpolate(traj, playhead) : undefined;
+    drawSimFrame(ctx, computeFillLayout(w, h, traj, at), traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
 
   useEffect(() => {
@@ -165,7 +167,7 @@ export function RoverSimulator({
     const dpr = Math.min(2.5, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
-    sizeRef.current = { ...computeLayout(w, h), dpr };
+    sizeRef.current = { w, h, dpr };
     drawScene();
   }, [drawScene]);
 

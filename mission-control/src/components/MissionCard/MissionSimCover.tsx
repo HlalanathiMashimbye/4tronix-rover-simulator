@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
 import {
-  computeCoverLayout,
+  computeFillLayout,
   drawSimFrame,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
@@ -26,7 +26,7 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
  * poster: the trail is fully drawn and the rover is parked where the mission
  * ended.
  *
- * It FILLS the card (computeCoverLayout), cropping the yard to this
+ * It FILLS the card (computeFillLayout), cropping the yard to this
  * mission's trail: the yard is near square and the card is wide, and fitting
  * all of it left the floor as a thin column between bars of sand.
  *
@@ -67,7 +67,7 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // The final frame: trail complete, rover parked where the mission ended.
-    drawSimFrame(ctx, computeCoverLayout(w, h, trajectory), trajectory, trajectory.length - 1, palette, floor);
+    drawSimFrame(ctx, computeFillLayout(w, h, trajectory), trajectory, trajectory.length - 1, palette, floor);
   }, [trajectory, palette, floor]);
 
   useEffect(() => {
