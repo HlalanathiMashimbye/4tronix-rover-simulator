@@ -4,8 +4,23 @@
     {
       "name": "mission-control",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "mission-control"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "mission-control"
+      ],
       "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "mission-control-challenges",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd ../4tronix-rover-fork.worktrees/challenges/mission-control && npm run dev"
+      ],
+      "port": 3002,
       "autoPort": true
     },
     {
@@ -13,9 +28,18 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "set -a && source mission-control/.env && cd yard/satellite && python3 web_server.py"
+        "cd yard/satellite && SATELLITE_CONFIG=/private/tmp/claude-501/-Users-hlali-Documents-4tronix-rover-fork/289b6492-fb2b-4bc9-adc5-a09a2fbfc51b/scratchpad/sat-config.json YARD_ID=curiosity ../../.venv/bin/python web_server.py"
       ],
       "port": 3001
+    },
+    {
+      "name": "yard-rover-sim",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd yard/rover && ROVER_DRIVER=fake ../../.venv/bin/python rover_server.py"
+      ],
+      "port": 8523
     }
   ]
 }
