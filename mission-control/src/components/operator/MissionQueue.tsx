@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
 import {
@@ -69,11 +69,18 @@ const YOUTUBE_RED = '#E60000';
  */
 const SETTLED_FILTERS = ['done', 'needs-video'];
 
-/** 08:41, in the operator's own clock. Falls back to nothing for a bad date. */
-function clockTime(iso: string): string {
+/** Submission time in the operator's local clock, including the date. */
+function submissionDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 /**
@@ -85,14 +92,16 @@ function clockTime(iso: string): string {
  * default state is the quiet one; the exceptions get the words.
  */
 function rowStatusLine(mission: QueueMission): string {
+  const stamp = mission.submittedAt ? submissionDateTime(mission.submittedAt) : '';
   if (mission.needsReview) return mission.reviewReason ?? 'Needs review';
   switch (mission.status) {
     case 'processing':
-      return 'Running now';
+      return stamp ? `Running now · ${stamp}` : 'Running now';
     case 'queued':
-      // When it arrived, which is what triage reads: a queue of nineteen
-      // saying "Waiting" nineteen times said nothing the position did not.
-      return mission.submittedAt ? `Sent ${clockTime(mission.submittedAt)}` : 'Waiting';
+      // When it arrived matters for triage, and the front of the queue is the
+      // next job to be handed to the rover. Both the status and the timestamp
+      // must be visible on the same row.
+      return stamp ? `Waiting · ${stamp}` : 'Waiting';
     case 'completed':
       return stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
     case 'cancelled':
@@ -191,8 +200,16 @@ function YardQueue({
   const [donePagesFor, setDonePagesFor] = useState<{ yardId: string; pages: number } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const { query, activeFilter, sort } = useSearch();
+  const { query, activeFilter, sort, setSort } = useSearch();
+  const defaultQueueSort = useRef(false);
   useRegisterSort();
+
+  useEffect(() => {
+    if (!defaultQueueSort.current && !SETTLED_FILTERS.includes(activeFilter) && !query.trim()) {
+      defaultQueueSort.current = true;
+      setSort('oldest');
+    }
+  }, [activeFilter, query, setSort]);
 
   const searching = query.trim().length > 0;
   // Also while searching: the settled list is what makes a finished mission
