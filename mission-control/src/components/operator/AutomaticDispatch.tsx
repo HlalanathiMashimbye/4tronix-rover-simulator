@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bot, Camera, Check, Copy, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Bot, Camera, Check, Copy, Crosshair, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 import { missionClipboardText } from '@/lib/missionClipboard';
+
+/** How to put the rover on the start mark: the tape in the yard says where. */
+const START_MARK_HOW = 'Centre it where the arrow crosses the seam, nose along the arrow.';
 
 type CheckKey = 'camera' | 'rover' | 'recording';
 type CheckState = 'waiting' | 'ready' | 'failed';
@@ -402,6 +405,22 @@ export function AutomaticDispatch({
             );
           })}
         </div>
+
+        {/* The start mark (AB#465). A run starts from wherever the rover is
+            standing, and where it is standing is the one thing none of the
+            checks can see. A reminder, not a gate: it is the operator's hand
+            on the rover, and a box ticked before every run stops being read.
+            The how is the tooltip and for screen readers; the yard's run
+            station says the same beside its own Send. */}
+        <p
+          data-testid="start-mark-reminder"
+          title={START_MARK_HOW}
+          className="flex shrink-0 items-center gap-1 text-xs font-semibold text-foreground"
+        >
+          <Crosshair className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+          Rover on the start mark?
+          <span className="sr-only">{START_MARK_HOW}</span>
+        </p>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {!live && !unreachable && (

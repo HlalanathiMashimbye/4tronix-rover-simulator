@@ -147,6 +147,15 @@
             font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
         }
         .warning-box.show { display: block; }
+        /* The start mark (AB#465): where the rover stands is the one thing the
+           checks cannot see, so the reminder sits on the Send button's own
+           row of the page, every time. */
+        .start-mark {
+            display: flex; align-items: flex-start; gap: 0.45rem; margin: 0;
+            font-size: var(--fs-2xs); line-height: 1.45; color: var(--text-dim);
+        }
+        .start-mark svg { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--ok); }
+        .start-mark strong { color: var(--text); }
         .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
         .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
         @keyframes recpulse { 50% { opacity: 0.35; } }
@@ -387,6 +396,12 @@
                 </div>
                 <div class="live-foot">
                     <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
+                    <!-- Mission Control's operator console says the same beside
+                         its Send to Rover; the tape on the floor says where. -->
+                    <p class="start-mark" id="startMark" data-start-mark-reminder>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                        <span><strong>Rover on the start mark?</strong> Centre it where the arrow crosses the seam, nose along the arrow.</span>
+                    </p>
                     <div class="action-row">
                         <button class="btn run-primary" id="runBtn" type="button">Send to rover</button>
                         <button class="btn stop-action" id="stopBtn" type="button">Stop</button>

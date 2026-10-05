@@ -258,15 +258,58 @@ function paintTerrain(ctx, L, P, floor) {
     ctx.textBaseline = 'middle';
     // Inside the top edge when the back wall is cropped off or too close to it.
     ctx.fillText('N', x0 + yw / 2, y0 > 14 ? y0 - 7 : Math.max(y0, 0) + 9);
-    // Start pad at the start spot, where every run begins.
-    const [hx, hy] = worldToScreen(L, 0, 0);
-    ctx.strokeStyle = 'rgba(52,211,153,0.9)';
-    ctx.lineWidth = 2;
+    drawStartMark(ctx, L);
+}
+/**
+ * The start mark (AB#465), in the rover's frame: a strip of tape crossing the
+ * seam where the rover's centre goes, its arrow pointing the way the rover
+ * faces. In centimetres. yard/docs/yard-measurements.md tells a person how to
+ * tape it from the same numbers, and yardMeasurements.test.ts holds the two
+ * together, so the mark on screen is the mark on the floor.
+ *
+ * The arrow runs past the rover's nose (it is 20 cm long, so its nose is 10 cm
+ * ahead of its centre), so with the rover parked on it the arrow still shows
+ * in front: on screen, and on the floor, where that is what lines the rover up.
+ */
+export const START_MARK_CM = { behind: 12, ahead: 20, arrowhead: 5 };
+const START_MARK_BEHIND_CM = START_MARK_CM.behind;
+const START_MARK_AHEAD_CM = START_MARK_CM.ahead;
+const START_MARK_HEAD_CM = START_MARK_CM.arrowhead;
+/** Where the start mark's centre, tail and arrow tip are on screen. */
+export function startMark(L) {
+    return {
+        centre: worldToScreen(L, 0, 0),
+        tail: worldToScreen(L, 0, -START_MARK_BEHIND_CM),
+        tip: worldToScreen(L, 0, START_MARK_AHEAD_CM),
+    };
+}
+function drawStartMark(ctx, L) {
+    const { centre, tail, tip } = startMark(L);
+    // The arrowhead's two barbs, back from the tip and either side of the strip.
+    const left = worldToScreen(L, -START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
+    const right = worldToScreen(L, START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
+    const width = Math.max(2, 2.5 * L.s);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    // A dark edge first, so the tape reads on the bright parts of the floor.
+    for (const [colour, extra] of [['rgba(20,8,2,0.55)', 2], ['rgba(52,211,153,0.95)', 0]]) {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = width + extra;
+        ctx.beginPath();
+        ctx.moveTo(tail[0], tail[1]);
+        ctx.lineTo(tip[0], tip[1]);
+        ctx.moveTo(left[0], left[1]);
+        ctx.lineTo(tip[0], tip[1]);
+        ctx.lineTo(right[0], right[1]);
+        ctx.stroke();
+    }
+    // Where the rover's centre goes.
+    ctx.fillStyle = 'rgba(52,211,153,0.95)';
     ctx.beginPath();
-    ctx.arc(hx, hy, 10, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = 'rgba(52,211,153,0.18)';
+    ctx.arc(centre[0], centre[1], Math.max(2.5, 1.6 * L.s), 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 }
 function drawTrail(ctx, L, traj, endIdx, P) {
     if (endIdx <= 0)

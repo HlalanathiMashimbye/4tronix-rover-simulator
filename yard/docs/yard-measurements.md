@@ -34,6 +34,32 @@ fails if the two ever disagree.
 | Seam between the two floor boards | 121 cm from the back wall | Photos, within 1 cm |
 | Door | The southern half of the west side, from the seam to the front wall | Confirmed by the team |
 | Start | **The middle of the seam: x 116.5, y 121, facing south** | The team's choice. In the photos the rover sat at x 112, y 119 |
+| Start mark | **12 cm behind, 20 cm ahead, 5 cm arrowhead** | Not taped yet: see [The start mark](#the-start-mark) |
+
+## The start mark
+
+Every mission in the simulator starts on the middle of the seam, facing the
+front wall (AB#465). A rover put down anywhere else runs a different mission
+from the one the learner watched, so the spot is taped on the floor, and both
+run pages remind the operator to use it, beside their Send buttons.
+
+**Taping it** (once, with a tape measure and green tape if there is some: the
+simulator draws the mark green):
+
+1. Find the middle of the seam: 116.5 cm from the west wall, the door side,
+   measured along the seam. It is the same from the east wall.
+2. Run a strip of tape across the seam there, north to south: from 12 cm
+   north of the seam to 20 cm south of it.
+3. Make the south end an arrowhead, 5 cm back and 5 cm to each side, so it
+   points at the front wall.
+
+**Using it**, before every run: the rover's centre, between its middle
+wheels, over the point where the tape crosses the seam, and its nose along
+the arrow. Parked like that, the last 10 cm of the arrow shows in front of
+its nose, which is what lines it up.
+
+The simulator draws the same mark at the same size, so what a learner sees
+under the rover on screen is what the operator sees on the floor.
 
 ## Rocks
 
@@ -133,7 +159,8 @@ alone, and scaling everything from the tape rather than the rover, moved:
 - **No heights.** Hold a ruler on each mound peak and on each rock.
 - **Positions along the back** sit on the backdrop's curved sweep, which
   rises, so they may be a centimetre or two off.
-- **The start spot is not marked** on the floor yet (AB#465).
+- **The start mark is not taped yet.** Ten minutes with a tape measure:
+  see [The start mark](#the-start-mark).
 - **The floor photo has the rover patched out.** A photo straight down with
   the rover out of the yard would replace the patch.
 
