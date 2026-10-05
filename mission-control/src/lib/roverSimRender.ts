@@ -127,6 +127,51 @@ export function computeLayout(w: number, h: number, yard: Yard = YARD): SimLayou
   return { w, h, s, ox: (w - yard.widthCm * s) / 2, oy: (h - yard.depthCm * s) / 2, yard };
 }
 
+/** Room around a cover's crop for the rover's body, which the path does not include. */
+const COVER_PAD_CM = 15;
+
+/**
+ * A layout that fills the canvas edge to edge, for a mission's cover (AB#464).
+ *
+ * The yard is near square and a card is wide, so fitting all of it left a
+ * thin column of floor between two bars of sand. A cover is a picture of
+ * what the mission did, not a view anyone steers by, so it crops the yard
+ * instead: scaled to fill, with the crop centred on the trail but never so
+ * far that the rover, parked where it finished, leaves the card. It never
+ * crops past a wall, which would bring the bars back.
+ *
+ * The simulator itself keeps computeLayout and the whole yard: a learner
+ * driving has to see every wall.
+ */
+export function computeCoverLayout(w: number, h: number, traj: SimPoint[], yard: Yard = YARD): SimLayout {
+  const s = Math.max(w / yard.widthCm, h / yard.depthCm);
+  if (!(s > 0)) return computeLayout(w, h, yard);
+  const viewW = w / s;
+  const viewH = h / s;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  let end: [number, number] = roverToYard(0, 0, yard);
+  for (const point of traj) {
+    end = roverToYard(point.x, point.y, yard);
+    minX = Math.min(minX, end[0]);
+    maxX = Math.max(maxX, end[0]);
+    minY = Math.min(minY, end[1]);
+    maxY = Math.max(maxY, end[1]);
+  }
+  if (traj.length === 0) [minX, maxX, minY, maxY] = [end[0], end[0], end[1], end[1]];
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  // The trail's middle, held close enough to the finish to keep it on the
+  // card. A trail longer than the card loses its start, not its end.
+  const centre = (lo: number, hi: number, view: number, last: number) => {
+    const reach = Math.max(0, view / 2 - COVER_PAD_CM);
+    return clamp((lo + hi) / 2, last - reach, last + reach);
+  };
+  const left = clamp(centre(minX, maxX, viewW, end[0]) - viewW / 2, 0, yard.widthCm - viewW);
+  const top = clamp(centre(minY, maxY, viewH, end[1]) - viewH / 2, 0, yard.depthCm - viewH);
+  return { w, h, s, ox: -left * s, oy: -top * s, yard };
+}
+
 /** A point in the yard's measured frame (cm from the west and back walls) on screen. */
 function yardToScreen(L: SimLayout, x: number, y: number): [number, number] {
   return [L.ox + x * L.s, L.oy + y * L.s];
@@ -181,8 +226,9 @@ let terrainCache: { key: string; canvas: HTMLCanvasElement } | null = null;
 
 function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette, floor: CanvasImageSource | null) {
   // The floor photo arrives after the first frames, so having it is part of
-  // the key: the yard repaints once when it lands, and not again.
-  const key = `${L.w}x${L.h}@${L.s.toFixed(4)}:${P.groundInner}:${floor ? 'photo' : 'plain'}`;
+  // the key: the yard repaints once when it lands, and not again. So is where
+  // the yard sits, because a cover crops it to its own mission's trail.
+  const key = `${L.w}x${L.h}@${L.s.toFixed(4)}+${L.ox.toFixed(1)},${L.oy.toFixed(1)}:${P.groundInner}:${floor ? 'photo' : 'plain'}`;
 
   if (terrainCache?.key !== key) {
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;

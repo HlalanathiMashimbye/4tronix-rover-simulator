@@ -9,7 +9,7 @@
 
 import { simulateCommands, STEP_SECONDS, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, roverToYard, yardToRover, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeLayout, worldToScreen } from '@/lib/roverSimRender';
+import { computeCoverLayout, computeLayout, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const SPEED_60_CM_PER_SECOND = 9;
@@ -105,3 +105,44 @@ describe('the yard on screen', () => {
     expect(x1).toBeCloseTo(x0 - 10, 6);
   });
 });
+
+describe('a mission card', () => {
+  // About the size the home feed draws a cover: a wide strip.
+  const W = 320;
+  const H = 140;
+
+  function onCard(L: SimLayout, x: number, y: number) {
+    const [sx, sy] = worldToScreen(L, x, y);
+    expect(sx).toBeGreaterThanOrEqual(0);
+    expect(sx).toBeLessThanOrEqual(W);
+    expect(sy).toBeGreaterThanOrEqual(0);
+    expect(sy).toBeLessThanOrEqual(H);
+  }
+
+  it('is filled edge to edge by the yard, with no bars beside it', () => {
+    const L = computeCoverLayout(W, H, drive({ command: 'forward', speed: 60, duration: 5 }));
+    expect(L.ox).toBeLessThanOrEqual(0);
+    expect(L.oy).toBeLessThanOrEqual(0);
+    expect(L.ox + YARD.widthCm * L.s).toBeGreaterThanOrEqual(W - 1e-6);
+    expect(L.oy + YARD.depthCm * L.s).toBeGreaterThanOrEqual(H - 1e-6);
+  });
+
+  it('shows the whole of a short trail', () => {
+    const run = drive({ command: 'forward', speed: 60, duration: 5 });
+    const L = computeCoverLayout(W, H, run);
+    for (const point of run) onCard(L, point.x, point.y);
+  });
+
+  it('shows where the rover finished when the trail is longer than the card', () => {
+    const run = drive({ command: 'forward', speed: 60, duration: 30 });
+    const end = run[run.length - 1];
+    onCard(computeCoverLayout(W, H, run), end.x, end.y);
+  });
+
+  it('follows a trail to the back of the yard', () => {
+    const run = drive({ command: 'reverse', speed: 60, duration: 8 });
+    const L = computeCoverLayout(W, H, run);
+    for (const point of run) onCard(L, point.x, point.y);
+  });
+});
+
