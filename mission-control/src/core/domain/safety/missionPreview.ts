@@ -12,9 +12,11 @@
  * moves, calculatePythonDuration and the limits for how long it runs. The one
  * new fact is where the simulated rover meets the edge of the yard.
  *
- * THE EDGE IS THE SIMULATOR'S YARD, not the real one: there is no overlay of
- * the real yard and no fixed start position yet, so the console says so in
- * its wording rather than promising a crash or its absence.
+ * THE EDGE IS THE MEASURED YARD'S (AB#464), from the measured start spot,
+ * so "reaches the edge" now means the real walls. It is still a prediction:
+ * the rover has to be put down on the start spot by hand, and its speed was
+ * calibrated on one battery charge, so the wording says where the run is
+ * headed rather than promising a crash or its absence.
  */
 
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
@@ -67,11 +69,11 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
       ? {
           id: 'edge',
           level: 'warn',
-          message: `Reaches the edge of the simulator's yard at ${formatSeconds(hitAt)}`,
+          message: `Reaches the edge of the yard at ${formatSeconds(hitAt)}`,
           short: `Edge at ${formatSeconds(hitAt)}`,
           atSeconds: hitAt,
         }
-      : { id: 'edge', level: 'ok', message: "Stays inside the simulator's yard", short: 'Stays inside' },
+      : { id: 'edge', level: 'ok', message: 'Stays inside the yard', short: 'Stays inside' },
   );
 
   const duration = calculatePythonDuration(code);

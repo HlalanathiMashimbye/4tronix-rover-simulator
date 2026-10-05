@@ -31,10 +31,53 @@
 const FULL_SPEED_CM_PER_SECOND = 15;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
-const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
-// Must match YARD_W/YARD_H in roverSimRender.ts, which explains the size.
-const YARD_HALF_W = 120 - ROVER_MARGIN; // 240 cm wide, origin at centre
-const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
+/** How close the rover's centre gets to a wall: its body is 20 x 18.5 cm. */
+const ROVER_MARGIN = 12;
+/**
+ * The real yard (AB#464), as yard/docs/yard-measurements.md records it.
+ * yardMeasurements.test.ts reads that doc's tables and fails if these drift
+ * from it, so the measurement and the simulator cannot quietly disagree.
+ *
+ * It replaced a 240 x 180 yard that was picked for how it looked, which was
+ * 69 cm short north to south: the simulator said a rover hit the wall when the
+ * real one had room to spare.
+ */
+export const YARD = {
+    widthCm: 233,
+    depthCm: 249,
+    // The middle of the seam between the two floor boards, facing the front wall.
+    start: { x: 116.5, y: 121, facingDegrees: 180 },
+    rocks: [
+        { name: 'R1', x: 62, y: 16, widthCm: 30, depthCm: 5 },
+        { name: 'R2', x: 138, y: 25, widthCm: 13, depthCm: 17 },
+        { name: 'R3', x: 206, y: 50, widthCm: 20, depthCm: 24 },
+        { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
+    ],
+};
+/**
+ * The rover's frame to the yard's.
+ *
+ * TWO FRAMES ON PURPOSE. The physics works in the rover's own frame: it starts
+ * at (0, 0), forward is +y and its right is +x, exactly as it always has, so
+ * every turn, square and calibration test still means what it says. The yard
+ * is where that frame is put down: at the start spot, turned to face the way
+ * the rover faces there. Moving the start, or turning it, is then a change to
+ * YARD and nothing else.
+ */
+export function roverToYard(rx, ry, yard = YARD) {
+    const bearing = (yard.start.facingDegrees * Math.PI) / 180;
+    // Forward is the bearing, as (east, north); the rover's right is 90 degrees on.
+    const east = rx * Math.cos(bearing) + ry * Math.sin(bearing);
+    const north = -rx * Math.sin(bearing) + ry * Math.cos(bearing);
+    return [yard.start.x + east, yard.start.y - north];
+}
+/** The yard's frame to the rover's: the inverse of roverToYard. */
+export function yardToRover(x, y, yard = YARD) {
+    const bearing = (yard.start.facingDegrees * Math.PI) / 180;
+    const east = x - yard.start.x;
+    const north = yard.start.y - y;
+    return [east * Math.cos(bearing) - north * Math.sin(bearing), east * Math.sin(bearing) + north * Math.cos(bearing)];
+}
 /**
  * How far each wheel sits from the point the rover turns about.
  *
@@ -118,7 +161,9 @@ const SERVO_FR = 15;
 const SERVO_RL = 11;
 const SERVO_RR = 13;
 export class RoverPhysics {
-    constructor() {
+    /** The yard whose walls stop the rover. */
+    constructor(yard = YARD) {
+        this.yard = yard;
         this.state = {
             x: 0,
             y: 0,
@@ -277,12 +322,21 @@ export class RoverPhysics {
         const newX = (xFL + xFR + xBL + xBR) / 4;
         const newY = (yFL + yFR + yBL + yBR) / 4;
         this.state.heading = (hFL + hFR + hBL + hBR) / 4;
-        // Clamp to terrain bounds: the rover cannot leave the yard.
-        const clampedX = Math.max(-YARD_HALF_W, Math.min(YARD_HALF_W, newX));
-        const clampedY = Math.max(-YARD_HALF_H, Math.min(YARD_HALF_H, newY));
-        this.state.hitWall = clampedX !== newX || clampedY !== newY;
-        this.state.x = clampedX;
-        this.state.y = clampedY;
+        // The rover cannot leave the yard. The walls are the yard's, so the clamp
+        // happens in the yard's frame and the answer comes back to the rover's.
+        const [yardX, yardY] = roverToYard(newX, newY, this.yard);
+        const clampedX = Math.max(ROVER_MARGIN, Math.min(this.yard.widthCm - ROVER_MARGIN, yardX));
+        const clampedY = Math.max(ROVER_MARGIN, Math.min(this.yard.depthCm - ROVER_MARGIN, yardY));
+        this.state.hitWall = clampedX !== yardX || clampedY !== yardY;
+        if (this.state.hitWall) {
+            [this.state.x, this.state.y] = yardToRover(clampedX, clampedY, this.yard);
+        }
+        else {
+            // Not round-tripped: the trigonometry would add crumbs like 1e-15 to a
+            // straight drive that the calibration tests compare exactly.
+            this.state.x = newX;
+            this.state.y = newY;
+        }
         return { ...this.state };
     }
     /**

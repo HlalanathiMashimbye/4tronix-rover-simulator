@@ -37,6 +37,11 @@ The reason they are shared rather than reimplemented: the yard's offline
 editor and the browser simulator must agree about what a program does. When
 they disagreed, a child saw one thing on screen and the rover did another.
 
+The yard itself lives in `rover-physics.ts` as `YARD`: its measured size,
+rocks and start spot. The physics stops the rover at its walls and the
+renderer draws it, so both read the one definition. It used to be two pairs
+of numbers, one in each file, with a comment asking them to match.
+
 ## 2. Small UI helpers
 
 ```

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useYardFloor } from '@/hooks/useYardFloor';
 import {
   computeLayout,
   drawSimFrame,
@@ -71,7 +72,7 @@ export function RoverSimulator({
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
-  const sizeRef = useRef<SimLayout & { dpr: number }>({ w: 0, h: 0, s: 1, ox: 0, oy: 0, dpr: 1 });
+  const sizeRef = useRef<SimLayout & { dpr: number }>({ ...computeLayout(0, 0), s: 1, dpr: 1 });
 
   // Read through a ref so a parent passing a fresh callback each render does
   // not restart the playback loop, whose effect depends on syncHud.
@@ -115,6 +116,13 @@ export function RoverSimulator({
   // next resize or playback frame happens to redraw it.
   const simPalette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
 
+  // The yard's floor photo, read through a ref and NOT a dependency of
+  // drawScene. The effect that starts a fresh run depends on drawScene, so a
+  // photo landing mid-run would otherwise rewind the run to its first frame.
+  // The effect below repaints once when it arrives instead.
+  const floor = useYardFloor();
+  const floorRef = useRef(floor);
+
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -125,8 +133,13 @@ export function RoverSimulator({
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, L, traj, playhead, simPalette);
+    drawSimFrame(ctx, L, traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
+
+  useEffect(() => {
+    floorRef.current = floor;
+    drawScene();
+  }, [floor, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 

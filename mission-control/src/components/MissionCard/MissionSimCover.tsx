@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useTheme } from '@/contexts/ThemeContext';
+import { useYardFloor } from '@/hooks/useYardFloor';
 import {
   computeLayout,
   drawSimFrame,
@@ -17,8 +18,8 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
  * The cover has to be the same picture as the mission page, so it is drawn by
  * the same code - drawSimFrame, the same palette, the same arena. An earlier
  * version approximated it with an SVG polyline on a grey gradient, which was
- * cheaper and looked like a different product: the mission page shows rust
- * ground, craters, a dashed blue trail and the rover itself, and a cover that
+ * cheaper and looked like a different product: the mission page shows the
+ * yard's floor, a dashed blue trail and the rover itself, and a cover that
  * shows a grey line is not a thumbnail of it.
  *
  * The frame is the LAST one, which is what makes it a cover rather than a
@@ -38,6 +39,7 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { theme } = useTheme();
   const palette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
+  const floor = useYardFloor();
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -62,8 +64,8 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // The final frame: trail complete, rover parked where the mission ended.
-    drawSimFrame(ctx, computeLayout(w, h), trajectory, trajectory.length - 1, palette);
-  }, [trajectory, palette]);
+    drawSimFrame(ctx, computeLayout(w, h), trajectory, trajectory.length - 1, palette, floor);
+  }, [trajectory, palette, floor]);
 
   useEffect(() => {
     draw();

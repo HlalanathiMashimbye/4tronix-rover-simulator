@@ -13,8 +13,10 @@ Needs OpenCV, which nothing else in the yard does, so use a throwaway venv:
     /tmp/yardvenv/bin/pip install opencv-python-headless numpy
     /tmp/yardvenv/bin/python measure_yard.py
 
-It reads the photos in photos/ beside it and writes the two figures beside
-it. Both can be pointed elsewhere: measure_yard.py [photos] [output folder].
+It reads the photos in photos/ beside it, writes the two figures beside it,
+and writes the simulator's floor photo into mission-control/public/yards/.
+Both can be pointed elsewhere: measure_yard.py [photos] [output folder], and
+an output folder gets the floor photo too, so a trial run changes nothing.
 
 The photos are the originals from an iPhone 13, taken on 3 October 2026, with
 only the GPS location removed from their metadata. Keep them that way:
@@ -23,10 +25,11 @@ read off the full-resolution originals, against their rotation tag.
 
 THE METHOD, in the order the script runs it:
 
-1. Width. The rover is in IMG_8558 and its footprint is known (185 x 200 mm),
-   so it is a ruler lying on the floor. The photo is matched into the one
+1. Width. Taped: 2330 mm, and everything is scaled from it. The rover is a
+   check: it is in IMG_8558 and its footprint is known (185 x 200 mm), so
+   it is a ruler lying on the floor. That photo is matched into the one
    photo that shows all four floor corners, the back half of the floor is
-   straightened, and the rover's size in it gives the width.
+   straightened, and the rover's size in it gives the width again.
 2. Depth. The camera's own lens gives the floor's proportions with no
    ruler at all: a rectangle seen through a known lens can only have one
    aspect ratio. That is an independent check on step 1, and the only way to
@@ -62,6 +65,9 @@ FRONT_LEFT, FRONT_RIGHT = (654, 3150), (2458, 3125)
 ROVER_PHOTO = 'IMG_8558.jpg'
 ROVER_BOX = ((1466, 1370), (1691, 1602))   # (left, top), (right, bottom)
 ROVER_WIDTH_MM, ROVER_LENGTH_MM = 185, 200  # 4tronix's published size
+
+# The one length anyone put a tape to, along the backdrop wall.
+TAPE_WIDTH_MM = 2330
 
 # 35 mm-equivalent focal lengths, from the photos' EXIF.
 ULTRA_WIDE_MM, MAIN_MM = 14, 26
@@ -103,10 +109,21 @@ def matches(fa, fb, ratio=0.7):
 
 
 def homography(fa, fb):
-    """Maps photo a onto photo b, through the floor (the dominant plane)."""
+    """
+    Maps photo a onto the wide shot b, through the floor.
+
+    Only matches that land on the floor in the wide shot are used, away from
+    its edges. Fitted to everything, the backdrop's printed photo (flat, and
+    full of texture) pulled the fit off the floor: IMG_8518 came out about
+    11 cm out in the middle of the yard, which was only caught when its pixels
+    were patched into another photo and the seam did not line up.
+    """
     pa, pb = matches(fa, fb)
-    H, inliers = cv2.findHomography(pa, pb, cv2.RANSAC, 6.0)
-    return H, int(inliers.sum()), len(pa)
+    quad = [BACK_LEFT, BACK_RIGHT, FRONT_RIGHT, FRONT_LEFT]
+    u = transform(pb, np.linalg.inv(unit_square_to(quad)))
+    on_floor = (u[:, 0] > 0.05) & (u[:, 0] < 0.95) & (u[:, 1] > 0.1) & (u[:, 1] < 0.95)
+    H, inliers = cv2.findHomography(pa[on_floor], pb[on_floor], cv2.RANSAC, 6.0)
+    return H, int(inliers.sum()), int(on_floor.sum())
 
 
 def unit_square_to(points):
@@ -129,9 +146,9 @@ def lens_shape(K, quad):
     return np.linalg.norm(b) / np.linalg.norm(a), angle
 
 
-def top_down(image, to_wide, floor_to_wide, size):
+def top_down(image, to_wide, floor_to_wide, size, px_per_mm=OUT_PX_PER_MM):
     """The photo, straightened into floor coordinates (x east, y south, from the back-left corner)."""
-    out_to_floor = np.diag([1 / OUT_PX_PER_MM, 1 / OUT_PX_PER_MM, 1])
+    out_to_floor = np.diag([1 / px_per_mm, 1 / px_per_mm, 1])
     out_to_photo = np.linalg.inv(to_wide) @ floor_to_wide @ out_to_floor
     return cv2.warpPerspective(image, np.linalg.inv(out_to_photo), size, flags=cv2.INTER_AREA)
 
@@ -190,10 +207,10 @@ def box_value(g, x0, y0, x1, y1, q):
 
 # Read by eye from the top-down maps on a 1 cm grid, in cm from the west wall
 # (x) and the back wall (y). yard-measurements.md's tables copy these.
-SEAM_Y = 120.5
-START = (111, 119)  # the rover's centre in IMG_8558/8559, facing south
+SEAM_Y = 121
+ROVER_AT = (112, 119)  # the rover's centre in IMG_8558/8559, facing south
 ROCKS = [  # name, x, y, drawn radius
-    ('R1', 66, 19, 14), ('R2', 138, 27, 8), ('R3', 206, 50, 12), ('R4', 140, 134, 13),
+    ('R1', 62, 16, 15), ('R2', 138, 25, 9), ('R3', 206, 50, 12), ('R4', 141, 133, 12),
 ]
 
 
@@ -230,7 +247,7 @@ def figure(photo, heights, width_cm, depth_cm, peaks):
         for name, x, y, r in ROCKS:
             cv2.circle(out, q(x, y), int(r * k), (0, 255, 255), 2)
             label(out, name, q(x + r + 1, y + 2), (255, 255, 255), 0.55)
-        sx, sy = START
+        sx, sy = ROVER_AT
         cv2.rectangle(out, q(sx - ROVER_WIDTH_MM / 20, sy - ROVER_LENGTH_MM / 20),
                       q(sx + ROVER_WIDTH_MM / 20, sy + ROVER_LENGTH_MM / 20), (0, 255, 0), 2)
         cv2.arrowedLine(out, q(sx, sy), q(sx, sy + 33), (0, 255, 0), 3, tipLength=0.3)
@@ -249,12 +266,66 @@ def figure(photo, heights, width_cm, depth_cm, peaks):
                       framed(colour, 'Relative height from stereo: blue low, red high')])
 
 
-def main(folder, out):
+FLOOR_PX_PER_MM = 0.6  # 6 px per cm: sharp at twice the size the simulator draws it
+
+
+def clean_floor(folder, to_wide, floor, width, depth, path):
+    k = FLOOR_PX_PER_MM * 10
+    size = (int(round(width * FLOOR_PX_PER_MM)), int(round(depth * FLOOR_PX_PER_MM)))
+
+    def straightened(name):
+        image = load(folder, name)
+        seen = np.full(image.shape[:2], 255, np.uint8)
+        return (top_down(image, to_wide[name], floor, size, FLOOR_PX_PER_MM).astype(np.float32),
+                top_down(seen, to_wide[name], floor, size, FLOOR_PX_PER_MM) > 250)
+
+    def cm_box(x0, y0, x1, y1):
+        box = np.zeros((size[1], size[0]), bool)
+        box[int(y0 * k):int(y1 * k), int(x0 * k):int(x1 * k)] = True
+        return box
+
+    rover = cm_box(100, 106, 125, 132)
+    # Floor that differs between photos for a real reason: the rover, and R4,
+    # which was on the seam at 14:27 and south of it at 15:52.
+    moved = rover | cm_box(125, 105, 160, 150)
+    base, base_seen = straightened('IMG_8559.jpg')
+
+    def like_base(image, seen):
+        both = base_seen & seen & ~moved
+        a = cv2.cvtColor(image.astype(np.uint8), cv2.COLOR_BGR2LAB).astype(np.float32)
+        b = cv2.cvtColor(base.astype(np.uint8), cv2.COLOR_BGR2LAB).astype(np.float32)
+        for c in range(3):
+            a[..., c] = ((a[..., c] - a[..., c][both].mean()) / (a[..., c][both].std() + 1e-6)
+                         * b[..., c][both].std() + b[..., c][both].mean())
+        return cv2.cvtColor(np.clip(a, 0, 255).astype(np.uint8), cv2.COLOR_LAB2BGR).astype(np.float32)
+
+    def blend(onto, image, weight):
+        w = weight[..., None]
+        return onto * (1 - w) + image * w
+
+    out, have = base, base_seen.copy()
+    for i, name in enumerate(['IMG_8518.jpg', 'IMG_8520.jpg', WIDE]):
+        if name not in to_wide:
+            continue
+        image, seen = straightened(name)
+        image = like_base(image, seen)
+        if i == 0:
+            soft = np.clip(cv2.GaussianBlur(rover.astype(np.float32), (0, 0), 1.5 * k) * 1.6, 0, 1)
+            out = blend(out, image, soft * seen)
+        need = ~have & seen
+        soft = np.maximum(cv2.GaussianBlur(need.astype(np.float32), (0, 0), 5 * k), need)
+        out = blend(out, image, soft * seen)
+        have |= seen
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    cv2.imwrite(path, np.clip(out, 0, 255).astype(np.uint8), [cv2.IMWRITE_WEBP_QUALITY, 75])
+
+
+def main(folder, out, floor_path):
     os.makedirs(out, exist_ok=True)
     wide = load(folder, WIDE)
     wide_features = features(cv2.cvtColor(wide, cv2.COLOR_BGR2GRAY))
 
-    # 1. Width, with the rover as the ruler.
+    # 1. Width: the tape, checked by the rover.
     rover_photo = load(folder, ROVER_PHOTO, grey=True)
     H, inliers, n = homography(features(rover_photo), wide_features)
     print(f'{ROVER_PHOTO} matched into {WIDE}: {inliers} of {n} matches agree')
@@ -264,9 +335,9 @@ def main(folder, out):
     rr = transform(rover, np.linalg.inv(unit_square_to(back_half)))
     width_frac = (rr[1, 0] + rr[2, 0] - rr[0, 0] - rr[3, 0]) / 2
     length_frac = (rr[2, 1] + rr[3, 1] - rr[0, 1] - rr[1, 1]) / 2
-    width = ROVER_WIDTH_MM / width_frac
+    width = TAPE_WIDTH_MM
     back_depth_by_rover = ROVER_LENGTH_MM / length_frac
-    print(f'Width, west to east: {width:.0f} mm  (tape: 2330 mm)')
+    print(f'Width, west to east: {width} mm taped; the rover makes it {ROVER_WIDTH_MM / width_frac:.0f} mm')
     print(f'Back wall to seam, by the rover: {back_depth_by_rover:.0f} mm')
 
     # 2. Depth, from the lens.
@@ -298,7 +369,7 @@ def main(folder, out):
     # thing of known height in both photos of a pair) gave the mounds anywhere
     # from 5 to 24 cm, and the edges either sign, depending only on the
     # feature detector's settings. Where the high ground is held to within
-    # 5 cm across the same changes, so that is all this reports.
+    # 3 cm across the same changes, so that is all this reports.
     clean = parallax(greys['IMG_8518.jpg'], greys['IMG_8520.jpg'], to_wide['IMG_8518.jpg'],
                      floor, width, depth, size)
     clean -= box_value(clean, 60, 60, 80, 80, 50)
@@ -317,6 +388,14 @@ def main(folder, out):
 
     print('Mound peaks (cm from west, from back):', [tuple(round(v) for v in p) for p in peaks])
 
+    # 5. The simulator's floor (AB#464). IMG_8559 is the only photo with every
+    # rock where it stays, so it is the base. The rover is lifted out of it
+    # with IMG_8518, taken before the rover was put down, and the strip 8559
+    # cut off is filled from the others. Each borrowed photo's colours are
+    # matched to 8559 on floor both of them see, so the joins do not show.
+    clean_floor(folder, to_wide, floor, width, depth, floor_path)
+    print(f'Wrote the simulator floor to {floor_path}')
+
     # From 215 cm on, that pair is looking at the front wall's top, not the
     # floor behind it: not data.
     clean[int(215 * k):] = np.nan
@@ -329,5 +408,10 @@ if __name__ == '__main__':
     here = os.path.dirname(os.path.abspath(__file__))
     if len(sys.argv) > 3:
         sys.exit(__doc__)
-    main(os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(here, 'photos'),
-         sys.argv[2] if len(sys.argv) > 2 else here)
+    out = sys.argv[2] if len(sys.argv) > 2 else here
+    # The simulator serves its floor from mission-control's public folder. An
+    # explicit output folder gets it instead, so a trial run changes nothing.
+    floor_path = (os.path.join(out, 'floor.webp') if len(sys.argv) > 2 else
+                  os.path.join(here, '..', '..', '..', 'mission-control', 'public', 'yards', 'curiosity', 'floor.webp'))
+    main(os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(here, 'photos'), out,
+         os.path.normpath(floor_path))

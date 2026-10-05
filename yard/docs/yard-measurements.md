@@ -1,8 +1,9 @@
 # The real yard, measured
 
 Measured on 5 October 2026 from five phone photos taken on 3 October
-(AB#463). One number was taped: the width, 2.33 m. Everything else comes from
-the photos, with the rover as the ruler, and
+(AB#463), and corrected the same day for AB#464 (see
+[Corrections](#corrections)). One number was taped: the width, 2.33 m.
+Everything else is scaled from it and comes from the photos, and
 [`yard-measurements/measure_yard.py`](yard-measurements/measure_yard.py)
 reproduces all of it from the originals.
 
@@ -20,30 +21,31 @@ The backdrop wall is **north** and the door is **west**. The photos were taken
 from the south.
 
 Positions are in cm from the west wall (x) and from the back wall (y), as on
-the map's grid. The simulator puts its origin in the middle with y pointing
-north, so for the simulator: `x_sim = x - 116.5`, `y_sim = 124.5 - y`.
+the map's grid. The simulator reads these numbers as they are, from `YARD` in
+`mission-control/src/lib/rover-physics.ts`, and `yardMeasurements.test.ts`
+fails if the two ever disagree.
 
 ## The yard
 
 | What | Value | How sure |
 |---|---|---|
-| Width, west to east | **233 cm** | Taped. The photos give 231.5 to 232.9 |
+| Width, west to east | **233 cm** | Taped. The rover in the photos makes it 233 to 236.5 |
 | Depth, north to south | **249 cm** | Photos only, within about 2 cm. The front wall hides the last strip of floor from the camera, so if anything it is a little more |
-| Seam between the two floor boards | 120 cm from the back wall | Photos, within 1 cm |
+| Seam between the two floor boards | 121 cm from the back wall | Photos, within 1 cm |
 | Door | The southern half of the west side, from the seam to the front wall | Confirmed by the team |
-| Start | **The middle, on the seam, facing south** | The team's choice. In the photo the rover sat at x 111, y 119, about 5 cm from the exact middle |
+| Start | **The middle of the seam: x 116.5, y 121, facing south** | The team's choice. In the photos the rover sat at x 112, y 119 |
 
 ## Rocks
 
 All four stay where they are. Sizes are as seen from above; heights were not
 measured.
 
-| Rock | x, y | Simulator x, y | Size |
-|---|---|---|---|
-| R1, long and dark, against the backdrop | 66, 19 | -50.5, +105.5 | 26 x 6 |
-| R2 | 138, 27 | +21.5, +97.5 | 13 x 14 |
-| R3 | 206, 50 | +89.5, +74.5 | 20 x 22 |
-| R4, the big one | 140, 134 | +23.5, -9.5 | 24 x 25 |
+| Rock | x, y | Size |
+|---|---|---|
+| R1, long and dark, against the backdrop | 62, 16 | 30 x 5 |
+| R2 | 138, 25 | 13 x 17 |
+| R3 | 206, 50 | 20 x 24 |
+| R4, the big one | 141, 133 | 23 x 23 |
 
 R4 is in three different places across the photos: west of the middle at
 14:19, on the seam at 14:27, and where the table puts it at 15:52. It was
@@ -52,18 +54,30 @@ where it belongs.
 
 ## The ground
 
-**Two mounds in the middle**, with their peaks at (95, 84) and (86, 122): the
-two bright spots with rings of cracked texture around them. The southern peak
-is 25 cm west of the start, so **the rover starts on the eastern slope of a
-mound**, not on level ground.
+**Two mounds in the middle**, with their peaks at (94, 94) and (84, 137): the
+two bright spots with rings of cracked texture around them. The start is
+33 cm east and 16 cm north of the southern peak, so **the rover starts on that
+mound's north-eastern slope**, not on level ground.
 
 How high they are is not known. The stereo finds them in every pair of photos
-tried, in the same places to within 5 cm, but scaling its answer to centimetres gave
-anything from 5 to 24 cm depending only on the feature detector's settings.
+tried, but when this was first measured, scaling its answer to centimetres
+gave anything from 5 to 24 cm depending only on the feature detector's
+settings.
 
 The stereo also hints at raised back and west edges and a dip on the east
 side. Those did not survive the same settings check, so they are not recorded
 here as facts.
+
+## The simulator's floor
+
+The simulator draws the yard on a photo of its floor (AB#464), which the
+script writes to `mission-control/public/yards/curiosity/floor.webp`. No
+single photo would do: the ones without the rover were all taken before R4
+reached its spot. So it is the 15:52 photo, the only one with every rock where
+it stays, with the rover lifted out using a photo taken before it was put
+down, and the strip at the front that photo cut off filled from the others.
+Each borrowed photo's colours are matched to the 15:52 one on floor both can
+see, so the joins do not show.
 
 ## How it was measured
 
@@ -73,18 +87,19 @@ the phone, with only the GPS location removed from their metadata. The
 script runs on them with no arguments; its docstring says how to set it up
 and has the detail. In short:
 
-1. **Width.** The rover (185 x 200 mm) is in one photo. That photo is matched
-   into the one wide shot that shows all four floor corners, the back half of
-   the floor is straightened, and the rover's size in it gives the width.
-   It agrees with the tape to within 1%.
+1. **Width.** Taped. The rover (185 x 200 mm) is in one photo and checks it:
+   that photo is matched into the one wide shot that shows all four floor
+   corners, the back half of the floor is straightened, and the rover's size
+   in it gives the width again, within 1.5% of the tape.
 2. **Depth.** A rectangle seen through a known lens can only have one aspect
    ratio, so the phone's own lens gives north-south without a ruler. The
    floor's corners come out at 89.3 degrees, which checks both that they were
    picked in the right places and that the floor is a rectangle. For the back
-   half, the lens and the rover agree to within 4 cm.
-3. **Positions.** Every photo is straightened into the same coordinates, and
-   the rocks, the seam and the rover are read off a 1 cm grid. The rover
-   measures 18.5 x 20.5 cm on that map, which is its real size.
+   half, the lens and the rover agree to within 2 cm.
+3. **Positions.** Every photo is straightened into the same coordinates,
+   matched on points on the floor only, and the rocks, the seam and the rover
+   are read off a 1 cm grid. The rover measures 18.5 x 20.3 cm on that map,
+   which is its real size.
 4. **The ground.** There is no depth map in the photos (the phone saved only
    an HDR gain map). Photos taken seconds apart from different spots are a
    stereo pair, though: the middle of the floor is taken as flat, and
@@ -92,10 +107,25 @@ and has the detail. In short:
    below it.
 
 To check how far to trust each number, the whole thing was rerun with six
-different feature-detector settings. Width moved between 231.5 and 232.9 cm,
-depth between 247.8 and 249.4, the seam between 120.0 and 120.8, and the mound
-peaks by up to 5 cm. The heights in centimetres moved by a factor of
-four, which is why there are none above.
+different feature-detector settings. The rover's width moved between 233.2
+and 236.5 cm and the mound peaks by up to 3 cm. Depth and the seam do not move
+at all, because they come from the lens, the hand-picked corners and the
+tape, none of which the settings touch.
+
+## Corrections
+
+The first version of this page (AB#463) matched each photo into the wide shot
+on every feature the two had in common. Many of those were on the backdrop,
+which is flat and full of texture, and they pulled the match off the floor:
+one photo came out about 11 cm out in the middle of the yard. It was caught
+when that photo's pixels were patched into another for the simulator's floor
+and the seam between the floor boards did not line up. Matching on the floor
+alone, and scaling everything from the tape rather than the rover, moved:
+
+- the mound peaks by 10 to 15 cm, from (95, 84) and (86, 122), onto the bright
+  centres that can be seen in the photos;
+- R1 by 5 cm and R2 by 2 cm, and the rocks' sizes by up to 4 cm;
+- the seam by 1 cm, and the start spot with it.
 
 ## Limitations, and two minutes at the next visit
 
@@ -104,15 +134,14 @@ four, which is why there are none above.
 - **Positions along the back** sit on the backdrop's curved sweep, which
   rises, so they may be a centimetre or two off.
 - **The start spot is not marked** on the floor yet (AB#465).
+- **The floor photo has the rover patched out.** A photo straight down with
+  the rover out of the yard would replace the patch.
 
 ## What this changes
 
-The simulator's yard is 240 x 180 cm: 7 cm too wide and 69 cm too short. Today
-it calls the edge too early going north or south. These numbers are the input
-to AB#464 (the simulator shows the real yard), AB#465 (the start spot),
-AB#466 (catching crashes into rocks and walls) and AB#468 (zones and rocks
-per yard).
-
-One decision falls out for AB#465. The rover starts facing south, and the
-simulator starts it facing up the screen. Draw the yard with north up and the
-rover starts facing down, or turn the map round so that "forward" goes up.
+The simulator used a 240 x 180 cm yard that was picked for how it looked: 7 cm
+too wide and 69 cm too short, so it called the edge too early going north or
+south. Since AB#464 it drives in this yard, drawn north up on its floor photo,
+with the rover starting on the seam facing south, so down the screen. These
+numbers are also the input to AB#465 (marking the start spot), AB#466
+(catching crashes into rocks and walls) and AB#468 (zones and rocks per yard).

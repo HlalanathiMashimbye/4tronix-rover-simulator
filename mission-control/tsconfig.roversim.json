@@ -11,8 +11,9 @@
   // in each copy asking humans to mirror changes into the other.
   //
   // Deliberately tsc and not a bundler: these files import almost nothing
-  // at runtime (rover-physics and roverSimRender have zero imports; the other
-  // two have one local import and one type-only import that is erased), so a
+  // at runtime (rover-physics has none, roverSimRender takes the yard from
+  // rover-physics, and the other two have one local import and one type-only
+  // import that is erased), so a
   // bundler would buy nothing and add a dependency to a satellite that is
   // otherwise plain static files. Native ES modules are enough.
   //

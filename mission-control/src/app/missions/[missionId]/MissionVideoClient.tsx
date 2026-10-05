@@ -210,9 +210,9 @@ export default function MissionVideoClient({
         {/* Fixed at 60/40, video to code, and the number came from the
             simulator's geometry rather than taste.
 
-            The yard is a 400x300 world - 4:3 - letterboxed by computeLayout
-            inside whatever canvas it gets. So a WIDER panel makes it worse,
-            not better. Measured, at a 1400px viewport:
+            The yard is letterboxed by computeLayout inside whatever canvas it
+            gets, so a WIDER panel makes it worse, not better. Measured for the
+            old 4:3 yard, at a 1400px viewport:
 
               70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
               65/35  canvas 716x469 (1.53)  64px each side
@@ -224,6 +224,13 @@ export default function MissionVideoClient({
             what every player does and nobody remarks on it; a yard floating in
             grey with a hand's width of nothing down each side reads as a
             rendering fault, which is exactly how it was reported.
+
+            Since AB#464 the yard is the measured one, 233 x 249 cm, near
+            square, and the same viewport leaves 86px each side (canvas
+            819x711). It is drawn as a walled map on the panel's own ground
+            now, not floating in grey, so it reads as a frame rather than a
+            fault. Narrowing this track would win it back at the video's
+            expense, and was left for a decision of its own.
 
             The 320px floor on the right track keeps the code readable, so this
             does not squeeze the editor to buy the change.
