@@ -668,10 +668,8 @@ options = {}) {
         drawRockJolt(ctx, L, impact.rock, impact.away, motion.joltCm, floor, P);
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
-    // Under the rover, so at the moment of the crash the rover sits on it.
-    const crashedAt = crashMark(L, traj, playhead);
-    if (crashedAt)
-        drawCrashMark(ctx, L, crashedAt);
+    if (impact && motion)
+        drawCrashScar(ctx, L, impact);
     const current = interpolate(traj, playhead);
     /**
      * Odometer, in screen px, up to the playhead: how far the wheels have
@@ -692,8 +690,31 @@ options = {}) {
         ctx.translate(impact.away[0] * motion.recoilCm * L.s, impact.away[1] * motion.recoilCm * L.s);
     }
     drawRover(ctx, L, current, playhead, odo);
-    if (current.hitWall || current.hitRock) {
-        drawWallHit(ctx, L, current);
+    ctx.restore();
+    if (impact && motion)
+        drawImpact(ctx, L, impact, age, motion);
+    ctx.restore();
+}
+export function crashImpact(L, traj) {
+    const frame = crashFrame(traj);
+    if (frame < 0)
+        return null;
+    const point = traj[frame];
+    const [cx, cy] = roverToYard(point.x, point.y, L.yard);
+    const rock = point.hitRock ? L.yard.rocks.find((r) => r.name === point.hitRock) ?? null : null;
+    if (rock) {
+        // On the rock's edge, on the line to the rover: the side it was hit from.
+        const radius = rockRadius(rock);
+        const dx = cx - rock.x;
+        const dy = cy - rock.y;
+        const d = Math.hypot(dx, dy) || 1;
+        return {
+            frame,
+            contact: [rock.x + (dx / d) * radius, rock.y + (dy / d) * radius],
+            away: [dx / d, dy / d],
+            rock,
+            wall: null,
+        };
     }
     // The physics holds the rover's centre a fixed distance off whichever wall
     // stopped it, so that wall is the nearest one.
@@ -897,37 +918,6 @@ function drawImpact(ctx, L, impact, age, motion) {
             ctx.fill();
             ctx.stroke();
         }
-    }
-    ctx.restore();
-}
-/**
- * Where the run crashed, once the playhead has got there (AB#466), or null.
- *
- * Kept on screen after the moment has passed, so a learner who looked away,
- * or a run that backs off and carries on, still shows the spot the pre-flight
- * check is complaining about.
- */
-export function crashMark(L, traj, playhead) {
-    const frame = crashFrame(traj);
-    if (frame < 0 || playhead < frame)
-        return null;
-    return worldToScreen(L, traj[frame].x, traj[frame].y);
-}
-function drawCrashMark(ctx, L, at) {
-    const [x, y] = at;
-    const r = Math.max(6, 7 * L.s);
-    ctx.save();
-    ctx.lineCap = 'round';
-    for (const [colour, width] of [['rgba(20,8,2,0.6)', 5], ['rgba(239,68,68,0.95)', 3]]) {
-        ctx.strokeStyle = colour;
-        ctx.lineWidth = width;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.moveTo(x - r * 0.55, y - r * 0.55);
-        ctx.lineTo(x + r * 0.55, y + r * 0.55);
-        ctx.moveTo(x + r * 0.55, y - r * 0.55);
-        ctx.lineTo(x - r * 0.55, y + r * 0.55);
-        ctx.stroke();
     }
     ctx.restore();
 }
