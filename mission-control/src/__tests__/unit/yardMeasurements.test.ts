@@ -38,9 +38,8 @@ describe('the simulator yard against yard-measurements.md', () => {
   });
 
   it('draws the start mark at the size the doc tells a person to tape it', () => {
-    const [, behind, ahead, arrowhead] =
-      row('Start mark').match(/(\d+) cm behind, (\d+) cm ahead, (\d+) cm arrowhead/) ?? [];
-    expect({ behind: +behind, ahead: +ahead, arrowhead: +arrowhead }).toEqual(START_MARK_CM);
+    const [, arm] = row('Start mark').match(/cross, arms (\d+) cm/) ?? [];
+    expect({ arm: +arm }).toEqual(START_MARK_CM);
   });
 
   it('has every rock in the doc, where the doc puts it, at its size', () => {

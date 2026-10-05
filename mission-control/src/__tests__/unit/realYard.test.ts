@@ -109,13 +109,18 @@ describe('the yard on screen', () => {
     expect(y1).toBeCloseTo(y0 + 10, 6);
   });
 
-  it('draws the start mark on the start spot, its arrow pointing south past the nose', () => {
-    const { centre, tail, tip } = startMark(L);
+  it('draws the start mark as a cross on the start spot, reaching past the rover on every side', () => {
+    const { centre, tips } = startMark(L);
     expect(centre).toEqual(worldToScreen(L, 0, 0));
-    // South is down the screen; the rover's nose is 10 cm ahead of its centre.
-    expect(tip[0]).toBeCloseTo(centre[0], 6);
-    expect(tip[1] - centre[1]).toBeGreaterThan(10 * L.s);
-    expect(tail[1]).toBeLessThan(centre[1]);
+    // Four arms, each pointing no way more than another, and each longer than
+    // the rover's body reaches that way (10 cm ahead and behind, 9.25 aside),
+    // so the tips show around a parked rover.
+    const lengths = tips.map(([x, y]) => Math.hypot(x - centre[0], y - centre[1]));
+    expect(new Set(lengths.map((l) => l.toFixed(6))).size).toBe(1);
+    expect(lengths[0]).toBeGreaterThan(10 * L.s);
+    const [ahead, behind, right, left] = tips;
+    expect(ahead[0] + behind[0]).toBeCloseTo(2 * centre[0], 6);
+    expect(right[1] + left[1]).toBeCloseTo(2 * centre[1], 6);
   });
 
   it("draws the rover's right as screen left, west, for the same reason", () => {
