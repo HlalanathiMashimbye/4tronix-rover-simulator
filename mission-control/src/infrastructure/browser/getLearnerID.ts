@@ -1,50 +1,75 @@
-/**
- * Reusable Utility: getLearnerID()
- *
- * Automatically retrieves or generates a unique learner ID.
- * - Generates random unique ID using nanoid
- * - Stores in localStorage for persistence
- * - Reuses existing ID if found in storage
- * - Generates new ID if cache/localStorage is cleared
- *
- * Usage:
- *   const learnerId = getLearnerID();
- */
-
 import { nanoid } from 'nanoid';
 
 const LEARNER_ID_KEY = 'mars-rover-learner-id';
+const OLD_SESSION_KEY = 'mars-rover-session-id';
 
 /**
- * Get or create a unique learner ID
+ * Get or create a unique learner ID.
  *
- * @returns {string} The learner ID (either existing or newly generated)
+ * On first call in a browser that has the old session key but no learner key,
+ * the session's nanoid is adopted so the learner keeps their existing identity.
  */
 export function getLearnerID(): string {
-  // Check if localStorage is available
   if (typeof window === 'undefined') {
     throw new Error('getLearnerID can only be called in browser context');
   }
 
   try {
-    // Try to retrieve existing ID from localStorage
     const existingId = localStorage.getItem(LEARNER_ID_KEY);
 
     if (existingId && existingId.length > 0) {
+      migrateOldSessionKey();
       return existingId;
     }
 
-    // Generate new unique ID
-    const newId = nanoid(21); // 21 chars = ~149 bits of entropy (collision-resistant)
+    // No learner key — check for the old session key before minting a new id.
+    const migrated = migrateOldSessionKey();
+    if (migrated) return migrated;
 
-    // Store in localStorage
+    const newId = nanoid(21);
     localStorage.setItem(LEARNER_ID_KEY, newId);
-
     return newId;
   } catch (error) {
-    // Fallback: generate temporary ID (won't persist)
     console.warn('localStorage unavailable, using temporary learner ID (will not persist):', error);
     return nanoid(21);
+  }
+}
+
+/**
+ * If the old `mars-rover-session-id` key exists, extract its nanoid and — when
+ * no learner key is set yet — adopt it as the learner ID. The old key is
+ * removed either way so only one identity remains.
+ *
+ * Returns the adopted id when it was written, null otherwise.
+ */
+function migrateOldSessionKey(): string | null {
+  try {
+    const raw = localStorage.getItem(OLD_SESSION_KEY);
+    if (!raw) return null;
+
+    let sessionId: string | null = null;
+    try {
+      const parsed = JSON.parse(raw);
+      sessionId = parsed?.sessionId ?? null;
+    } catch {
+      // Not JSON — treat as plain string (defensive).
+      if (raw.length > 0) sessionId = raw;
+    }
+
+    localStorage.removeItem(OLD_SESSION_KEY);
+
+    if (!sessionId || sessionId.length === 0) return null;
+
+    // Only adopt when the learner key is absent — if both exist the learner
+    // key wins because missions were hashed from it.
+    if (!localStorage.getItem(LEARNER_ID_KEY)) {
+      localStorage.setItem(LEARNER_ID_KEY, sessionId);
+      return sessionId;
+    }
+
+    return null;
+  } catch {
+    return null;
   }
 }
 
