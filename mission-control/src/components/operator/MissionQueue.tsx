@@ -326,9 +326,10 @@ function YardQueue({
   /**
    * Each waiting mission's place in arrival order, oldest visible = 1.
    *
-   * The list shows newest first, so the row index would hand #1 to the mission
-   * that arrived last. The number is what a child at the desk asks about ("how
-   * many are before mine?"), so it keeps meaning order of arrival.
+   * The query delivers newest first and the operator can re-sort the list,
+   * so neither order is the row index. The number is what a child at the
+   * desk asks about ("how many are before mine?"), so it keeps meaning order
+   * of arrival whatever the list is sorted by.
    */
   const arrivalPosition = useMemo(() => {
     const positions = new Map<string, number>();

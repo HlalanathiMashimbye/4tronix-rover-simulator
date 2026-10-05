@@ -38,13 +38,16 @@ const waiting = (n: number) =>
   }));
 
 describe('the queue query, at the cap', () => {
-  it('keeps the oldest waiting missions at the front and drops the stale end when full', () => {
-    snapshotDocs = waiting(QUEUE_LIMIT + 1);
+  it('keeps the newest when full, drops the stale end, and says so', () => {
+    // As Firestore delivers them for a newest-first query.
+    snapshotDocs = waiting(QUEUE_LIMIT + 1).reverse();
     const onMissions = jest.fn();
     subscribeToYardQueue('curiosity', onMissions, () => {});
     const [missions, olderHidden] = onMissions.mock.calls[0];
     expect(missions).toHaveLength(QUEUE_LIMIT);
-    expect(missions[0].submittedAt).toBe('2026-09-26T12:00:00Z');
+    const ids = missions.map((m: { id: string }) => m.id);
+    expect(ids).toContain(`m${QUEUE_LIMIT}`); // the newest arrival is on screen
+    expect(ids).not.toContain('m0'); // the oldest is the one left out
     expect(olderHidden).toBe(true);
   });
 

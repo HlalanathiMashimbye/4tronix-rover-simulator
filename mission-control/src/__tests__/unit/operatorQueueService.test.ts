@@ -72,9 +72,13 @@ describe('the query', () => {
     expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT + 1);
   });
 
-  it('orders the queue by oldest waiting mission first, so the front of the queue is the next job', () => {
+  it('orders newest first, so the cap drops the stale end and never new work', () => {
+    // It was oldest first, which hid every new mission once 50 were waiting
+    // (3 Oct 2026), and #259 briefly made it so again. Showing the next job
+    // at the top is the console's sort, not this query: see
+    // operatorQueueNewestFirstView.test.tsx.
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'asc');
+    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'desc');
   });
 
   it('returns the unsubscribe handle so a yard switch tears down', () => {

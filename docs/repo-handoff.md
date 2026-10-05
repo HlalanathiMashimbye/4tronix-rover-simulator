@@ -55,14 +55,13 @@ the login step.
    - `docs/prod-staging-split-plan`, Werner's draft PR #186.
    - `fix/cloud-run-request-cpu`, draft PR #240 (Cloud Run billed per
      request).
-   - `472-live-queue`, PR #259 (live queue sorting).
 
-   Merging or closing #240 and #259 on the fork before the handoff leaves
-   less to carry. Push whichever are still open.
+   Merging or closing #240 on the fork before the handoff leaves less to
+   carry. Push it only if it is still open.
 
    ```bash
    git push upstream main feat/challenges docs/prod-staging-split-plan \
-     fix/cloud-run-request-cpu 472-live-queue
+     fix/cloud-run-request-cpu
    ```
 
 3. **Copy the Actions variables.** There are 19, and no secrets: everything
@@ -129,7 +128,7 @@ the login step.
 
 8. **Reopen the open PRs on upstream.** Pull requests do not move with a
    merge. #186 matters most, because its discussion is the prod/staging plan;
-   do the same for #240 and #259 if they are still open. Their branches are
+   do the same for #240 if it is still open. Their branches are
    pushed in step 2; link each old PR from its new one so the comments are not
    lost.
 
