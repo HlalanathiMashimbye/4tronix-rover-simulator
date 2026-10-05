@@ -38,12 +38,13 @@ const waiting = (n: number) =>
   }));
 
 describe('the queue query, at the cap', () => {
-  it('says when older missions were left out, and shows only the cap', () => {
+  it('keeps the oldest waiting missions at the front and drops the stale end when full', () => {
     snapshotDocs = waiting(QUEUE_LIMIT + 1);
     const onMissions = jest.fn();
     subscribeToYardQueue('curiosity', onMissions, () => {});
     const [missions, olderHidden] = onMissions.mock.calls[0];
     expect(missions).toHaveLength(QUEUE_LIMIT);
+    expect(missions[0].submittedAt).toBe('2026-09-26T12:00:00Z');
     expect(olderHidden).toBe(true);
   });
 

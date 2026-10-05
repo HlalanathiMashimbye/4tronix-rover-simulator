@@ -67,6 +67,24 @@ async function openMission() {
 }
 
 describe('a queued mission', () => {
+  it('shows the waiting status with the submission date and time', async () => {
+    const submittedAt = '2026-10-05T14:32:00Z';
+    emitQueue([{ ...MISSION, submittedAt }]);
+
+    const expected = new Date(submittedAt).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    expect(await screen.findByText(`Waiting · ${expected}`)).toBeInTheDocument();
+  });
+
   it('opens from its row, which carries no buttons of its own', async () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 

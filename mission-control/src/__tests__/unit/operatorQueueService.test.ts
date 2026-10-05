@@ -72,12 +72,9 @@ describe('the query', () => {
     expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT + 1);
   });
 
-  it('orders newest first, so the cap drops the stale end and never new work', () => {
-    // It was oldest first, which hid every new mission once 50 were waiting
-    // (3 Oct 2026). The operator chooses what to run, so the order is theirs
-    // to read: see operatorQueueNewestFirst.test.tsx.
+  it('orders the queue by oldest waiting mission first, so the front of the queue is the next job', () => {
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'desc');
+    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'asc');
   });
 
   it('returns the unsubscribe handle so a yard switch tears down', () => {

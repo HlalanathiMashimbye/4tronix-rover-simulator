@@ -132,7 +132,7 @@ export function subscribeToYardQueue(
     collection(db, 'missions'),
     where('yardId', '==', yardId),
     where('status', 'in', ACTIVE_STATUSES),
-    orderBy('submittedAt', 'desc'),
+    orderBy('submittedAt', 'asc'),
     // One past the cap, to know whether anything older was left out.
     limit(QUEUE_LIMIT + 1),
   );
