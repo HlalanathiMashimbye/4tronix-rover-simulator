@@ -17,11 +17,14 @@ count before relying on it, because the fork keeps moving.
 
 ## Before the merge
 
-- [ ] **Bring in upstream's three commits.** Upstream has three commits the
-      fork never took (MacBook satellite mode, a `mac-env/` ignore, and a
-      CHANGELOG plus a `start-mac.sh` fix), and is 564 commits behind the fork.
-      Merge `upstream/main` into the fork first so the handoff itself is a
-      fast-forward, not a conflict resolved in a hurry.
+- [x] **Bring in upstream's three commits.** Done on 5 Oct 2026: MacBook
+      satellite mode, the `mac-env/` ignore and the CHANGELOG plus
+      `start-mac.sh` fix are merged, so the handoff is a fast-forward. His
+      separate Mac camera server was not kept, because the fork's
+      `camera_server.py` already does that job; his camera list and launcher
+      now drive it. The CHANGELOG entry says what moved where, so David can
+      see his work landed. If upstream gains commits before the handoff,
+      repeat this:
 
       ```bash
       git fetch upstream && git log --oneline origin/main..upstream/main

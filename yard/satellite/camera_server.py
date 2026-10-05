@@ -134,7 +134,7 @@ def setup_webcam(index=None):
                 logger.warning(
                     f"No camera at index {index}. On macOS this is usually permission "
                     "rather than hardware: whichever app launched the satellite needs "
-                    "Camera access. Set CAMERA_INDEX to try a different device."
+                    "Camera access. Or pick another camera on Settings."
                 )
             else:
                 logger.warning(f"No camera at index {index}. Set CAMERA_INDEX to try another.")

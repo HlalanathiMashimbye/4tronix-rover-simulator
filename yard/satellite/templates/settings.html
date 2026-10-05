@@ -216,8 +216,8 @@
 
         .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
         .camera-controls .btn { min-height: 34px; padding: 0.3rem 0.65rem; font-size: var(--fs-xs); }
-        .camera-index-label { color: var(--text-faint); font-size: var(--fs-xs); }
-        .camera-index { width: 58px; min-height: 34px; padding: 0.25rem 0.45rem; }
+        .camera-source-label { color: var(--text-faint); font-size: var(--fs-xs); }
+        .camera-source { max-width: 14rem; min-height: 34px; padding: 0.25rem 0.45rem; }
         .camera-managed { color: var(--text-faint); font-size: 0.68rem; font-family: var(--mono); }
         .camera-msg { margin-top: 0.4rem; font-size: var(--fs-xs); color: var(--text-dim); min-height: 1.1em; }
         .camera-msg[data-tone="bad"] { color: var(--bad); }
@@ -417,7 +417,7 @@
            all well under the 44px a finger needs. */
         @media (pointer: coarse) {
             .shell .btn { min-height: 44px; }
-            .camera-index { min-height: 44px; }
+            .camera-source { min-height: 44px; }
             .link-btn { min-height: 44px; padding: 0 0.5rem; }
             .info-tip { min-width: 44px; min-height: 44px; }
             .sync-input-row input { min-height: 44px; }
@@ -504,8 +504,12 @@
                     <div class="camera-controls">
                         <button class="btn" id="camera-start">Start</button>
                         <button class="btn" id="camera-stop">Stop</button>
-                        <label class="camera-index-label" for="camera-index">Device</label>
-                        <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
+                        <!-- Only where the satellite can name its cameras (a Mac).
+                             There was a device-number field here; on the Pi
+                             it did nothing and elsewhere nobody knew what it
+                             meant. CAMERA_INDEX still sets it for a developer. -->
+                        <label class="camera-source-label" for="camera-source" hidden>Camera</label>
+                        <select class="camera-source" id="camera-source" hidden></select>
                         <span class="camera-managed" id="camera-managed"></span>
                     </div>
                     <!-- Only appears when the camera has something to say. -->
@@ -639,7 +643,6 @@
         // and a terminal, which at an event means finding a laptop.
         const camStart = document.getElementById('camera-start');
         const camStop = document.getElementById('camera-stop');
-        const camIndex = document.getElementById('camera-index');
         const camMsg = document.getElementById('camera-msg');
         const camManaged = document.getElementById('camera-managed');
 
@@ -694,7 +697,44 @@
             }
         }
 
-        camStart.onclick = () => cameraAction('start', { cameraIndex: Number(camIndex.value) });
+        // A Mac has several cameras - built-in, Continuity Camera, Desk View -
+        // so it gets a list of them by name (David's MacBook mode had this on
+        // /status). Everywhere else there is nothing to choose and nothing is
+        // shown: Start restarts whichever camera the satellite already uses.
+        const camSource = document.getElementById('camera-source');
+        const camSourceLabel = document.querySelector('label[for="camera-source"]');
+        // Last index the status reported, so a list that arrives after it
+        // still opens on the right name.
+        let camCurrentIndex = null;
+
+        camStart.onclick = () => cameraAction('start',
+            camSource.hidden ? {} : { cameraIndex: Number(camSource.value) });
+
+        function paintDevices(data) {
+            if (!data || !data.available || !data.devices || !data.devices.length) return;
+            // Built as elements, never as an HTML string: the names come from
+            // whatever is plugged in.
+            camSource.replaceChildren(...data.devices.map((d) => {
+                const opt = document.createElement('option');
+                opt.value = String(d.index);
+                opt.textContent = d.name;
+                return opt;
+            }));
+            if (camCurrentIndex !== null) camSource.value = String(camCurrentIndex);
+            camSource.hidden = false;
+            camSourceLabel.hidden = false;
+        }
+
+        camSource.onchange = () => {
+            cameraAction('start', { cameraIndex: Number(camSource.value) });
+        };
+
+        // Once, not on the status clock: cameras are rarely plugged in while
+        // the page is open, and a reload picks up the ones that are.
+        fetch('/operator/api/camera/devices')
+            .then((r) => r.json())
+            .then(paintDevices)
+            .catch(() => {});
         camStop.onclick = () => cameraAction('stop');
 
         // Painted from the shared status, not from a poll of its own.
@@ -706,7 +746,10 @@
         // fine while the run station refuses to record.
         function paintCamera(cam) {
             if (!cam) return;
-            if (typeof cam.cameraIndex === 'number') camIndex.value = cam.cameraIndex;
+            if (typeof cam.cameraIndex === 'number') {
+                camCurrentIndex = cam.cameraIndex;
+                if (!camSource.hidden) camSource.value = String(cam.cameraIndex);
+            }
             camStart.textContent = cam.listening ? 'Restart camera' : 'Start camera';
             camStop.hidden = !cam.listening;
             // Worth showing: on the Pi systemd owns the lifecycle and will

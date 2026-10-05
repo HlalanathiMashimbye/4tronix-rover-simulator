@@ -451,3 +451,138 @@ def test_a_value_above_the_slider_says_the_real_number(page: Page, live_server):
 
     page.wait_for_function(
         "document.getElementById('tunMsg').textContent.includes('In force: 7.5s')")
+
+
+# --- Camera picked by name ---------------------------------------------------
+# David's MacBook mode had a dropdown of named cameras on /status; it lives on
+# the Settings camera card now, fed by /operator/api/camera/devices.
+
+def mock_devices(page, payload):
+    page.route('**/operator/api/camera/devices', lambda route: route.fulfill(
+        status=200, content_type='application/json', body=json.dumps(payload)))
+
+
+MAC_CAMERAS = {'available': True, 'devices': [
+    {'index': 0, 'name': 'FaceTime HD Camera'},
+    {'index': 1, 'name': 'iPhone Camera'},
+]}
+
+
+def test_a_mac_picks_its_camera_by_name_not_by_number(page: Page, live_server):
+    mock_status(page, camera={'reachable': True, 'port': 8890, 'cameraIndex': 1})
+    mock_devices(page, MAC_CAMERAS)
+    page.goto(f'{live_server}/settings')
+    picker = page.locator('#camera-source')
+    picker.wait_for(state='visible')
+    assert picker.locator('option').all_text_contents() == ['FaceTime HD Camera', 'iPhone Camera']
+    assert page.locator('label[for="camera-source"]').is_visible()
+    # The camera's current index is the one shown selected.
+    page.wait_for_function("document.getElementById('camera-source').value === '1'")
+
+
+def test_picking_a_camera_restarts_it_on_that_index(page: Page, live_server):
+    mock_status(page)
+    mock_devices(page, MAC_CAMERAS)
+    sent = []
+
+    def start(route):
+        sent.append(json.loads(route.request.post_data or '{}'))
+        route.fulfill(status=200, content_type='application/json', body='{"status":"ok"}')
+    page.route('**/operator/api/camera/start', start)
+    page.route('**/operator/api/camera', lambda route: route.fulfill(
+        status=200, content_type='application/json', body='{"listening": true}'))
+
+    page.goto(f'{live_server}/settings')
+    page.locator('#camera-source').wait_for(state='visible')
+    page.select_option('#camera-source', '1')
+    page.wait_for_function("document.getElementById('camera-msg').textContent === 'Camera is up.'")
+    assert sent == [{'cameraIndex': 1}]
+
+
+def _capture_starts(page):
+    sent = []
+
+    def start(route):
+        sent.append(json.loads(route.request.post_data or '{}'))
+        route.fulfill(status=200, content_type='application/json', body='{"status":"ok"}')
+    page.route('**/operator/api/camera/start', start)
+    page.route('**/operator/api/camera', lambda route: route.fulfill(
+        status=200, content_type='application/json', body='{"listening": true}'))
+    return sent
+
+
+def test_a_machine_that_cannot_name_cameras_shows_no_camera_choice(page: Page, live_server):
+    """There used to be a device-number field here. On the Pi it did nothing
+    and nobody knew what it meant, so where there are no names there is no
+    choice at all, and Start restarts the camera the satellite already uses."""
+    mock_status(page)
+    mock_devices(page, {'available': False, 'devices': []})
+    sent = _capture_starts(page)
+    page.goto(f'{live_server}/settings')
+    page.wait_for_load_state('networkidle')
+    assert page.locator('#camera-source').is_hidden()
+    assert page.locator('label[for="camera-source"]').is_hidden()
+    assert page.locator('#card-camera input[type="number"]').count() == 0
+
+    page.click('#camera-start')
+    page.wait_for_function("document.getElementById('camera-msg').textContent === 'Camera is up.'")
+    assert sent == [{}]
+
+
+def test_start_on_a_mac_restarts_the_camera_showing_in_the_list(page: Page, live_server):
+    mock_status(page, camera={'reachable': True, 'port': 8890, 'cameraIndex': 1})
+    mock_devices(page, MAC_CAMERAS)
+    sent = _capture_starts(page)
+    page.goto(f'{live_server}/settings')
+    page.wait_for_function("document.getElementById('camera-source').value === '1'")
+    page.click('#camera-start')
+    page.wait_for_function("document.getElementById('camera-msg').textContent === 'Camera is up.'")
+    assert sent == [{'cameraIndex': 1}]
+
+
+def test_a_camera_name_is_shown_as_text_never_as_markup(page: Page, live_server):
+    mock_status(page)
+    mock_devices(page, {'available': True, 'devices': [
+        {'index': 0, 'name': '<img src=x onerror="window.pwned=1">Cam'}]})
+    page.goto(f'{live_server}/settings')
+    page.locator('#camera-source').wait_for(state='visible')
+    assert page.locator('#camera-source option').all_text_contents() == [
+        '<img src=x onerror="window.pwned=1">Cam']
+    assert page.locator('#camera-source img').count() == 0
+
+
+def test_the_picker_follows_the_camera_when_its_index_changes_later(page: Page, live_server):
+    """The page paints the picker once but the status every few seconds; a
+    restart from elsewhere must move the selection, not leave it stale."""
+    camera = {'reachable': True, 'port': 8890, 'cameraIndex': 0}
+
+    def status(route):
+        route.fulfill(status=200, content_type='application/json', body=json.dumps({
+            'satellite': {'hostname': 'testhost', 'ip': '1.2.3.4'},
+            'rover': {'reachable': False, 'driver': None, 'queue_size': None, 'url': 'http://x'},
+            'camera': camera,
+        }))
+    page.route('**/api/status', status)
+    mock_devices(page, MAC_CAMERAS)
+    page.goto(f'{live_server}/settings')
+    page.wait_for_function("document.getElementById('camera-source').value === '0'")
+
+    camera['cameraIndex'] = 1
+    page.evaluate('YardStatus.refreshNow()')
+    page.wait_for_function("document.getElementById('camera-source').value === '1'", timeout=5000)
+
+
+def test_a_list_that_arrives_after_the_status_opens_on_the_current_camera(page: Page, live_server):
+    """The two requests race. When the status wins, the list has to open on the
+    camera in use, not on the first name, or Start would switch camera."""
+    mock_status(page, camera={'reachable': True, 'port': 8890, 'cameraIndex': 1})
+    held = []
+    page.route('**/operator/api/camera/devices', lambda route: held.append(route))
+    page.goto(f'{live_server}/settings')
+    wait_for_badge(page, 'camera')  # the status has painted; the list has not
+    assert held, 'the page never asked for the camera list'
+    held[0].fulfill(status=200, content_type='application/json', body=json.dumps(MAC_CAMERAS))
+    page.locator('#camera-source').wait_for(state='visible')
+    # Short timeout: the status poll repainting a few seconds later must not be
+    # what makes this pass.
+    page.wait_for_function("document.getElementById('camera-source').value === '1'", timeout=1000)
