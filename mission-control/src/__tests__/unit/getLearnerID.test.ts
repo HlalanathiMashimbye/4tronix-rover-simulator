@@ -120,4 +120,53 @@ describe('getLearnerID Utility', () => {
       expect(calls.every((id) => id === originalId)).toBe(true);
     });
   });
+
+  describe('migration from mars-rover-session-id', () => {
+    const OLD_KEY = 'mars-rover-session-id';
+    const NEW_KEY = 'mars-rover-learner-id';
+
+    it('adopts session id when only the old key exists', () => {
+      const oldSession = JSON.stringify({
+        sessionId: 'old-session-nanoid-12345',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        fingerprint: 'abc',
+      });
+      localStorage.setItem(OLD_KEY, oldSession);
+
+      const id = getLearnerID();
+
+      expect(id).toBe('old-session-nanoid-12345');
+      expect(localStorage.getItem(NEW_KEY)).toBe('old-session-nanoid-12345');
+      expect(localStorage.getItem(OLD_KEY)).toBeNull();
+    });
+
+    it('keeps learner id when both keys exist', () => {
+      localStorage.setItem(NEW_KEY, 'existing-learner-id');
+      localStorage.setItem(OLD_KEY, JSON.stringify({
+        sessionId: 'old-session-id',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }));
+
+      const id = getLearnerID();
+
+      expect(id).toBe('existing-learner-id');
+      expect(localStorage.getItem(OLD_KEY)).toBeNull();
+    });
+
+    it('generates a new id when neither key exists', () => {
+      const id = getLearnerID();
+
+      expect(id).toBeDefined();
+      expect(id.length).toBe(21);
+      expect(localStorage.getItem(OLD_KEY)).toBeNull();
+    });
+
+    it('returns existing learner id when only the new key exists', () => {
+      localStorage.setItem(NEW_KEY, 'my-learner-id');
+
+      const id = getLearnerID();
+
+      expect(id).toBe('my-learner-id');
+    });
+  });
 });
