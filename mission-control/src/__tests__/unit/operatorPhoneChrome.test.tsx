@@ -153,7 +153,9 @@ describe('the queue screen on a phone', () => {
     expect(rows.queryByText('processing')).not.toBeInTheDocument();
     expect(rows.queryByText('queued')).not.toBeInTheDocument();
     // A waiting mission says when it arrived, in the operator's clock.
-    expect(rows.getByText(/^Sent \d{2}:\d{2}/)).toBeInTheDocument();
+    const rockLover = screen.getByRole('button', { name: /rock lover/i });
+    expect(within(rockLover).getByText(/Waiting/i)).toBeInTheDocument();
+    expect(within(rockLover).getByText(/\d{2}[:.]\d{2}/)).toBeInTheDocument();
   });
 });
 
