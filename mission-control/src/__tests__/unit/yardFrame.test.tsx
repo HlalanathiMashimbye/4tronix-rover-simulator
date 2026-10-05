@@ -78,7 +78,8 @@ it('gives every footer the same fixed slot, outside the yard', () => {
   const drive = slotFor(<DriveFooter onResetPosition={() => {}} />);
   const short = slotFor(<p>one line</p>);
   expect(drive.inFrame).toBe(false);
-  expect(drive.className).toMatch(/\bh-\[/);
+  // Its size is the simFooter rule's (globals.css), the same for every footer.
+  expect(drive.className).toContain('simFooter');
   expect(short.className).toBe(drive.className);
 });
 

@@ -722,6 +722,17 @@
   }
 }
 
+/* Tablets and narrow laptop windows: the same 3:2 split, build over
+   simulator, for the same reason as the phone rule above but a later one.
+   Left to auto, these rows were sized by their content, so the simulator's
+   row was a different height in Drive, Blocks and Python. Its yard is sized
+   from that row (AB#464), and must be one size in every mode. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+
 @media (min-width: 1024px) {
   .workspaceSplitGrid {
     align-items: stretch;
@@ -915,6 +926,50 @@
 @keyframes rover-marker-nudge {
   0%, 100% { transform: translateX(0); }
   50% { transform: translateX(2px); }
+}
+
+/*
+ * The simulator card (RoverSimulator, AB#464): its yard over a footer slot of
+ * one fixed size, so the yard is the same size in every mode.
+ *
+ * Over, unless the card is much wider than it is tall. That is the shape it
+ * takes under the editor in the stacked layout (narrow laptop windows,
+ * tablets), where a 108px footer under the yard left the yard 5px of a 179px
+ * card. Beside it, the yard gets the card's whole height and the footer a
+ * fixed width, which keeps it one size there too. An aspect-ratio container
+ * query, because width alone cannot tell a wide card from a big one.
+ */
+.simCard {
+  container: sim / size;
+}
+.simBody {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+.simFooter {
+  height: 6.75rem;
+}
+@container sim (min-aspect-ratio: 3 / 2) {
+  .simBody {
+    flex-direction: row;
+  }
+  /* The yard exactly as wide as its height allows, and the footer the rest.
+     A fixed footer width left the yard centred in a wide space, with empty
+     ground either side of it. The yard's size still depends only on the
+     row's height, so it is the same in every mode. */
+  .simBody > [data-yard-frame-space] {
+    flex: 0 0 auto;
+    height: 100%;
+    aspect-ratio: var(--yard-ratio);
+  }
+  .simFooter {
+    flex: 1 1 0;
+    height: auto;
+    min-width: 16rem;
+  }
 }
 
 /*
