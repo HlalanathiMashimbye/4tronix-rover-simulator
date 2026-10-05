@@ -263,54 +263,47 @@ function paintTerrain(ctx, L, P, floor) {
     drawStartMark(ctx, L);
 }
 /**
- * The start mark (AB#465), in the rover's frame: a strip of tape crossing the
- * seam where the rover's centre goes, its arrow pointing the way the rover
- * faces. In centimetres. yard/docs/yard-measurements.md tells a person how to
- * tape it from the same numbers, and yardMeasurements.test.ts holds the two
- * together, so the mark on screen is the mark on the floor.
+ * The start mark (AB#465): a cross of tape where the rover's centre goes, one
+ * arm along the seam and one across it. In centimetres. yard-measurements.md
+ * tells a person how to tape it from the same number, and
+ * yardMeasurements.test.ts holds the two together, so the mark on screen is
+ * the mark on the floor.
  *
- * The arrow runs past the rover's nose (it is 20 cm long, so its nose is 10 cm
- * ahead of its centre), so with the rover parked on it the arrow still shows
- * in front: on screen, and on the floor, where that is what lines the rover up.
+ * A CROSS, NOT AN ARROW. It was an arrow pointing the way the rover faces,
+ * and an arrow reads as "drive this way" when a mission can just as well start
+ * by reversing. Which way the rover faces is said in words instead, "facing
+ * the front wall", which in the room is unmistakable.
+ *
+ * Each arm runs 14 cm from the centre, past the rover's body on every side
+ * (it is 20 x 18.5 cm), so with the rover parked on it all four tips show:
+ * that is what centres it, on screen and on the floor.
  */
-export const START_MARK_CM = { behind: 12, ahead: 20, arrowhead: 5 };
-const START_MARK_BEHIND_CM = START_MARK_CM.behind;
-const START_MARK_AHEAD_CM = START_MARK_CM.ahead;
-const START_MARK_HEAD_CM = START_MARK_CM.arrowhead;
-/** Where the start mark's centre, tail and arrow tip are on screen. */
+export const START_MARK_CM = { arm: 14 };
+/** Where the start mark's centre and the tips of its four arms are on screen. */
 export function startMark(L) {
+    const arm = START_MARK_CM.arm;
     return {
         centre: worldToScreen(L, 0, 0),
-        tail: worldToScreen(L, 0, -START_MARK_BEHIND_CM),
-        tip: worldToScreen(L, 0, START_MARK_AHEAD_CM),
+        tips: [worldToScreen(L, 0, arm), worldToScreen(L, 0, -arm), worldToScreen(L, arm, 0), worldToScreen(L, -arm, 0)],
     };
 }
 function drawStartMark(ctx, L) {
-    const { centre, tail, tip } = startMark(L);
-    // The arrowhead's two barbs, back from the tip and either side of the strip.
-    const left = worldToScreen(L, -START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
-    const right = worldToScreen(L, START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
+    const { tips } = startMark(L);
+    const [ahead, behind, right, left] = tips;
     const width = Math.max(2, 2.5 * L.s);
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     // A dark edge first, so the tape reads on the bright parts of the floor.
     for (const [colour, extra] of [['rgba(20,8,2,0.55)', 2], ['rgba(52,211,153,0.95)', 0]]) {
         ctx.strokeStyle = colour;
         ctx.lineWidth = width + extra;
         ctx.beginPath();
-        ctx.moveTo(tail[0], tail[1]);
-        ctx.lineTo(tip[0], tip[1]);
+        ctx.moveTo(behind[0], behind[1]);
+        ctx.lineTo(ahead[0], ahead[1]);
         ctx.moveTo(left[0], left[1]);
-        ctx.lineTo(tip[0], tip[1]);
         ctx.lineTo(right[0], right[1]);
         ctx.stroke();
     }
-    // Where the rover's centre goes.
-    ctx.fillStyle = 'rgba(52,211,153,0.95)';
-    ctx.beginPath();
-    ctx.arc(centre[0], centre[1], Math.max(2.5, 1.6 * L.s), 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
 }
 function drawTrail(ctx, L, traj, endIdx, P) {
@@ -675,8 +668,10 @@ options = {}) {
         drawRockJolt(ctx, L, impact.rock, impact.away, motion.joltCm, floor, P);
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
-    if (impact && motion)
-        drawCrashScar(ctx, L, impact);
+    // Under the rover, so at the moment of the crash the rover sits on it.
+    const crashedAt = crashMark(L, traj, playhead);
+    if (crashedAt)
+        drawCrashMark(ctx, L, crashedAt);
     const current = interpolate(traj, playhead);
     /**
      * Odometer, in screen px, up to the playhead: how far the wheels have
@@ -697,31 +692,8 @@ options = {}) {
         ctx.translate(impact.away[0] * motion.recoilCm * L.s, impact.away[1] * motion.recoilCm * L.s);
     }
     drawRover(ctx, L, current, playhead, odo);
-    ctx.restore();
-    if (impact && motion)
-        drawImpact(ctx, L, impact, age, motion);
-    ctx.restore();
-}
-export function crashImpact(L, traj) {
-    const frame = crashFrame(traj);
-    if (frame < 0)
-        return null;
-    const point = traj[frame];
-    const [cx, cy] = roverToYard(point.x, point.y, L.yard);
-    const rock = point.hitRock ? L.yard.rocks.find((r) => r.name === point.hitRock) ?? null : null;
-    if (rock) {
-        // On the rock's edge, on the line to the rover: the side it was hit from.
-        const radius = rockRadius(rock);
-        const dx = cx - rock.x;
-        const dy = cy - rock.y;
-        const d = Math.hypot(dx, dy) || 1;
-        return {
-            frame,
-            contact: [rock.x + (dx / d) * radius, rock.y + (dy / d) * radius],
-            away: [dx / d, dy / d],
-            rock,
-            wall: null,
-        };
+    if (current.hitWall || current.hitRock) {
+        drawWallHit(ctx, L, current);
     }
     // The physics holds the rover's centre a fixed distance off whichever wall
     // stopped it, so that wall is the nearest one.
@@ -925,6 +897,37 @@ function drawImpact(ctx, L, impact, age, motion) {
             ctx.fill();
             ctx.stroke();
         }
+    }
+    ctx.restore();
+}
+/**
+ * Where the run crashed, once the playhead has got there (AB#466), or null.
+ *
+ * Kept on screen after the moment has passed, so a learner who looked away,
+ * or a run that backs off and carries on, still shows the spot the pre-flight
+ * check is complaining about.
+ */
+export function crashMark(L, traj, playhead) {
+    const frame = crashFrame(traj);
+    if (frame < 0 || playhead < frame)
+        return null;
+    return worldToScreen(L, traj[frame].x, traj[frame].y);
+}
+function drawCrashMark(ctx, L, at) {
+    const [x, y] = at;
+    const r = Math.max(6, 7 * L.s);
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const [colour, width] of [['rgba(20,8,2,0.6)', 5], ['rgba(239,68,68,0.95)', 3]]) {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.moveTo(x - r * 0.55, y - r * 0.55);
+        ctx.lineTo(x + r * 0.55, y + r * 0.55);
+        ctx.moveTo(x + r * 0.55, y - r * 0.55);
+        ctx.lineTo(x - r * 0.55, y + r * 0.55);
+        ctx.stroke();
     }
     ctx.restore();
 }

@@ -10,7 +10,7 @@
 
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, rockTouching, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeLayout, crashImpact, crashMotion } from '@/lib/roverSimRender';
+import { computeLayout, crashMark, worldToScreen } from '@/lib/roverSimRender';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import type { SimulationCommand } from '@/lib/roverBlockly';
@@ -90,51 +90,18 @@ describe('the no-crash pre-flight check', () => {
 
 describe('the crash on screen', () => {
   const L = computeLayout(YARD.widthCm, YARD.depthCm);
-  const R4 = YARD.rocks.find((rock) => rock.name === 'R4')!;
 
-  it('puts the impact on the rock, on the side the rover hit it from', () => {
+  it('marks the spot once the playhead reaches it, and keeps it after', () => {
     const run = towardsR4();
-    const impact = crashImpact(L, run)!;
-    expect(impact.rock?.name).toBe('R4');
-    expect(impact.frame).toBe(findCrash(run)!.frame);
-    // On the rock's edge...
-    const [x, y] = impact.contact;
-    expect(Math.hypot(x - R4.x, y - R4.y)).toBeCloseTo(Math.max(R4.widthCm, R4.depthCm) / 2, 6);
-    // ...facing the start, where the rover came from (north-west of R4).
-    expect(x).toBeLessThan(R4.x);
-    expect(y).toBeLessThan(R4.y);
-    expect(Math.hypot(...impact.away)).toBeCloseTo(1, 9);
+    const frame = findCrash(run)!.frame;
+    expect(crashMark(L, run, frame - 1)).toBeNull();
+    const spot = worldToScreen(L, run[frame].x, run[frame].y);
+    expect(crashMark(L, run, frame)).toEqual(spot);
+    expect(crashMark(L, run, run.length - 1)).toEqual(spot);
   });
 
-  it('puts a wall crash on the wall it ran into', () => {
-    const impact = crashImpact(L, drive({ command: 'forward', speed: 60, duration: 20 }))!;
-    expect(impact.wall).toBe('south');
-    expect(impact.contact[1]).toBe(YARD.depthCm);
-    // Bounces back north, into the yard.
-    expect(impact.away).toEqual([0, -1]);
-  });
-
-  it('has nothing to show for a run that hits nothing', () => {
-    expect(crashImpact(L, straightSouth())).toBeNull();
-  });
-
-  it('shakes, bounces and throws grit at the moment, and leaves only the scar after', () => {
-    const now = crashMotion(0.05);
-    expect(Math.hypot(...now.shake)).toBeGreaterThan(0);
-    expect(now.recoilCm).toBeGreaterThan(0);
-    expect(now.flash).toBeGreaterThan(0);
-    expect(now.debris).toBeGreaterThan(0);
-    const later = crashMotion(1.5);
-    expect(later).toEqual({ shake: [0, 0], recoilCm: 0, joltCm: 0, flash: 0, ring: 0, debris: 0, tint: 0 });
-  });
-
-  it('moves nothing for a viewer who asked for less motion', () => {
-    const now = crashMotion(0.05, true);
-    expect(now.shake).toEqual([0, 0]);
-    expect(now.recoilCm).toBe(0);
-    expect(now.joltCm).toBe(0);
-    expect(now.debris).toBe(0);
-    expect(now.ring).toBe(0);
-    expect(now.tint).toBe(0);
+  it('marks nothing for a run that hits nothing', () => {
+    const run = straightSouth();
+    expect(crashMark(L, run, run.length - 1)).toBeNull();
   });
 });

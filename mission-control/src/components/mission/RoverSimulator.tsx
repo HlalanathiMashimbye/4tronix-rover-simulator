@@ -112,7 +112,7 @@ export function RoverSimulator({
   const { theme } = useTheme();
   const isManual = editorMode === 'manual';
   const [isPaused, setIsPaused] = useState(false);
-  const [hud, setHud] = useState({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null as 'rock' | 'wall' | null });
+  const [hud, setHud] = useState({ x: 0, y: 0, heading: 0, frame: 0, total: 0, hitWall: false, hitRock: null as string | null });
 
   // Keep the latest trajectory available to the rAF loop (which reads it live)
   // without re-subscribing every frame. Runs before the draw effects below.
@@ -216,7 +216,7 @@ export function RoverSimulator({
   const syncHud = useCallback(() => {
     const traj = trajRef.current;
     if (traj.length === 0) {
-      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null });
+      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, hitWall: false, hitRock: null });
       reportSource(null);
       return;
     }
@@ -234,7 +234,8 @@ export function RoverSimulator({
       heading: ((st.heading % 360) + 360) % 360,
       frame: Math.round(playhead) + 1,
       total: traj.length,
-      crashed,
+      hitWall: !!st.hitWall,
+      hitRock: st.hitRock ?? null,
     });
   }, [isManual, reportSource]);
 
@@ -393,7 +394,7 @@ export function RoverSimulator({
 
   const yard = (
     <YardFrame
-      className={bare ? 'relative h-full w-full' : 'relative w-full flex-1'}
+      className={bare ? 'relative h-full w-full' : 'relative min-w-0 flex-1'}
       frameRef={wrapRef}
       frameClassName={
         bare && frameless ? 'overflow-hidden' : 'overflow-hidden rounded-2xl border border-border'
@@ -410,16 +411,16 @@ export function RoverSimulator({
           </p>
         </div>
       )}
-      {hud.crashed && (
-        // A crash, said like one. It arrives with a jolt (crash-banner in
-        // globals.css, none under reduced motion) and stays for the rest of
-        // the run, as the scar on the yard does.
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-2" role="status">
-          <div className="crash-banner flex items-center gap-1.5 rounded-full border border-red-300/50 bg-red-600 px-3 py-1.5 text-white shadow-lg shadow-red-950/40">
-            <Zap className="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true" />
-            <span className="text-xs font-extrabold uppercase tracking-wider">Crash!</span>
-            <span className="truncate text-xs font-semibold">
-              {hud.crashed === 'rock' ? 'Your rover hit a rock.' : 'Your rover hit the wall.'}
+      {(hud.hitWall || hud.hitRock) && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+          <div className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/80 px-3 py-1.5 backdrop-blur-sm">
+            <svg className="h-3.5 w-3.5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-semibold text-red-300">
+              {hud.hitRock
+                ? 'Rock hit! The real rover would crash into it here.'
+                : 'Wall hit! The rover cannot drive past the edge of the yard.'}
             </span>
           </div>
         </div>
@@ -433,7 +434,9 @@ export function RoverSimulator({
   if (bare) return yard;
 
   return (
-    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
+    // simCard / simBody / simFooter: see globals.css. The footer goes beside
+    // the yard instead of under it when the card is much wider than tall.
+    <div className="simCard panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
       {/* A fixed height: the position readout appears once a run starts and
           is taller than the title, and the yard is sized from what is left. */}
       <div className="flex h-6 shrink-0 items-center justify-between gap-2">
@@ -450,13 +453,15 @@ export function RoverSimulator({
         )}
       </div>
 
-      {yard}
+      <div className="simBody">
+        {yard}
 
-      {footer !== undefined && (
-        <div className="@container h-[6.75rem] shrink-0 overflow-hidden" data-sim-footer="">
-          {footer}
-        </div>
-      )}
+        {footer !== undefined && (
+          <div className="simFooter @container shrink-0 overflow-hidden" data-sim-footer="">
+            {footer}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
