@@ -3,7 +3,30 @@
  * Based on legacy/simulator/roversimui.py Rover class
  */
 
-const FULL_SPEED_CM_PER_SECOND = 10;
+/**
+ * How far the rover drives in a second at full speed (100).
+ *
+ * MEASURED ON THE ROVER, ON THE YARD FLOOR, 3 October 2026, at speed 60,
+ * timed by the rover's own queue (forward for N seconds), read off a ruler:
+ *
+ *     1s -> 9cm, 9cm        2s -> 18cm, 18cm
+ *
+ * 9cm a second, and exactly proportional: no start-up loss worth modelling.
+ * At speed 60 that is 15cm a second at full speed. It was 10, inherited from
+ * the 4tronix Qt simulator, so the simulator showed every drive at two thirds
+ * of its real length and a mission that stopped short of the edge on screen
+ * could reach it in the yard.
+ *
+ * ONLY SPEED 60 WAS MEASURED. Every Blocks mission drives at 60; other speeds
+ * (Python can ask for any) assume distance scales with speed, which is the
+ * standard model but has not been checked on this rover. To check it, drive
+ * forward at speed 100 for 1s and 2s: this predicts 15cm and 30cm.
+ *
+ * ONE BATTERY STATE. Four runs in a row from one charge; how the distance
+ * drifts as the battery drains is not measured yet (AB#467's note suggests
+ * about 20 runs from full).
+ */
+const FULL_SPEED_CM_PER_SECOND = 15;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 
@@ -33,12 +56,16 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  *     4.7s ->  210 deg     18.7s ->  810 deg     25.0s -> 1110 deg
  *     9.4s ->  435 deg      9.4s ->  440 deg     41.0s -> 1890 deg
  *
- * Pooled: 45.29 deg/s, against 38.44 from the geometry below. The rover turns
- * FASTER than a perfect pivot, not slower, which is why this is a calibration
- * and not the "scrub factor" it was first written as - scrub can only lose
- * rotation. The wheels sit at 50 degrees where the angle tangent to the circle
- * they trace is 26.6, so the rover pivots about a point 7.6cm from each wheel
- * rather than the 8.9cm half-diagonal, and a smaller circle turns faster.
+ * Pooled: 45.29 deg/s, and reproducing that number is this constant's whole
+ * job. The geometry below gives 57.65 at the measured drive speed of 15cm/s
+ * at full (see FULL_SPEED_CM_PER_SECOND), so the rover achieves 0.786 of a
+ * perfect pivot: ordinary tyre scrub, which can only lose rotation.
+ *
+ * It was 1.178 until 3 October 2026, fitted against the inherited 10cm/s.
+ * At that too-slow wheel speed the rover appeared to turn FASTER than its
+ * geometry allowed, and a pivot-point explanation was written to account for
+ * it. Measuring the drive speed removed the puzzle; this was re-derived from
+ * the same six runs so the spin rate, measured directly, did not move.
  *
  * Confirmed by prediction rather than by fitting: at this value a 90 degree
  * turn sleeps 1.987s, and four of them brought the rover back to its starting
@@ -47,24 +74,31 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  * IT IS ONE SURFACE AND ONE BATTERY STATE. Grip changes how much the tyres
  * slide, so a smooth floor will not give the same number. To recalibrate, spin
  * at speed 60 for a known time, count the degrees turned, and set this to
- * (measured degrees per second) / 38.44.
+ * (measured degrees per second) / 57.65.
  */
-export const SPIN_RATE_CALIBRATION = 1.178;
+export const SPIN_RATE_CALIBRATION = 0.7856;
 
 /**
  * How much of the geometric turn the rover actually achieves when steering.
  *
  * MEASURED ON THE ROVER, 5 September 2026, high-grip floor, speed 60:
  *
- *     4s at 45 degrees ->  90 deg turned   (geometry says 121.5) ratio 0.74
- *     8s at 20 degrees -> ~102 deg turned  (geometry says 117.6) ratio 0.87
- *     6s at 30 degrees ->  90 deg turned   (geometry says 129.0) ratio 0.70
+ *     4s at 45 degrees ->  90 deg turned   (geometry said 121.5) ratio 0.74
+ *     8s at 20 degrees -> ~102 deg turned  (geometry said 117.6) ratio 0.87
+ *     6s at 30 degrees ->  90 deg turned   (geometry said 129.0) ratio 0.70
+ *
+ * Those geometry figures, and the 0.75 fitted from them, were at the old
+ * drive speed of 10cm/s at full. At the measured 15 (3 October) the geometric
+ * turn is 1.5 times larger, so the same measured turns give 0.75 / 1.5 = 0.5.
+ * The rover's turns do not change; the arcs do, for the better: at 0.75 and
+ * the old speed the simulator drew a ~15cm turning circle where the rover
+ * drives ~23cm (9cm/s at 22.5 degrees a second).
  *
  * The 30 degree run was an out-of-sample check, not part of the fit: with the
  * constant already set from 45 and 20, the simulator predicted 97 degrees
  * there and the rover turned about 90. Uncalibrated it would have been 129.
  *
- * The ratios scatter around 0.75 with no trend against angle, so
+ * The ratios scattered around 0.75 with no trend against angle, so
  * the formula's shape is right and it simply over-turns by a fixed proportion.
  * The rover understeers: the tyres slip outward and it traces a wider arc than
  * the wheel angle implies. Applied to the turning radius rather than to the
@@ -81,7 +115,7 @@ export const SPIN_RATE_CALIBRATION = 1.178;
  * same way: steer a known angle for a known time, measure the degrees turned,
  * and set this to (measured) / (what the simulator draws uncalibrated).
  */
-export const STEER_RATE_CALIBRATION = 0.75;
+export const STEER_RATE_CALIBRATION = 0.5;
 
 /** The wheel angle a steer block uses when the caller does not name one. */
 export const DEFAULT_STEER_DEGREES = 30;

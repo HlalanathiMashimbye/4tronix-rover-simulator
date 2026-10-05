@@ -59,14 +59,17 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
   }
 
   const hit = trajectory.findIndex((point) => point.hitWall);
+  // Rounded to the tenth the words say: step 53 is 5.300000000000001 seconds
+  // in floating point, and a time the message calls 5.3 should be 5.3.
+  const hitAt = Math.round(hit * STEP_SECONDS * 10) / 10;
   findings.push(
     hit >= 0
       ? {
           id: 'edge',
           level: 'warn',
-          message: `Reaches the edge of the simulator's yard at ${formatSeconds(hit * STEP_SECONDS)}`,
-          short: `Edge at ${formatSeconds(hit * STEP_SECONDS)}`,
-          atSeconds: hit * STEP_SECONDS,
+          message: `Reaches the edge of the simulator's yard at ${formatSeconds(hitAt)}`,
+          short: `Edge at ${formatSeconds(hitAt)}`,
+          atSeconds: hitAt,
         }
       : { id: 'edge', level: 'ok', message: "Stays inside the simulator's yard", short: 'Stays inside' },
   );
