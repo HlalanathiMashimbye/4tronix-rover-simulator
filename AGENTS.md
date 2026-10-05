@@ -181,6 +181,8 @@ there will cost you an afternoon if you skip them:
   stale code, producing faults that exist nowhere in the repository. Check
   `git log --oneline -1 && git status --porcelain` on it - status must be empty
   - before debugging anything. Never `scp` single files onto it.
-- The satellite's passwordless sudo is granted per unit, and sudo matches the
-  whole argument list, so `systemctl restart a b` silently prompts for a
-  password. Restart services one command at a time.
+- Restarting the satellite's services needs the `mars` password: there is no
+  passwordless sudo rule for them (checked 3 October 2026), so an agent cannot
+  do it and must hand the two commands to a person. Restart them one command at
+  a time. `yard/docs/satellite.md` has the details and the rule that would
+  change this.
