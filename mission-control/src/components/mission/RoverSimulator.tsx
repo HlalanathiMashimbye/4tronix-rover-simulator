@@ -381,7 +381,7 @@ export function RoverSimulator({
 
   const yard = (
     <YardFrame
-      className={bare ? 'relative h-full w-full' : 'relative w-full flex-1'}
+      className={bare ? 'relative h-full w-full' : 'relative min-w-0 flex-1'}
       frameRef={wrapRef}
       frameClassName={
         bare && frameless ? 'overflow-hidden' : 'overflow-hidden rounded-2xl border border-border'
@@ -421,7 +421,9 @@ export function RoverSimulator({
   if (bare) return yard;
 
   return (
-    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
+    // simCard / simBody / simFooter: see globals.css. The footer goes beside
+    // the yard instead of under it when the card is much wider than tall.
+    <div className="simCard panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
       {/* A fixed height: the position readout appears once a run starts and
           is taller than the title, and the yard is sized from what is left. */}
       <div className="flex h-6 shrink-0 items-center justify-between gap-2">
@@ -438,13 +440,15 @@ export function RoverSimulator({
         )}
       </div>
 
-      {yard}
+      <div className="simBody">
+        {yard}
 
-      {footer !== undefined && (
-        <div className="@container h-[6.75rem] shrink-0 overflow-hidden" data-sim-footer="">
-          {footer}
-        </div>
-      )}
+        {footer !== undefined && (
+          <div className="simFooter @container shrink-0 overflow-hidden" data-sim-footer="">
+            {footer}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
