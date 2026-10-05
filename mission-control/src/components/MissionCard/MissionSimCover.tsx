@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { useTheme } from '@/contexts/ThemeContext';
+import { useYardFloor } from '@/hooks/useYardFloor';
 import {
-  computeLayout,
+  computeFillLayout,
   drawSimFrame,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
@@ -17,18 +18,21 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
  * The cover has to be the same picture as the mission page, so it is drawn by
  * the same code - drawSimFrame, the same palette, the same arena. An earlier
  * version approximated it with an SVG polyline on a grey gradient, which was
- * cheaper and looked like a different product: the mission page shows rust
- * ground, craters, a dashed blue trail and the rover itself, and a cover that
+ * cheaper and looked like a different product: the mission page shows the
+ * yard's floor, a dashed blue trail and the rover itself, and a cover that
  * shows a grey line is not a thumbnail of it.
  *
  * The frame is the LAST one, which is what makes it a cover rather than a
  * poster: the trail is fully drawn and the rover is parked where the mission
  * ended.
  *
- * Cost in a grid is lower than it looks. drawTerrain caches the painted ground
- * to an offscreen canvas keyed on size and palette, and every card in a grid is
- * the same size - so the first card pays for the terrain and the rest get one
- * drawImage each.
+ * It FILLS the card (computeFillLayout), cropping the yard to this
+ * mission's trail: the yard is near square and the card is wide, and fitting
+ * all of it left the floor as a thin column between bars of sand.
+ *
+ * Cost in a grid is lower than it looks. A cover is drawn once, not every
+ * frame, and each card's crop is its own, so a grid of a dozen is a dozen
+ * paints of the floor: one drawImage of the photo and the overlay each.
  */
 interface MissionSimCoverProps {
   trajectory: TrajectoryPoint[];
@@ -38,6 +42,7 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { theme } = useTheme();
   const palette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
+  const floor = useYardFloor();
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -62,8 +67,8 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // The final frame: trail complete, rover parked where the mission ended.
-    drawSimFrame(ctx, computeLayout(w, h), trajectory, trajectory.length - 1, palette);
-  }, [trajectory, palette]);
+    drawSimFrame(ctx, computeFillLayout(w, h, trajectory), trajectory, trajectory.length - 1, palette, floor);
+  }, [trajectory, palette, floor]);
 
   useEffect(() => {
     draw();

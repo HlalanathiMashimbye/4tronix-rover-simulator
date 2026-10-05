@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useYardFloor } from '@/hooks/useYardFloor';
+import { YardFrame } from '@/components/mission/YardFrame';
 import {
   computeLayout,
   drawSimFrame,
@@ -9,7 +11,6 @@ import {
   SIM_FPS,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
-  type SimLayout,
 } from '@/lib/roverSimRender';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource } from '@/lib/roverBlockly';
@@ -21,10 +22,10 @@ interface RoverSimulatorProps {
   editorMode?: 'manual' | 'blockly' | 'code';
   resetVersion?: number;
   /**
-   * Rendered inside this card, below the playback controls. A slot rather than
-   * anything simulator-specific: the arena is drawn letterboxed with vertical
-   * slack, which makes this the cheapest place on the page to spend height.
-   * The simulator does not need to know what goes in it.
+   * Rendered inside this card, under the yard, in a slot of ONE fixed height
+   * whatever is in it. The yard is sized from what is left, so the checks
+   * appearing, a hint wrapping or Drive's controls replacing Send can never
+   * change its size. Leave it out for no slot at all.
    */
   footer?: React.ReactNode;
   /**
@@ -39,6 +40,11 @@ interface RoverSimulatorProps {
    * two ways, so they get the same shape.
    */
   bare?: boolean;
+  /**
+   * For bare only: the parent's frame is already the yard's shape (the run
+   * player's), so the simulator draws no border of its own inside it.
+   */
+  frameless?: boolean;
   /**
    * Told which part of the program the playhead is on, so the editor can light
    * it up (AB#450). null when nothing is running: before the first frame,
@@ -62,6 +68,7 @@ export function RoverSimulator({
   resetVersion = 0,
   footer,
   bare = false,
+  frameless = false,
   onSourceChange,
   onFinished,
 }: RoverSimulatorProps) {
@@ -71,7 +78,9 @@ export function RoverSimulator({
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
-  const sizeRef = useRef<SimLayout & { dpr: number }>({ w: 0, h: 0, s: 1, ox: 0, oy: 0, dpr: 1 });
+  // The canvas's size. The canvas is the yard's own shape (YardFrame), so the
+  // layout from it is the whole yard, edge to edge.
+  const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   // Read through a ref so a parent passing a fresh callback each render does
   // not restart the playback loop, whose effect depends on syncHud.
@@ -115,18 +124,30 @@ export function RoverSimulator({
   // next resize or playback frame happens to redraw it.
   const simPalette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
 
+  // The yard's floor photo, read through a ref and NOT a dependency of
+  // drawScene. The effect that starts a fresh run depends on drawScene, so a
+  // photo landing mid-run would otherwise rewind the run to its first frame.
+  // The effect below repaints once when it arrives instead.
+  const floor = useYardFloor();
+  const floorRef = useRef(floor);
+
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const L = sizeRef.current;
-    if (L.w === 0) return;
-    ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
+    const { w, h, dpr } = sizeRef.current;
+    if (w === 0) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, L, traj, playhead, simPalette);
+    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
+
+  useEffect(() => {
+    floorRef.current = floor;
+    drawScene();
+  }, [floor, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 
@@ -152,7 +173,7 @@ export function RoverSimulator({
     const dpr = Math.min(2.5, window.devicePixelRatio || 1);
     canvas.width = Math.max(1, Math.round(w * dpr));
     canvas.height = Math.max(1, Math.round(h * dpr));
-    sizeRef.current = { ...computeLayout(w, h), dpr };
+    sizeRef.current = { w, h, dpr };
     drawScene();
   }, [drawScene]);
 
@@ -320,118 +341,105 @@ export function RoverSimulator({
 
   const hasTrajectory = trajectory.length > 0;
 
-  return (
-    <div
-      className={
-        bare
-          ? 'relative h-full w-full'
-          : 'panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay'
+  const controls = hasTrajectory && (
+    // ONE ROW, like a video player, laid over the bottom of the yard rather
+    // than under it: below, it took height from the yard the moment a run
+    // started, and the yard has to stay one size. Icons with labels for screen
+    // readers; the shapes are the ones every player uses.
+    <div className="absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-2.5 pb-2 pt-5">
+      {!isManual && (
+        <button
+          onClick={handlePlayPause}
+          aria-label={isPaused ? 'Play' : 'Pause'}
+          className={`clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+            isPaused ? 'bg-gradient-mars text-primary-foreground' : 'bg-white/90 text-gray-900'
+          }`}
+        >
+          {isPaused ? <PlayIcon /> : <PauseIcon />}
+        </button>
+      )}
+      <input
+        type="range"
+        min={0}
+        max={Math.max(0, trajectory.length - 1)}
+        value={Math.min(Math.max(0, hud.frame - 1), Math.max(0, trajectory.length - 1))}
+        onChange={(e) => handleScrub(parseInt(e.target.value))}
+        className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary"
+        aria-label="Scrub simulation frame"
+      />
+      <button
+        onClick={handleReset}
+        aria-label="Reset"
+        title="Reset"
+        className="clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-black/45 text-white transition-colors"
+      >
+        <ResetIcon />
+      </button>
+    </div>
+  );
+
+  const yard = (
+    <YardFrame
+      className={bare ? 'relative h-full w-full' : 'relative w-full flex-1'}
+      frameRef={wrapRef}
+      frameClassName={
+        bare && frameless ? 'overflow-hidden' : 'overflow-hidden rounded-2xl border border-border'
       }
+      // The colour the canvas paints beyond the floor photo's edges, so a
+      // sliver the canvas misses by rounding never reads as a band.
+      frameStyle={{ background: simPalette.groundOuter }}
     >
-      {/* The run player's own chrome already names the run and says it is a
-          simulation, so a second header inside the same frame is a repeat. */}
-      {!bare && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
-            <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
-          </div>
-          {hasTrajectory && (
-            <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
-              <Chip label="X" value={`${hud.x.toFixed(0)}`} />
-              <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
-              <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
-            </div>
-          )}
+      <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
+      {!hasTrajectory && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-4 text-center">
+          <p className="text-xs font-semibold text-foreground/70">
+            Tap a block or press Run to move your rover
+          </p>
         </div>
       )}
-
-      <div
-        ref={wrapRef}
-        className={
-          bare
-            ? 'absolute inset-0 overflow-hidden'
-            : 'panel-inner relative min-h-0 w-full flex-1 overflow-hidden border border-border'
-        }
-        // The colour the canvas paints at its own edges, so the two can never
-        // disagree. This was simPalette.backdrop, which was correct while the
-        // yard was letterboxed inside the canvas. Once the terrain grew to
-        // fill the whole canvas nothing painted backdrop any more, and on the
-        // light theme it was a cream sitting behind a tan - so any sliver the
-        // canvas failed to cover read as a hard-edged band.
-        style={{ background: simPalette.groundOuter }}
-      >
-        <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
-        {!hasTrajectory && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 text-center">
-            <p className="text-xs font-semibold text-foreground/70">
-              Tap a block or press Run to move your rover
-            </p>
+      {hud.hitWall && (
+        <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
+          <div className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/80 px-3 py-1.5 backdrop-blur-sm">
+            <svg className="h-3.5 w-3.5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span className="text-xs font-semibold text-red-300">Wall hit! The rover can&apos;t move past the terrain edge.</span>
           </div>
-        )}
-        {hud.hitWall && (
-          <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
-            <div className="flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-950/80 px-3 py-1.5 backdrop-blur-sm">
-              <svg className="h-3.5 w-3.5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-xs font-semibold text-red-300">Wall hit! The rover can&apos;t move past the terrain edge.</span>
-            </div>
+        </div>
+      )}
+      {controls}
+    </YardFrame>
+  );
+
+  // The run player's own chrome already names the run and says it is a
+  // simulation, so bare has no header of its own.
+  if (bare) return yard;
+
+  return (
+    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
+      {/* A fixed height: the position readout appears once a run starts and
+          is taller than the title, and the yard is sized from what is left. */}
+      <div className="flex h-6 shrink-0 items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
+        </div>
+        {hasTrajectory && (
+          <div className="flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground">
+            <Chip label="X" value={`${hud.x.toFixed(0)}`} />
+            <Chip label="Y" value={`${hud.y.toFixed(0)}`} />
+            <Chip label="°" value={`${hud.heading.toFixed(0)}`} />
           </div>
         )}
       </div>
 
-      {hasTrajectory && (
-        // ONE ROW, like a video player: play/pause, the scrubber, reset. They
-        // were two full-width buttons under the scrubber, 45px of a frame that
-        // is mostly there to show the rover, for two actions that each need a
-        // thumb's width. Icons with labels for screen readers; the shapes are
-        // the ones every player uses.
-        <div
-          className={
-            bare
-              // Over the arena, not below it. Sitting below, this took 54px out
-              // of a 207px frame, so the picture shrank the moment you switched
-              // from the video of the real run to the simulation of it. A video's
-              // own controls overlay its picture; so do these.
-              ? 'absolute inset-x-0 bottom-0 z-10 flex items-center gap-2 bg-gradient-to-t from-black/70 via-black/35 to-transparent px-2.5 pb-2 pt-5'
-              : 'flex shrink-0 items-center gap-2'
-          }
-        >
-          {!isManual && (
-            <button
-              onClick={handlePlayPause}
-              aria-label={isPaused ? 'Play' : 'Pause'}
-              className={`clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-                isPaused ? 'bg-gradient-mars text-primary-foreground' : bare ? 'bg-white/90 text-gray-900' : 'border border-border bg-secondary text-foreground'
-              }`}
-            >
-              {isPaused ? <PlayIcon /> : <PauseIcon />}
-            </button>
-          )}
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, trajectory.length - 1)}
-            value={Math.min(Math.max(0, hud.frame - 1), Math.max(0, trajectory.length - 1))}
-            onChange={(e) => handleScrub(parseInt(e.target.value))}
-            className="h-1.5 min-w-0 flex-1 cursor-pointer accent-primary"
-            aria-label="Scrub simulation frame"
-          />
-          <button
-            onClick={handleReset}
-            aria-label="Reset"
-            title="Reset"
-            className={`clay-press flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-              bare ? 'bg-black/45 text-white' : 'border border-border bg-card text-foreground'
-            }`}
-          >
-            <ResetIcon />
-          </button>
+      {yard}
+
+      {footer !== undefined && (
+        <div className="@container h-[6.75rem] shrink-0 overflow-hidden" data-sim-footer="">
+          {footer}
         </div>
       )}
-
-      {footer}
     </div>
   );
 }

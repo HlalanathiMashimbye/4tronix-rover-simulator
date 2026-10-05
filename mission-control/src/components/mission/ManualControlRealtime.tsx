@@ -7,7 +7,7 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 interface ManualControlRealtimeProps {
   onTrajectoryUpdate: (trajectory: TrajectoryPoint[]) => void;
-  onReset?: () => void;
+  /** Bumped by the workspace's reset (DriveFooter, or the simulator's own). */
   resetVersion?: number;
 }
 
@@ -66,7 +66,7 @@ function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
 /** Bounded so a long drive cannot grow the trail for ever. */
 const MAX_TRAIL_POINTS = 3000;
 
-export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersion = 0 }: ManualControlRealtimeProps) {
+export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: ManualControlRealtimeProps) {
   const roverRef = useRef<RoverPhysics>(new RoverPhysics());
   const trajectoryRef = useRef<TrajectoryPoint[]>([]);
   const animationFrameRef = useRef<number | null>(null);
@@ -200,17 +200,12 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [runBlock, stopNow]);
 
-  const handleReset = () => {
-    resetController();
-    onReset?.();
-  };
-
   return (
     // On a phone this shares the screen with the docked simulator (AB#455),
-    // so the buttons compact and two things go: the keyboard hint, which a
-    // touch screen has no use for, and Reset position, which the simulator's
-    // own Reset already does. Before this, half the buttons were clipped off
-    // the bottom with no way to reach them.
+    // so the buttons compact. Reset position and the keyboard hint are not
+    // here at all: on a laptop they are in the simulator's footer
+    // (DriveFooter), beside the rover they act on, and on a phone the
+    // simulator's own Reset does the job and there is no keyboard.
     <div className="flex h-full w-full flex-col gap-2 p-3 md:gap-3 md:p-4">
       <div>
         <h3 className="font-display text-base font-bold text-foreground md:text-lg">Tap a block to drive</h3>
@@ -239,15 +234,6 @@ export function ManualControlRealtime({ onTrajectoryUpdate, onReset, resetVersio
         </button>
       </div>
 
-      <div className="hidden items-center justify-between gap-2 md:flex">
-        <button
-          onClick={handleReset}
-          className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary"
-        >
-          Reset position
-        </button>
-        <span className="text-[11px] text-muted-foreground">Keys: W A S D, Q E, space to stop</span>
-      </div>
     </div>
   );
 }

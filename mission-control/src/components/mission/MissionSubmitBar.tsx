@@ -1,32 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Rocket, CheckCircle2 } from 'lucide-react';
+import { useMemo } from 'react';
+import { Rocket } from 'lucide-react';
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 
-// Deliberately plain CSS, not Motion's AnimatePresence - see NotificationModal
-// for why: verified in a clean production build that AnimatePresence's exit
-// animation completes correctly here but the component never actually
-// unmounts, in this exact library/framework combination. Not shipping that.
-const EXIT_MS = 200;
-
 /**
- * Name-and-launch controls, rendered as the footer of the simulator column.
+ * Checks, name and launch, in the simulator's footer slot.
  *
  * These used to be stacked under the block canvas, where they cost 147px of a
- * workspace locked to the viewport - against 311px for the canvas itself. The
- * simulator's arena is drawn letterboxed with vertical slack to spare, so the
- * space is cheaper on that side.
+ * workspace locked to the viewport. Under the simulator they cost nothing the
+ * editor needs, and now nothing the simulator needs either: the slot is one
+ * fixed height in every mode (RoverSimulator's footer), and this fills it in
+ * one shape whatever the checks say, so the yard above never changes size
+ * (AB#464). Drive mode puts DriveFooter in the same slot.
  *
- * Only mounted in Blocks and Python modes. Drive mode has no code to send, so
- * it would otherwise show a permanently disabled button.
+ * The "Mission sent" news takes the checks' line rather than appearing under
+ * the button: appearing would change the height, and MissionSentDialog is the
+ * celebration anyway.
  *
  * Sizing responds to the CONTAINER, not the viewport: the split slider can
- * squeeze this column to 320px while the window stays wide, so viewport
- * breakpoints would not see it coming. Below 24rem the button takes its own
- * line rather than crushing the name field to a few characters.
+ * squeeze this column to 320px while the window stays wide. Narrow, the chips
+ * drop their words and the button says only "Send".
  */
 interface MissionSubmitBarProps {
   missionName: string;
@@ -48,9 +44,6 @@ export function MissionSubmitBar({
   currentCode,
   hasRunSimulation,
 }: MissionSubmitBarProps) {
-  const [mounted, setMounted] = useState(submitSuccess);
-  const [visible, setVisible] = useState(false);
-
   // A parse of the whole program on every keystroke. Cheap enough to do plainly
   // - it is one pass over the lines - but memoised because Blockly re-reports
   // identical code on any workspace event, drag included.
@@ -61,53 +54,41 @@ export function MissionSubmitBar({
 
   const hasCode = currentCode.trim().length > 0;
 
-  // Mount immediately, flip visible a frame later so the transition has a
-  // "before" state to run from, and hold the unmount until the exit
-  // animation has actually played. Mirrors NotificationModal/EmailPrompt.
-  useEffect(() => {
-    if (submitSuccess) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- the banner is appearing
-      setMounted(true);
-      const raf = requestAnimationFrame(() => setVisible(true));
-      return () => cancelAnimationFrame(raf);
-    }
-    setVisible(false);
-    const timer = setTimeout(() => setMounted(false), EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [submitSuccess]);
-
   return (
-    <div className="@container shrink-0 border-t border-border/60 pt-1.5">
-      {/* Only once there is something to check. An empty workspace failing
-          three checks reads as an error the learner has made, when in fact
-          they have not started yet. */}
-      {hasCode && (
-        <div className="mb-1.5">
-          <PreFlightChecklist result={preFlight} />
-        </div>
-      )}
+    <div className="@container flex h-full flex-col justify-between gap-1.5 border-t border-border/60 pt-1.5">
+      <PreFlightChecklist
+        result={preFlight}
+        started={hasCode}
+        message={
+          submitSuccess ? (
+            <span className="font-bold text-buzz">Mission sent! It is in the queue for the rover to run.</span>
+          ) : undefined
+        }
+      />
 
-      <div className="flex flex-wrap items-start gap-1.5">
+      <div className="flex items-center gap-1.5">
         <MissionNameInput value={missionName} onChange={onMissionNameChange} />
 
         <button
           onClick={onSubmit}
           disabled={submitting || !hasCode || !missionName.trim() || !preFlight.ready}
-          // The checklist directly above says which check is holding it, so the
-          // button does not repeat itself - but a disabled control with no
-          // accessible reason is invisible to a screen reader.
+          // The visible words shorten in a narrow column; the name does not.
+          aria-label={submitting ? 'Sending' : 'Send to Mission Control'}
+          // The chips and the line above say which check is holding it, but a
+          // disabled control with no accessible reason is invisible to a
+          // screen reader.
           title={!preFlight.ready && hasCode ? 'Pre-flight checks are not complete yet' : undefined}
           // Green once the checks pass, mission orange until then. The button
           // is disabled for exactly the same condition, so the colour is not a
           // second thing to keep in step - it is the disabled state wearing a
           // visible answer to "is it my turn yet".
-          className={`clay clay-press flex h-9 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 @min-[24rem]:w-auto ${
+          className={`clay clay-press flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 ${
             preFlight.ready ? 'bg-gradient-buzz' : 'bg-gradient-mars'
           }`}
         >
           {submitting ? (
             <>
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
@@ -115,31 +96,13 @@ export function MissionSubmitBar({
             </>
           ) : (
             <>
-              <Rocket className="h-4 w-4" />
-              <span>Send to Mission Control</span>
+              <Rocket className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden @min-[24rem]:inline">Send to Mission Control</span>
+              <span className="@min-[24rem]:hidden">Send</span>
             </>
           )}
         </button>
       </div>
-
-      {/* Confirmation belongs next to the button that earned it, not back in
-          the editor column the controls just left.
-          A submit is rare and high-emotion (the delight tier, not just
-          feedback) - it earns a real entrance rather than the plain
-          conditional render this used to be. */}
-      {mounted && (
-        <div
-          className={`mt-2 flex items-start gap-2 rounded-xl border border-buzz/40 bg-buzz/10 p-2 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-            visible ? 'scale-100 opacity-100' : 'translate-y-1 scale-[0.97] opacity-0'
-          }`}
-        >
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
-          <div className="flex-1">
-            <p className="text-xs font-bold text-buzz">Mission sent!</p>
-            <p className="text-xs text-buzz/80">It is in the queue for the rover to run.</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

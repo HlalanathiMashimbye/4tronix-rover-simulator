@@ -16,7 +16,7 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  * elsewhere. This plays it in the same simulator the learner used, from the
  * stored code (no extra reads: the console has already loaded it), and lists
  * what to look at worst first: problems in the code, a run over the limit,
- * the rover reaching the edge of the simulator's yard and when.
+ * the rover reaching the edge of the yard and when.
  *
  * Plays on open, because the operator opened the mission to see it. The code
  * beside it lights up as it runs (onSourceChange), as in the editor.
@@ -44,7 +44,7 @@ export function MissionPreview({
 
       {/* Whatever height the panel leaves, not a fixed 4:3: a fixed shape
           pushed Send to Rover below the fold on a laptop. The simulator
-          letterboxes its yard inside any box. */}
+          frames the whole yard in its own shape inside it (YardFrame). */}
       <div className="relative min-h-[120px] w-full flex-1">
         <RoverSimulator
           trajectory={trajectory}

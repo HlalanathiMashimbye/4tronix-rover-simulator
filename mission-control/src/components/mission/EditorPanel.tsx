@@ -36,7 +36,6 @@ interface EditorPanelProps {
   error: string | null;
 
   onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
-  onResetSimulation: () => void;
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
@@ -55,7 +54,6 @@ export function EditorPanel({
   onEditorModeChange,
   error,
   onManualTrajectory,
-  onResetSimulation,
   manualResetVersion,
   onGenerateCommands,
   onCodeChange,
@@ -124,7 +122,6 @@ export function EditorPanel({
         {editorMode === 'manual' && (
           <ManualControlRealtime
             onTrajectoryUpdate={onManualTrajectory}
-            onReset={onResetSimulation}
             resetVersion={manualResetVersion}
           />
         )}

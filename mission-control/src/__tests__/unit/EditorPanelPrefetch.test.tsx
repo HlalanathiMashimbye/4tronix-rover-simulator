@@ -36,7 +36,6 @@ function renderPanel() {
       onEditorModeChange={noop}
       error={null}
       onManualTrajectory={noop}
-      onResetSimulation={noop}
       manualResetVersion={0}
       onGenerateCommands={noop}
       onCodeChange={noop}

@@ -24,6 +24,10 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 jest.mock('@/contexts/ThemeContext', () => ({ useTheme: () => ({ theme: 'dark' }) }));
 
+// What the yard's floor photo hook returns, so a test can make it arrive.
+let mockFloor: object | null = null;
+jest.mock('@/hooks/useYardFloor', () => ({ useYardFloor: () => mockFloor }));
+
 // The canvas is irrelevant here; only the playhead is under test. A proxy
 // swallows whatever drawScene reaches for without pinning the test to the
 // drawing code.
@@ -109,5 +113,33 @@ describe('re-running the same program', () => {
     // And actually playing again, which did not.
     await runFrames(10);
     expect(playhead()).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The floor photo loads after the simulator has mounted (AB#464), often after
+ * a mission page has already started playing its run. Repainting for it must
+ * not count as a new run: the effect that rewinds for a fresh run depends on
+ * drawScene, so the photo arriving through drawScene's dependencies sent the
+ * rover back to its first frame.
+ */
+describe('the floor photo arriving', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockFloor = null;
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it('does not restart a run that is already playing', async () => {
+    const run = trajectoryOf(60);
+    const { rerender } = render(<RoverSimulator trajectory={run} isPlaying editorMode="code" />);
+    await runFrames(10);
+    const before = playhead();
+    expect(before).toBeGreaterThan(0);
+
+    mockFloor = {};
+    rerender(<RoverSimulator trajectory={run} isPlaying editorMode="code" />);
+
+    expect(playhead()).toBeGreaterThanOrEqual(before);
   });
 });

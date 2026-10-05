@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Blocks, ChevronLeft, Code2, Maximize2, Minimize2, Play } from 'lucide-react';
 import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
 import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
+import { YARD } from '@/lib/rover-physics';
 
 /**
  * Create Mission on a phone: the "docked sim" layout (AB#455).
@@ -89,7 +90,11 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
     // globals.css (.phoneWorkspace): the simulator grows, the launch controls
     // slide up, the editor slides away, and back. Everything stays mounted so
     // there is something to animate, and what is off screen is inert.
-    <div data-launch={launching} className="phoneWorkspace flex h-full min-h-0 flex-col">
+    <div
+      data-launch={launching}
+      className="phoneWorkspace flex h-full min-h-0 flex-col"
+      style={{ ['--yard-ratio' as string]: YARD.widthCm / YARD.depthCm }}
+    >
       <div className="flex h-10 shrink-0 items-center justify-between gap-2">
         <Link
           href="/"
@@ -133,13 +138,15 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
         data-expanded={simExpanded}
         data-keyboard={keyboard.open && !launching}
         data-launch={launching}
-        // The outer radius, not panel-inner's: the strip sits beside the editor
-        // card as a sibling, not inside it, and the two read as one family.
-        className="phoneSimStrip relative overflow-hidden rounded-2xl border border-border"
+        // No frame of its own: the simulator draws the yard in the yard's own
+        // shape and frames that (AB#464), so a frame here would be a second
+        // outline with empty ground between the two. Whatever width the yard
+        // does not need is the page's, and the enlarge button sits in it.
+        className="phoneSimStrip relative"
       >
         {simulator}
         {launching ? null : keyboard.open ? (
-          <div className="absolute inset-0 z-20 flex items-center gap-2 bg-card px-3 text-xs" aria-live="polite">
+          <div className="absolute inset-0 z-20 flex items-center gap-2 rounded-2xl border border-border bg-card px-3 text-xs" aria-live="polite">
             <Play className="h-3 w-3 shrink-0 text-buzz" fill="currentColor" />
             <span className="truncate font-mono text-foreground">
               {runningText ?? <span className="font-sans text-muted-foreground">Simulator is hidden while you type</span>}
