@@ -94,10 +94,10 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
  *
  * SIZED SO THE ROVER'S REAL SPEED READS AS MOVEMENT.
  *
- * The rover covers 6cm a second at speed 60, which is what the hardware
- * actually does. In a 640cm yard that made a default square about 4% of the
- * width - smaller than the rover icon - so a child drew a perfect square and
- * saw nothing happen.
+ * The rover covers 9cm a second at speed 60 (measured 3 October 2026; this
+ * said 6, the inherited figure, until then). In a 640cm yard a default square
+ * at 6 was about 4% of the width - smaller than the rover icon - so a child
+ * drew a perfect square and saw nothing happen.
  *
  * The fix is the yard, not the speed. FULL_SPEED_CM_PER_SECOND is tied to real
  * hardware, and inflating it would make the simulator trace a neat square on
