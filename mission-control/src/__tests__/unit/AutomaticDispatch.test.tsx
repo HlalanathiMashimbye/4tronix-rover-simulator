@@ -320,3 +320,20 @@ describe('Automatic Route dispatch', () => {
     });
   });
 });
+
+/**
+ * A run starts from wherever the rover is standing (AB#465), and none of the
+ * yard checks can see that, so the reminder has to be where Send is pressed:
+ * in the same row, whatever state the checks are in.
+ */
+describe('the start mark', () => {
+  it('reminds the operator beside Send to Rover, before the yard is read', () => {
+    global.fetch = jest.fn();
+    mount();
+    const reminder = screen.getByTestId('start-mark-reminder');
+    // Immediately ahead of the buttons, Send among them.
+    expect(reminder.nextElementSibling).toContainElement(sendButton());
+    expect(reminder).toHaveAttribute('title', expect.stringMatching(/\S/));
+  });
+});
+

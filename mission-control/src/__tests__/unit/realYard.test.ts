@@ -9,7 +9,7 @@
 
 import { simulateCommands, STEP_SECONDS, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, roverToYard, yardToRover, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeFillLayout, computeLayout, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
+import { computeFillLayout, computeLayout, startMark, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const SPEED_60_CM_PER_SECOND = 9;
@@ -104,6 +104,15 @@ describe('the yard on screen', () => {
     const [x1, y1] = worldToScreen(L, 0, 10);
     expect(x1).toBeCloseTo(x0, 6);
     expect(y1).toBeCloseTo(y0 + 10, 6);
+  });
+
+  it('draws the start mark on the start spot, its arrow pointing south past the nose', () => {
+    const { centre, tail, tip } = startMark(L);
+    expect(centre).toEqual(worldToScreen(L, 0, 0));
+    // South is down the screen; the rover's nose is 10 cm ahead of its centre.
+    expect(tip[0]).toBeCloseTo(centre[0], 6);
+    expect(tip[1] - centre[1]).toBeGreaterThan(10 * L.s);
+    expect(tail[1]).toBeLessThan(centre[1]);
   });
 
   it("draws the rover's right as screen left, west, for the same reason", () => {

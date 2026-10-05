@@ -12,6 +12,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { YARD } from '@/lib/rover-physics';
+import { START_MARK_CM } from '@/lib/roverSimRender';
 
 const DOC = readFileSync(join(__dirname, '../../../../yard/docs/yard-measurements.md'), 'utf8');
 
@@ -34,6 +35,12 @@ describe('the simulator yard against yard-measurements.md', () => {
     expect(Number(x)).toBe(YARD.start.x);
     expect(Number(y)).toBe(YARD.start.y);
     expect(BEARINGS[facing]).toBe(YARD.start.facingDegrees);
+  });
+
+  it('draws the start mark at the size the doc tells a person to tape it', () => {
+    const [, behind, ahead, arrowhead] =
+      row('Start mark').match(/(\d+) cm behind, (\d+) cm ahead, (\d+) cm arrowhead/) ?? [];
+    expect({ behind: +behind, ahead: +ahead, arrowhead: +arrowhead }).toEqual(START_MARK_CM);
   });
 
   it('has every rock in the doc, where the doc puts it, at its size', () => {
