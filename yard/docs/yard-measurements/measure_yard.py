@@ -11,11 +11,15 @@ Needs OpenCV, which nothing else in the yard does, so use a throwaway venv:
 
     python3 -m venv /tmp/yardvenv
     /tmp/yardvenv/bin/pip install opencv-python-headless numpy
-    /tmp/yardvenv/bin/python measure_yard.py <folder of the photos> <output folder>
+    /tmp/yardvenv/bin/python measure_yard.py
 
-The photos are the originals from an iPhone 13, taken on 3 October 2026 (not
-committed: 25 MB). Screenshots or messaging-app copies will not do, because
-the points below are read off the full-resolution originals.
+It reads the photos in photos/ beside it and writes the two figures beside
+it. Both can be pointed elsewhere: measure_yard.py [photos] [output folder].
+
+The photos are the originals from an iPhone 13, taken on 3 October 2026, with
+only the GPS location removed from their metadata. Keep them that way:
+screenshots or messaging-app copies will not do, because the points below are
+read off the full-resolution originals, against their rotation tag.
 
 THE METHOD, in the order the script runs it:
 
@@ -43,7 +47,7 @@ import numpy as np
 
 # The wide shot: ultra-wide lens, from a ladder at the south side. The only
 # photo with all four floor corners in it.
-WIDE = 'IMG_8519.JPG'
+WIDE = 'IMG_8519.jpg'
 
 # Floor corners in WIDE, in its full-resolution pixels. Read by eye from
 # zoomed crops: where each side wall's base meets the floor, and where the
@@ -55,7 +59,7 @@ SEAM_LEFT, SEAM_RIGHT = (725, 2158), (2338, 2133)
 FRONT_LEFT, FRONT_RIGHT = (654, 3150), (2458, 3125)
 
 # The rover's wheels, outermost edges, in IMG_8558 at full resolution.
-ROVER_PHOTO = 'IMG_8558 2.jpg'
+ROVER_PHOTO = 'IMG_8558.jpg'
 ROVER_BOX = ((1466, 1370), (1691, 1602))   # (left, top), (right, bottom)
 ROVER_WIDTH_MM, ROVER_LENGTH_MM = 185, 200  # 4tronix's published size
 
@@ -280,11 +284,11 @@ def main(folder, out):
     # 3. Top-down maps, every photo into the same coordinates.
     size = (int(width * OUT_PX_PER_MM), int(depth * OUT_PX_PER_MM))
     to_wide, greys = {WIDE: np.eye(3)}, {WIDE: cv2.cvtColor(wide, cv2.COLOR_BGR2GRAY)}
-    for name in ['IMG_8518.JPG', 'IMG_8520.JPG', 'IMG_8559 2.jpg']:
+    for name in ['IMG_8518.jpg', 'IMG_8520.jpg', 'IMG_8559.jpg']:
         greys[name] = load(folder, name, grey=True)
         to_wide[name], inliers, n = homography(features(greys[name]), wide_features)
         print(f'{name} matched into {WIDE}: {inliers} of {n} matches agree')
-    photo = top_down(load(folder, 'IMG_8559 2.jpg'), to_wide['IMG_8559 2.jpg'], floor, size)
+    photo = top_down(load(folder, 'IMG_8559.jpg'), to_wide['IMG_8559.jpg'], floor, size)
     cv2.imwrite(os.path.join(out, 'yard-top-down.jpg'), photo, [cv2.IMWRITE_JPEG_QUALITY, 85])
 
     # 4. Where the ground rises, from the cleanest stereo pair. The rocks at
@@ -295,7 +299,7 @@ def main(folder, out):
     # from 5 to 24 cm, and the edges either sign, depending only on the
     # feature detector's settings. Where the high ground is held to within
     # 5 cm across the same changes, so that is all this reports.
-    clean = parallax(greys['IMG_8518.JPG'], greys['IMG_8520.JPG'], to_wide['IMG_8518.JPG'],
+    clean = parallax(greys['IMG_8518.jpg'], greys['IMG_8520.jpg'], to_wide['IMG_8518.jpg'],
                      floor, width, depth, size)
     clean -= box_value(clean, 60, 60, 80, 80, 50)
     clean *= np.sign(np.mean([box_value(clean, x - 5, y - 5, x + 5, y + 5, 50) for _, x, y, _ in ROCKS[1:3]]))
@@ -322,6 +326,8 @@ def main(folder, out):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
+    here = os.path.dirname(os.path.abspath(__file__))
+    if len(sys.argv) > 3:
         sys.exit(__doc__)
-    main(os.path.expanduser(sys.argv[1]), sys.argv[2])
+    main(os.path.expanduser(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(here, 'photos'),
+         sys.argv[2] if len(sys.argv) > 2 else here)

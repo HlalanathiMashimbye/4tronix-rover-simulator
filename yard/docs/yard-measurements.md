@@ -1,6 +1,6 @@
 # The real yard, measured
 
-Measured on 5 October 2026 from seven phone photos taken on 3 October
+Measured on 5 October 2026 from five phone photos taken on 3 October
 (AB#463). One number was taped: the width, 2.33 m. Everything else comes from
 the photos, with the rover as the ruler, and
 [`yard-measurements/measure_yard.py`](yard-measurements/measure_yard.py)
@@ -67,9 +67,11 @@ here as facts.
 
 ## How it was measured
 
-Seven photos from an iPhone 13. The originals are not committed, at 25 MB;
-keep them with AB#463 on the board so this can be rerun. The script's
-docstring has the detail; in short:
+Five photos from an iPhone 13, committed in
+[`yard-measurements/photos/`](yard-measurements/photos/) as they came off
+the phone, with only the GPS location removed from their metadata. The
+script runs on them with no arguments; its docstring says how to set it up
+and has the detail. In short:
 
 1. **Width.** The rover (185 x 200 mm) is in one photo. That photo is matched
    into the one wide shot that shows all four floor corners, the back half of
