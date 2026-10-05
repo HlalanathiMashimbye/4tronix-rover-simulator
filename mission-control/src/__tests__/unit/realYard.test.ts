@@ -65,12 +65,15 @@ describe('the rover in the real yard', () => {
     expect(y).toBeCloseTo(121, 0);
   });
 
-  it('turned left, heads east', () => {
+  it('turned left, heads east, and meets R4 long before the east wall', () => {
+    // R4 is 12 cm south of the seam; the rover is 9.25 cm wide each side of
+    // its centre and R4 is 11.5 cm round, so a drive along the seam clips it.
     const turn = spinSecondsForDegrees(90, 60);
-    const [x] = endInYard(
-      drive({ command: 'spinLeft', speed: 60, duration: turn }, { command: 'forward', speed: 60, duration: 20 }),
-    );
-    nearWall(x, YARD.widthCm);
+    const run = drive({ command: 'spinLeft', speed: 60, duration: turn }, { command: 'forward', speed: 60, duration: 20 });
+    expect(run[run.length - 1].hitRock).toBe('R4');
+    const [x] = endInYard(run);
+    expect(x).toBeGreaterThan(YARD.start.x);
+    expect(x).toBeLessThan(YARD.rocks.find((rock) => rock.name === 'R4')!.x);
   });
 
   it('converts between the rover and the yard both ways', () => {

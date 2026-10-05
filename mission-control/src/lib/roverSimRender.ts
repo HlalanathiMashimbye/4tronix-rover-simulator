@@ -8,6 +8,7 @@
  */
 
 import { YARD, roverToYard, type Yard } from './rover-physics';
+import { crashFrame } from './simulateCommands';
 
 export interface SimPoint {
   x: number;
@@ -15,6 +16,7 @@ export interface SimPoint {
   heading: number;
   servos: Record<string, number>;
   hitWall?: boolean;
+  hitRock?: string | null;
   /** The four corner lamps: 'r, g, b' or null for off. */
   leds?: (string | null)[];
 }
@@ -222,6 +224,7 @@ export function interpolate(traj: SimPoint[], p: number): SimPoint {
     heading: lerp(a.heading, b.heading, f),
     servos: { [FL]: sv(FL), [FR]: sv(FR), [RL]: sv(RL), [RR]: sv(RR) },
     hitWall: a.hitWall || b.hitWall,
+    hitRock: a.hitRock ?? b.hitRock ?? null,
     // Lamps do not blend between two colours: they are on or off at a given
     // frame. Take the frame the playhead is actually on.
     leds: a.leds,
@@ -801,6 +804,9 @@ export function drawSimFrame(
     return;
   }
   drawTrail(ctx, L, traj, Math.floor(playhead), P);
+  // Under the rover, so at the moment of the crash the rover sits on it.
+  const crashedAt = crashMark(L, traj, playhead);
+  if (crashedAt) drawCrashMark(ctx, L, crashedAt);
   const current = interpolate(traj, playhead);
 
   /**
@@ -818,7 +824,39 @@ export function drawSimFrame(
   }
 
   drawRover(ctx, L, current, playhead, odo);
-  if (current.hitWall) {
+  if (current.hitWall || current.hitRock) {
     drawWallHit(ctx, L, current);
   }
+}
+
+/**
+ * Where the run crashed, once the playhead has got there (AB#466), or null.
+ *
+ * Kept on screen after the moment has passed, so a learner who looked away,
+ * or a run that backs off and carries on, still shows the spot the pre-flight
+ * check is complaining about.
+ */
+export function crashMark(L: SimLayout, traj: SimPoint[], playhead: number): [number, number] | null {
+  const frame = crashFrame(traj);
+  if (frame < 0 || playhead < frame) return null;
+  return worldToScreen(L, traj[frame].x, traj[frame].y);
+}
+
+function drawCrashMark(ctx: CanvasRenderingContext2D, L: SimLayout, at: [number, number]) {
+  const [x, y] = at;
+  const r = Math.max(6, 7 * L.s);
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (const [colour, width] of [['rgba(20,8,2,0.6)', 5], ['rgba(239,68,68,0.95)', 3]] as const) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.moveTo(x - r * 0.55, y - r * 0.55);
+    ctx.lineTo(x + r * 0.55, y + r * 0.55);
+    ctx.moveTo(x + r * 0.55, y - r * 0.55);
+    ctx.lineTo(x - r * 0.55, y + r * 0.55);
+    ctx.stroke();
+  }
+  ctx.restore();
 }

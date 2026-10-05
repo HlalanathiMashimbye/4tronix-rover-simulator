@@ -114,12 +114,13 @@ describe('runPreFlightChecks', () => {
     expect(runPreFlightChecks(code, { hasRunSimulation: true }).ready).toBe(true);
   });
 
-  it('holds only the simulation check when the code itself is fine', () => {
+  it('holds only the checks a run answers when the code itself is fine', () => {
+    // Watching it, and what it hits (AB#466): both need the run.
     const code = 'rover.forward(60)\ntime.sleep(3)';
     const result = runPreFlightChecks(code, { hasRunSimulation: false });
 
     const failed = result.checks.filter((check) => !check.passed).map((check) => check.id);
-    expect(failed).toEqual(['simulation-run']);
+    expect(failed).toEqual(['simulation-run', 'no-crash']);
   });
 
   it('uses the 60 second checklist ceiling, not the 120 second hard limit', () => {

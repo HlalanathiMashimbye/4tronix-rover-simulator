@@ -59,6 +59,7 @@ function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
       '13': state.servos[13],
     },
     hitWall: state.hitWall,
+    hitRock: state.hitRock,
     leds: [null, null, null, null],
   };
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
+import { findCrash } from '@/core/domain/safety/crashCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -313,6 +314,13 @@ export function MissionWorkspace() {
 
   // Not "has a run happened" but "has THIS been watched" - see watchedCode.
   const hasRunSimulation = watchedCode !== null && watchedCode === currentCode;
+  // What that watched run hit (AB#466). Only once it has been watched: before
+  // then the trajectory may be an older program's, and there is nothing yet
+  // that the learner has seen happen.
+  const crash = useMemo(
+    () => (hasRunSimulation ? findCrash(trajectory) : undefined),
+    [hasRunSimulation, trajectory],
+  );
 
   const editorPanel = (
     <EditorPanel
@@ -343,6 +351,7 @@ export function MissionWorkspace() {
         submitSuccess={submitSuccess}
         currentCode={currentCode}
         hasRunSimulation={hasRunSimulation}
+        crash={crash}
       />
     );
 
