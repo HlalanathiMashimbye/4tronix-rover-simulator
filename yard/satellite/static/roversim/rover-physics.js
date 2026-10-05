@@ -8,8 +8,8 @@
 /**
  * How far the rover drives in a second at full speed (100).
  *
- * MEASURED ON THE ROVER, 3 October 2026, at speed 60, timed by the rover's
- * own queue (forward for N seconds) and read off a ruler:
+ * MEASURED ON THE ROVER, ON THE YARD FLOOR, 3 October 2026, at speed 60,
+ * timed by the rover's own queue (forward for N seconds), read off a ruler:
  *
  *     1s -> 9cm, 9cm        2s -> 18cm, 18cm
  *
@@ -23,6 +23,10 @@
  * (Python can ask for any) assume distance scales with speed, which is the
  * standard model but has not been checked on this rover. To check it, drive
  * forward at speed 100 for 1s and 2s: this predicts 15cm and 30cm.
+ *
+ * ONE BATTERY STATE. Four runs in a row from one charge; how the distance
+ * drifts as the battery drains is not measured yet (AB#467's note suggests
+ * about 20 runs from full).
  */
 const FULL_SPEED_CM_PER_SECOND = 15;
 const VEHICLE_WIDTH_CM = 16;
