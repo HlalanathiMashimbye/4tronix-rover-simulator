@@ -3,24 +3,20 @@
  */
 
 /**
- * The simulator is framed in the yard's own shape, and nothing else in its
- * column can change its size (AB#464).
+ * Nothing in the simulator's column can change the yard's size (AB#464).
  *
  * jsdom does no layout, so these hold the STRUCTURE that makes the size
- * constant: the frame's proportions come from YARD, the play controls are
- * inside the frame (laid over the yard) rather than beside it in the column,
- * and the footer slot is the same slot whichever bar fills it. The sizes
- * themselves were measured in a browser: one size in Drive, Blocks and Python,
- * before and after a run.
+ * constant: the play controls are inside the yard (laid over it) rather than
+ * beside it in the column, and the footer slot is the same slot whichever bar
+ * fills it. The sizes themselves were measured in a browser: one size in
+ * Drive, Blocks and Python, before and after a run.
  */
 
 import { render, screen, fireEvent } from '@testing-library/react';
 
-import { YardFrame } from '@/components/mission/YardFrame';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { DriveFooter } from '@/components/mission/DriveFooter';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
-import { YARD } from '@/lib/rover-physics';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 jest.mock('@/contexts/ThemeContext', () => ({ useTheme: () => ({ theme: 'dark' }) }));
@@ -48,13 +44,6 @@ const RUN: TrajectoryPoint[] = Array.from({ length: 10 }, (_, i) => ({
   hitWall: false,
   leds: [null, null, null, null],
 }));
-
-it("takes the frame's proportions from the measured yard", () => {
-  const { container } = render(<YardFrame>inside</YardFrame>);
-  const space = container.querySelector('[data-yard-frame-space]') as HTMLElement;
-  expect(Number(space.style.getPropertyValue('--yard-ratio'))).toBeCloseTo(YARD.widthCm / YARD.depthCm, 9);
-  expect(container.querySelector('[data-yard-frame]')).toHaveTextContent('inside');
-});
 
 it('lays the play controls over the yard, where they cannot take its height', () => {
   const { container } = render(<RoverSimulator trajectory={RUN} isPlaying editorMode="code" />);

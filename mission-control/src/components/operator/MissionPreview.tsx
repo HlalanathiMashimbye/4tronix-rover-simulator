@@ -44,7 +44,7 @@ export function MissionPreview({
 
       {/* Whatever height the panel leaves, not a fixed 4:3: a fixed shape
           pushed Send to Rover below the fold on a laptop. The simulator
-          frames the whole yard in its own shape inside it (YardFrame). */}
+          stretches the whole yard to fill it (computeLayout). */}
       <div className="relative min-h-[120px] w-full flex-1">
         <RoverSimulator
           trajectory={trajectory}

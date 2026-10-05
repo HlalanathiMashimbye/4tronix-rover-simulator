@@ -5,7 +5,6 @@ import { useReducedMotion } from 'motion/react';
 import { Zap } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
-import { YardFrame } from '@/components/mission/YardFrame';
 import {
   computeLayout,
   drawSimFrame,
@@ -43,8 +42,8 @@ interface RoverSimulatorProps {
    */
   bare?: boolean;
   /**
-   * For bare only: the parent's frame is already the yard's shape (the run
-   * player's), so the simulator draws no border of its own inside it.
+   * For bare only: the parent already frames it (the run player does), so
+   * the simulator draws no border of its own inside that frame.
    */
   frameless?: boolean;
   /**
@@ -80,8 +79,8 @@ export function RoverSimulator({
   const playheadRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const lastTsRef = useRef<number | null>(null);
-  // The canvas's size. The canvas is the yard's own shape (YardFrame), so the
-  // layout from it is the whole yard, edge to edge.
+  // The canvas's size. The yard is stretched to fill it (computeLayout), so
+  // the layout from it is the whole yard, edge to edge.
   const sizeRef = useRef({ w: 0, h: 0, dpr: 1 });
 
   // Read through a ref so a parent passing a fresh callback each render does
@@ -391,16 +390,18 @@ export function RoverSimulator({
     </div>
   );
 
+  // The whole box the simulator is given: the yard is stretched to fill it
+  // (computeLayout), so its shape is the panel's.
   const yard = (
-    <YardFrame
-      className={bare ? 'relative h-full w-full' : 'relative min-w-0 flex-1'}
-      frameRef={wrapRef}
-      frameClassName={
-        bare && frameless ? 'overflow-hidden' : 'overflow-hidden rounded-2xl border border-border'
-      }
+    <div
+      ref={wrapRef}
+      data-yard-frame=""
+      className={`simYard relative min-h-0 min-w-0 overflow-hidden ${bare ? 'h-full w-full' : 'flex-1'} ${
+        bare && frameless ? '' : 'rounded-2xl border border-border'
+      }`}
       // The colour the canvas paints beyond the floor photo's edges, so a
       // sliver the canvas misses by rounding never reads as a band.
-      frameStyle={{ background: simPalette.groundOuter }}
+      style={{ background: simPalette.groundOuter }}
     >
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
       {!hasTrajectory && (
@@ -425,7 +426,7 @@ export function RoverSimulator({
         </div>
       )}
       {controls}
-    </YardFrame>
+    </div>
   );
 
   // The run player's own chrome already names the run and says it is a

@@ -8,8 +8,6 @@ import { describeRuns, type RunOption } from '@/lib/missionRuns';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
-import { YardFrame } from '@/components/mission/YardFrame';
-import { YARD } from '@/lib/rover-physics';
 import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
 import {
   readStoredSound,
@@ -145,12 +143,7 @@ export function RunStackCarousel({
           than over the footage, so the chrome now covers no picture at all. */}
       <div className="flex min-h-0 items-start justify-center md:min-h-0 md:flex-1 md:items-stretch">
       <div
-        // The simulation is framed in the yard's own shape, not the video's
-        // (AB#464): a 16:9 frame either cropped the yard's rocks and corners or
-        // left bars beside it. On a phone the frame takes that shape outright;
-        // from md up it is centred in the column's height (YardFrame below).
-        className={`relative w-full touch-pan-y md:aspect-auto md:h-full ${isSim ? 'aspect-(--yard-ratio)' : 'aspect-video'}`}
-        style={{ ['--yard-ratio' as string]: YARD.widthCm / YARD.depthCm }}
+        className="relative aspect-video w-full touch-pan-y md:aspect-auto md:h-full"
         onPointerDown={(event) => {
           if (!canNavigate) return;
           setDragStart(event.clientX);
@@ -164,7 +157,6 @@ export function RunStackCarousel({
         }}
         onPointerCancel={() => setDragStart(null)}
       >
-        <FrameFor sim={isSim}>
         {/* The rest of the stack, showing through behind the top card. Inset so
             the peeled corners read as depth rather than as a misaligned edge. */}
         <div className="pointer-events-none absolute inset-x-3 bottom-1 top-2" aria-hidden="true">
@@ -227,9 +219,11 @@ export function RunStackCarousel({
                 />
               </div>
             ) : (
-              /* No padding and no card: the simulation fills the frame, which
-                 is already the yard's shape (FrameFor), so the simulator draws
-                 no border of its own inside it. */
+              /* No padding and no card: the simulation fills the frame the
+                 same way the video does (the yard stretches to fill it), so
+                 switching between the two runs does not change the size of
+                 the picture. The frame is the player's own, so the simulator
+                 draws no border inside it. */
               <div className="h-full">
                 <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare frameless onSourceChange={onSimSourceChange} />
               </div>
@@ -318,21 +312,10 @@ export function RunStackCarousel({
           <NavButton direction="previous" disabled={!canNavigate} onClick={() => move(-1)} />
           <NavButton direction="next" disabled={!canNavigate} onClick={() => move(1)} />
         </motion.article>
-        </FrameFor>
       </div>
       </div>
     </section>
   );
-}
-
-/**
- * The box the stack sits in: the whole frame for a video, the largest
- * yard-shaped box in it for the simulation, so the stack's peeking cards and
- * the top card share the yard's outline instead of the video's.
- */
-function FrameFor({ sim, children }: { sim: boolean; children: React.ReactNode }) {
-  if (!sim) return <div className="absolute inset-0">{children}</div>;
-  return <YardFrame className="absolute inset-0">{children}</YardFrame>;
 }
 
 /**

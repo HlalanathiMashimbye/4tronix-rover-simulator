@@ -226,10 +226,9 @@ export default function MissionVideoClient({
             rendering fault, which is exactly how it was reported.
 
             Since AB#464 the yard is the measured one, 233 x 249 cm, near
-            square, and the simulation is framed in that shape (YardFrame)
-            rather than the video's, centred in this track. Whatever width it
-            does not need is the page's, outside the frame, not empty ground
-            inside it. The split stays for the video's sake.
+            square, and it is stretched to fill the canvas (computeLayout), so
+            no split leaves bars beside it. The split stays for the video's
+            sake.
 
             The 320px floor on the right track keeps the code readable, so this
             does not squeeze the editor to buy the change.

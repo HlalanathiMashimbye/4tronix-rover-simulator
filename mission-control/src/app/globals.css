@@ -953,9 +953,9 @@
  * Over, unless the card is much wider than it is tall. That is the shape it
  * takes under the editor in the stacked layout (narrow laptop windows,
  * tablets), where a 108px footer under the yard left the yard 5px of a 179px
- * card. Beside it, the yard gets the card's whole height and the footer a
- * fixed width, which keeps it one size there too. An aspect-ratio container
- * query, because width alone cannot tell a wide card from a big one.
+ * card. Beside it, the yard gets the card's whole height and the footer the
+ * rest of the width, which keeps the yard one size there too. An aspect-ratio
+ * container query, because width alone cannot tell a wide card from a big one.
  */
 .simCard {
   container: sim / size;
@@ -974,14 +974,13 @@
   .simBody {
     flex-direction: row;
   }
-  /* The yard exactly as wide as its height allows, and the footer the rest.
-     A fixed footer width left the yard centred in a wide space, with empty
-     ground either side of it. The yard's size still depends only on the
-     row's height, so it is the same in every mode. */
-  .simBody > [data-yard-frame-space] {
-    flex: 0 0 auto;
-    height: 100%;
-    aspect-ratio: var(--yard-ratio);
+  /* The yard the card's height and up to 1.6 times that across, and the
+     footer the rest. The yard stretches to fill whatever it is given
+     (computeLayout); this keeps it from being stretched into a strip, and
+     its size still depends only on the card, so it is the same in every
+     mode. 2rem is the header and the gap under it. */
+  .simBody > .simYard {
+    flex: 0 1 calc((100cqh - 2rem) * 1.6);
   }
   .simFooter {
     flex: 1 1 0;
@@ -995,9 +994,10 @@
  *
  * Editing: the docked simulator takes 30% of the screen so the blocks keep
  * most of it, and grows to up to 62% when the learner wants a proper look.
- * Launching (after Run): the simulator grows to the whole yard at full width,
- * the controls rise in under it and the editor sinks away; Back to blocks
- * plays it in reverse.
+ * Launching (after Run): the simulator takes everything the launch controls
+ * leave, the controls rise in under it and the editor sinks away; Back to
+ * blocks plays it in reverse. The yard stretches to fill the strip at every
+ * size (computeLayout), so the strip is sized for the screen, not the yard.
  *
  * Sized with FLEX, not height, because the launch size is "whatever is
  * left", which height cannot express and flex can interpolate: flex-grow and
@@ -1009,11 +1009,6 @@
  */
 .phoneWorkspace {
   --phone-move: 420ms var(--ease-drawer);
-  /* So the strip can be sized to the yard: 100cqw / --yard-ratio (set from
-     YARD in PhoneWorkspace) is how tall the whole yard is at full width. The
-     yard is framed in its own shape (AB#464), and a strip taller than that
-     would only be empty ground above and below it. */
-  container-type: inline-size;
 }
 .phoneSimStrip {
   flex: 0 0 30dvh;
@@ -1021,18 +1016,15 @@
   transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  flex-basis: min(62dvh, calc(100cqw / var(--yard-ratio)));
+  flex-basis: 62dvh;
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
 .phoneSimStrip[data-keyboard="true"] {
   flex-basis: 2.25rem;
 }
-/* Launching: the whole yard at full width, with the launch controls straight
-   under it. It used to take everything they left, which the yard, limited by
-   the width, cannot use. */
 .phoneWorkspace[data-launch="true"] .phoneSimStrip {
-  flex: 0 1 calc(100cqw / var(--yard-ratio));
+  flex: 1 1 0;
 }
 
 .phoneLaunchSlot {
