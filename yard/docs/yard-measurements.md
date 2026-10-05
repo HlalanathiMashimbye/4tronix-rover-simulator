@@ -34,7 +34,7 @@ fails if the two ever disagree.
 | Seam between the two floor boards | 121 cm from the back wall | Photos, within 1 cm |
 | Door | The southern half of the west side, from the seam to the front wall | Confirmed by the team |
 | Start | **The middle of the seam: x 116.5, y 121, facing south** | The team's choice. In the photos the rover sat at x 112, y 119 |
-| Start mark | **12 cm behind, 20 cm ahead, 5 cm arrowhead** | Not taped yet: see [The start mark](#the-start-mark) |
+| Start mark | **A cross, arms 14 cm from the centre** | Not taped yet: see [The start mark](#the-start-mark) |
 
 ## The start mark
 
@@ -48,15 +48,16 @@ simulator draws the mark green):
 
 1. Find the middle of the seam: 116.5 cm from the west wall, the door side,
    measured along the seam. It is the same from the east wall.
-2. Run a strip of tape across the seam there, north to south: from 12 cm
-   north of the seam to 20 cm south of it.
-3. Make the south end an arrowhead, 5 cm back and 5 cm to each side, so it
-   points at the front wall.
+2. Tape a cross there: one strip along the seam and one across it, each
+   28 cm long and centred on the spot, so every arm is 14 cm.
+
+A cross and not an arrow: an arrow reads as "drive this way", and a mission
+can just as well start by reversing.
 
 **Using it**, before every run: the rover's centre, between its middle
-wheels, over the point where the tape crosses the seam, and its nose along
-the arrow. Parked like that, the last 10 cm of the arrow shows in front of
-its nose, which is what lines it up.
+wheels, over the middle of the cross, facing the front wall. Parked like
+that, all four tips of the cross show, about 4 cm past the rover on each
+side, which is what centres it.
 
 The simulator draws the same mark at the same size, so what a learner sees
 under the rover on screen is what the operator sees on the floor.

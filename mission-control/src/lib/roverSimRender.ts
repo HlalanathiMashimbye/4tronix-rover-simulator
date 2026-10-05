@@ -351,61 +351,50 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
 }
 
 /**
- * The start mark (AB#465), in the rover's frame: a strip of tape crossing the
- * seam where the rover's centre goes, its arrow pointing the way the rover
- * faces. In centimetres. yard/docs/yard-measurements.md tells a person how to
- * tape it from the same numbers, and yardMeasurements.test.ts holds the two
- * together, so the mark on screen is the mark on the floor.
+ * The start mark (AB#465): a cross of tape where the rover's centre goes, one
+ * arm along the seam and one across it. In centimetres. yard-measurements.md
+ * tells a person how to tape it from the same number, and
+ * yardMeasurements.test.ts holds the two together, so the mark on screen is
+ * the mark on the floor.
  *
- * The arrow runs past the rover's nose (it is 20 cm long, so its nose is 10 cm
- * ahead of its centre), so with the rover parked on it the arrow still shows
- * in front: on screen, and on the floor, where that is what lines the rover up.
+ * A CROSS, NOT AN ARROW. It was an arrow pointing the way the rover faces,
+ * and an arrow reads as "drive this way" when a mission can just as well start
+ * by reversing. Which way the rover faces is said in words instead, "facing
+ * the front wall", which in the room is unmistakable.
+ *
+ * Each arm runs 14 cm from the centre, past the rover's body on every side
+ * (it is 20 x 18.5 cm), so with the rover parked on it all four tips show:
+ * that is what centres it, on screen and on the floor.
  */
-export const START_MARK_CM = { behind: 12, ahead: 20, arrowhead: 5 };
-const START_MARK_BEHIND_CM = START_MARK_CM.behind;
-const START_MARK_AHEAD_CM = START_MARK_CM.ahead;
-const START_MARK_HEAD_CM = START_MARK_CM.arrowhead;
+export const START_MARK_CM = { arm: 14 };
 
-/** Where the start mark's centre, tail and arrow tip are on screen. */
-export function startMark(L: SimLayout): {
-  centre: [number, number];
-  tail: [number, number];
-  tip: [number, number];
-} {
+/** Where the start mark's centre and the tips of its four arms are on screen. */
+export function startMark(L: SimLayout): { centre: [number, number]; tips: [number, number][] } {
+  const arm = START_MARK_CM.arm;
   return {
     centre: worldToScreen(L, 0, 0),
-    tail: worldToScreen(L, 0, -START_MARK_BEHIND_CM),
-    tip: worldToScreen(L, 0, START_MARK_AHEAD_CM),
+    tips: [worldToScreen(L, 0, arm), worldToScreen(L, 0, -arm), worldToScreen(L, arm, 0), worldToScreen(L, -arm, 0)],
   };
 }
 
 function drawStartMark(ctx: CanvasRenderingContext2D, L: SimLayout) {
-  const { centre, tail, tip } = startMark(L);
-  // The arrowhead's two barbs, back from the tip and either side of the strip.
-  const left = worldToScreen(L, -START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
-  const right = worldToScreen(L, START_MARK_HEAD_CM, START_MARK_AHEAD_CM - START_MARK_HEAD_CM);
+  const { tips } = startMark(L);
+  const [ahead, behind, right, left] = tips;
   const width = Math.max(2, 2.5 * L.s);
 
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
   // A dark edge first, so the tape reads on the bright parts of the floor.
   for (const [colour, extra] of [['rgba(20,8,2,0.55)', 2], ['rgba(52,211,153,0.95)', 0]] as const) {
     ctx.strokeStyle = colour;
     ctx.lineWidth = width + extra;
     ctx.beginPath();
-    ctx.moveTo(tail[0], tail[1]);
-    ctx.lineTo(tip[0], tip[1]);
+    ctx.moveTo(behind[0], behind[1]);
+    ctx.lineTo(ahead[0], ahead[1]);
     ctx.moveTo(left[0], left[1]);
-    ctx.lineTo(tip[0], tip[1]);
     ctx.lineTo(right[0], right[1]);
     ctx.stroke();
   }
-  // Where the rover's centre goes.
-  ctx.fillStyle = 'rgba(52,211,153,0.95)';
-  ctx.beginPath();
-  ctx.arc(centre[0], centre[1], Math.max(2.5, 1.6 * L.s), 0, Math.PI * 2);
-  ctx.fill();
   ctx.restore();
 }
 
