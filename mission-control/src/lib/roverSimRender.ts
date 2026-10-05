@@ -102,7 +102,13 @@ export const LIGHT_SIM_PALETTE: SimPalette = {
 };
 
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
-const MARGIN = 10; // px inset so the rover never clips the panel edge
+/**
+ * None: every simulator is framed in the yard's own shape (YardFrame), so the
+ * yard IS the canvas. Any inset would be a band of empty ground inside the
+ * frame. The rover's centre stays 12 cm from a wall and its body is 20 cm
+ * long, so it does not clip at true scale.
+ */
+const MARGIN = 0;
 
 // Servo ids for the four steerable wheels (front/rear, left/right).
 const FL = '9';
@@ -131,12 +137,13 @@ export function computeLayout(w: number, h: number, yard: Yard = YARD): SimLayou
 const FILL_PAD_CM = 15;
 
 /**
- * A layout where the yard FILLS the canvas, edge to edge (AB#464).
+ * A layout where the yard FILLS the canvas, cropped, for a mission's cover on
+ * the home feed (AB#464).
  *
- * The yard is near square and almost no panel is: the cards are wide strips,
- * the mission page and the phone strip are landscape. Fitting the whole yard
- * left bars of empty ground beside it on every one of them. So the yard is
- * scaled to fill and cropped, and the crop is placed for the run:
+ * Only the covers. Everywhere a rover is driven or watched, the frame is the
+ * yard's own shape and the whole yard shows, because a crop loses rocks and
+ * corners that a learner needs. A cover is a thumbnail in a wide card, so
+ * there the crop is the better trade, placed for the run:
  *
  *  - Centred on the whole trail, so a run that fits is framed once and the
  *    view holds still while it plays.

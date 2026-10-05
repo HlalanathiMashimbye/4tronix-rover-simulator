@@ -9,6 +9,7 @@ import { generateRandomMissionName } from '@/core/domain/services/missionNameGen
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
+import { DriveFooter } from '@/components/mission/DriveFooter';
 import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { SplitPane } from '@/components/ui/SplitPane';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
@@ -319,7 +320,6 @@ export function MissionWorkspace() {
       onEditorModeChange={handleEditorModeChange}
       error={error}
       onManualTrajectory={handleManualTrajectory}
-      onResetSimulation={handleResetSimulation}
       manualResetVersion={manualResetVersion}
       onGenerateCommands={runSimulation}
       onCodeChange={setCurrentCode}
@@ -390,9 +390,10 @@ export function MissionWorkspace() {
             <SimulationPanel
               {...simulatorProps}
               // Name and launch live under the simulator so the block canvas
-              // keeps the full height of its own column. The simulator is on
-              // screen in every mode.
-              footer={submitBar}
+              // keeps the full height of its own column. Drive fills the same
+              // fixed slot with its reset, so the yard is one size in every
+              // mode.
+              footer={submitBar ?? <DriveFooter onResetPosition={handleResetSimulation} />}
             />
           }
         />

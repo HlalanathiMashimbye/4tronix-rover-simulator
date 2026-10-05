@@ -83,13 +83,20 @@ describe('the rover in the real yard', () => {
 });
 
 describe('the yard on screen', () => {
-  // 1 px per cm once the renderer's 10 px margin is taken off each side.
-  const L = computeLayout(YARD.widthCm + 20, YARD.depthCm + 20);
+  // A canvas in the yard's own shape (YardFrame), at 1 px per cm.
+  const L = computeLayout(YARD.widthCm, YARD.depthCm);
+
+  it('fills a yard-shaped canvas corner to corner, with no band of empty ground', () => {
+    const big = computeLayout(YARD.widthCm * 2, YARD.depthCm * 2);
+    expect(big.ox).toBeCloseTo(0, 6);
+    expect(big.oy).toBeCloseTo(0, 6);
+    expect(big.s).toBeCloseTo(2, 6);
+  });
 
   it('puts the start where it is in the yard, with north at the top', () => {
     const [x, y] = worldToScreen(L, 0, 0);
-    expect(x).toBeCloseTo(10 + 116.5, 6);
-    expect(y).toBeCloseTo(10 + 121, 6);
+    expect(x).toBeCloseTo(116.5, 6);
+    expect(y).toBeCloseTo(121, 6);
   });
 
   it('draws forward as down the screen, because the rover starts facing south', () => {

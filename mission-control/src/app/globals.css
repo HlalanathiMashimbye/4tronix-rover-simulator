@@ -921,10 +921,10 @@
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
  * Editing: the docked simulator takes 30% of the screen so the blocks keep
- * most of it, and grows to 62% when the learner wants a proper look.
- * Launching (after Run): the simulator takes everything the launch controls
- * leave, the controls rise in under it and the editor sinks away; Back to
- * blocks plays it in reverse.
+ * most of it, and grows to up to 62% when the learner wants a proper look.
+ * Launching (after Run): the simulator grows to the whole yard at full width,
+ * the controls rise in under it and the editor sinks away; Back to blocks
+ * plays it in reverse.
  *
  * Sized with FLEX, not height, because the launch size is "whatever is
  * left", which height cannot express and flex can interpolate: flex-grow and
@@ -936,6 +936,11 @@
  */
 .phoneWorkspace {
   --phone-move: 420ms var(--ease-drawer);
+  /* So the strip can be sized to the yard: 100cqw / --yard-ratio (set from
+     YARD in PhoneWorkspace) is how tall the whole yard is at full width. The
+     yard is framed in its own shape (AB#464), and a strip taller than that
+     would only be empty ground above and below it. */
+  container-type: inline-size;
 }
 .phoneSimStrip {
   flex: 0 0 30dvh;
@@ -943,15 +948,18 @@
   transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  flex-basis: 62dvh;
+  flex-basis: min(62dvh, calc(100cqw / var(--yard-ratio)));
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
 .phoneSimStrip[data-keyboard="true"] {
   flex-basis: 2.25rem;
 }
+/* Launching: the whole yard at full width, with the launch controls straight
+   under it. It used to take everything they left, which the yard, limited by
+   the width, cannot use. */
 .phoneWorkspace[data-launch="true"] .phoneSimStrip {
-  flex: 1 1 0;
+  flex: 0 1 calc(100cqw / var(--yard-ratio));
 }
 
 .phoneLaunchSlot {
