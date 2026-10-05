@@ -132,7 +132,11 @@ export function subscribeToYardQueue(
     collection(db, 'missions'),
     where('yardId', '==', yardId),
     where('status', 'in', ACTIVE_STATUSES),
-    orderBy('submittedAt', 'asc'),
+    // Newest first, and it has to stay that way: #259 flipped this to asc to
+    // put the next job at the top, and the cap went back to hiding new work.
+    // Display order is the console's sort (oldest first by default); this only
+    // decides which QUEUE_LIMIT missions make it onto the screen at all.
+    orderBy('submittedAt', 'desc'),
     // One past the cap, to know whether anything older was left out.
     limit(QUEUE_LIMIT + 1),
   );

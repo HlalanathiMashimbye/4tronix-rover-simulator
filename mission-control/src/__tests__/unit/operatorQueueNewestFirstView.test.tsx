@@ -3,8 +3,10 @@
  */
 
 /**
- * The console's side of showing the oldest waiting mission first. See
- * operatorQueueNewestFirst.test.tsx for the query contract.
+ * The console's side of the queue. The query delivers newest first, so the
+ * cap never hides new work (operatorQueueNewestFirst.test.tsx); the console
+ * still shows the mission that has waited longest at the top, numbered #1,
+ * because that is the next job to hand to the rover.
  */
 
 import { render, screen, within } from '@testing-library/react';
@@ -34,9 +36,8 @@ const mission = (id: string, name: string, minute: number) => ({
   submittedAt: `2026-09-26T12:${String(minute).padStart(2, '0')}:00Z`,
 });
 
-// As the query delivers them: oldest first. The queue shows the mission that
-// has waited longest at the top and the newest arrival at the end.
-const OLDEST_FIRST = [mission('a', 'Bright Storm Climber', 17), mission('b', 'Jolly Meteor Rover', 24), mission('c', 'Proud Crater Mapper', 29)];
+// As the query delivers them: newest first.
+const NEWEST_FIRST = [mission('c', 'Proud Crater Mapper', 29), mission('b', 'Jolly Meteor Rover', 24), mission('a', 'Bright Storm Climber', 17)];
 
 function renderQueue(olderHidden: boolean) {
   render(
@@ -44,7 +45,7 @@ function renderQueue(olderHidden: boolean) {
       <MissionQueue role="operator" yardId="curiosity" yardName="Curiosity" yards={[]} />
     </SearchProvider>,
   );
-  act(() => emit(OLDEST_FIRST, olderHidden));
+  act(() => emit(NEWEST_FIRST, olderHidden));
 }
 
 const row = (name: RegExp) => screen.getByRole('button', { name });
@@ -56,10 +57,10 @@ it('lists the oldest waiting mission first', () => {
   expect(names[2]).toMatch(/Proud Crater Mapper/);
 });
 
-it('numbers missions from the newest arrival, so the oldest waiting mission is not #1', () => {
+it('numbers missions by arrival, so #1 is the one that has waited longest', () => {
   renderQueue(false);
-  expect(within(row(/Bright Storm Climber/)).getByText('3')).toBeInTheDocument();
-  expect(within(row(/Proud Crater Mapper/)).getByText('1')).toBeInTheDocument();
+  expect(within(row(/Bright Storm Climber/)).getByText('1')).toBeInTheDocument();
+  expect(within(row(/Proud Crater Mapper/)).getByText('3')).toBeInTheDocument();
 });
 
 it('says when older waiting missions are not on screen', () => {
