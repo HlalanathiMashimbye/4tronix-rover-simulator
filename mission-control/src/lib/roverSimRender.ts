@@ -43,10 +43,10 @@ export interface SimLayout {
  */
 export interface SimPalette {
   /**
-   * The ground is a radial wash from the centre out, and it is painted across
-   * the whole canvas - there is no letterbox and no frame any more, so the
-   * outer stop is also the colour at every edge. Anything sitting behind the
-   * canvas has to use groundOuter to be invisible.
+   * The ground is a radial wash from the centre out, used until the floor
+   * photo loads. The outer stop is also the colour painted beyond the yard,
+   * where a cover's crop or a rounding sliver shows it, so anything sitting
+   * behind the canvas has to use groundOuter to be invisible.
    */
   groundInner: string; // radial wash, centre
   groundMid: string;
