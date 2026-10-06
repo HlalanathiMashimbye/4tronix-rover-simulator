@@ -108,7 +108,7 @@ export function MissionDetail({
       <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1 @2xl:gap-3">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
-        <MissionPreview key={mission.id} mission={mission} onSourceChange={setRunningSource} />
+        <MissionPreview key={mission.id} mission={mission} yardId={yardId} onSourceChange={setRunningSource} />
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
           {/* Not on a phone: the blocks are plainly the learner's, and the

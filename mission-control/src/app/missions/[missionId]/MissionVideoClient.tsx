@@ -9,6 +9,7 @@ import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -47,7 +48,9 @@ export default function MissionVideoClient({
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
   // From the blocks where there are blocks, so it knows which block is which.
-  const simTrajectory = useMissionTrajectory(mission);
+  // Simulated in the yard it was sent to (AB#468), the one drawn below.
+  const { layout: yardLayout } = useYardLayout(mission?.yardId);
+  const simTrajectory = useMissionTrajectory(mission, yardLayout);
   /** What the simulation is running, lit up in the code like the editor (AB#450). */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
 
@@ -252,6 +255,7 @@ export default function MissionVideoClient({
               missionName={missionName}
               trajectory={simTrajectory}
               onSimSourceChange={setRunningSource}
+              yardId={mission.yardId}
             />
             {/* Under the player, where a learner looks after watching. One
                 line, so the leftover height goes to the player instead. */}

@@ -6,6 +6,7 @@ import { MissionNameInput } from '@/components/mission/MissionNameInput';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import type { Crash } from '@/core/domain/safety/crashCheck';
+import type { Slope } from '@/core/domain/safety/slopeCheck';
 
 /**
  * Checks, name and launch, in Create Mission's footer card (MissionWorkspace):
@@ -38,6 +39,8 @@ interface MissionSubmitBarProps {
   hasRunSimulation: boolean;
   /** What that run hit, from crashCheck: null for nothing (AB#466). */
   crash?: Crash | null;
+  /** The steepest ground that run climbs, from slopeCheck: null for flat (AB#468). */
+  slope?: Slope | null;
 }
 
 export function MissionSubmitBar({
@@ -49,13 +52,14 @@ export function MissionSubmitBar({
   currentCode,
   hasRunSimulation,
   crash,
+  slope,
 }: MissionSubmitBarProps) {
   // A parse of the whole program on every keystroke. Cheap enough to do plainly
   // - it is one pass over the lines - but memoised because Blockly re-reports
   // identical code on any workspace event, drag included.
   const preFlight = useMemo(
-    () => runPreFlightChecks(currentCode, { hasRunSimulation, crash }),
-    [currentCode, hasRunSimulation, crash],
+    () => runPreFlightChecks(currentCode, { hasRunSimulation, crash, slope }),
+    [currentCode, hasRunSimulation, crash, slope],
   );
 
   const hasCode = currentCode.trim().length > 0;

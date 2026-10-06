@@ -1,7 +1,7 @@
 // GENERATED FILE - DO NOT EDIT.
 // Built from mission-control/src/lib by scripts/build-roversim.mjs.
 // Edit the TypeScript source and re-run `npm run build:roversim`.
-import { RoverPhysics, YARD } from './rover-physics.js';
+import { RoverPhysics, YARD, zoneUnderRover } from './rover-physics.js';
 /**
  * The first frame the physics stopped the rover, at a wall or a rock, or -1.
  *
@@ -29,7 +29,7 @@ export function simulateCommands(commands, yard = YARD) {
     // Lamps persist until something changes them, exactly like the real rover:
     // they do not go out because the next command was a drive.
     let leds = [null, null, null, null];
-    const trajectory = [toPoint(physics, leds)];
+    const trajectory = [toPoint(physics, yard, leds)];
     for (const cmd of commands) {
         if (cmd.command === 'leds') {
             // A null slot means "leave that lamp alone", which is what setPixel does
@@ -39,7 +39,7 @@ export function simulateCommands(commands, yard = YARD) {
             // than a single frame nobody sees.
             const steps = Math.max(1, Math.round((cmd.duration ?? 0.3) / STEP_SECONDS));
             for (let i = 0; i < steps; i++)
-                trajectory.push(toPoint(physics, leds, cmd.source));
+                trajectory.push(toPoint(physics, yard, leds, cmd.source));
             continue;
         }
         if (cmd.command === 'wait') {
@@ -47,7 +47,7 @@ export function simulateCommands(commands, yard = YARD) {
             physics.setCommand('stop', 0);
             for (let i = 0; i < steps; i++) {
                 physics.update(STEP_SECONDS);
-                trajectory.push(toPoint(physics, leds, cmd.source));
+                trajectory.push(toPoint(physics, yard, leds, cmd.source));
             }
             continue;
         }
@@ -71,23 +71,23 @@ export function simulateCommands(commands, yard = YARD) {
         const remainder = durationSeconds - wholeSteps * STEP_SECONDS;
         for (let i = 0; i < wholeSteps; i++) {
             physics.update(STEP_SECONDS);
-            trajectory.push(toPoint(physics, leds, cmd.source));
+            trajectory.push(toPoint(physics, yard, leds, cmd.source));
         }
         // 1e-9 rather than 0: floating point leaves crumbs like 2.7755e-17 behind,
         // and a step of that length is a wasted point, not a movement.
         if (remainder > 1e-9) {
             physics.update(remainder);
-            trajectory.push(toPoint(physics, leds, cmd.source));
+            trajectory.push(toPoint(physics, yard, leds, cmd.source));
         }
         // A command with no duration at all still gets one point, so 'stop' shows.
         if (wholeSteps === 0 && remainder <= 1e-9) {
             physics.update(0);
-            trajectory.push(toPoint(physics, leds, cmd.source));
+            trajectory.push(toPoint(physics, yard, leds, cmd.source));
         }
     }
     return trajectory;
 }
-function toPoint(physics, leds, source) {
+function toPoint(physics, yard, leds, source) {
     const s = physics.getState();
     return {
         x: s.x,
@@ -98,6 +98,7 @@ function toPoint(physics, leds, source) {
         servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
         hitWall: s.hitWall,
         hitRock: s.hitRock,
+        zone: zoneUnderRover(s.x, s.y, yard),
         leds: [...leds],
         ...(source ? { source } : {}),
     };

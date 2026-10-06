@@ -45,6 +45,7 @@ export function RunStackCarousel({
   missionName,
   trajectory,
   onSimSourceChange,
+  yardId,
 }: {
   runs: RunOption[];
   selectedId: string;
@@ -53,6 +54,8 @@ export function RunStackCarousel({
   trajectory: TrajectoryPoint[];
   /** What the simulation is running, so the page can light up the code (AB#450). */
   onSimSourceChange?: (source: CommandSource | null) => void;
+  /** The yard the mission ran in, for the simulator to draw (AB#468). */
+  yardId?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
@@ -225,7 +228,7 @@ export function RunStackCarousel({
                  the picture. The frame is the player's own, so the simulator
                  draws no border inside it. */
               <div className="h-full">
-                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare frameless onSourceChange={onSimSourceChange} />
+                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare frameless onSourceChange={onSimSourceChange} yardId={yardId} />
               </div>
             )}
           </div>

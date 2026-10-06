@@ -7,6 +7,7 @@ const findAll = jest.fn();
 const save = jest.fn();
 const setActive = jest.fn();
 const rename = jest.fn();
+const setLayout = jest.fn();
 
 class UnauthorizedError extends Error {}
 class ForbiddenError extends Error {}
@@ -18,7 +19,7 @@ jest.mock('@/infrastructure/auth/dal', () => ({
 }));
 
 jest.mock('@/infrastructure/container.server', () => ({
-  adminYardRepository: () => ({ findAll, save, setActive, rename }),
+  adminYardRepository: () => ({ findAll, save, setActive, rename, setLayout }),
 }));
 
 jest.mock('@/infrastructure/config/yardDirectory', () => ({ clearYardCache: jest.fn() }));
@@ -26,6 +27,7 @@ jest.mock('@/infrastructure/config/yardDirectory', () => ({ clearYardCache: jest
 import { NextRequest } from 'next/server';
 
 import { POST, PATCH } from '@/app/api/operator/yards/route';
+import { YARD } from '@/lib/rover-physics';
 
 const CURIOSITY = {
   id: 'curiosity',
@@ -166,6 +168,34 @@ describe('/api/operator/yards', () => {
       await PATCH(req('PATCH', { id: 'curiosity', active: true }));
 
       expect(setActive).toHaveBeenCalledWith('curiosity', true);
+    });
+  });
+
+  describe('laying out (AB#468)', () => {
+    it('replaces the layout whole, never merges it into the yard', async () => {
+      // A merge would keep a zone the admin had just removed.
+      const layout = { ...YARD, zones: [] };
+      const resp = await PATCH(req('PATCH', { id: 'curiosity', layout }));
+
+      expect(resp.status).toBe(200);
+      expect(setLayout).toHaveBeenCalledWith('curiosity', layout);
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it('refuses a layout with a rock past the east wall, in words, and saves nothing', async () => {
+      const layout = { ...YARD, rocks: [{ name: 'R9', x: YARD.widthCm + 10, y: 50, widthCm: 10, depthCm: 10 }] };
+      const resp = await PATCH(req('PATCH', { id: 'curiosity', layout }));
+
+      expect(resp.status).toBe(400);
+      expect((await resp.json()).error).toMatch(/R9 is past the east wall/);
+      expect(setLayout).not.toHaveBeenCalled();
+    });
+
+    it('refuses an operator who is not an admin', async () => {
+      requireAdmin.mockRejectedValue(new ForbiddenError());
+
+      expect((await PATCH(req('PATCH', { id: 'curiosity', layout: YARD }))).status).toBe(403);
+      expect(setLayout).not.toHaveBeenCalled();
     });
   });
 });

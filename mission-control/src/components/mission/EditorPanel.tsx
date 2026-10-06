@@ -9,6 +9,7 @@ import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import type { Yard } from '@/lib/rover-physics';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { prefetchBlockly } from '@/infrastructure/browser/loadBlockly';
 import { loadPythonEditor, prefetchPythonEditor } from '@/components/mission/loadPythonEditor';
@@ -37,6 +38,8 @@ interface EditorPanelProps {
 
   onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
   manualResetVersion: number;
+  /** The yard Drive drives in (AB#468). */
+  yard?: Yard;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
   onBlocklyCode: (code: string) => void;
@@ -55,6 +58,7 @@ export function EditorPanel({
   error,
   onManualTrajectory,
   manualResetVersion,
+  yard,
   onGenerateCommands,
   onCodeChange,
   onBlocklyCode,
@@ -123,6 +127,7 @@ export function EditorPanel({
           <ManualControlRealtime
             onTrajectoryUpdate={onManualTrajectory}
             resetVersion={manualResetVersion}
+            yard={yard}
           />
         )}
         {editorMode === 'blockly' && <BlocklyEditor key={isPhone ? 'phone' : 'desktop'} phone={isPhone} onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={isPhone ? undefined : onShowAsPython} highlight={highlight} onRegisterRun={onRegisterRun} />}
