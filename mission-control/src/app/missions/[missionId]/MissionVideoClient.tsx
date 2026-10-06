@@ -92,6 +92,27 @@ export default function MissionVideoClient({
     void fetchMission();
   }, [missionId]);
 
+  // Remix into the workspace: carry blocks for block-built missions,
+  // otherwise the Python, and open the matching editor mode.
+  const remix = useCallback(() => {
+    if (mission && mission.status === 'completed') {
+      if (mission.blocklyState) {
+        localStorage.setItem('roverWorkspace', mission.blocklyState);
+        router.push('/mission?mode=blockly');
+      } else {
+        localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
+        router.push('/mission?mode=code');
+      }
+    }
+  }, [mission, router]);
+
+  // Auto-remix when landing from email or deep link with ?autoRemix=true
+  useEffect(() => {
+    if (autoRemix && mission && mission.status === 'completed') {
+      remix();
+    }
+  }, [autoRemix, mission, remix]);
+
   if (loading) {
     return (
       <main className="flex h-page items-center justify-center">
@@ -129,27 +150,6 @@ export default function MissionVideoClient({
   const dateLabel = new Date(mission.completedAt || mission.submittedAt).toLocaleDateString();
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
-
-  // Remix into the workspace: carry blocks for block-built missions,
-  // otherwise the Python, and open the matching editor mode.
-  const remix = useCallback(() => {
-    if (mission && mission.status === 'completed') {
-      if (mission.blocklyState) {
-        localStorage.setItem('roverWorkspace', mission.blocklyState);
-        router.push('/mission?mode=blockly');
-      } else {
-        localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
-        router.push('/mission?mode=code');
-      }
-    }
-  }, [mission, router]);
-
-  // Auto-remix when landing from email or deep link with ?autoRemix=true
-  useEffect(() => {
-    if (autoRemix && mission && mission.status === 'completed') {
-      remix();
-    }
-  }, [autoRemix, mission, remix]);
 
   const copyCode = async () => {
     // The same payload the operator queue copies. This button used to write
