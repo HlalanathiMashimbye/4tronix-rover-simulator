@@ -17,6 +17,9 @@ import { useEffect } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
 jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('mode=blockly') }));
+jest.mock('@/infrastructure/container.browser', () => ({
+  browserMissionRepository: jest.fn(),
+}));
 jest.mock('@/contexts/LearnerContext', () => ({
   useLearner: () => ({ learnerEmail: 'learner@example.com', openEmailPrompt: () => {}, showEmailPrompt: false }),
 }));
