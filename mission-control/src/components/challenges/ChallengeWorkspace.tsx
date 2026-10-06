@@ -175,14 +175,16 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
           anyway, since a route change follows shortly after it appears. */}
       {finishResult && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/85 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-2 rounded-3xl border border-primary/40 bg-card p-8 text-center clay">
-            <PartyPopper className="h-10 w-10 text-primary" />
-            <p className="font-display text-xl font-bold text-foreground">
+          <div className="flex flex-col items-center gap-2 rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-green-edge bg-kid-panel p-8 text-center">
+            <span className="flex h-20 w-20 items-center justify-center rounded-full border-b-[6px] border-kid-orange-edge bg-kid-orange text-kid-ink">
+              <PartyPopper className="h-10 w-10" aria-hidden="true" />
+            </span>
+            <p className="font-display text-2xl font-bold text-foreground">
               {finishResult.justUnlockedLevelId
                 ? `Level ${finishResult.justUnlockedLevelId} unlocked!`
                 : 'Challenge complete!'}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-kid-muted-text">
               {isCodeChallenge ? 'Carrying your code into Create Mission…' : 'Heading back to Challenges…'}
             </p>
           </div>

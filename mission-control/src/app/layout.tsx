@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Fredoka } from "next/font/google";
+import { Inter, Fredoka, Nunito } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
@@ -43,6 +43,15 @@ const fredoka = Fredoka({
   weight: ["300", "400", "500", "600", "700"],
 });
 
+// The reading face on the Challenges surface only (see globals.css). Not
+// preloaded: every page shares this layout, and only /challenges uses it, so
+// a preload would spend a font download on every other page for nothing.
+const nunito = Nunito({
+  variable: "--font-rounded",
+  subsets: ["latin"],
+  preload: false,
+});
+
 const APP_TITLE = "Mission Control · Mars Mission Platform";
 // Describes what the platform actually does. The previous line promised a
 // rover called Sparky and mission patches to earn; neither exists anywhere in
@@ -84,7 +93,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fredoka.variable} h-full antialiased`}
+      className={`${inter.variable} ${fredoka.variable} ${nunito.variable} h-full antialiased`}
       // data-theme and style are set by the beforeInteractive script above,
       // before hydration - server-rendered HTML never has them, so React
       // correctly sees a diff here on every load. That is the whole point of

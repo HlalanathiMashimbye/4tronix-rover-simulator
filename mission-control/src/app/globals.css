@@ -226,6 +226,57 @@
   --shadow-card: var(--shadow-soft);
 }
 
+/*
+ * The Challenges surface: a brighter, toy-like palette for the youngest
+ * learners, scoped by the data-surface attribute app/challenges/layout.tsx
+ * sets so nothing outside /challenges changes. See
+ * docs/UI_REDESIGN_STANDARDS.md for why it exists.
+ *
+ * TEXT ON A FILL IS ALWAYS --kid-ink, NEVER WHITE. White on Scratch blue is
+ * 2.93:1, on the orange 1.89:1, on the green 2.54:1 - all under the 4.5:1 AA
+ * floor. Ink on the same fills runs 5.5, 8.4 and 6.3. kidPalette.test.ts
+ * recomputes these from this file, so a "brighter" swap that drops a pair
+ * under 4.5:1 fails CI rather than shipping.
+ *
+ * The *-edge shades are the darker lip under a pill (border-b-4): the 3D
+ * press reads from that one darker band, not from a shadow.
+ *
+ * The *-text shades are for the colours used AS TEXT on a panel. The vivid
+ * fills are fine as text on the dark panel; on the light one they need
+ * deepening, the same reason the block colours above have light variants.
+ */
+[data-surface="challenges"] {
+  --kid-blue: #4C97FF;
+  --kid-blue-edge: #3373CC;
+  --kid-orange: #FFAB19;
+  --kid-orange-edge: #CF8B17;
+  --kid-green: #10B981;
+  --kid-green-edge: #0B8A60;
+  --kid-ink: #14213D;
+
+  --kid-panel: #1A2147;
+  --kid-panel-edge: #2B3570;
+  --kid-muted-text: #B8C2E0;
+  --kid-blue-text: #4C97FF;
+  --kid-orange-text: #FFAB19;
+  --kid-green-text: #10B981;
+
+  /* Rounded body face, larger leading. Fredoka stays the display face for
+     headings (h1-h3 already use it); Nunito is the reading face because its
+     letterforms stay open at body sizes where Fredoka's get heavy. */
+  font-family: var(--font-rounded), var(--font-sans);
+  line-height: 1.6;
+}
+
+[data-theme="light"] [data-surface="challenges"] {
+  --kid-panel: #FFFFFF;
+  --kid-panel-edge: #DCE6F7;
+  --kid-muted-text: #5B6B8C;
+  --kid-blue-text: #1F5FCC;
+  --kid-orange-text: #A35C00;
+  --kid-green-text: #047857;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -274,6 +325,21 @@
   --color-block-stop: var(--block-stop);
   --color-block-hat: var(--block-hat);
   --color-block-foreground: var(--block-foreground);
+
+  /* Challenges surface palette - only defined inside [data-surface="challenges"] */
+  --color-kid-blue: var(--kid-blue);
+  --color-kid-blue-edge: var(--kid-blue-edge);
+  --color-kid-orange: var(--kid-orange);
+  --color-kid-orange-edge: var(--kid-orange-edge);
+  --color-kid-green: var(--kid-green);
+  --color-kid-green-edge: var(--kid-green-edge);
+  --color-kid-ink: var(--kid-ink);
+  --color-kid-panel: var(--kid-panel);
+  --color-kid-panel-edge: var(--kid-panel-edge);
+  --color-kid-muted-text: var(--kid-muted-text);
+  --color-kid-blue-text: var(--kid-blue-text);
+  --color-kid-orange-text: var(--kid-orange-text);
+  --color-kid-green-text: var(--kid-green-text);
 
   /* Page-content ceiling. One token instead of max-w-6xl/7xl repeated
      across five files - a monitor wider than 1280px was leaving dead
@@ -534,6 +600,7 @@
   .animate-shoot,
   .animate-twinkle,
   .animate-blast,
+  .animate-node-glow,
   .page-transition-enter {
     animation: none !important;
   }
@@ -593,6 +660,15 @@
 .animate-shoot { animation: shoot 6s ease-in infinite; }
 .animate-twinkle { animation: twinkle 2.6s ease-in-out infinite; }
 .animate-blast { animation: blast-off 1.6s ease-in-out infinite; }
+
+/* The "play this next" node on the challenges map. A ring that breathes
+   outward rather than a bounce: it has to be findable at a glance without
+   pulling the eye every second for the whole visit. */
+@keyframes node-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--kid-blue) 55%, transparent); }
+  50% { box-shadow: 0 0 0 10px color-mix(in oklab, var(--kid-blue) 0%, transparent); }
+}
+.animate-node-glow { animation: node-glow 2.2s ease-in-out infinite; }
 
 /* Planets and decorative objects */
 .planet {
