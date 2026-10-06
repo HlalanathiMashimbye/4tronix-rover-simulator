@@ -1,8 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
-import { Zap } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
 import {
@@ -131,10 +129,6 @@ export function RoverSimulator({
   // The effect below repaints once when it arrives instead.
   const floor = useYardFloor();
   const floorRef = useRef(floor);
-  // Read the same way, for the same reason: the crash's shake, recoil and
-  // flying grit are left out for a viewer who asked for less motion.
-  const reduceMotion = useReducedMotion();
-  const reduceMotionRef = useRef(!!reduceMotion);
 
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -146,16 +140,13 @@ export function RoverSimulator({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current, {
-      reducedMotion: reduceMotionRef.current,
-    });
+    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
 
   useEffect(() => {
     floorRef.current = floor;
-    reduceMotionRef.current = !!reduceMotion;
     drawScene();
-  }, [floor, reduceMotion, drawScene]);
+  }, [floor, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 
@@ -412,17 +403,13 @@ export function RoverSimulator({
         </div>
       )}
       {hud.crashed && (
-        // A crash, said like one. It arrives with a jolt (crash-banner in
-        // globals.css, none under reduced motion) and stays for the rest of
-        // the run, as the scar on the yard does.
+        // Said plainly and held still, from the crash frame to the end of the
+        // run, as the mark on the yard is. "Would": the simulator predicts the
+        // real run, and a shouted, jolting CRASH! made it look less like one.
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-2" role="status">
-          <div className="crash-banner flex items-center gap-1.5 rounded-full border border-red-300/50 bg-red-600 px-3 py-1.5 text-white shadow-lg shadow-red-950/40">
-            <Zap className="h-3.5 w-3.5 shrink-0" fill="currentColor" aria-hidden="true" />
-            <span className="text-xs font-extrabold uppercase tracking-wider">Crash!</span>
-            <span className="truncate text-xs font-semibold">
-              {hud.crashed === 'rock' ? 'Your rover hit a rock.' : 'Your rover hit the wall.'}
-            </span>
-          </div>
+          <p className="truncate rounded-full bg-red-600/90 px-3 py-1 text-xs font-semibold text-white">
+            {hud.crashed === 'rock' ? 'Your rover would hit a rock.' : 'Your rover would hit the wall.'}
+          </p>
         </div>
       )}
       {controls}
