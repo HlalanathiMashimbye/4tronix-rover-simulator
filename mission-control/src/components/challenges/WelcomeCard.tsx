@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Compass } from 'lucide-react';
 import { hasSeenWelcome, recordWelcomeSeen } from '@/infrastructure/browser/platformMilestones';
+import { RecoveryCodeCard } from '@/components/learner/RecoveryCodeCard';
+import { RestoreFromCode } from '@/components/learner/RestoreFromCode';
 
 /**
  * A first-visit welcome that points a new learner at the Getting Started
@@ -20,6 +22,10 @@ import { hasSeenWelcome, recordWelcomeSeen } from '@/infrastructure/browser/plat
  *
  * Plain CSS transitions, not Motion's AnimatePresence, for the reason recorded
  * in MissionSentDialog.
+ *
+ * After the welcome is dismissed, the recovery code card is offered once so
+ * the learner can save a code to restore their identity on another device.
+ * The "I have a recovery code" link opens the restore dialog instead.
  */
 
 export const TOUR_CHALLENGE_HREF = '/challenges/platform-orientation';
@@ -29,10 +35,10 @@ const EXIT_MS = 200;
 export function WelcomeCard() {
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [showRestore, setShowRestore] = useState(false);
+  const [showRecoveryOffer, setShowRecoveryOffer] = useState(false);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Decided after mount: localStorage does not exist during the server render,
-  // and deciding there would flash the card at every visitor.
   useEffect(() => {
     if (hasSeenWelcome()) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- the first-visit check needs the browser
@@ -48,7 +54,11 @@ export function WelcomeCard() {
   const close = useCallback(() => {
     recordWelcomeSeen();
     setVisible(false);
-    exitTimer.current = setTimeout(() => setOpen(false), EXIT_MS);
+    exitTimer.current = setTimeout(() => {
+      setOpen(false);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- deferred after exit animation
+      setShowRecoveryOffer(true);
+    }, EXIT_MS);
   }, []);
 
   useEffect(() => {
@@ -60,63 +70,84 @@ export function WelcomeCard() {
     return () => window.removeEventListener('keydown', onKey);
   }, [open, close]);
 
-  if (!open) return null;
-
   return (
-    <div
-      className={`fixed inset-0 z-[100] grid place-items-center px-4 py-8 ${visible ? '' : 'pointer-events-none'}`}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="welcome-title"
-      aria-describedby="welcome-body"
-    >
-      <div
-        className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
-        onClick={close}
+    <>
+      {open && (
+        <div
+          className={`fixed inset-0 z-[100] grid place-items-center px-4 py-8 ${visible ? '' : 'pointer-events-none'}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="welcome-title"
+          aria-describedby="welcome-body"
+        >
+          <div
+            className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
+            onClick={close}
+          />
+
+          <div
+            className={`relative z-[101] w-full max-w-md rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+              visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+            }`}
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
+              <Compass className="h-7 w-7 text-primary" aria-hidden="true" />
+            </div>
+
+            <h2 id="welcome-title" className="mt-3 font-display text-xl font-bold text-foreground">
+              Welcome to Mission Control
+            </h2>
+
+            <div id="welcome-body" className="mt-2 space-y-2 text-sm text-muted-foreground">
+              <p>
+                Write a mission for a real Mars rover, send it to the yard, and watch a video of your
+                code driving it.
+              </p>
+              <p>
+                New here? The <span className="font-semibold text-foreground">Getting Started</span>{' '}
+                challenges show you around the site, one small step at a time.
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
+              <Link
+                href={TOUR_CHALLENGE_HREF}
+                onClick={() => { recordWelcomeSeen(); setShowRecoveryOffer(true); }}
+                autoFocus
+                className="clay clay-press flex-1 rounded-xl bg-gradient-mars px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
+              >
+                Show me around
+              </Link>
+              <button
+                type="button"
+                onClick={close}
+                className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/70"
+              >
+                I&apos;ll explore on my own
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { recordWelcomeSeen(); setOpen(false); setVisible(false); setShowRestore(true); }}
+              className="mt-3 w-full text-center text-xs text-muted-foreground transition-colors hover:text-primary"
+            >
+              I have a recovery code
+            </button>
+          </div>
+        </div>
+      )}
+
+      <RestoreFromCode
+        open={showRestore}
+        onClose={() => setShowRestore(false)}
       />
 
-      <div
-        className={`relative z-[101] w-full max-w-md rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
-          visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
-        }`}
-      >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-          <Compass className="h-7 w-7 text-primary" aria-hidden="true" />
-        </div>
-
-        <h2 id="welcome-title" className="mt-3 font-display text-xl font-bold text-foreground">
-          Welcome to Mission Control
-        </h2>
-
-        <div id="welcome-body" className="mt-2 space-y-2 text-sm text-muted-foreground">
-          <p>
-            Write a mission for a real Mars rover, send it to the yard, and watch a video of your
-            code driving it.
-          </p>
-          <p>
-            New here? The <span className="font-semibold text-foreground">Getting Started</span>{' '}
-            challenges show you around the site, one small step at a time.
-          </p>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
-          <Link
-            href={TOUR_CHALLENGE_HREF}
-            onClick={recordWelcomeSeen}
-            autoFocus
-            className="clay clay-press flex-1 rounded-xl bg-gradient-mars px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
-          >
-            Show me around
-          </Link>
-          <button
-            type="button"
-            onClick={close}
-            className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary/70"
-          >
-            I&apos;ll explore on my own
-          </button>
-        </div>
-      </div>
-    </div>
+      <RecoveryCodeCard
+        open={showRecoveryOffer}
+        onClose={() => setShowRecoveryOffer(false)}
+        onSkip={() => setShowRecoveryOffer(false)}
+      />
+    </>
   );
 }

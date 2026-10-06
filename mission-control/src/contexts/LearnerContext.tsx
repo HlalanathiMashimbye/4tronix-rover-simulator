@@ -10,7 +10,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
-import { getLearnerID, clearLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';
@@ -25,6 +25,8 @@ interface LearnerContextType {
   openEmailPrompt: () => void;
   closeEmailPrompt: () => void;
   showEmailPrompt: boolean;
+  generateRecoveryCode: () => Promise<string | null>;
+  restoreFromCode: (code: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const LearnerContext = createContext<LearnerContextType | undefined>(undefined);
@@ -208,6 +210,46 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    * handles the field being absent, and it is left alone.
    */
 
+  async function generateRecoveryCode(): Promise<string | null> {
+    const learnerId = getLearnerID();
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(learnerId)}/recovery-code`,
+        { method: 'POST' },
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.code ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function restoreFromCode(code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch('/api/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error ?? 'Code not recognised' };
+      }
+
+      setLearnerID(data.learnerId);
+      setLearner(null);
+      setSessionId(null);
+      setLoading(true);
+      await initializeLearnerSession();
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
   /**
    * Reset session and create new learner identity
    */
@@ -231,6 +273,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         openEmailPrompt,
         closeEmailPrompt,
         showEmailPrompt,
+        generateRecoveryCode,
+        restoreFromCode,
       }}
     >
       {children}

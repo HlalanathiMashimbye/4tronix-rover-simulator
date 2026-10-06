@@ -17,6 +17,13 @@ jest.mock('@/infrastructure/browser/getLearnerID', () => ({
   getLearnerID: jest.fn(() => 'learner-a'),
 }));
 
+jest.mock('@/components/learner/RecoveryCodeCard', () => ({
+  RecoveryCodeCard: () => null,
+}));
+jest.mock('@/components/learner/RestoreFromCode', () => ({
+  RestoreFromCode: () => null,
+}));
+
 // A plain anchor: these tests are about the welcome, not the App Router.
 jest.mock('next/link', () => ({
   __esModule: true,
