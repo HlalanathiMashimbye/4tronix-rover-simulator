@@ -219,31 +219,19 @@ export default function MissionVideoClient({
           </button>
         </div>
 
-        {/* Fixed at 60/40, video to code, and the number came from the
-            simulator's geometry rather than taste.
+        {/* Half each, video to code, beside each other on a laptop and one
+            above the other on a phone (6 Oct 2026, the user's call: the
+            player took 60% and squeezed the program).
 
-            The yard is letterboxed by computeLayout inside whatever canvas it
-            gets, so a WIDER panel makes it worse, not better. Measured for the
-            old 4:3 yard, at a 1400px viewport:
+            It was 60/40, for the simulator's sake: the old 4:3 yard was
+            letterboxed inside its canvas, and a narrower panel left less grey
+            down its sides. Since AB#464 the yard is the measured one and is
+            stretched to fill the canvas (computeLayout), so no split leaves
+            bars beside it. A 16:9 video in a half that is taller than 16:9
+            sits centred on black, which is what every player does.
 
-              70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
-              65/35  canvas 716x469 (1.53)  64px each side
-              60/40  canvas 664x490 (1.35)  24px each side
-
-            The two media want opposite shapes and no split serves both: 16:9
-            video wants width, the 4:3 yard wants less of it. 60/40 is chosen
-            because the failures are not equivalent. A letterboxed video is
-            what every player does and nobody remarks on it; a yard floating in
-            grey with a hand's width of nothing down each side reads as a
-            rendering fault, which is exactly how it was reported.
-
-            Since AB#464 the yard is the measured one, 233 x 249 cm, near
-            square, and it is stretched to fill the canvas (computeLayout), so
-            no split leaves bars beside it. The split stays for the video's
-            sake.
-
-            The 320px floor on the right track keeps the code readable, so this
-            does not squeeze the editor to buy the change.
+            The 320px floor on the right track keeps the code readable on a
+            narrow laptop.
 
             No height: the grid is a flexible track and takes what this flex
             column has left, the same as Create Mission. */}

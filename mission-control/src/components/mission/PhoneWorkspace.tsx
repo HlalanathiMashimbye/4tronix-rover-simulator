@@ -11,8 +11,8 @@ import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
  *
  * Editing, and while a run plays:
  *   top bar     back, Run (Stop while a run plays)
- *   sim strip   half the screen, expandable
- *   editor      the other half, the running block or line lit up
+ *   sim strip   a third of the screen, expandable
+ *   editor      the rest, the running block or line lit up
  *
  * When a run has played to its end (the launch view):
  *   top bar     Back to blocks / Back to code
