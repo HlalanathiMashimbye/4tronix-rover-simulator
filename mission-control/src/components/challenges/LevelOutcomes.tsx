@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { GraduationCap, Rocket, Target } from 'lucide-react';
+import { GraduationCap, Rocket, Sparkles, Target } from 'lucide-react';
 import type { ChallengeLevel, LearningOutcome } from '@/core/domain/entities/Challenge';
 import { challengesPractising } from '@/core/domain/services/curriculumOutcomes';
 import { CHALLENGES } from '@/infrastructure/config/challenges';
@@ -36,6 +36,30 @@ export function LevelOutcomes({ level, linkChallenges }: { level: ChallengeLevel
         ))}
       </ul>
     </div>
+  );
+}
+
+/**
+ * The same list, folded to one "What you'll learn" line - how both the hub's
+ * level cards and the briefing show it. Open, it was three paragraphs of small
+ * print between a child and the thing they came to press (the map's nodes,
+ * Start Mission); folded, it is one tap away for the parent or teacher who
+ * wants it. One component so the hub and the briefing fold it the same way.
+ */
+export function LevelOutcomesFold({ level, linkChallenges }: { level: ChallengeLevel; linkChallenges: boolean }) {
+  return (
+    <details className="group mt-4 rounded-2xl border-2 border-kid-panel-edge">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold text-kid-muted-text hover:text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-kid-blue/60 [&::-webkit-details-marker]:hidden">
+        <Sparkles className="h-5 w-5" aria-hidden="true" />
+        What you&apos;ll learn
+        <span aria-hidden="true" className="ml-auto transition-transform group-open:rotate-180">
+          ▾
+        </span>
+      </summary>
+      <div className="px-4 pb-4">
+        <LevelOutcomes level={level} linkChallenges={linkChallenges} />
+      </div>
+    </details>
   );
 }
 

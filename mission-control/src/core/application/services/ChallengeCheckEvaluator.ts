@@ -13,6 +13,7 @@
  */
 
 import { ChallengeCheckSpec } from '@/core/domain/entities/Challenge';
+import { endsOnGoal, type TargetGeometry, type TargetPoint } from '@/core/domain/services/challengeTarget';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 export type TrajectoryOutcome = 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
@@ -47,6 +48,12 @@ export interface ChallengeEvalContext {
    */
   visitedRoutes?: string[];
   missionCreated?: boolean;
+  /** The learner has answered the current step's prediction (any answer). */
+  predictionMade?: boolean;
+  /** Where the last simulated run ended, in the rover's frame. */
+  runEnd?: TargetPoint;
+  /** The challenge's goal, from challengeTarget's targetGeometry. */
+  targetGoal?: TargetGeometry['goal'];
 }
 
 export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalContext): boolean {
@@ -74,6 +81,12 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
 
     case 'code-contains':
       return context.generatedCode?.includes(spec.pattern) ?? false;
+
+    case 'prediction-made':
+      return context.predictionMade === true;
+
+    case 'reaches-target':
+      return context.runEnd !== undefined && endsOnGoal(context.runEnd, context.targetGoal ?? null);
 
     default:
       // Exhaustiveness check: a new ChallengeCheckKind added to the domain

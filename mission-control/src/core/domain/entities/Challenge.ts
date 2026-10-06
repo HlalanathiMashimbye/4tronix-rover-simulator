@@ -8,12 +8,15 @@
  * for a learner's progress through it).
  */
 
+import type { SimulationCommand } from '@/lib/roverBlockly';
+
 export type ChallengeLevelId = 1 | 2 | 3;
 
 export type ChallengeId =
   | 'platform-orientation'
   | 'explore-the-platform'
   | 'first-mission'
+  | 'drive-to-target'
   | 'basic-movement'
   | 'loop-structures'
   | 'draw-a-square';
@@ -65,6 +68,21 @@ export type ChallengeCheckSpec =
        */
       kind: 'code-contains';
       pattern: string;
+    }
+  | {
+      /**
+       * The learner has picked an answer to the step's prediction. Any answer
+       * passes: in PRIMM the guess is never marked wrong (AB#453) - it is
+       * there so the run that follows has something to be compared with.
+       */
+      kind: 'prediction-made';
+    }
+  | {
+      /**
+       * The last simulated run ended on the challenge's target - within its
+       * arriveWithinCm of where the target's reference program stops.
+       */
+      kind: 'reaches-target';
     };
 
 export interface ChallengeStep {
@@ -73,6 +91,35 @@ export interface ChallengeStep {
   instructions: string;
   hints?: string[];
   checks: ChallengeCheckSpec[];
+  /**
+   * The Predict in PRIMM: a question about the code already on the canvas,
+   * answered by picking one option before anything has been run.
+   */
+  prediction?: {
+    question: string;
+    options: string[];
+  };
+}
+
+/**
+ * What a finished challenge should look like, shown on the simulator (AB#447)
+ * so a learner knows what they are aiming for.
+ *
+ * Held as a REFERENCE PROGRAM rather than a drawn shape: the simulator runs it
+ * through the same physics as the learner's own code, so the target's corners
+ * and distances are exactly what a correct program produces rather than an
+ * idealised drawing a correct program could never match. Only the path is
+ * ever drawn - never these commands, nor the blocks or code that make them.
+ */
+export interface ChallengeTarget {
+  /** One line, about the result and never the steps, e.g. "four sides, 90 degree corners". */
+  description: string;
+  commands: SimulationCommand[];
+  /**
+   * Set when the target is a place to reach: the end of the path is drawn as
+   * a marker, and a 'reaches-target' check passes within this many cm of it.
+   */
+  arriveWithinCm?: number;
 }
 
 /**
@@ -94,6 +141,14 @@ export interface Challenge {
   steps: ChallengeStep[];
   /** Ids of the LearningOutcomes, on this challenge's own level, that it practises. */
   outcomeIds: string[];
+  target?: ChallengeTarget;
+  /**
+   * Ready-made code on the Blockly canvas when the challenge first opens, as
+   * Blockly's own serialization JSON - for a PRIMM challenge, which starts by
+   * reading code rather than writing it. Omitted, the canvas starts with the
+   * uplink block alone.
+   */
+  starterBlocks?: object;
 }
 
 /** One CSTA K-12 Computer Science Standard, worded as CSTA publishes it. */

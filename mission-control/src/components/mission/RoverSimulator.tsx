@@ -10,6 +10,7 @@ import {
   SIM_FPS,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
+  type SimTarget,
 } from '@/lib/roverSimRender';
 import { crashFrame, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource } from '@/lib/roverBlockly';
@@ -50,6 +51,8 @@ interface RoverSimulatorProps {
    * learner could otherwise press Run and Send in the same second.
    */
   onFinished?: () => void;
+  /** A challenge's target, drawn under the run (AB#447). */
+  target?: SimTarget | null;
 }
 
 export function RoverSimulator({
@@ -62,6 +65,7 @@ export function RoverSimulator({
   frameless = false,
   onSourceChange,
   onFinished,
+  target = null,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -121,6 +125,9 @@ export function RoverSimulator({
   // The effect below repaints once when it arrives instead.
   const floor = useYardFloor();
   const floorRef = useRef(floor);
+  // Through a ref for the same reason: showing or hiding the target mid-run
+  // must repaint, not rewind the run to its first frame.
+  const targetRef = useRef(target);
 
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -132,13 +139,18 @@ export function RoverSimulator({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current);
+    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current, targetRef.current);
   }, [isManual, simPalette]);
 
   useEffect(() => {
     floorRef.current = floor;
     drawScene();
   }, [floor, drawScene]);
+
+  useEffect(() => {
+    targetRef.current = target;
+    drawScene();
+  }, [target, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 

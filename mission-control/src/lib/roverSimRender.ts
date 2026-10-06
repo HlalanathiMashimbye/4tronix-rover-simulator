@@ -425,6 +425,73 @@ function drawStartMark(ctx: CanvasRenderingContext2D, L: SimLayout) {
   ctx.restore();
 }
 
+/**
+ * A challenge's target, in the rover's frame (AB#447, AB#453): the path a
+ * correct program drives, and - when the target is a place to reach - the spot
+ * it stops on.
+ *
+ * The path and the goal are drawn separately because they are shown
+ * separately. The path is the "what am I aiming for" overlay, which the
+ * challenge hides once the learner starts building; the goal is where the
+ * rover has to stop, which a learner tuning a number needs to keep seeing.
+ */
+export interface SimTarget {
+  path: { x: number; y: number }[];
+  showPath: boolean;
+  goal: { x: number; y: number; radiusCm: number } | null;
+}
+
+function drawTarget(ctx: CanvasRenderingContext2D, L: SimLayout, target: SimTarget) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (target.showPath && target.path.length > 1) {
+    // A dark edge under bright dashes, like the start mark, so it reads on
+    // both the pale and the dark parts of the floor photo. Dashed and yellow
+    // so it cannot be mistaken for the rover's own dotted trail.
+    for (const [colour, width, dash] of [
+      ['rgba(20,8,2,0.55)', 7, [] as number[]],
+      ['rgba(255,214,10,0.95)', 4, [10, 8]],
+    ] as const) {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      target.path.forEach(({ x, y }, i) => {
+        const [sx, sy] = worldToScreen(L, x, y);
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      });
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  if (target.goal) {
+    // A bullseye whose outer ring is the real tolerance, so "inside the ring"
+    // on screen is exactly what the check accepts. Never drawn smaller than a
+    // finger can point at, though: the ring is a few cm across on a phone.
+    const [cx, cy] = worldToScreen(L, target.goal.x, target.goal.y);
+    const rx = Math.max(10, target.goal.radiusCm * L.sx);
+    const ry = Math.max(10, target.goal.radiusCm * L.sy);
+    const rings: [string, number][] = [
+      ['rgba(20,8,2,0.55)', 1.15],
+      ['rgba(239,68,68,0.95)', 1],
+      ['rgba(255,255,255,0.95)', 0.66],
+      ['rgba(239,68,68,0.95)', 0.33],
+    ];
+    for (const [colour, k] of rings) {
+      ctx.fillStyle = colour;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx * k, ry * k, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
 function drawTrail(
   ctx: CanvasRenderingContext2D,
   L: SimLayout,
@@ -793,11 +860,14 @@ export function drawSimFrame(
   P: SimPalette = DARK_SIM_PALETTE,
   /** The yard's floor photo, once loaded (useYardFloor). Plain ground until then. */
   floor: CanvasImageSource | null = null,
+  /** A challenge's target, under everything the rover does. */
+  target: SimTarget | null = null,
 ) {
   // Skip degenerate layouts (container not laid out yet) to avoid drawing with
   // a zero/negative scale.
   if (L.w <= 0 || L.h <= 0 || L.s <= 0) return;
   drawTerrain(ctx, L, P, floor);
+  if (target) drawTarget(ctx, L, target);
   if (traj.length === 0) {
     drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} }, 0);
     return;

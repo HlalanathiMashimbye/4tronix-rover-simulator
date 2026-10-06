@@ -135,7 +135,8 @@ describe('findCurriculumProblems', () => {
 describe('isFirstChallengeOfLevel', () => {
   it("is true only for the level's first challenge", () => {
     const level = CHALLENGE_LEVELS.find((l) => l.id === 2)!;
-    expect(isFirstChallengeOfLevel(level, 'basic-movement')).toBe(true);
+    expect(isFirstChallengeOfLevel(level, 'drive-to-target')).toBe(true);
+    expect(isFirstChallengeOfLevel(level, 'basic-movement')).toBe(false);
     expect(isFirstChallengeOfLevel(level, 'loop-structures')).toBe(false);
   });
 });

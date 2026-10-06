@@ -39,6 +39,7 @@
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
+import { spinSecondsForDegrees } from '@/lib/rover-physics';
 
 export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
@@ -79,7 +80,10 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     // summary below - the level is the smallest place that covers both of them.
     description:
       "Build rover missions out of blocks at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
-    challengeIds: ['basic-movement', 'loop-structures'],
+    // drive-to-target first: one straight move and no turning, so the first
+    // thing a learner does with blocks is read some and change one number
+    // (AB#453), before basic-movement asks them to build from nothing.
+    challengeIds: ['drive-to-target', 'basic-movement', 'loop-structures'],
     outcomes: [
       {
         id: 'l2-sequence',
@@ -246,6 +250,85 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 
+  /**
+   * PRIMM (Predict, Run, Investigate, Modify, Make), suggested by the sponsor
+   * as mission 1 (AB#453). The learner starts with code they did not write and
+   * reads it before running it, rather than facing an empty canvas.
+   *
+   * No turning anywhere: the starter and the target are one straight move, so
+   * the only thing to work out is how long to drive.
+   *
+   * The target is a marker straight ahead of the start mark rather than a
+   * rock: the start (AB#465) is mid-seam facing the front wall, and no rock
+   * lies ahead of it. At the measured 9cm a second at speed 60, the starter's
+   * 3 seconds stops about 18cm short of the 5-second target, and the
+   * Move Forward block's half-second steps put 4.5, 5 and 5.5 seconds inside
+   * the ring - challengeTarget.test.ts holds both numbers to that.
+   */
+  'drive-to-target': {
+    id: 'drive-to-target',
+    levelId: 2,
+    title: 'Drive to the Target',
+    summary: 'Read some ready-made blocks, guess what they do, then change one number until the rover stops on the target.',
+    workspaceKind: 'blockly-sim',
+    scorePoints: 125,
+    outcomeIds: ['l2-sequence', 'l2-debug'],
+    starterBlocks: {
+      blocks: {
+        languageVersion: 0,
+        blocks: [
+          {
+            type: 'rover_on_receive',
+            x: 40,
+            y: 40,
+            inputs: { DO: { block: { type: 'rover_forward', fields: { TIME: 3 } } } },
+          },
+        ],
+      },
+    },
+    target: {
+      description: 'One straight line, forward to the target. No turns.',
+      commands: [{ command: 'forward', speed: 60, duration: 5 }],
+      arriveWithinCm: 5,
+    },
+    steps: [
+      {
+        id: 'predict',
+        title: 'Predict',
+        instructions:
+          'Some blocks are already on the canvas. Do not run them yet! Read them, then pick what you think the rover will do.',
+        prediction: {
+          question: 'What will the rover do?',
+          options: ['Drive in a square', 'Drive in a triangle', 'Drive in a straight line', 'Spin on the spot'],
+        },
+        checks: [{ kind: 'prediction-made' }],
+      },
+      {
+        id: 'run',
+        title: 'Run',
+        instructions: 'Press Run and watch the rover. Did it do what you guessed? Whatever you picked, you know something new now.',
+        checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
+      },
+      {
+        id: 'modify',
+        title: 'Reach the target',
+        instructions:
+          'The rover stopped before the target. Which number decides how far it goes? Change it, press Run, and look. Keep going until the rover stops inside the target.',
+        hints: [
+          'The number in the Move Forward block is how many seconds the rover drives for.',
+          'More seconds means further. If it goes past the target, try a smaller number.',
+        ],
+        checks: [{ kind: 'reaches-target' }],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'You did it! Press "Finish & Export" to carry your blocks into Create Mission and send them to the real rover.',
+        checks: [],
+      },
+    ],
+  },
+
   'basic-movement': {
     id: 'basic-movement',
     levelId: 2,
@@ -335,6 +418,15 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     workspaceKind: 'monaco-sim',
     scorePoints: 250,
     outcomeIds: ['l3-python', 'l3-decompose', 'l3-tune'],
+    // The square the final step's loop draws, with its corners turned exactly
+    // 90 degrees: the shape to aim for, not the sleeps that make it (AB#447).
+    target: {
+      description: 'Four equal sides and four square corners, ending back where it started.',
+      commands: Array.from({ length: 4 }, () => [
+        { command: 'forward', speed: 60, duration: 2 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+      ]).flat(),
+    },
     steps: [
       {
         id: 'drive-one-side',

@@ -15,7 +15,7 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ChallengeId, ChallengeLevelId } from '@/core/domain/entities/Challenge';
-import { CHALLENGES } from '@/infrastructure/config/challenges';
+import { CHALLENGE_LEVELS, CHALLENGES } from '@/infrastructure/config/challenges';
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -77,7 +77,7 @@ describe('the mission map', () => {
 
     const upNext = screen.getAllByRole('link', { name: /Up next/ });
     expect(upNext).toHaveLength(1);
-    expect(upNext[0]).toHaveAttribute('href', '/challenges/basic-movement');
+    expect(upNext[0]).toHaveAttribute('href', '/challenges/drive-to-target');
   });
 
   it('does not make a locked node a link', () => {
@@ -85,7 +85,19 @@ describe('the mission map', () => {
 
     const level2 = screen.getByRole('region', { name: /Level 2/ });
     expect(within(level2).queryAllByRole('link')).toHaveLength(0);
-    expect(within(level2).getAllByText('Locked')).toHaveLength(2);
+    expect(within(level2).getAllByText('Locked')).toHaveLength(CHALLENGE_LEVELS[1].challengeIds.length);
+  });
+
+  it("keeps each level's outcomes folded away, so the map is what a child sees", () => {
+    render(<ChallengesHub />);
+
+    const level1 = screen.getByRole('region', { name: /Level 1/ });
+    const outcome = within(level1).getByText(CHALLENGE_LEVELS[0].outcomes[0].text);
+    expect(outcome).not.toBeVisible();
+
+    const summary = within(level1).getByText("What you'll learn");
+    expect(summary.closest('summary')).not.toBeNull();
+    expect(summary).toBeVisible();
   });
 
   it('counts stars from completions', () => {
@@ -117,6 +129,16 @@ describe('the challenge briefing', () => {
 
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Mission' })).not.toBeInTheDocument();
+  });
+
+  it("folds a level's outcomes on its first briefing, leaving Mission Goals and Start in view", () => {
+    const level2 = CHALLENGE_LEVELS[1];
+    render(<ChallengeBriefingGate challenge={CHALLENGES[level2.challengeIds[0]]} briefingLevel={level2} />);
+
+    expect(screen.getByText(level2.outcomes[0].text)).not.toBeVisible();
+    expect(screen.getByText("What you'll learn")).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Mission Goals' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start Mission' })).toBeVisible();
   });
 
   it('keeps teacher info folded away until asked for', () => {

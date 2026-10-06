@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Blocks, Code2 } from 'lucide-react';
+import { Blocks, Code2, Eye, Target } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { MissionFeed } from '@/components/mission-feed/MissionFeed';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
+import { pillClass } from './pill';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { SimulationCommand } from '@/lib/roverBlockly';
@@ -15,6 +16,7 @@ import {
   deriveTrajectoryOutcomes,
   type TrajectoryOutcome,
 } from '@/core/application/services/ChallengeCheckEvaluator';
+import type { TargetGeometry, TargetPoint } from '@/core/domain/services/challengeTarget';
 
 // The same lazily loaded CodeMirror editor Create Mission uses (see
 // EditorPanel), so Level 3 types into exactly the editor the learner will
@@ -31,7 +33,16 @@ interface ChallengeCenterPanelProps {
   onCodeChange: (code: string) => void;
   onBlocklyStateChange: (state: string) => void;
   onTrajectoryOutcomes: (outcomes: TrajectoryOutcome[]) => void;
+  /** Where each simulated run ended, for 'reaches-target' checks. */
+  onRunEnd?: (end: TargetPoint) => void;
+  /** The challenge's target, from challengeTarget's targetGeometry, or null. */
+  target?: TargetGeometry | null;
+  /** Keep the target's path off the simulator for now (a Predict step is unanswered). */
+  holdTarget?: boolean;
 }
+
+/** How long "Show target" brings the path back for (AB#447: "about 5 seconds"). */
+export const TARGET_PEEK_MS = 5000;
 
 /**
  * The workspace's center panel, branching on the challenge's workspaceKind.
@@ -63,11 +74,38 @@ export function ChallengeCenterPanel({
   onCodeChange,
   onBlocklyStateChange,
   onTrajectoryOutcomes,
+  onRunEnd,
+  target = null,
+  holdTarget = false,
 }: ChallengeCenterPanelProps) {
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [blocksView, setBlocksView] = useState<'blocks' | 'python'>('blocks');
   const [lastGeneratedCode, setLastGeneratedCode] = useState('');
+
+  /**
+   * The target overlay (AB#447): on when the challenge opens, off once the
+   * learner starts building, and back for TARGET_PEEK_MS when they ask.
+   *
+   * "Starts building" is the code changing from whatever the editor first
+   * reported, not the first report itself: a PRIMM challenge opens with code
+   * already on the canvas, and loading it is not the learner building.
+   */
+  const firstCode = useRef<string | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [peeking, setPeeking] = useState(false);
+  useEffect(() => {
+    if (!peeking) return;
+    const timer = setTimeout(() => setPeeking(false), TARGET_PEEK_MS);
+    return () => clearTimeout(timer);
+  }, [peeking]);
+
+  const showPath = target !== null && !holdTarget && (!building || peeking);
+  // Memoised: the simulator repaints whenever this object changes.
+  const simTarget = useMemo(
+    () => (target ? { path: target.path, goal: target.goal, showPath } : null),
+    [target, showPath],
+  );
 
   if (challenge.workspaceKind === 'embedded-platform') {
     return (
@@ -81,9 +119,12 @@ export function ChallengeCenterPanel({
   }
 
   const handleRun = (commands: SimulationCommand[]) => {
-    setTrajectory(simulateCommands(commands));
+    const run = simulateCommands(commands);
+    setTrajectory(run);
     setIsPlaying(true);
     onTrajectoryOutcomes(deriveTrajectoryOutcomes(commands));
+    const end = run[run.length - 1];
+    if (end) onRunEnd?.({ x: end.x, y: end.y });
   };
 
   const handleReset = () => {
@@ -94,7 +135,10 @@ export function ChallengeCenterPanel({
   const handleCodeChange = (code: string) => {
     setLastGeneratedCode(code);
     onCodeChange(code);
+    if (firstCode.current === null) firstCode.current = code;
+    else if (code !== firstCode.current) setBuilding(true);
   };
+
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
@@ -135,6 +179,8 @@ export function ChallengeCenterPanel({
                 onGenerateCommands={handleRun}
                 onCodeChange={handleCodeChange}
                 onBlocklyStateChange={onBlocklyStateChange}
+                storageKey={`challengeWorkspace:${challenge.id}`}
+                starterWorkspace={challenge.starterBlocks}
               />
             </div>
           ) : (
@@ -149,14 +195,35 @@ export function ChallengeCenterPanel({
         </div>
       </div>
 
-      <div className="min-h-0 min-w-0 flex-1">
-        <SimulationPanel
-          trajectory={trajectory}
-          isPlaying={isPlaying}
-          onReset={handleReset}
-          editorMode={challenge.workspaceKind === 'blockly-sim' ? 'blockly' : 'code'}
-          resetVersion={0}
-        />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+        {target && challenge.target && !holdTarget && (
+          <div className="flex shrink-0 items-center gap-2 rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel px-3 py-1.5">
+            {showPath ? (
+              <p className="flex min-h-11 items-center gap-2 text-sm font-bold text-foreground">
+                <Target className="h-5 w-5 shrink-0 text-kid-orange-text" aria-hidden="true" />
+                <span>
+                  <span className="text-kid-orange-text">Target: </span>
+                  {challenge.target.description}
+                </span>
+              </p>
+            ) : (
+              <button type="button" onClick={() => setPeeking(true)} className={pillClass('orange')}>
+                <Eye className="h-5 w-5" aria-hidden="true" />
+                Show target
+              </button>
+            )}
+          </div>
+        )}
+        <div className="min-h-0 flex-1">
+          <SimulationPanel
+            trajectory={trajectory}
+            isPlaying={isPlaying}
+            onReset={handleReset}
+            editorMode={challenge.workspaceKind === 'blockly-sim' ? 'blockly' : 'code'}
+            resetVersion={0}
+            target={simTarget}
+          />
+        </div>
       </div>
     </div>
   );

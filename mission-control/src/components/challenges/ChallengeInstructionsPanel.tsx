@@ -21,6 +21,9 @@ interface ChallengeInstructionsPanelProps {
   onNext: () => void;
   onFinish: () => void;
   finishing?: boolean;
+  /** The learner's answer to a Predict step, once given, or null. */
+  prediction?: string | null;
+  onPredict?: (option: string) => void;
 }
 
 /**
@@ -55,6 +58,8 @@ export function ChallengeInstructionsPanel({
   onNext,
   onFinish,
   finishing,
+  prediction = null,
+  onPredict,
 }: ChallengeInstructionsPanelProps) {
   const [hintOpen, setHintOpen] = useState(false);
   const hintRef = useRef<HTMLDivElement>(null);
@@ -81,6 +86,40 @@ export function ChallengeInstructionsPanel({
           <h2 className="mt-1.5 font-display text-xl font-bold text-foreground md:text-2xl">{step.title}</h2>
 
           <p className="mt-1 whitespace-pre-line text-base leading-relaxed text-foreground">{step.instructions}</p>
+
+          {step.prediction ? (
+            // PRIMM Predict (AB#453). Picking is all the step asks: no answer is
+            // marked right or wrong, here or later - the run is what answers it.
+            <div className="mt-3">
+              <p id="prediction-question" className="font-display text-base font-bold text-foreground">
+                {step.prediction.question}
+              </p>
+              <div role="group" aria-labelledby="prediction-question" className="mt-2 flex flex-wrap gap-2">
+                {step.prediction.options.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={prediction === option}
+                    onClick={() => onPredict?.(option)}
+                    className={pillClass(prediction === option ? 'blue' : 'plain')}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              {prediction && (
+                <p className="mt-2 text-sm font-bold text-kid-blue-text" role="status">
+                  Got it! Press Next, then run the code to find out.
+                </p>
+              )}
+            </div>
+          ) : (
+            prediction && (
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-kid-orange/20 px-3 py-1 text-sm font-bold text-foreground">
+                Your guess: {prediction}
+              </p>
+            )
+          )}
 
           <ul aria-label="Mission checklist" className="mt-3 flex flex-wrap gap-2">
             {checks.map((check, index) => {

@@ -11,6 +11,7 @@ import {
   type ChallengeEvalContext,
   type TrajectoryOutcome,
 } from '@/core/application/services/ChallengeCheckEvaluator';
+import { targetGeometry, type TargetPoint } from '@/core/domain/services/challengeTarget';
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
 import { readMilestones } from '@/infrastructure/browser/platformMilestones';
 import { playLevelUnlockSound } from '@/infrastructure/browser/levelUnlockSound';
@@ -73,6 +74,10 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const [trajectoryOutcomes, setTrajectoryOutcomes] = useState<TrajectoryOutcome[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [finishResult, setFinishResult] = useState<FinishResult | null>(null);
+  /** The learner's answer to a PRIMM Predict step - kept so later steps can show it back. */
+  const [prediction, setPrediction] = useState<string | null>(null);
+  const [runEnd, setRunEnd] = useState<TargetPoint | undefined>(undefined);
+  const geometry = useMemo(() => (challenge.target ? targetGeometry(challenge.target) : null), [challenge.target]);
 
   const step = challenge.steps[stepIndex];
 
@@ -85,8 +90,11 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
       trajectoryOutcomes,
       visitedRoutes: milestones.visitedRoutes,
       missionCreated: milestones.missionCreated,
+      predictionMade: prediction !== null,
+      runEnd,
+      targetGoal: geometry?.goal ?? null,
     }),
-    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes, milestones],
+    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes, milestones, prediction, runEnd, geometry],
   );
 
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
@@ -153,6 +161,8 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         onNext={() => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1))}
         onFinish={handleFinish}
         finishing={finishing}
+        prediction={prediction}
+        onPredict={setPrediction}
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
@@ -164,6 +174,12 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
             onCodeChange={setGeneratedCode}
             onBlocklyStateChange={setBlocklyState}
             onTrajectoryOutcomes={setTrajectoryOutcomes}
+            onRunEnd={setRunEnd}
+            target={geometry}
+            // The guess has to be the learner's own: the target's path would
+            // answer the Predict question for them, so it waits until they
+            // have picked (AB#453 Predict, AB#447 overlay).
+            holdTarget={Boolean(step.prediction) && prediction === null}
           />
         </div>
       </div>
