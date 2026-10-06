@@ -19,10 +19,13 @@ describe('on a phone', () => {
     expect(phone.toolboxPosition).toBe('end');
   });
 
-  it('zooms with two fingers, with no buttons or trashcan over the blocks', () => {
+  it('zooms with two fingers, with no buttons over the blocks', () => {
     expect(phone.zoom.controls).toBe(false);
     expect(phone.zoom.pinch).toBe(true);
-    expect(phone.trashcan).toBe(false);
+  });
+
+  it('has a bin to drag blocks into, the way to delete one that a child will find', () => {
+    expect(phone.trashcan).toBe(true);
   });
 
   it('uses the icon toolbox', () => {
