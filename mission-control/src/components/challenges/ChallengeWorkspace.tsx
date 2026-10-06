@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
@@ -13,6 +13,8 @@ import {
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
 import { readMilestones } from '@/infrastructure/browser/platformMilestones';
+import { playLevelUnlockSound } from '@/infrastructure/browser/levelUnlockSound';
+import { readStoredSound, serverSoundSnapshot, subscribeToSound } from '@/hooks/soundPreference';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
 
@@ -47,6 +49,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const router = useRouter();
   const { query, activeFilter } = useSearch();
   const { completeChallenge } = useChallengeProgress();
+  const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [loadMoreCalled, setLoadMoreCalled] = useState(false);
@@ -95,6 +98,10 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     setFinishing(true);
     try {
       const justUnlockedLevelId = await completeChallenge(challenge.id);
+      // Only a new level gets the launch, so it stays an event rather than
+      // noise on every challenge; and the learner's mute covers it, since a
+      // room of thirty finishing at once is the case that mute exists for.
+      if (justUnlockedLevelId && !muted) playLevelUnlockSound();
 
       if (challenge.workspaceKind === 'blockly-sim') {
         writeChallengeHandoff({

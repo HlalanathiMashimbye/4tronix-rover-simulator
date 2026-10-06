@@ -1,11 +1,13 @@
 /**
- * Whether rover videos start muted, remembered across visits (AB#409).
+ * Whether the learner wants sound, remembered across visits (AB#409).
  *
- * The sound in question is the REAL RUN'S VIDEO, not anything the app
- * generates: there is no audio of our own anywhere in the product. A learner
- * watching a rover video in a classroom, a library, or a room with thirty other
- * children needs to be able to turn it off, and needs it to stay off without
- * being asked again on the next mission they open.
+ * Mostly this is the REAL RUN'S VIDEO. The one sound the app makes itself -
+ * the launch when finishing a challenge unlocks a level (levelUnlockSound.ts)
+ * - obeys the same switch, so a learner has one place to make the product
+ * quiet rather than one per noise. A learner watching a rover video in a
+ * classroom, a library, or a room with thirty other children needs to be able
+ * to turn it off, and needs it to stay off without being asked again on the
+ * next mission they open.
  *
  * A tiny external store rather than context, for the same reason the yard
  * picker is one: it is read by components in different trees, it must survive
