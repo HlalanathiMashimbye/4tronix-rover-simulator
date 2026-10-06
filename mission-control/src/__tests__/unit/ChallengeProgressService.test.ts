@@ -14,9 +14,9 @@ import { ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
 import { ChallengeProgress, isLevelUnlocked } from '@/core/domain/entities/ChallengeProgress';
 
 const LEVELS: ChallengeLevel[] = [
-  { id: 1, title: 'Level 1', description: '', challengeIds: ['platform-orientation'] },
-  { id: 2, title: 'Level 2', description: '', challengeIds: ['basic-movement', 'loop-structures'] },
-  { id: 3, title: 'Level 3', description: '', challengeIds: ['draw-a-square'] },
+  { id: 1, title: 'Level 1', description: '', challengeIds: ['platform-orientation'], outcomes: [] },
+  { id: 2, title: 'Level 2', description: '', challengeIds: ['basic-movement', 'loop-structures'], outcomes: [] },
+  { id: 3, title: 'Level 3', description: '', challengeIds: ['draw-a-square'], outcomes: [] },
 ];
 
 function progressWith(...challengeIds: ChallengeId[]): ChallengeProgress {

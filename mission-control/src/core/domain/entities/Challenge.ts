@@ -92,6 +92,37 @@ export interface Challenge {
   workspaceKind: ChallengeWorkspaceKind;
   scorePoints: number;
   steps: ChallengeStep[];
+  /** Ids of the LearningOutcomes, on this challenge's own level, that it practises. */
+  outcomeIds: string[];
+}
+
+/** One CSTA K-12 Computer Science Standard, worded as CSTA publishes it. */
+export interface CstaStandard {
+  code: string;
+  /** e.g. 'Grades 3-5' - shown so a teacher can see the band a claim is pitched at. */
+  gradeBand: string;
+  text: string;
+}
+
+/**
+ * Where a learning outcome comes from. CSTA and NASA JPL are the primary
+ * sources (AB#444); CAPS is a secondary reference, cited only where it fits.
+ * At least one of csta / nasaJpl must be present - see curriculumOutcomes.ts.
+ */
+export interface LearningOutcomeAlignment {
+  /** Codes into the CSTA catalogue (infrastructure/config/curriculumStandards.ts). */
+  csta?: string[];
+  /** The NASA JPL mission work this outcome mirrors, in a sentence a parent can read. */
+  nasaJpl?: string;
+  caps?: string;
+}
+
+/** One thing a learner will be able to do by the end of a level. */
+export interface LearningOutcome {
+  id: string;
+  /** Always phrased "You will be able to ...", addressed to the learner. */
+  text: string;
+  alignment: LearningOutcomeAlignment;
 }
 
 export interface ChallengeLevel {
@@ -99,4 +130,5 @@ export interface ChallengeLevel {
   title: string;
   description: string;
   challengeIds: ChallengeId[];
+  outcomes: LearningOutcome[];
 }

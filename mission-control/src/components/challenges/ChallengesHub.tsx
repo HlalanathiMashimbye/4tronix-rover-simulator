@@ -7,6 +7,7 @@ import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 import { CHALLENGE_LEVELS, CHALLENGES } from '@/infrastructure/config/challenges';
 import type { ChallengeLevel } from '@/core/domain/entities/Challenge';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
+import { LevelOutcomes } from './LevelOutcomes';
 
 /**
  * Progressive Challenges hub - one card per level, each listing its
@@ -111,6 +112,10 @@ function LevelCard({
           Complete Level {level.id - 1} to unlock.
         </p>
       )}
+
+      <div className="mt-3 rounded-xl border border-border/40 bg-background/30 px-3 py-2.5">
+        <LevelOutcomes level={level} linkChallenges={unlocked} />
+      </div>
 
       <div className="mt-3 space-y-2">
         {challenges.map((challenge) => {

@@ -12,13 +12,19 @@
  * the learner has already traced with blocks, so the new thing is the typing,
  * not the task.
  *
- * WHY PLACE NAMES ARE EXPLAINED HERE AND STANDARDS CODES ARE NOT.
- * Challenges used to carry CAPS/CSTA codes, rendered as pills on the learner's
- * instruction panel. They came out because nobody on the team can vouch for the
- * mapping, and a curriculum claim a teacher can check is only worth making if
- * it survives being checked. "Jezero Crater" got the opposite treatment - it
- * stayed, with a sentence saying what it is, because an unexplained proper noun
- * is a question a learner cannot answer, while a real place is a hook.
+ * WHY STANDARDS LIVE ON A LEVEL'S OUTCOMES, WITH THEIR WORDING.
+ * Challenges used to carry bare CAPS/CSTA codes as pills on the instruction
+ * panel. They came out because nobody on the team could vouch for the mapping,
+ * and a curriculum claim a teacher can check is only worth making if it
+ * survives being checked. They are back (AB#444) in a shape that can be
+ * checked: each level states 2-4 "You will be able to ..." outcomes, each
+ * outcome cites its standard, and the hub shows the standard's full CSTA
+ * wording and grade band (curriculumStandards.ts) beside it - so the claim is
+ * made to the person able to check it. Every challenge names the outcomes it
+ * practises in outcomeIds; core/domain/services/curriculumOutcomes.ts holds
+ * the rules. "Jezero Crater" is explained in the level description for the
+ * same reason: an unexplained proper noun is a question a learner cannot
+ * answer, while a real place is a hook.
  *
  * Step instructions carry their code as their own \n-separated lines rather
  * than inline in a sentence. That is a learner-facing choice - code you are
@@ -45,6 +51,26 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     // box - and a single long challenge pays out once, at the end, which is
     // where people give up.
     challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission'],
+    outcomes: [
+      {
+        id: 'l1-find',
+        text: 'You will be able to find what you are looking for on a website by searching, filtering and browsing.',
+        alignment: { csta: ['1A-CS-01'] },
+      },
+      {
+        id: 'l1-privacy',
+        text: 'You will be able to choose what you share about yourself online, and say why some things are kept private.',
+        alignment: { csta: ['1B-NI-05'] },
+      },
+      {
+        id: 'l1-uplink',
+        text: 'You will be able to send a program from your computer to a real rover, and find out when it has run.',
+        alignment: {
+          nasaJpl:
+            "Perseverance's team writes the rover's commands on Earth, sends them to Mars, and waits for the rover to report back - it is never driven live.",
+        },
+      },
+    ],
   },
   {
     id: 2,
@@ -54,12 +80,56 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     description:
       "Build rover missions out of blocks at Jezero Crater - the dried-up river delta on Mars where NASA's Perseverance rover landed in 2021.",
     challengeIds: ['basic-movement', 'loop-structures'],
+    outcomes: [
+      {
+        id: 'l2-sequence',
+        text: 'You will be able to put movement commands in the right order to drive the rover where you want it to go.',
+        alignment: {
+          csta: ['1B-AP-10'],
+          nasaJpl: "Rover drivers at NASA JPL plan each of Perseverance's drives across Jezero Crater as a sequence of commands.",
+          caps: 'Coding and Robotics (Grades R-9): algorithms and sequencing',
+        },
+      },
+      {
+        id: 'l2-repeat',
+        text: 'You will be able to use a Repeat block so the rover does the same thing several times, without copying blocks.',
+        alignment: {
+          csta: ['1B-AP-10'],
+          caps: 'Coding and Robotics (Grades R-9): loops',
+        },
+      },
+      {
+        id: 'l2-debug',
+        text: 'You will be able to run your program in the simulator, see what went wrong, and fix it.',
+        alignment: {
+          csta: ['1B-AP-15'],
+          nasaJpl: 'JPL tests every drive on a simulated rover before sending it to Mars.',
+        },
+      },
+    ],
   },
   {
     id: 3,
     title: 'Python Rover Commands',
     description: 'Leave the blocks behind and type the same missions out as real Python.',
     challengeIds: ['draw-a-square'],
+    outcomes: [
+      {
+        id: 'l3-python',
+        text: 'You will be able to type a short Python program that drives the rover, giving each move a speed and a time.',
+        alignment: { csta: ['1B-AP-10'] },
+      },
+      {
+        id: 'l3-decompose',
+        text: 'You will be able to break a shape into parts that repeat - one side and one corner, four times - and write it as a loop.',
+        alignment: { csta: ['1B-AP-11'] },
+      },
+      {
+        id: 'l3-tune',
+        text: 'You will be able to change one number at a time and re-run your program until the rover does what you meant.',
+        alignment: { csta: ['2-AP-17'] },
+      },
+    ],
   },
 ];
 
@@ -71,6 +141,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'Search missions, filter by status, and browse the full feed.',
     workspaceKind: 'embedded-platform',
     scorePoints: 50,
+    outcomeIds: ['l1-find'],
     steps: [
       {
         id: 'filter-pending',
@@ -118,6 +189,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'There is more here than the mission feed - go and find it.',
     workspaceKind: 'embedded-platform',
     scorePoints: 75,
+    outcomeIds: ['l1-find', 'l1-privacy'],
     steps: [
       {
         id: 'visit-history',
@@ -148,6 +220,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
     workspaceKind: 'embedded-platform',
     scorePoints: 100,
+    outcomeIds: ['l1-privacy', 'l1-uplink'],
     steps: [
       {
         id: 'open-create-mission',
@@ -180,6 +253,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
     scorePoints: 150,
+    outcomeIds: ['l2-sequence', 'l2-debug'],
     steps: [
       {
         id: 'drive-forward',
@@ -211,6 +285,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
     scorePoints: 200,
+    outcomeIds: ['l2-repeat', 'l2-debug'],
     steps: [
       {
         id: 'add-repeat',
@@ -259,6 +334,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     summary: 'Type real Python that drives the rover around a square - one side, one corner, four times.',
     workspaceKind: 'monaco-sim',
     scorePoints: 250,
+    outcomeIds: ['l3-python', 'l3-decompose', 'l3-tune'],
     steps: [
       {
         id: 'drive-one-side',

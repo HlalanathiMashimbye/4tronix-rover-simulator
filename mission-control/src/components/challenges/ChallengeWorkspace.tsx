@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PartyPopper } from 'lucide-react';
-import type { Challenge } from '@/core/domain/entities/Challenge';
+import { PartyPopper, Play } from 'lucide-react';
+import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
 import { useSearch } from '@/contexts/SearchContext';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 import {
@@ -15,9 +15,17 @@ import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff
 import { readMilestones } from '@/infrastructure/browser/platformMilestones';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
+import { LevelOutcomes } from './LevelOutcomes';
 
 interface ChallengeWorkspaceProps {
   challenge: Challenge;
+  /**
+   * Set only when this is its level's first challenge: the level's outcomes
+   * are then shown before the workspace, so a learner knows what the level
+   * is building towards before its first step (AB#444). Later challenges in
+   * the level skip it - the learner has already been briefed.
+   */
+  briefingLevel?: ChallengeLevel;
 }
 
 const FINISH_LABEL: Record<Challenge['workspaceKind'], string> = {
@@ -43,7 +51,7 @@ interface FinishResult {
  * returning to the hub - the code was just validated here, so the natural
  * next step is sending it to a real rover, not browsing challenges again.
  */
-export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
+export function ChallengeWorkspace({ challenge, briefingLevel }: ChallengeWorkspaceProps) {
   const router = useRouter();
   const { query, activeFilter } = useSearch();
   const { completeChallenge } = useChallengeProgress();
@@ -70,6 +78,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const [trajectoryOutcomes, setTrajectoryOutcomes] = useState<TrajectoryOutcome[]>([]);
   const [finishing, setFinishing] = useState(false);
   const [finishResult, setFinishResult] = useState<FinishResult | null>(null);
+  const [briefed, setBriefed] = useState(!briefingLevel);
 
   const step = challenge.steps[stepIndex];
 
@@ -120,6 +129,29 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
       setFinishing(false);
     }
   };
+
+  if (briefingLevel && !briefed) {
+    return (
+      <div className="flex flex-1 items-start justify-center overflow-y-auto py-4">
+        <section className="w-full max-w-xl space-y-4 rounded-2xl border border-border/60 bg-card/40 p-5 clay">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
+              Level {briefingLevel.id}: {briefingLevel.title}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">{briefingLevel.description}</p>
+          </div>
+          <LevelOutcomes level={briefingLevel} linkChallenges />
+          <button
+            onClick={() => setBriefed(true)}
+            className="clay clay-press flex items-center gap-1.5 rounded-xl bg-gradient-mars px-4 py-2 text-sm font-bold text-primary-foreground"
+          >
+            <Play className="h-4 w-4" />
+            Start challenge
+          </button>
+        </section>
+      </div>
+    );
+  }
 
   if (!step) {
     return (
