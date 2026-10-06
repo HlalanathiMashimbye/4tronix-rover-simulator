@@ -7,6 +7,7 @@ import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
 import { findCrash } from '@/core/domain/safety/crashCheck';
+import { findSlope } from '@/core/domain/safety/slopeCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -15,6 +16,7 @@ import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
@@ -33,6 +35,11 @@ function runningLineText(code: string, source: CommandSource | null): string | n
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
+  // The yard this site's missions go to, and its layout (AB#468): what the
+  // simulator drives in here, so a run is judged against the rocks and slopes
+  // of the yard it will run in.
+  const yardId = resolveYardId();
+  const { layout: yardLayout } = useYardLayout(yardId);
   const initialMode = (searchParams.get('mode') as EditorMode) || 'manual';
   const initialCode = searchParams.get('code') ?? '';
 
@@ -130,7 +137,7 @@ export function MissionWorkspace() {
   // trajectory in the simulator.
   const runSimulation = (commands: SimulationCommand[]) => {
     setError(null);
-    const simulated = simulateCommands(commands);
+    const simulated = simulateCommands(commands, yardLayout);
     setTrajectory(simulated);
     setIsPlaying(true);
     setSimulatedCode(currentCode);
@@ -243,7 +250,7 @@ export function MissionWorkspace() {
 
       const validation = validateMission({
         code: currentCode,
-        yardId: resolveYardId(),
+        yardId,
         learnerId,
         sessionId,
         // Stamp the email when the learner has provided one so this mission
@@ -313,6 +320,11 @@ export function MissionWorkspace() {
     () => (hasRunSimulation ? findCrash(trajectory) : undefined),
     [hasRunSimulation, trajectory],
   );
+  // And what ground it climbs (AB#468), on the same terms.
+  const slope = useMemo(
+    () => (hasRunSimulation ? findSlope(trajectory) : undefined),
+    [hasRunSimulation, trajectory],
+  );
 
   const editorPanel = (
     <EditorPanel
@@ -321,6 +333,7 @@ export function MissionWorkspace() {
       error={error}
       onManualTrajectory={handleManualTrajectory}
       manualResetVersion={manualResetVersion}
+      yard={yardLayout}
       onGenerateCommands={runSimulation}
       onCodeChange={setCurrentCode}
       onBlocklyCode={setBlocklyCode}
@@ -344,10 +357,12 @@ export function MissionWorkspace() {
         currentCode={currentCode}
         hasRunSimulation={hasRunSimulation}
         crash={crash}
+        slope={slope}
       />
     );
 
   const simulatorProps = {
+    yardId,
     trajectory,
     isPlaying,
     onReset: handleResetSimulation,

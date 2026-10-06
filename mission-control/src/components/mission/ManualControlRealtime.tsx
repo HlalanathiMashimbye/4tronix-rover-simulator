@@ -2,13 +2,15 @@
 
 import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
 import styles from './ManualControlRealtime.module.css';
-import { RoverPhysics, RoverState } from '@/lib/rover-physics';
+import { RoverPhysics, RoverState, YARD, zoneUnderRover, type Yard } from '@/lib/rover-physics';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 interface ManualControlRealtimeProps {
   onTrajectoryUpdate: (trajectory: TrajectoryPoint[]) => void;
   /** Bumped by the workspace's reset (DriveFooter, or the simulator's own). */
   resetVersion?: number;
+  /** The yard being driven in (AB#468): its rocks stop the rover, its slopes are recorded. */
+  yard?: Yard;
 }
 
 /**
@@ -45,7 +47,7 @@ const KEY_MAP: Record<string, DriveBlock> = {
 };
 
 /** One physics state as the simulator wants it. Manual driving has no lamps. */
-function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
+function toTrajectoryPoint(state: RoverState, yard: Yard): TrajectoryPoint {
   return {
     x: state.x,
     y: state.y,
@@ -60,6 +62,7 @@ function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
     },
     hitWall: state.hitWall,
     hitRock: state.hitRock,
+    zone: zoneUnderRover(state.x, state.y, yard),
     leds: [null, null, null, null],
   };
 }
@@ -67,8 +70,13 @@ function toTrajectoryPoint(state: RoverState): TrajectoryPoint {
 /** Bounded so a long drive cannot grow the trail for ever. */
 const MAX_TRAIL_POINTS = 3000;
 
-export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: ManualControlRealtimeProps) {
-  const roverRef = useRef<RoverPhysics>(new RoverPhysics());
+export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0, yard = YARD }: ManualControlRealtimeProps) {
+  const roverRef = useRef<RoverPhysics>(new RoverPhysics(yard));
+  // The yard's layout arrives from the server just after the page does
+  // (useYardLayout). Before anything has been driven the rover is simply put
+  // in it; mid-drive it waits for the next reset, rather than yanking the
+  // rover back to the start under a learner's finger.
+  const yardRef = useRef(yard);
   const trajectoryRef = useRef<TrajectoryPoint[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,10 +97,15 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: 
     }
     setIsActive(false);
     setActiveCommand(null);
-    roverRef.current.reset();
+    roverRef.current = new RoverPhysics(yardRef.current);
     trajectoryRef.current = [];
     startedRef.current = false;
   }, []);
+
+  useEffect(() => {
+    yardRef.current = yard;
+    if (!startedRef.current) roverRef.current = new RoverPhysics(yard);
+  }, [yard]);
 
   // Listen for external reset from the shared simulator controls.
   useEffect(() => {
@@ -107,7 +120,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: 
       const newState = roverRef.current.update();
       // Converted here, once per frame, rather than re-mapping the whole trail
       // on every frame further up. See the note on onTrajectoryUpdate below.
-      trajectoryRef.current.push(toTrajectoryPoint(newState));
+      trajectoryRef.current.push(toTrajectoryPoint(newState, yardRef.current));
 
       /**
        * A sliding window, and callers must treat it as one.
@@ -159,7 +172,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: 
   const runBlock = useCallback((block: DriveBlock) => {
     if (!startedRef.current) {
       startedRef.current = true;
-      trajectoryRef.current = [toTrajectoryPoint(roverRef.current.getState())];
+      trajectoryRef.current = [toTrajectoryPoint(roverRef.current.getState(), yardRef.current)];
     }
     if (runTimeoutRef.current) clearTimeout(runTimeoutRef.current);
     roverRef.current.setCommand(block.command, block.speed);

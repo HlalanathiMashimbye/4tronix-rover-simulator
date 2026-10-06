@@ -27,13 +27,15 @@ import {
 } from '@/core/domain/safety/limits';
 import { ROVER_MOVEMENT_COMMANDS } from '@/core/domain/safety/rover-command-allowlist';
 import type { Crash } from '@/core/domain/safety/crashCheck';
+import type { Slope } from '@/core/domain/safety/slopeCheck';
 
 export type PreFlightCheckId =
   | 'simulation-run'
   | 'rover-moves'
   | 'runs-long-enough'
   | 'within-time-limit'
-  | 'no-crash';
+  | 'no-crash'
+  | 'flat-ground';
 
 /**
  * One rule and whether this mission meets it. No wording.
@@ -47,16 +49,24 @@ export type PreFlightCheckId =
 export interface PreFlightCheck {
   id: PreFlightCheckId;
   passed: boolean;
+  /**
+   * Said, not enforced: a check that does not hold up Send. The slopes
+   * (AB#468) are the one: the real run may differ there, and the learner is
+   * told and left to decide.
+   */
+  advisory?: boolean;
 }
 
 export interface PreFlightResult {
   checks: PreFlightCheck[];
-  /** True when every check passes - the Send button's enabled state. */
+  /** True when every check that is not advisory passes - the Send button's enabled state. */
   ready: boolean;
   /** Seconds the mission will run for, as measured by the ceiling. */
   duration: number;
   /** What the watched run hit, for the words that explain no-crash. */
   crash?: Crash | null;
+  /** The steepest ground the watched run climbs, for the words that explain flat-ground. */
+  slope?: Slope | null;
 }
 
 /**
@@ -129,6 +139,8 @@ export interface PreFlightContext {
    * code, and only the workspace has the run.
    */
   crash?: Crash | null;
+  /** The steepest ground the watched run climbs, from slopeCheck (AB#468). */
+  slope?: Slope | null;
 }
 
 /**
@@ -154,7 +166,17 @@ export function runPreFlightChecks(code: string, context: PreFlightContext): Pre
     { id: 'runs-long-enough', passed: duration >= MISSION_MIN_DURATION_SECONDS },
     { id: 'within-time-limit', passed: duration <= MISSION_MAX_DURATION_SECONDS },
     { id: 'no-crash', passed: context.hasRunSimulation && !context.crash },
+    // Last, and advisory (AB#468): the slopes are drawn by eye and the
+    // physics drives over them as if flat, so a run that climbs one may not
+    // match the real rover. The learner is told why; Send stays theirs.
+    { id: 'flat-ground', passed: context.hasRunSimulation && !context.slope, advisory: true },
   ];
 
-  return { checks, ready: checks.every((check) => check.passed), duration, crash: context.crash };
+  return {
+    checks,
+    ready: checks.every((check) => check.passed || check.advisory),
+    duration,
+    crash: context.crash,
+    slope: context.slope,
+  };
 }

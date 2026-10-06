@@ -11,7 +11,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-import { YARD } from '@/lib/rover-physics';
+import { YARD, zoneAt } from '@/lib/rover-physics';
 import { START_MARK_CM } from '@/lib/roverSimRender';
 
 const DOC = readFileSync(join(__dirname, '../../../../yard/docs/yard-measurements.md'), 'utf8');
@@ -51,4 +51,20 @@ describe('the simulator yard against yard-measurements.md', () => {
     expect(rocks.length).toBeGreaterThan(0);
     expect(YARD.rocks).toEqual(rocks);
   });
+
+  it('has every slope zone in the doc, where the doc puts it, at its size (AB#468)', () => {
+    const zones = [...DOC.matchAll(/^\| [^|]+ peak \| (yellow|orange|red) \| (\d+), (\d+) \| (\d+) \|$/gm)].map(
+      ([, level, x, y, r]) => ({ level, x: +x, y: +y, rx: +r, ry: +r }),
+    );
+    expect(zones.length).toBeGreaterThan(0);
+    const order = (z: { level: string; x: number }) => `${z.level}:${z.x}`;
+    expect([...(YARD.zones ?? [])].sort((a, b) => order(a).localeCompare(order(b)))).toEqual(
+      zones.sort((a, b) => order(a).localeCompare(order(b))),
+    );
+  });
+
+  it('keeps the start off every zone, so a run is not flagged before it moves', () => {
+    expect(zoneAt(YARD.start.x, YARD.start.y)).toBeNull();
+  });
 });
+

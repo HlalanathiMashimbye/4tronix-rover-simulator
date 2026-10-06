@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { SettingsManager } from '@/components/operator/SettingsManager';
 import { YardManager } from '@/components/operator/YardManager';
+import { YardLayoutEditor } from '@/components/operator/YardLayoutEditor';
 import { adminYardRepository } from '@/infrastructure/container.server';
 import {
   SETTINGS,
@@ -65,6 +66,7 @@ export default async function OperatorSettingsPage() {
       <div className="mx-auto grid w-full max-w-page gap-3 pb-8 lg:grid-cols-2 lg:items-start">
         <YardManager initialYards={yards} />
         <SettingsManager initialSettings={settings} />
+        <YardLayoutEditor initialYards={yards} />
       </div>
     </main>
   );

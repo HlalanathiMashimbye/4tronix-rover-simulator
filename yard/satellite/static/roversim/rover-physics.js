@@ -33,6 +33,8 @@ const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 /** How close the rover's centre gets to a wall: its body is 20 x 18.5 cm. */
 const ROVER_MARGIN = 12;
+/** The levels from gentle to steep, which is also how they rank. */
+export const ZONE_LEVELS = ['yellow', 'orange', 'red'];
 /**
  * The real yard (AB#464), as yard/docs/yard-measurements.md records it.
  * yardMeasurements.test.ts reads that doc's tables and fails if these drift
@@ -52,6 +54,17 @@ export const YARD = {
         { name: 'R2', x: 138, y: 25, widthCm: 13, depthCm: 17 },
         { name: 'R3', x: 206, y: 50, widthCm: 20, depthCm: 24 },
         { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
+    ],
+    // Rings round the two mound peaks, by eye from the floor photo. Only the
+    // peaks: the whole mound rises gently and the start is on it, and a run
+    // flagged before it has moved would teach a learner to ignore the flag.
+    zones: [
+        { level: 'yellow', x: 94, y: 94, rx: 26, ry: 26 },
+        { level: 'yellow', x: 84, y: 137, rx: 26, ry: 26 },
+        { level: 'orange', x: 94, y: 94, rx: 17, ry: 17 },
+        { level: 'orange', x: 84, y: 137, rx: 17, ry: 17 },
+        { level: 'red', x: 94, y: 94, rx: 8, ry: 8 },
+        { level: 'red', x: 84, y: 137, rx: 8, ry: 8 },
     ],
 };
 /**
@@ -103,6 +116,33 @@ export function rockTouching(x, y, heading, yard = YARD) {
             return rock;
     }
     return null;
+}
+/**
+ * The steepest zone at a point of the yard, or null on flat ground.
+ *
+ * Zones overlap by design, rings inside rings, so the answer is the highest
+ * level of any that contains the point.
+ */
+export function zoneAt(x, y, yard = YARD) {
+    let steepest = -1;
+    for (const zone of yard.zones ?? []) {
+        const dx = (x - zone.x) / zone.rx;
+        const dy = (y - zone.y) / zone.ry;
+        if (dx * dx + dy * dy <= 1)
+            steepest = Math.max(steepest, ZONE_LEVELS.indexOf(zone.level));
+    }
+    return steepest < 0 ? null : ZONE_LEVELS[steepest];
+}
+/**
+ * The zone the rover is on, at a pose in its own frame.
+ *
+ * Its centre, not its footprint as with rocks: a rock is hit by whichever
+ * corner reaches it, but a slope matters once the rover is on it, and the
+ * footprint would flag the start, which sits 35 cm from the nearer peak.
+ */
+export function zoneUnderRover(x, y, yard = YARD) {
+    const [cx, cy] = roverToYard(x, y, yard);
+    return zoneAt(cx, cy, yard);
 }
 /** The yard's frame to the rover's: the inverse of roverToYard. */
 export function yardToRover(x, y, yard = YARD) {

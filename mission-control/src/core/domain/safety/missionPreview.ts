@@ -22,18 +22,18 @@
  */
 
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
-import { STEP_SECONDS } from '@/lib/simulateCommands';
 import { checkLearnerCode } from '@/core/domain/safety/learnerCodeCheck';
 import { movesTheRover } from '@/core/domain/safety/preFlightChecks';
 import { calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_MAX_DURATION_SECONDS, MISSION_MIN_DURATION_SECONDS } from '@/core/domain/safety/limits';
 import { findCrash } from '@/core/domain/safety/crashCheck';
+import { findSlope } from '@/core/domain/safety/slopeCheck';
 
 /** stop: do not send it as it is. warn: look before sending. ok: nothing to see. */
 export type FindingLevel = 'stop' | 'warn' | 'ok';
 
 export interface PreviewFinding {
-  id: 'code' | 'moves' | 'crash' | 'duration';
+  id: 'code' | 'moves' | 'crash' | 'slope' | 'duration';
   level: FindingLevel;
   message: string;
   /** The same in a couple of words, for a phone's one-line summary. */
@@ -82,6 +82,23 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
             short: `Edge at ${formatSeconds(crash.atSeconds)}`,
             atSeconds: crash.atSeconds,
           },
+  );
+
+  // A slope is something to look at, never a stop (AB#468): the zones are
+  // drawn by eye, the run may still go fine, and the learner was told.
+  const slope = findSlope(trajectory);
+  const ground = { yellow: 'a gentle slope', orange: 'a steep slope', red: "a mound's top" } as const;
+  const groundShort = { yellow: 'Gentle slope', orange: 'Steep slope', red: 'Mound top' } as const;
+  findings.push(
+    !slope
+      ? { id: 'slope', level: 'ok', message: 'Stays on flat ground', short: 'Flat' }
+      : {
+          id: 'slope',
+          level: 'warn',
+          message: `Climbs ${ground[slope.level]} at ${formatSeconds(slope.atSeconds)}: the run may not match`,
+          short: `${groundShort[slope.level]} ${formatSeconds(slope.atSeconds)}`,
+          atSeconds: slope.atSeconds,
+        },
   );
 
   const duration = calculatePythonDuration(code);

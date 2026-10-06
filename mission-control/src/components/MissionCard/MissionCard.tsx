@@ -7,6 +7,7 @@ import { Mission } from '@/core/domain/entities/Mission';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { MissionSimCover } from '@/components/MissionCard/MissionSimCover';
 import { missionCoverTrajectory } from '@/core/domain/services/missionCover';
+import { useYardLayout } from '@/hooks/useYardLayout';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;
@@ -111,9 +112,10 @@ export function MissionCard({ mission }: MissionCardProps) {
   // Derived whenever the video is not carrying the tile, which now includes a
   // video whose thumbnail failed to load: every mission that drove somewhere
   // has a cover of its own to fall back on.
+  const { layout: yardLayout } = useYardLayout(mission.yardId);
   const coverTrajectory = useMemo(
-    () => missionCoverTrajectory(youtubeThumbnail ? undefined : mission.code),
-    [youtubeThumbnail, mission.code],
+    () => missionCoverTrajectory(youtubeThumbnail ? undefined : mission.code, yardLayout),
+    [youtubeThumbnail, mission.code, yardLayout],
   );
 
   return (
@@ -159,7 +161,7 @@ export function MissionCard({ mission }: MissionCardProps) {
             {/* Zooms on hover like a video thumbnail, so every cover answers
                 the pointer the same way. */}
             <div className="absolute inset-0 transition-[scale] duration-500 ease-[var(--ease-out)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105">
-              <MissionSimCover trajectory={coverTrajectory} />
+              <MissionSimCover trajectory={coverTrajectory} yardId={mission.yardId} />
             </div>
             <span className="absolute bottom-2 left-3 z-10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
               {mission.blocklyState ? 'Simulated · Blocks' : 'Simulated · Python'}

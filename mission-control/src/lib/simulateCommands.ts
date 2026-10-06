@@ -1,4 +1,4 @@
-import { RoverPhysics, YARD, type Yard } from './rover-physics';
+import { RoverPhysics, YARD, zoneUnderRover, type Yard, type ZoneLevel } from './rover-physics';
 import type { CommandSource, SimulationCommand } from './roverBlockly';
 
 export interface TrajectoryPoint {
@@ -11,6 +11,12 @@ export interface TrajectoryPoint {
   hitWall?: boolean;
   /** The rock the rover was stopped by at this frame, if any (AB#466). */
   hitRock?: string | null;
+  /**
+   * The rising ground the rover is on at this frame, if any (AB#468). Nothing
+   * in the physics reads it: the rover drives on as it would on the flat, and
+   * this only records that from here the real run may not match.
+   */
+  zone?: ZoneLevel | null;
   /**
    * The four corner lamps at this moment, as 'r, g, b' or null for off.
    *
@@ -58,7 +64,7 @@ export function simulateCommands(commands: SimulationCommand[], yard: Yard = YAR
   // Lamps persist until something changes them, exactly like the real rover:
   // they do not go out because the next command was a drive.
   let leds: (string | null)[] = [null, null, null, null];
-  const trajectory: TrajectoryPoint[] = [toPoint(physics, leds)];
+  const trajectory: TrajectoryPoint[] = [toPoint(physics, yard, leds)];
 
   for (const cmd of commands) {
     if (cmd.command === 'leds') {
@@ -68,7 +74,7 @@ export function simulateCommands(commands: SimulationCommand[], yard: Yard = YAR
       // Show it for a beat, so a lights-only program is still watchable rather
       // than a single frame nobody sees.
       const steps = Math.max(1, Math.round((cmd.duration ?? 0.3) / STEP_SECONDS));
-      for (let i = 0; i < steps; i++) trajectory.push(toPoint(physics, leds, cmd.source));
+      for (let i = 0; i < steps; i++) trajectory.push(toPoint(physics, yard, leds, cmd.source));
       continue;
     }
 
@@ -77,7 +83,7 @@ export function simulateCommands(commands: SimulationCommand[], yard: Yard = YAR
       physics.setCommand('stop', 0);
       for (let i = 0; i < steps; i++) {
         physics.update(STEP_SECONDS);
-        trajectory.push(toPoint(physics, leds, cmd.source));
+        trajectory.push(toPoint(physics, yard, leds, cmd.source));
       }
       continue;
     }
@@ -104,25 +110,25 @@ export function simulateCommands(commands: SimulationCommand[], yard: Yard = YAR
 
     for (let i = 0; i < wholeSteps; i++) {
       physics.update(STEP_SECONDS);
-      trajectory.push(toPoint(physics, leds, cmd.source));
+      trajectory.push(toPoint(physics, yard, leds, cmd.source));
     }
     // 1e-9 rather than 0: floating point leaves crumbs like 2.7755e-17 behind,
     // and a step of that length is a wasted point, not a movement.
     if (remainder > 1e-9) {
       physics.update(remainder);
-      trajectory.push(toPoint(physics, leds, cmd.source));
+      trajectory.push(toPoint(physics, yard, leds, cmd.source));
     }
     // A command with no duration at all still gets one point, so 'stop' shows.
     if (wholeSteps === 0 && remainder <= 1e-9) {
       physics.update(0);
-      trajectory.push(toPoint(physics, leds, cmd.source));
+      trajectory.push(toPoint(physics, yard, leds, cmd.source));
     }
   }
 
   return trajectory;
 }
 
-function toPoint(physics: RoverPhysics, leds: (string | null)[], source?: CommandSource): TrajectoryPoint {
+function toPoint(physics: RoverPhysics, yard: Yard, leds: (string | null)[], source?: CommandSource): TrajectoryPoint {
   const s = physics.getState();
   return {
     x: s.x,
@@ -133,6 +139,7 @@ function toPoint(physics: RoverPhysics, leds: (string | null)[], source?: Comman
     servos: { '9': s.servos[9], '15': s.servos[15], '11': s.servos[11], '13': s.servos[13] },
     hitWall: s.hitWall,
     hitRock: s.hitRock,
+    zone: zoneUnderRover(s.x, s.y, yard),
     leds: [...leds],
     ...(source ? { source } : {}),
   };
