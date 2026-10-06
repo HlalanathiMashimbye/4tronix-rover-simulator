@@ -11,7 +11,7 @@
  */
 
 import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTemplates';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 
 describe('Remix Feature', () => {
   describe('Email Template', () => {
@@ -209,7 +209,7 @@ describe('Remix Feature', () => {
 
   describe('Remix Visibility Rules', () => {
     it('should show remix only for completed missions', () => {
-      const statuses: Array<{ status: string; shouldShow: boolean }> = [
+      const statuses: Array<{ status: MissionStatus; shouldShow: boolean }> = [
         { status: 'completed', shouldShow: true },
         { status: 'queued', shouldShow: false },
         { status: 'processing', shouldShow: false },
@@ -225,7 +225,7 @@ describe('Remix Feature', () => {
           sessionId: 'session123',
           name: `Mission ${status}`,
           code: 'rover.forward(100)',
-          status: status as any,
+          status,
           submittedAt: '2026-10-06T12:00:00Z',
           ...(status === 'completed' && { completedAt: '2026-10-06T12:01:00Z' }),
         };
