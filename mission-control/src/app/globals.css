@@ -568,6 +568,8 @@
   .launch-trail > span,
   .launch-ring,
   .pop-in,
+  .dice-roll,
+  .nameReel,
   .skeleton {
     animation: none !important;
   }
@@ -736,6 +738,40 @@
   to { background-position: -120% 0; }
 }
 
+/* Rolling a new mission name (MissionNameInput): the die is thrown, tumbling
+   two full turns with a hop and a smaller one, and settles the way up it
+   started. Meanwhile the names roll up through the box like a slot machine's
+   reel, dimmed while they are only passing, and the new one lands with a
+   bounce as the die stops. */
+.dice-roll {
+  transform-origin: center;
+  animation: dice-roll 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes dice-roll {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  20% { transform: translateY(-7px) rotate(170deg) scale(1.2); }
+  45% { transform: translateY(0) rotate(430deg) scale(0.9); }
+  62% { transform: translateY(-3px) rotate(580deg) scale(1.06); }
+  80% { transform: translateY(0) rotate(700deg) scale(0.97); }
+  92% { transform: translateY(0) rotate(728deg) scale(1); }
+  100% { transform: translateY(0) rotate(720deg) scale(1); }
+}
+.nameReel[data-name-reel="passing"] {
+  color: var(--muted-foreground);
+  animation: name-pass 90ms ease-out;
+}
+.nameReel[data-name-reel="landed"] {
+  animation: name-land 420ms var(--ease-spring);
+}
+@keyframes name-pass {
+  from { transform: translateY(75%); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes name-land {
+  from { transform: translateY(85%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 /* Lands with a small bounce. For an element arriving once: a heading after a
    moment, an empty state's icon. */
 .pop-in {
@@ -827,12 +863,15 @@
     grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
-  /* A mission's page (the fixed variant) docks its player at the top, at
-     its natural 16:9 height, and gives the code everything else, the same
-     shape as Create Mission. It used to grow and scroll, with a 45vh floor
-     on the code, which made the blocks a second screen down. */
+  /* A mission's page (the fixed variant): the player on top, the code
+     below, half each, the same shape as Create Mission. It used to grow and
+     scroll, with a 45vh floor on the code, which made the blocks a second
+     screen down; then the player kept its 16:9 height and the code had the
+     rest, which on a tall phone left the video a strip at the top (6 Oct
+     2026). The simulator stretches to its half and the video sits centred
+     in it on black, as any player letterboxes. */
   .workspaceSplitGrid--fixed {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
@@ -898,9 +937,9 @@
     align-items: stretch;
   }
 
-  /* A mission's page: video and code at 60/40 (see MissionVideoClient). */
+  /* A mission's page: video and code half each (see MissionVideoClient). */
   .workspaceSplitGrid--fixed {
-    grid-template-columns: minmax(0, 60fr) minmax(320px, 40fr);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
   }
 }
 
@@ -1093,36 +1132,39 @@
 /*
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
- * Editing: the docked simulator takes 30% of the screen so the blocks keep
- * most of it, and grows to up to 62% when the learner wants a proper look.
- * Launching (after Run): the simulator takes everything the launch controls
- * leave, the controls rise in under it and the editor sinks away; Back to
- * blocks plays it in reverse. The yard stretches to fill the strip at every
- * size (computeLayout), so the strip is sized for the screen, not the yard.
+ * Editing and running: the simulator has a third and the editor two, so a
+ * run plays with its program in view and the running block lit up in it.
+ * Not half each: tried on an iPhone (6 Oct 2026), half left the block canvas
+ * too small to build a program on, and the expand button is there for a
+ * proper look at the yard. Enlarged, the simulator has about 62%; the
+ * mission's own page, which has nothing to edit, is half each (above).
+ * Launching (when a run ends): the
+ * simulator takes everything the launch controls leave, the controls rise in
+ * under it and the editor sinks away; Back to blocks plays it in reverse. The
+ * yard stretches to fill the strip at every size (computeLayout), so the
+ * strip is sized for the screen, not the yard.
  *
- * Sized with FLEX, not height, because the launch size is "whatever is
- * left", which height cannot express and flex can interpolate: flex-grow and
- * flex-basis both animate, so the simulator glides between a fixed share and
- * the remainder. The launch controls use the grid 0fr-to-1fr trick, the one
- * way to animate to their natural height. dvh, not vh: mobile Safari's vh
- * includes the strip under the URL bar, which is the clipping this layout
- * exists to get rid of.
+ * Sized with FLEX, not height, because every size here is a share of what
+ * is left, which height cannot express and flex can interpolate: flex-grow
+ * and flex-basis both animate, so the simulator glides between a third, more
+ * than half and the remainder. The launch controls use the grid 0fr-to-1fr
+ * trick, the one way to animate to their natural height.
  */
 .phoneWorkspace {
   --phone-move: 420ms var(--ease-drawer);
 }
 .phoneSimStrip {
-  flex: 0 0 30dvh;
+  flex: 1 1 0;
   min-height: 0;
   transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  flex-basis: 62dvh;
+  flex-grow: 3.3;
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
 .phoneSimStrip[data-keyboard="true"] {
-  flex-basis: 2.25rem;
+  flex: 0 0 2.25rem;
 }
 .phoneWorkspace[data-launch="true"] .phoneSimStrip {
   flex: 1 1 0;
@@ -1155,7 +1197,7 @@
 }
 
 .phoneEditorSlot {
-  flex: 1 1 0;
+  flex: 2 1 0;
   min-height: 0;
   margin-top: 0.375rem;
   transition: flex var(--phone-move), opacity 220ms ease, transform var(--phone-move), margin var(--phone-move);
@@ -1176,9 +1218,35 @@
   .phoneSimStrip,
   .phoneLaunchSlot,
   .phoneLaunch,
-  .phoneEditorSlot {
+  .phoneEditorSlot,
+  .roverBin {
     transition: none;
   }
+}
+
+/*
+ * The bin on a phone's block canvas (blockCanvasControls.tsx). Quiet while
+ * nothing is moving, so it does not compete with the program; red and a
+ * little bigger while a block is being dragged, so the place to drop it is
+ * plain; bigger again and filled once the block is over it, which is the
+ * moment letting go deletes.
+ */
+.roverBin {
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  transition: transform 180ms var(--ease-spring), background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.roverBin[data-bin="dragging"] {
+  transform: scale(1.15);
+  border-color: color-mix(in oklab, var(--destructive) 55%, transparent);
+  color: var(--destructive);
+}
+.roverBin[data-bin="over"] {
+  transform: scale(1.35);
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: var(--destructive-foreground);
 }
 
 /* The Python editor's hover and autocomplete help card. */
