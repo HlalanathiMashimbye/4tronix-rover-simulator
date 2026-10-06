@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { Blocks, Code2 } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { MissionFeed } from '@/components/mission-feed/MissionFeed';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
-import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
+import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { SimulationCommand } from '@/lib/roverBlockly';
@@ -14,6 +15,14 @@ import {
   deriveTrajectoryOutcomes,
   type TrajectoryOutcome,
 } from '@/core/application/services/ChallengeCheckEvaluator';
+
+// The same lazily loaded CodeMirror editor Create Mission uses (see
+// EditorPanel), so Level 3 types into exactly the editor the learner will
+// meet when they send the mission for real.
+const PythonCodeEditor = dynamic(() => loadPythonEditor().then((m) => m.PythonCodeEditor), {
+  ssr: false,
+  loading: () => <div className="h-full animate-pulse rounded-xl border border-border bg-[#1e1e1e]" />,
+});
 
 interface ChallengeCenterPanelProps {
   challenge: Challenge;
@@ -38,7 +47,7 @@ interface ChallengeCenterPanelProps {
  * does, with a Blocks/Python toggle so a learner can see what their blocks
  * generate without leaving the challenge (the "Show as Python" action tab).
  *
- * 'monaco-sim' reuses MonacoCodeEditor + SimulationPanel - real Python, for
+ * 'monaco-sim' reuses PythonCodeEditor + SimulationPanel - real Python, for
  * Level 3, where a learner types out by hand a shape they built from blocks
  * in Level 2.
  *
@@ -129,7 +138,7 @@ export function ChallengeCenterPanel({
               />
             </div>
           ) : (
-            <MonacoCodeEditor onGenerateCommands={handleRun} onCodeChange={handleCodeChange} />
+            <PythonCodeEditor onGenerateCommands={handleRun} onCodeChange={handleCodeChange} />
           )}
 
           {challenge.workspaceKind === 'blockly-sim' && blocksView === 'python' && (
