@@ -161,13 +161,20 @@ export default function MissionVideoClient({
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
+          {/* The name is the one thing here that is allowed to shrink, so it
+              was the one thing that did: on an iPhone the badge, star and
+              Remix took the row and left the title nothing. It keeps room for
+              about ten letters now, and the badge and star tighten on a phone
+              to make that room. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-2.5">
             <Link href="/" className="shrink-0 text-muted-foreground transition-colors hover:text-primary" aria-label="Back to the feed">
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <h1 className="truncate font-display text-lg font-bold text-foreground md:text-xl">{missionName}</h1>
+            <h1 className="min-w-[6.5rem] truncate font-display text-base font-bold text-foreground md:min-w-0 md:text-xl">
+              {missionName}
+            </h1>
             <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:uppercase md:tracking-[0.12em] ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
             >
               {discoveryStatus}
             </span>
@@ -175,7 +182,7 @@ export default function MissionVideoClient({
               onClick={() => toggleFavorite(mission.id, missionName)}
               aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={starred}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-amber-400"
+              className="-mx-1 shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:text-amber-400 md:mx-0 md:p-1.5"
             >
               <Star
                 className={`h-5 w-5 transition-colors ${starred ? 'fill-amber-400 text-amber-400' : ''}`}
@@ -202,7 +209,9 @@ export default function MissionVideoClient({
             className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
           >
             <Zap className="h-3.5 w-3.5" fill="currentColor" />
-            Remix
+            {/* Words down to the narrowest phones; below 360px the bolt alone,
+                named for screen readers by aria-label. */}
+            <span className="max-[359px]:sr-only">Remix</span>
           </button>
         </div>
 

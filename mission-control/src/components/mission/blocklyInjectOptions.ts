@@ -47,8 +47,9 @@ const DESKTOP = {
  *   and the flyout opens upward over the canvas instead of eating its width.
  * - No zoom buttons: two fingers zoom, as on every map and photo a child has
  *   used, and the buttons were the thing blocks hid under.
- * - No trashcan: dragging a block back onto the category strip deletes it,
- *   which Blockly does by default, so the can only cost canvas.
+ * - A trashcan after all. It was left out because dragging a block back onto
+ *   the category strip deletes it, but nobody guesses that, and on an iPhone
+ *   the missing bin was the first thing noticed (6 Oct 2026).
  * - Smaller to start, so a typical program fits the width without zooming.
  */
 const PHONE = {
@@ -63,7 +64,7 @@ const PHONE = {
     minScale: 0.35,
     scaleSpeed: 1.15,
   },
-  trashcan: false,
+  trashcan: true,
   move: { drag: true, scrollbars: true, wheel: false },
 };
 
