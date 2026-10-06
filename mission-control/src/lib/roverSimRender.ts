@@ -793,30 +793,19 @@ export function drawSimFrame(
   P: SimPalette = DARK_SIM_PALETTE,
   /** The yard's floor photo, once loaded (useYardFloor). Plain ground until then. */
   floor: CanvasImageSource | null = null,
-  /** No shake, recoil or flying grit: the viewer asked for less motion. */
-  options: { reducedMotion?: boolean } = {},
 ) {
   // Skip degenerate layouts (container not laid out yet) to avoid drawing with
   // a zero/negative scale.
   if (L.w <= 0 || L.h <= 0 || L.s <= 0) return;
-
-  const impact = traj.length > 0 ? crashImpact(L, traj) : null;
-  const age = impact ? (playhead - impact.frame) / SIM_FPS : -1;
-  const motion = impact && age >= 0 ? crashMotion(age, options.reducedMotion) : null;
-
-  ctx.save();
-  if (motion) ctx.translate(motion.shake[0], motion.shake[1]);
   drawTerrain(ctx, L, P, floor);
   if (traj.length === 0) {
     drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} }, 0);
-    ctx.restore();
     return;
   }
-  if (impact && motion && impact.rock && floor && motion.joltCm !== 0) {
-    drawRockJolt(ctx, L, impact.rock, impact.away, motion.joltCm, floor, P);
-  }
   drawTrail(ctx, L, traj, Math.floor(playhead), P);
-  if (impact && motion) drawCrashScar(ctx, L, impact);
+  // Under the rover, so the rover sits against what it hit.
+  const impact = crashImpact(L, traj);
+  if (impact && playhead >= impact.frame) drawCrashMark(ctx, L, impact);
   const current = interpolate(traj, playhead);
 
   /**
@@ -833,16 +822,7 @@ export function drawSimFrame(
     odo += Math.abs(traj[i].heading - traj[i - 1].heading) * 0.35;
   }
 
-  ctx.save();
-  if (impact && motion && motion.recoilCm > 0) {
-    // Bounced back off what it hit, and settling.
-    ctx.translate(impact.away[0] * motion.recoilCm * L.sx, impact.away[1] * motion.recoilCm * L.sy);
-  }
   drawRover(ctx, L, current, playhead, odo);
-  ctx.restore();
-
-  if (impact && motion) drawImpact(ctx, L, impact, age, motion);
-  ctx.restore();
 }
 
 /**
@@ -899,222 +879,39 @@ function rockRadius(rock: YardRock): number {
   return Math.max(rock.widthCm, rock.depthCm) / 2;
 }
 
-export interface CrashMotion {
-  /** Whole-picture jolt, px. */
-  shake: [number, number];
-  /** How far the rover has bounced back off it, cm. */
-  recoilCm: number;
-  /** How far the rock has been knocked, cm; it rocks back and settles. */
-  joltCm: number;
-  /** Strength of the flash, the shockwave, the grit and the red tint, 0 to 1. */
-  flash: number;
-  ring: number;
-  debris: number;
-  tint: number;
-}
-
 /**
- * How a crash moves at `age` seconds after it, as numbers the drawing uses.
+ * Where a run crashed: the rock it hit ringed in red, or the stretch of wall
+ * it ran into. Nothing moves: the real rover stops against a rock and pushes,
+ * and the rock stays put, so the simulator shows exactly that (AB#466). An
+ * earlier version shook the yard, bounced the rover back, knocked the rock
+ * and threw grit, which made the simulator less like the yard it predicts.
  *
- * A function of the time since the crash frame, never of a clock: scrubbing
- * back to the crash plays it again, and a cover drawn on the last frame shows
- * only what stays (the scar). With reduced motion nothing moves: no shake, no
- * recoil, no knocked rock, no grit; the flash still fades, which is a change of
- * light, not of place.
+ * Kept on screen after the crash frame, so a learner who looked away, or a
+ * run that backs off and carries on, still sees the spot the pre-flight check
+ * is complaining about.
  */
-export function crashMotion(age: number, reducedMotion = false): CrashMotion {
-  const fade = (seconds: number) => Math.max(0, 1 - age / seconds);
-  const decay = (seconds: number) => Math.exp(-age / seconds);
-  if (reducedMotion) {
-    return { shake: [0, 0], recoilCm: 0, joltCm: 0, flash: fade(0.5), ring: 0, debris: 0, tint: 0 };
-  }
-  const shake = age < 0.45 ? 6 * decay(0.1) : 0;
-  return {
-    shake: shake > 0 ? [shake * Math.sin(age * 95), shake * Math.cos(age * 71)] : [0, 0],
-    recoilCm: age < 0.7 ? 5 * decay(0.12) : 0,
-    joltCm: age < 0.6 ? 3 * decay(0.14) * Math.sin(age * 45) : 0,
-    flash: fade(0.5),
-    ring: fade(0.55),
-    debris: fade(1.3),
-    tint: fade(0.3),
-  };
-}
-
-/** Deterministic noise in [0, 1), so the grit flies the same way every replay. */
-function noise(n: number): number {
-  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-function sourceSize(image: CanvasImageSource): [number, number] {
-  if ('naturalWidth' in image && image.naturalWidth) return [image.naturalWidth, image.naturalHeight];
-  const sized = image as { width: number | SVGAnimatedLength; height: number | SVGAnimatedLength };
-  return [Number(sized.width), Number(sized.height)];
-}
-
-/** The rock's patch of the floor photo, knocked away from the rover and rocking back. */
-function drawRockJolt(
-  ctx: CanvasRenderingContext2D,
-  L: SimLayout,
-  rock: YardRock,
-  away: [number, number],
-  joltCm: number,
-  floor: CanvasImageSource,
-  P: SimPalette,
-) {
-  const r = rockRadius(rock) + 2;
-  const [iw, ih] = sourceSize(floor);
-  const kx = iw / L.yard.widthCm;
-  const ky = ih / L.yard.depthCm;
-  const shiftX = -away[0] * joltCm;
-  const shiftY = -away[1] * joltCm;
-  const [cx, cy] = yardToScreen(L, rock.x + shiftX, rock.y + shiftY);
-  const [dx, dy] = yardToScreen(L, rock.x - r + shiftX, rock.y - r + shiftY);
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.drawImage(floor, (rock.x - r) * kx, (rock.y - r) * ky, 2 * r * kx, 2 * r * ky, dx, dy, 2 * r * L.sx, 2 * r * L.sy);
-  ctx.fillStyle = P.floorShade;
-  ctx.fill();
-  ctx.restore();
-}
-
-/**
- * What stays after a crash: the rock ringed in red, or the stretch of wall
- * lit red, and a crack where it was hit. Kept on screen after the moment has
- * passed, so a learner who looked away, or a run that backs off and carries
- * on, still sees the spot the pre-flight check is complaining about.
- */
-function drawCrashScar(ctx: CanvasRenderingContext2D, L: SimLayout, impact: CrashImpact) {
+function drawCrashMark(ctx: CanvasRenderingContext2D, L: SimLayout, impact: CrashImpact) {
   const s = L.s;
   ctx.save();
   ctx.lineCap = 'round';
-  ctx.shadowColor = 'rgba(239,68,68,0.8)';
-  ctx.shadowBlur = 10;
   ctx.strokeStyle = 'rgba(239,68,68,0.95)';
   if (impact.rock) {
     const [rx, ry] = yardToScreen(L, impact.rock.x, impact.rock.y);
-    ctx.lineWidth = Math.max(2, 0.9 * s);
-    ctx.beginPath();
     const r = rockRadius(impact.rock) + 2;
+    ctx.lineWidth = Math.max(2, 0.6 * s);
+    ctx.beginPath();
     ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // The stretch of wall it ran into.
     const [x, y] = impact.contact;
     const along: [number, number] = [impact.away[1], -impact.away[0]];
     const [ax, ay] = yardToScreen(L, x - along[0] * 16, y - along[1] * 16);
     const [bx, by] = yardToScreen(L, x + along[0] * 16, y + along[1] * 16);
-    ctx.lineWidth = Math.max(3, 1.6 * s);
+    ctx.lineWidth = Math.max(3, 1.2 * s);
     ctx.beginPath();
     ctx.moveTo(ax, ay);
     ctx.lineTo(bx, by);
     ctx.stroke();
-  }
-  ctx.shadowBlur = 0;
-
-  // A crack where it was hit: jagged lines out from the contact, away from
-  // the rock or the wall, the same shape every time.
-  const [px, py] = yardToScreen(L, ...impact.contact);
-  const base = Math.atan2(impact.away[1], impact.away[0]);
-  ctx.strokeStyle = 'rgba(255,214,214,0.95)';
-  ctx.lineWidth = Math.max(1.2, 0.35 * s);
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const angle = base + (i / 5 - 0.5) * Math.PI * 1.3;
-    const length = (2.5 + 3 * noise(i + 1)) * s;
-    const kink = (noise(i + 9) - 0.5) * 0.6;
-    ctx.moveTo(px, py);
-    ctx.lineTo(px + Math.cos(angle + kink) * length * 0.55, py + Math.sin(angle + kink) * length * 0.55);
-    ctx.lineTo(px + Math.cos(angle) * length, py + Math.sin(angle) * length);
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-/**
- * The moment itself: the yard flushes red, a flash and a shockwave burst from
- * the impact, a puff of dust rolls out and grit flies off it.
- */
-function drawImpact(ctx: CanvasRenderingContext2D, L: SimLayout, impact: CrashImpact, age: number, motion: CrashMotion) {
-  const s = L.s;
-  const [px, py] = yardToScreen(L, ...impact.contact);
-  ctx.save();
-
-  if (motion.tint > 0) {
-    ctx.fillStyle = `rgba(239,68,68,${(0.22 * motion.tint).toFixed(3)})`;
-    ctx.fillRect(0, 0, L.w, L.h);
-  }
-
-  if (motion.debris > 0) {
-    // Dust: soft puffs rolling out from the impact, slower than the grit.
-    for (let i = 0; i < 3; i++) {
-      const angle = Math.atan2(impact.away[1], impact.away[0]) + (i - 1) * 0.9;
-      const reach = (4 + 10 * (1 - Math.exp(-age * 3))) * s;
-      const radius = (6 + 14 * (1 - Math.exp(-age * 2.5)) + i * 2) * s;
-      const x = px + Math.cos(angle) * reach;
-      const y = py + Math.sin(angle) * reach;
-      const puff = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      puff.addColorStop(0, `rgba(196,150,110,${(0.4 * motion.debris).toFixed(3)})`);
-      puff.addColorStop(1, 'rgba(196,150,110,0)');
-      ctx.fillStyle = puff;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
-  if (motion.flash > 0) {
-    const radius = (8 + 26 * (1 - motion.flash)) * s;
-    const flash = ctx.createRadialGradient(px, py, 0, px, py, radius);
-    flash.addColorStop(0, `rgba(255,252,235,${motion.flash.toFixed(3)})`);
-    flash.addColorStop(0.3, `rgba(255,190,70,${(0.85 * motion.flash).toFixed(3)})`);
-    flash.addColorStop(0.7, `rgba(239,68,68,${(0.45 * motion.flash).toFixed(3)})`);
-    flash.addColorStop(1, 'rgba(239,68,68,0)');
-    ctx.fillStyle = flash;
-    ctx.beginPath();
-    ctx.arc(px, py, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (motion.ring > 0) {
-    ctx.strokeStyle = `rgba(255,220,170,${(0.9 * motion.ring).toFixed(3)})`;
-    ctx.lineWidth = Math.max(2, 1.2 * s * motion.ring + 1);
-    ctx.beginPath();
-    ctx.arc(px, py, (8 + 45 * (1 - motion.ring)) * s, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  if (motion.debris > 0) {
-    // Grit off the rock, or chips off the wall, thrown back towards the rover
-    // and out to the sides, slowing as it goes. Each chunk edged dark so it
-    // reads against the floor photo.
-    const fill = impact.rock ? [214, 168, 112] : [236, 228, 216];
-    const base = Math.atan2(impact.away[1], impact.away[0]);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = `rgba(30,14,6,${(0.6 * motion.debris).toFixed(3)})`;
-    ctx.fillStyle = `rgba(${fill.join(',')},${motion.debris.toFixed(3)})`;
-    for (let i = 0; i < 26; i++) {
-      const angle = base + (noise(i * 3 + 1) - 0.5) * Math.PI * 1.3;
-      const speed = 60 + 90 * noise(i * 3 + 2);
-      const travelled = (speed * (1 - Math.exp(-age * 4))) / 4;
-      const size = Math.max(1.2, (0.8 + 1.6 * noise(i * 3 + 3)) * s);
-      const x = px + Math.cos(angle) * travelled * s;
-      const y = py + Math.sin(angle) * travelled * s;
-      // A tumbling chip: a small quadrilateral turning as it flies.
-      const spin = age * (6 + 10 * noise(i + 50)) + i;
-      ctx.beginPath();
-      for (let k = 0; k < 4; k++) {
-        const a = spin + (k * Math.PI) / 2;
-        const r = size * (k % 2 === 0 ? 1 : 0.6);
-        if (k === 0) ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-        else ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
   }
   ctx.restore();
 }

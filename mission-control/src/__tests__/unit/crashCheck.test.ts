@@ -5,12 +5,12 @@
  * wall in the simulator is headed for a real one. These drive into R4, the
  * big rock south-east of the start, and past it, and check that the physics
  * stops the rover, that the one crash rule finds it, that the pre-flight check
- * blocks Send on it, and that the simulator marks the spot.
+ * blocks Send on it, and that the simulator marks the spot and nothing more.
  */
 
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, rockTouching, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeLayout, crashImpact, crashMotion } from '@/lib/roverSimRender';
+import { computeLayout, crashImpact, drawSimFrame } from '@/lib/roverSimRender';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import type { SimulationCommand } from '@/lib/roverBlockly';
@@ -118,23 +118,47 @@ describe('the crash on screen', () => {
     expect(crashImpact(L, straightSouth())).toBeNull();
   });
 
-  it('shakes, bounces and throws grit at the moment, and leaves only the scar after', () => {
-    const now = crashMotion(0.05);
-    expect(Math.hypot(...now.shake)).toBeGreaterThan(0);
-    expect(now.recoilCm).toBeGreaterThan(0);
-    expect(now.flash).toBeGreaterThan(0);
-    expect(now.debris).toBeGreaterThan(0);
-    const later = crashMotion(1.5);
-    expect(later).toEqual({ shake: [0, 0], recoilCm: 0, joltCm: 0, flash: 0, ring: 0, debris: 0, tint: 0 });
+  /** Every call and assignment a frame makes on the canvas, in order. */
+  const drawing = (traj: TrajectoryPoint[], playhead: number): string[] => {
+    const log: string[] = [];
+    const gradient = { addColorStop: (...args: unknown[]) => log.push(`addColorStop ${args.join()}`) };
+    const ctx = new Proxy(
+      {},
+      {
+        get: (_, key) => (...args: unknown[]) => {
+          log.push(`${String(key)} ${args.map((a) => (typeof a === 'number' ? a.toFixed(3) : String(a))).join()}`);
+          return gradient;
+        },
+        set: (_, key, value) => {
+          log.push(`${String(key)}=${value}`);
+          return true;
+        },
+      },
+    ) as unknown as CanvasRenderingContext2D;
+    drawSimFrame(ctx, L, traj, playhead);
+    return log;
+  };
+
+  it('marks what it hit and changes nothing else: nothing shakes, bounces or flies', () => {
+    // The real rover stops against the rock and the rock stays put. So a
+    // crashed run must draw exactly what the same path would without the
+    // crash, the rover included, plus the red ring and nothing more.
+    const run = towardsR4();
+    const unmarked = run.map((point) => ({ ...point, hitRock: null, hitWall: false }));
+    const frame = findCrash(run)!.frame;
+    for (const playhead of [frame, frame + 0.4, frame + 3, run.length - 1]) {
+      const crashed = drawing(run, playhead);
+      const ring = crashed.indexOf('strokeStyle=rgba(239,68,68,0.95)');
+      expect(ring).toBeGreaterThan(0);
+      const start = crashed.lastIndexOf('save ', ring);
+      const end = crashed.indexOf('restore ', ring);
+      expect(crashed.slice(start, end + 1).filter((op) => op.startsWith('ellipse'))).toHaveLength(1);
+      expect([...crashed.slice(0, start), ...crashed.slice(end + 1)]).toEqual(drawing(unmarked, playhead));
+    }
   });
 
-  it('moves nothing for a viewer who asked for less motion', () => {
-    const now = crashMotion(0.05, true);
-    expect(now.shake).toEqual([0, 0]);
-    expect(now.recoilCm).toBe(0);
-    expect(now.joltCm).toBe(0);
-    expect(now.debris).toBe(0);
-    expect(now.ring).toBe(0);
-    expect(now.tint).toBe(0);
+  it('marks nothing before the crash', () => {
+    const run = towardsR4();
+    expect(drawing(run, findCrash(run)!.frame - 1)).not.toContain('strokeStyle=rgba(239,68,68,0.95)');
   });
 });

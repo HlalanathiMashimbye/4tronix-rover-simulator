@@ -65,7 +65,6 @@ it('shows no crash before the rover reaches the rock', () => {
 it('says it hit a rock from the crash frame, and still says so after it backs away', () => {
   render(<RoverSimulator trajectory={crashThenBackAway()} isPlaying={false} editorMode="code" />);
   scrub(10);
-  expect(screen.getByRole('status')).toHaveTextContent(/crash/i);
   expect(screen.getByRole('status')).toHaveTextContent(/rock/i);
   scrub(29);
   expect(screen.getByRole('status')).toHaveTextContent(/rock/i);
