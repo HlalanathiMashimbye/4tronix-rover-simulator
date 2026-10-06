@@ -1,32 +1,37 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Blocks, ChevronLeft, Code2, Maximize2, Minimize2, Play } from 'lucide-react';
+import { Blocks, ChevronLeft, Code2, Maximize2, Minimize2, Play, Square } from 'lucide-react';
 import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
 import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
 
 /**
  * Create Mission on a phone: the "docked sim" layout (AB#455).
  *
- * Editing:
- *   top bar     back, Run
- *   sim strip   ~30% of the screen, expandable
- *   editor      everything else
+ * Editing, and while a run plays:
+ *   top bar     back, Run (Stop while a run plays)
+ *   sim strip   a third of the screen, expandable
+ *   editor      the rest, the running block or line lit up
  *
- * After Run (the launch view):
- *   top bar     Edit
- *   simulator   most of the screen, playing the program
+ * When a run has played to its end (the launch view):
+ *   top bar     Back to blocks / Back to code
+ *   simulator   most of the screen, the rover where it finished
  *   launch      the pre-flight checks, the mission's name, Submit
  *
- * WHY RUN OPENS THE LAUNCH VIEW. Submitting used to sit behind a Send button
- * that only appeared once a run had been watched to its last frame, and then
- * behind a sheet. On a phone nobody found it: there was, in practice, no way
- * to submit a mission. Running is the step before submitting, so Run now
- * takes the learner straight to everything submitting needs. Submit stays
- * disabled until the run has been watched, and the checks above it say what
- * is still missing, so the rule is visible rather than a button that has not
- * appeared yet.
+ * WHY THE CODE STAYS FOR THE RUN. Run used to open the launch view at once,
+ * which slid the editor away just as the program started: the highlight
+ * showing which block or line the rover is on (AB#450) played to nobody,
+ * and that is the whole point of running a program to test it (6 Oct 2026).
+ *
+ * WHY THE LAUNCH VIEW STILL OPENS BY ITSELF. Submitting used to sit behind a
+ * Send button that only appeared once a run had been watched to its last
+ * frame, and then behind a sheet. On a phone nobody found it: there was, in
+ * practice, no way to submit a mission. So the end of a run still takes the
+ * learner to everything submitting needs, without a button to find. Stop
+ * does not: stopping is for changing something. Nor does a run ending while
+ * the keyboard is up, which would pull the editor out from under the
+ * learner's typing.
  *
  * The docked strip was chosen over Build/Watch tabs and a floating mini-sim
  * because it is the only one where a learner sees the program and the rover
@@ -45,6 +50,15 @@ interface PhoneWorkspaceProps {
   submitBar?: React.ReactNode;
   /** Runs the active editor's program in the simulator. */
   onRun: () => void;
+  /** A run is playing out now, so the top bar offers Stop instead of Run. */
+  running?: boolean;
+  /** Pauses the run where it is. */
+  onStop?: () => void;
+  /**
+   * Goes up by one each time a run is watched to its end. The launch view
+   * opens when it does (see above); its value at mount is not an ending.
+   */
+  runEnded?: number;
   /** Which editor the launch view returns to, for its button's words. */
   editorKind: 'blocks' | 'code';
   /** The launch view, owned by MissionWorkspace so a successful send can close it. */
@@ -57,7 +71,22 @@ interface PhoneWorkspaceProps {
   runningText?: string | null;
 }
 
-export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind, launchOpen, onLaunchOpenChange, runningText = null }: PhoneWorkspaceProps) {
+/** How long the rover rests where it finished before the launch view rises. */
+const LAUNCH_AFTER_MS = 700;
+
+export function PhoneWorkspace({
+  editor,
+  simulator,
+  submitBar,
+  onRun,
+  running = false,
+  onStop,
+  runEnded = 0,
+  editorKind,
+  launchOpen,
+  onLaunchOpenChange,
+  runningText = null,
+}: PhoneWorkspaceProps) {
   const [simExpanded, setSimExpanded] = useState(false);
   const keyboard = useOnScreenKeyboard();
   // Drive has no launch view: nothing to submit.
@@ -79,10 +108,22 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
     };
   }, [keyboard.inset]);
 
-  const run = () => {
-    onRun();
-    onLaunchOpenChange(true);
-  };
+  // The end of a run opens the launch view. What it needs to know at that
+  // moment is read through a ref, so the timer is only ever restarted by a
+  // run ending, not by the parent re-rendering with fresh props.
+  const canLaunch = submitBar !== undefined && !keyboard.open;
+  const launchRef = useRef({ canLaunch, onLaunchOpenChange });
+  useEffect(() => {
+    launchRef.current = { canLaunch, onLaunchOpenChange };
+  });
+  const endedAtMount = useRef(runEnded);
+  useEffect(() => {
+    if (runEnded === endedAtMount.current || !launchRef.current.canLaunch) return;
+    const timer = setTimeout(() => {
+      if (launchRef.current.canLaunch) launchRef.current.onLaunchOpenChange(true);
+    }, LAUNCH_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [runEnded]);
 
   return (
     // data-launch drives the move between editing and launching in
@@ -113,9 +154,19 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
               {editorKind === 'code' ? <Code2 className="h-3.5 w-3.5" /> : <Blocks className="h-3.5 w-3.5" />}
               {editorKind === 'code' ? 'Back to code' : 'Back to blocks'}
             </button>
+          ) : running && onStop ? (
+            // In Run's place and at Run's size, so nothing in the bar moves.
+            <button
+              onClick={onStop}
+              // A ring, not a border, which would make it 2px bigger than Run.
+              className="clay clay-press flex items-center gap-1.5 rounded-xl bg-card px-3 py-1.5 text-xs font-bold text-foreground ring-1 ring-inset ring-border"
+            >
+              <Square className="h-3.5 w-3.5 text-destructive" fill="currentColor" />
+              Stop
+            </button>
           ) : (
             <button
-              onClick={run}
+              onClick={onRun}
               className="clay clay-press flex items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background"
             >
               <Play className="h-3.5 w-3.5" fill="currentColor" />

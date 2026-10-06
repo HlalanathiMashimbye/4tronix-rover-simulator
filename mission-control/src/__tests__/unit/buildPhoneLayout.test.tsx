@@ -14,10 +14,13 @@
  * - the navbar drops its phone chrome on it, and keeps it on the feed;
  * - the phone layout is decided in one hook that follows the md breakpoint;
  * - the docked layout shows the simulator and the editor together, expands
- *   the simulator on request, and Run opens the launch view: the simulator,
- *   the checks, the name and Submit. Submitting used to sit behind a Send
- *   button that only appeared after a full watch, and on a phone nobody
- *   found it - there was no way to submit a mission.
+ *   the simulator on request, and keeps the editor on screen while a run
+ *   plays, so the running block or line can be followed (6 Oct 2026: Run
+ *   used to slide the editor away as the program started). Run reads Stop
+ *   while a run plays. When a run plays to its end the launch view opens by
+ *   itself: the simulator, the checks, the name and Submit. Submitting used
+ *   to sit behind a Send button that only appeared after a full watch, and
+ *   on a phone nobody found it - there was no way to submit a mission.
  *
  * That the page does not scroll is layout, which jsdom cannot measure; it
  * was checked in a browser at 360x640, 375x667, 390x844 and 412x915.
@@ -164,11 +167,92 @@ describe('the docked layout', () => {
     expect(screen.getByRole('button', { name: 'Enlarge the simulator' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('runs the program and opens the launch view in one press', () => {
+  it('runs the program with the editor still on screen, so the run can be followed in it', () => {
+    jest.useFakeTimers();
     const { onRun, onLaunchOpenChange } = renderWorkspace();
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    act(() => jest.runAllTimers());
     expect(onRun).toHaveBeenCalled();
-    expect(onLaunchOpenChange).toHaveBeenCalledWith(true);
+    expect(onLaunchOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByTestId('editor').parentElement).not.toHaveAttribute('inert');
+    jest.useRealTimers();
+  });
+
+  it('offers Stop in place of Run while a run plays', () => {
+    const onStop = jest.fn();
+    renderWorkspace({ running: true, onStop });
+    expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }));
+    expect(onStop).toHaveBeenCalled();
+  });
+
+  describe('when a run plays to its end', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    function endARun(overrides: Partial<React.ComponentProps<typeof PhoneWorkspace>> = {}) {
+      const onLaunchOpenChange = jest.fn();
+      const props = {
+        editor: <div data-testid="editor" />,
+        simulator: <div data-testid="simulator" />,
+        submitBar: <div data-testid="submit-bar" />,
+        onRun: () => {},
+        editorKind: 'blocks' as const,
+        launchOpen: false,
+        onLaunchOpenChange,
+        runEnded: 0,
+        ...overrides,
+      };
+      const { rerender } = render(<PhoneWorkspace {...props} />);
+      rerender(<PhoneWorkspace {...props} runEnded={props.runEnded + 1} />);
+      return onLaunchOpenChange;
+    }
+
+    it('opens the launch view, after a moment to see where the rover stopped', () => {
+      const onLaunchOpenChange = endARun();
+      expect(onLaunchOpenChange).not.toHaveBeenCalled();
+      act(() => jest.runAllTimers());
+      expect(onLaunchOpenChange).toHaveBeenCalledWith(true);
+    });
+
+    it('not for a run that ended before the layout was on screen', () => {
+      const onLaunchOpenChange = jest.fn();
+      render(
+        <PhoneWorkspace
+          editor={<div />}
+          simulator={<div />}
+          submitBar={<div />}
+          onRun={() => {}}
+          editorKind="blocks"
+          launchOpen={false}
+          onLaunchOpenChange={onLaunchOpenChange}
+          runEnded={3}
+        />,
+      );
+      act(() => jest.runAllTimers());
+      expect(onLaunchOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('not in Drive, which has nothing to send', () => {
+      const onLaunchOpenChange = endARun({ submitBar: undefined });
+      act(() => jest.runAllTimers());
+      expect(onLaunchOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('not while the keyboard is up, which would pull the editor out from under the typing', () => {
+      // The keyboard covers the bottom half of the screen.
+      Object.defineProperty(window, 'visualViewport', {
+        configurable: true,
+        value: { height: window.innerHeight / 2, scale: 1, offsetTop: 0, addEventListener: () => {}, removeEventListener: () => {} },
+      });
+      try {
+        const onLaunchOpenChange = endARun();
+        act(() => jest.runAllTimers());
+        expect(onLaunchOpenChange).not.toHaveBeenCalled();
+      } finally {
+        delete (window as { visualViewport?: unknown }).visualViewport;
+      }
+    });
   });
 
   it('shows the checks, name and Submit in the launch view, beside the simulator', () => {
