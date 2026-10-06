@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { PartyPopper, Play } from 'lucide-react';
 import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
@@ -13,6 +13,8 @@ import {
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
 import { readMilestones } from '@/infrastructure/browser/platformMilestones';
+import { playLevelUnlockSound } from '@/infrastructure/browser/levelUnlockSound';
+import { readStoredSound, serverSoundSnapshot, subscribeToSound } from '@/hooks/soundPreference';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
 import { LevelOutcomes } from './LevelOutcomes';
@@ -55,6 +57,7 @@ export function ChallengeWorkspace({ challenge, briefingLevel }: ChallengeWorksp
   const router = useRouter();
   const { query, activeFilter } = useSearch();
   const { completeChallenge } = useChallengeProgress();
+  const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
 
   const [stepIndex, setStepIndex] = useState(0);
   const [loadMoreCalled, setLoadMoreCalled] = useState(false);
@@ -104,6 +107,10 @@ export function ChallengeWorkspace({ challenge, briefingLevel }: ChallengeWorksp
     setFinishing(true);
     try {
       const justUnlockedLevelId = await completeChallenge(challenge.id);
+      // Only a new level gets the launch, so it stays an event rather than
+      // noise on every challenge; and the learner's mute covers it, since a
+      // room of thirty finishing at once is the case that mute exists for.
+      if (justUnlockedLevelId && !muted) playLevelUnlockSound();
 
       if (challenge.workspaceKind === 'blockly-sim') {
         writeChallengeHandoff({
@@ -200,14 +207,16 @@ export function ChallengeWorkspace({ challenge, briefingLevel }: ChallengeWorksp
           anyway, since a route change follows shortly after it appears. */}
       {finishResult && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/85 backdrop-blur-sm">
-          <div className="flex flex-col items-center gap-2 rounded-3xl border border-primary/40 bg-card p-8 text-center clay">
-            <PartyPopper className="h-10 w-10 text-primary" />
-            <p className="font-display text-xl font-bold text-foreground">
+          <div className="flex flex-col items-center gap-2 rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-green-edge bg-kid-panel p-8 text-center">
+            <span className="flex h-20 w-20 items-center justify-center rounded-full border-b-[6px] border-kid-orange-edge bg-kid-orange text-kid-ink">
+              <PartyPopper className="h-10 w-10" aria-hidden="true" />
+            </span>
+            <p className="font-display text-2xl font-bold text-foreground">
               {finishResult.justUnlockedLevelId
                 ? `Level ${finishResult.justUnlockedLevelId} unlocked!`
                 : 'Challenge complete!'}
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-base text-kid-muted-text">
               {isCodeChallenge ? 'Carrying your code into Create Mission…' : 'Heading back to Challenges…'}
             </p>
           </div>

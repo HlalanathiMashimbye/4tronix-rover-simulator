@@ -89,31 +89,31 @@ export function ChallengeCenterPanel({
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
-      <div className="panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border border-border/60 bg-card/40 clay">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel">
         {challenge.workspaceKind === 'blockly-sim' && (
-          <div className="flex shrink-0 gap-1.5 border-b border-border/60 p-1.5">
+          <div className="flex shrink-0 gap-1.5 border-b-2 border-kid-panel-edge p-1.5">
             <button
               onClick={() => setBlocksView('blocks')}
               aria-pressed={blocksView === 'blocks'}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold transition-colors ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 font-display text-sm font-bold transition-colors ${
                 blocksView === 'blocks'
-                  ? 'bg-gradient-mars text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'border-b-4 border-kid-blue-edge bg-kid-blue text-kid-ink'
+                  : 'text-kid-muted-text hover:text-foreground'
               }`}
             >
-              <Blocks className="h-3.5 w-3.5" />
+              <Blocks className="h-5 w-5" aria-hidden="true" />
               Blocks
             </button>
             <button
               onClick={() => setBlocksView('python')}
               aria-pressed={blocksView === 'python'}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-bold transition-colors ${
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-full px-3 font-display text-sm font-bold transition-colors ${
                 blocksView === 'python'
-                  ? 'bg-gradient-mars text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'border-b-4 border-kid-blue-edge bg-kid-blue text-kid-ink'
+                  : 'text-kid-muted-text hover:text-foreground'
               }`}
             >
-              <Code2 className="h-3.5 w-3.5" />
+              <Code2 className="h-5 w-5" aria-hidden="true" />
               Show as Python
             </button>
           </div>

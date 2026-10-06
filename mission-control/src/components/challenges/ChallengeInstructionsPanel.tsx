@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
 import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
+import { describeCheck } from './describeCheck';
+import { pillClass } from './pill';
 
 interface ChallengeInstructionsPanelProps {
   step: ChallengeStep;
@@ -21,57 +23,22 @@ interface ChallengeInstructionsPanelProps {
   finishing?: boolean;
 }
 
-function describeCheck(spec: ChallengeCheckSpec): string {
-  switch (spec.kind) {
-    case 'search-query':
-      return spec.matches ? `Search for "${spec.matches}"` : 'Type something into the search box';
-    case 'search-filter':
-      return `Set the filter to "${spec.filterKey}"`;
-    case 'load-more':
-      return 'Load another page of missions';
-    case 'route-visited':
-      return ROUTE_LABELS[spec.path] ?? `Open ${spec.path}`;
-    case 'mission-created':
-      return 'Send a mission to the queue';
-    case 'trajectory-outcome':
-      return `Rover ${spec.outcome.replace('-', ' ')}`;
-    case 'code-contains':
-      return CODE_CONTAINS_LABELS[spec.pattern] ?? 'Use the right command';
-  }
-}
-
 /**
- * A route check reads as the page's NAME in the navigation bar, not its path.
- * '/history' is an implementation detail; "Open History" is the thing the
- * learner is being asked to click. Unknown paths fall back to the raw path so
- * a new check is merely ugly rather than silently mislabelled.
- */
-const ROUTE_LABELS: Record<string, string> = {
-  '/history': 'Open History',
-  '/leaderboard': 'Open Leaderboard',
-  '/mission': 'Open Create Mission',
-};
-
-/**
- * Blockly and Monaco challenges share these check patterns, so the wording has
- * to fit both - Level 2 drags a Repeat block, Level 3 types the loop out.
- */
-const CODE_CONTAINS_LABELS: Record<string, string> = {
-  'for _ in range(': 'Repeat the movement in a loop',
-  'rover.setServo(0,': 'Point the mast',
-};
-
-/**
- * Top banner: the current step's title and instructions, a bulb icon for
- * hints/checks (mobile-friendly popover), and Back/Next buttons. Next is gated
- * on the step's own checks having passed - a learner cannot skip ahead of a
- * step they have not actually completed.
+ * Top banner: step dots, the current step's title and instructions, its
+ * checklist, and Back/Next. Next is gated on the step's own checks having
+ * passed - a learner cannot skip ahead of a step they have not actually
+ * completed.
+ *
+ * THE CHECKLIST IS ON THE PANEL, NOT BEHIND THE BULB. It used to sit in the
+ * hint popover, so the one piece of feedback that tells a child what Next is
+ * waiting for was a tap away - and the button that opened it was an icon with
+ * only a `title`, which has no accessible name and does not exist on touch.
+ * Ticks turning green as the child works are the feedback loop; hints, which
+ * should be asked for, stay behind the button.
  *
  * This banner used to carry CAPS/CSTA curriculum pills. They are gone because
- * nobody on the team can vouch for the mapping, and the readable half of it
- * (capsSubject) sat in a `title` tooltip, which does not exist on touch - so
- * the only part a learner ever saw was a code like "CSTA 2-AP-12". See
- * infrastructure/config/challenges.ts for the fuller reasoning.
+ * nobody on the team can vouch for the mapping - see
+ * infrastructure/config/challenges.ts.
  */
 export function ChallengeInstructionsPanel({
   step,
@@ -91,6 +58,7 @@ export function ChallengeInstructionsPanel({
 }: ChallengeInstructionsPanelProps) {
   const [hintOpen, setHintOpen] = useState(false);
   const hintRef = useRef<HTMLDivElement>(null);
+  const hasHints = Boolean(step.hints && step.hints.length > 0);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -104,99 +72,119 @@ export function ChallengeInstructionsPanel({
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [hintOpen]);
-  return (
-    <div className="panel flex flex-col gap-3 overflow-y-auto border border-border/60 bg-card/40 p-4 clay shrink-0">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-        <div className="flex-1">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-primary">
-            Step {stepIndex + 1} of {totalSteps}
-          </p>
-          <h2 className="font-display text-lg font-bold text-foreground">{step.title}</h2>
 
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{step.instructions}</p>
+  return (
+    <div className="flex shrink-0 flex-col gap-3 overflow-y-auto rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+        <div className="min-w-0 flex-1">
+          <StepDots stepIndex={stepIndex} totalSteps={totalSteps} />
+          <h2 className="mt-1.5 font-display text-xl font-bold text-foreground md:text-2xl">{step.title}</h2>
+
+          <p className="mt-1 whitespace-pre-line text-base leading-relaxed text-foreground">{step.instructions}</p>
+
+          <ul aria-label="Mission checklist" className="mt-3 flex flex-wrap gap-2">
+            {checks.map((check, index) => {
+              const done = results[index] ?? false;
+              return (
+                <li
+                  key={index}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold ${
+                    done
+                      ? 'bg-kid-green/15 text-kid-green-text'
+                      : 'border-2 border-dashed border-kid-panel-edge text-kid-muted-text'
+                  }`}
+                >
+                  {done ? (
+                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  ) : (
+                    <Circle className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  )}
+                  {describeCheck(check)}
+                  <span className="sr-only">{done ? ' - done' : ' - not done yet'}</span>
+                </li>
+              );
+            })}
+          </ul>
         </div>
 
-        <div className="flex gap-2 md:flex-col md:shrink-0">
-          <div className="relative" ref={hintRef}>
-            <button
-              onClick={() => setHintOpen(!hintOpen)}
-              className="clay-press flex items-center justify-center rounded-xl border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold text-foreground hover:bg-card/70 md:w-24"
-              title="View target checks and hints"
-            >
-              <Lightbulb className="h-4 w-4" />
-            </button>
-            {hintOpen && (
-              <div className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-xl border border-border/60 bg-card p-4 shadow-lg">
-                <div className="space-y-3">
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                      Target checks
-                    </h3>
-                    <ul className="mt-2 space-y-2">
-                      {checks.map((check, index) => {
-                        const done = results[index] ?? false;
-                        return (
-                          <li key={index} className="flex items-start gap-2 text-sm">
-                            {done ? (
-                              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-buzz" />
-                            ) : (
-                              <Circle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                            )}
-                            <span className={done ? 'text-foreground' : 'text-muted-foreground'}>
-                              {describeCheck(check)}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-
-                  {step.hints && step.hints.length > 0 && (
-                    <div className="border-t border-border/60 pt-3">
-                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">
-                        Hints
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                        {step.hints.map((hint, i) => (
-                          <li key={i}>• {hint}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
+        <div className="flex flex-wrap gap-2 md:shrink-0 md:justify-end">
+          {hasHints && (
+            <div className="relative" ref={hintRef}>
+              <button
+                type="button"
+                onClick={() => setHintOpen(!hintOpen)}
+                aria-expanded={hintOpen}
+                aria-controls="challenge-hints"
+                className={pillClass('orange')}
+              >
+                <Lightbulb className="h-5 w-5" aria-hidden="true" />
+                Hint
+              </button>
+              {hintOpen && (
+                <div
+                  id="challenge-hints"
+                  className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-orange-edge bg-kid-panel p-4 shadow-lg"
+                >
+                  <p className="font-display text-base font-bold text-kid-orange-text">Hints</p>
+                  <ul className="mt-2 space-y-2 text-sm text-foreground">
+                    {step.hints!.map((hint, i) => (
+                      <li key={i} className="flex gap-2">
+                        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-kid-orange-text" aria-hidden="true" />
+                        {hint}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
-          <button
-            onClick={onBack}
-            disabled={!canGoBack}
-            className="clay-press flex items-center justify-center gap-1 rounded-xl border border-border/60 bg-card/50 px-3 py-2 text-xs font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-24"
-          >
-            <ChevronLeft className="h-4 w-4" />
+          <button type="button" onClick={onBack} disabled={!canGoBack} className={pillClass('plain')}>
+            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             Back
           </button>
           {isFinalStep ? (
             <button
+              type="button"
               onClick={onFinish}
               disabled={!allStepChecksPass || finishing}
-              className="clay clay-press flex items-center justify-center gap-1 rounded-xl bg-gradient-mars px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-28"
+              className={pillClass('green')}
             >
-              <PartyPopper className="h-4 w-4" />
+              <PartyPopper className="h-5 w-5" aria-hidden="true" />
               {finishing ? 'Finishing…' : finishLabel}
             </button>
           ) : (
-            <button
-              onClick={onNext}
-              disabled={!canGoNext}
-              className="clay clay-press flex items-center justify-center gap-1 rounded-xl bg-gradient-mars px-3 py-2 text-xs font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 md:w-24"
-            >
+            <button type="button" onClick={onNext} disabled={!canGoNext} className={pillClass('blue')}>
               Next
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Progress as chunks rather than a sentence: a row of pills, done ones green
+ * and the current one blue and wider. The "Step 2 of 4" text is kept for
+ * screen readers, which cannot count dots.
+ */
+function StepDots({ stepIndex, totalSteps }: { stepIndex: number; totalSteps: number }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="sr-only">
+        Step {stepIndex + 1} of {totalSteps}
+      </span>
+      {Array.from({ length: totalSteps }, (_, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className={`h-2.5 rounded-full transition-[width] ${
+            i < stepIndex ? 'w-6 bg-kid-green' : i === stepIndex ? 'w-10 bg-kid-blue' : 'w-6 bg-kid-panel-edge'
+          }`}
+        />
+      ))}
     </div>
   );
 }
