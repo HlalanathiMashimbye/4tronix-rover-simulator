@@ -13,7 +13,7 @@
  */
 
 import { ChallengeCheckSpec } from '@/core/domain/entities/Challenge';
-import { endsOnGoal, type TargetGeometry, type TargetPoint } from '@/core/domain/services/challengeTarget';
+import { endsOnGoal, followsPath, type TargetGeometry, type TargetPoint } from '@/core/domain/services/challengeTarget';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 export type TrajectoryOutcome = 'moved-forward' | 'moved-backward' | 'spun-left' | 'spun-right';
@@ -54,6 +54,12 @@ export interface ChallengeEvalContext {
   runEnd?: TargetPoint;
   /** The challenge's goal, from challengeTarget's targetGeometry. */
   targetGoal?: TargetGeometry['goal'];
+  /** The whole of the last simulated run, in the rover's frame. */
+  runPath?: TargetPoint[];
+  /** The challenge's target, for 'matches-target'. */
+  target?: TargetGeometry | null;
+  /** Whether the last simulated run hit a rock or a wall. */
+  runCrashed?: boolean;
 }
 
 export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalContext): boolean {
@@ -87,6 +93,17 @@ export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalCo
 
     case 'reaches-target':
       return context.runEnd !== undefined && endsOnGoal(context.runEnd, context.targetGoal ?? null);
+
+    case 'matches-target': {
+      const target = context.target;
+      if (!target || target.matchWithinCm === null || !context.runPath) return false;
+      return followsPath(context.runPath, target.path, target.matchWithinCm);
+    }
+
+    case 'avoids-hazards':
+      // Only once something has run: an empty canvas has hit nothing, but
+      // has not avoided anything either.
+      return context.runPath !== undefined && context.runCrashed === false;
 
     default:
       // Exhaustiveness check: a new ChallengeCheckKind added to the domain

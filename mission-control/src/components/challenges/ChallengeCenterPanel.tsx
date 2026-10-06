@@ -10,7 +10,7 @@ import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
 import { pillClass } from './pill';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
-import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import { crashFrame, simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 import {
   deriveTrajectoryOutcomes,
@@ -33,8 +33,11 @@ interface ChallengeCenterPanelProps {
   onCodeChange: (code: string) => void;
   onBlocklyStateChange: (state: string) => void;
   onTrajectoryOutcomes: (outcomes: TrajectoryOutcome[]) => void;
-  /** Where each simulated run ended, for 'reaches-target' checks. */
-  onRunEnd?: (end: TargetPoint) => void;
+  /**
+   * Each simulated run: the path it drove and whether it hit a rock or a
+   * wall, for the target and hazard checks.
+   */
+  onRun?: (run: { path: TargetPoint[]; crashed: boolean }) => void;
   /** The challenge's target, from challengeTarget's targetGeometry, or null. */
   target?: TargetGeometry | null;
   /** Keep the target's path off the simulator for now (a Predict step is unanswered). */
@@ -74,7 +77,7 @@ export function ChallengeCenterPanel({
   onCodeChange,
   onBlocklyStateChange,
   onTrajectoryOutcomes,
-  onRunEnd,
+  onRun,
   target = null,
   holdTarget = false,
 }: ChallengeCenterPanelProps) {
@@ -123,8 +126,7 @@ export function ChallengeCenterPanel({
     setTrajectory(run);
     setIsPlaying(true);
     onTrajectoryOutcomes(deriveTrajectoryOutcomes(commands));
-    const end = run[run.length - 1];
-    if (end) onRunEnd?.({ x: end.x, y: end.y });
+    onRun?.({ path: run.map(({ x, y }) => ({ x, y })), crashed: crashFrame(run) >= 0 });
   };
 
   const handleReset = () => {
@@ -189,7 +191,12 @@ export function ChallengeCenterPanel({
               />
             </div>
           ) : (
-            <PythonCodeEditor onGenerateCommands={handleRun} onCodeChange={handleCodeChange} />
+            <PythonCodeEditor
+              onGenerateCommands={handleRun}
+              onCodeChange={handleCodeChange}
+              storageKey={`challengeCode:${challenge.id}`}
+              starterCode={challenge.starterCode}
+            />
           )}
 
           {challenge.workspaceKind === 'blockly-sim' && blocksView === 'python' && (

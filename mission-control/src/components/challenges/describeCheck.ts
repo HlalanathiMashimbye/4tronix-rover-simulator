@@ -28,6 +28,10 @@ export function describeCheck(spec: ChallengeCheckSpec): string {
       return 'Pick your prediction';
     case 'reaches-target':
       return 'Stop the rover on the target';
+    case 'matches-target':
+      return 'Draw the target shape';
+    case 'avoids-hazards':
+      return 'Miss every rock and wall';
   }
 }
 

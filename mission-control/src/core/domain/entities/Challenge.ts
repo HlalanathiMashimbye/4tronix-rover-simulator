@@ -10,16 +10,23 @@
 
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
-export type ChallengeLevelId = 1 | 2 | 3;
+export type ChallengeLevelId = 1 | 2 | 3 | 4 | 5;
 
 export type ChallengeId =
   | 'platform-orientation'
   | 'explore-the-platform'
   | 'first-mission'
+  | 'mission-spotter'
   | 'drive-to-target'
   | 'basic-movement'
   | 'loop-structures'
-  | 'draw-a-square';
+  | 'two-lines'
+  | 'draw-a-square'
+  | 'draw-a-rectangle'
+  | 'sample-site'
+  | 'sample-run-test'
+  | 'spot-the-hazard'
+  | 'hazard-test';
 
 /**
  * What one checklist item verifies, as plain data rather than a function.
@@ -83,6 +90,20 @@ export type ChallengeCheckSpec =
        * arriveWithinCm of where the target's reference program stops.
        */
       kind: 'reaches-target';
+    }
+  | {
+      /**
+       * The last run drew the target's shape: every point of the run within
+       * the target's matchWithinCm of its path, and every point of its path
+       * within that of the run. Both ways, so a run that stops halfway along
+       * the shape fails as surely as one that wanders off it. How a test
+       * that asks for a shape is graded (AB#446).
+       */
+      kind: 'matches-target';
+    }
+  | {
+      /** The last run hit no rock and no wall (AB#466's crash model). */
+      kind: 'avoids-hazards';
     };
 
 export interface ChallengeStep {
@@ -120,6 +141,8 @@ export interface ChallengeTarget {
    * a marker, and a 'reaches-target' check passes within this many cm of it.
    */
   arriveWithinCm?: number;
+  /** Set when the target is a shape to draw: how far, in cm, a run may stray from it. */
+  matchWithinCm?: number;
 }
 
 /**
@@ -149,6 +172,8 @@ export interface Challenge {
    * uplink block alone.
    */
   starterBlocks?: object;
+  /** The same for a Python challenge: code already in the editor when it first opens. */
+  starterCode?: string;
 }
 
 /** One CSTA K-12 Computer Science Standard, worded as CSTA publishes it. */
@@ -186,4 +211,10 @@ export interface ChallengeLevel {
   description: string;
   challengeIds: ChallengeId[];
   outcomes: LearningOutcome[];
+  /**
+   * The level's test (AB#446): its last challenge, which gives a goal and no
+   * help. It opens once the level's other challenges are done, and the next
+   * level opens once it is passed.
+   */
+  testId: ChallengeId;
 }

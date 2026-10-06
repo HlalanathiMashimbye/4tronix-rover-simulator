@@ -51,7 +51,8 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     // level used to declare the platform learnt on the strength of a search
     // box - and a single long challenge pays out once, at the end, which is
     // where people give up.
-    challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission'],
+    challengeIds: ['platform-orientation', 'explore-the-platform', 'first-mission', 'mission-spotter'],
+    testId: 'mission-spotter',
     outcomes: [
       {
         id: 'l1-find',
@@ -83,7 +84,8 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     // drive-to-target first: one straight move and no turning, so the first
     // thing a learner does with blocks is read some and change one number
     // (AB#453), before basic-movement asks them to build from nothing.
-    challengeIds: ['drive-to-target', 'basic-movement', 'loop-structures'],
+    challengeIds: ['drive-to-target', 'basic-movement', 'loop-structures', 'two-lines'],
+    testId: 'two-lines',
     outcomes: [
       {
         id: 'l2-sequence',
@@ -116,7 +118,8 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
     id: 3,
     title: 'Python Rover Commands',
     description: 'Leave the blocks behind and type the same missions out as real Python.',
-    challengeIds: ['draw-a-square'],
+    challengeIds: ['draw-a-square', 'draw-a-rectangle'],
+    testId: 'draw-a-rectangle',
     outcomes: [
       {
         id: 'l3-python',
@@ -132,6 +135,61 @@ export const CHALLENGE_LEVELS: ChallengeLevel[] = [
         id: 'l3-tune',
         text: 'You will be able to change one number at a time and re-run your program until the rover does what you meant.',
         alignment: { csta: ['2-AP-17'] },
+      },
+    ],
+  },
+  {
+    id: 4,
+    title: 'Jezero Sample Run',
+    // NASA-style (AB#445): the job Perseverance is in Jezero Crater to do.
+    description:
+      "Drive to rock sample sites in Jezero Crater, like NASA's Perseverance rover, and collect a sample when you get there.",
+    challengeIds: ['sample-site', 'sample-run-test'],
+    testId: 'sample-run-test',
+    outcomes: [
+      {
+        id: 'l4-route',
+        text: 'You will be able to plan a route of straight drives and turns that stops the rover exactly where you want it.',
+        alignment: {
+          csta: ['1B-AP-11'],
+          nasaJpl: "Perseverance's rover planners plot each drive to a sample site as a list of straight moves and turns.",
+        },
+      },
+      {
+        id: 'l4-sample',
+        text: 'You will be able to make the rover do a job when it arrives, like taking a picture of a rock sample.',
+        alignment: {
+          csta: ['1B-AP-10'],
+          nasaJpl: 'At each sample site Perseverance photographs the rock before it drills out a core to bring back to Earth.',
+        },
+      },
+    ],
+  },
+  {
+    id: 5,
+    title: 'Hazard Avoidance',
+    // NASA-style (AB#445), built on the crash model the simulator already has
+    // (AB#466) rather than on the distance sensor, which it does not model -
+    // the reason the old hazard challenge was taken out of Level 3.
+    description: 'Plan a route around the rocks in the yard, the way NASA plans every drive around hazards on Mars.',
+    challengeIds: ['spot-the-hazard', 'hazard-test'],
+    testId: 'hazard-test',
+    outcomes: [
+      {
+        id: 'l5-hazard',
+        text: 'You will be able to spot where a planned route would hit a rock, and change the plan to go around it.',
+        alignment: {
+          csta: ['1B-AP-15'],
+          nasaJpl: 'Rover drivers at NASA JPL check every planned drive for rocks and steep ground before it is sent.',
+        },
+      },
+      {
+        id: 'l5-test',
+        text: 'You will be able to test a route in the simulator and keep changing it until it is safe to send.',
+        alignment: {
+          csta: ['2-AP-17'],
+          nasaJpl: 'JPL tests every drive on a simulated rover before sending it to Mars.',
+        },
       },
     ],
   },
@@ -470,6 +528,264 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         title: 'Send it to a real rover',
         instructions: 'Happy with your square? Press "Finish & Export" to carry it into Create Mission.',
         checks: [],
+      },
+    ],
+  },
+  /*
+   * LEVEL TESTS (AB#446). Each level ends with one: a goal and nothing else -
+   * one step, no hints, no instructions on how, no step list - asking for
+   * something new built from the level's idea. They open once the level's
+   * tutorials are done (isChallengeUnlocked) and the next level opens once
+   * they pass. Code is kept between tries: every code challenge saves under
+   * its own key. challengeContent.test.ts holds every test to all of this,
+   * and runs each test's reference program through its own checks so none
+   * can ship ungradeable.
+   */
+
+  'mission-spotter': {
+    id: 'mission-spotter',
+    levelId: 1,
+    title: 'Level 1 Test: Mission Spotter',
+    summary: 'Find the finished missions about squares - on your own.',
+    workspaceKind: 'embedded-platform',
+    scorePoints: 150,
+    outcomeIds: ['l1-find'],
+    steps: [
+      {
+        id: 'goal',
+        title: 'Find the finished square missions',
+        instructions: 'Show only the missions that have finished, and only the ones with "square" in their name.',
+        checks: [
+          { kind: 'search-filter', filterKey: 'Completed' },
+          { kind: 'search-query', matches: 'square' },
+        ],
+      },
+    ],
+  },
+
+  'two-lines': {
+    id: 'two-lines',
+    levelId: 2,
+    title: 'Level 2 Test: Two Lines',
+    summary: 'Draw two lines joined by a square corner, with blocks.',
+    workspaceKind: 'blockly-sim',
+    scorePoints: 250,
+    outcomeIds: ['l2-sequence', 'l2-debug'],
+    target: {
+      description: 'Two lines the same length, joined by a square corner.',
+      commands: [
+        { command: 'forward', speed: 60, duration: 3 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 3 },
+      ],
+      matchWithinCm: 5,
+    },
+    steps: [
+      {
+        id: 'goal',
+        title: 'Draw two lines',
+        instructions: 'Make the rover draw the target: two lines, each 3 seconds long, joined by a square corner.',
+        checks: [{ kind: 'matches-target' }],
+      },
+    ],
+  },
+
+  'draw-a-rectangle': {
+    id: 'draw-a-rectangle',
+    levelId: 3,
+    title: 'Level 3 Test: Draw a Rectangle',
+    summary: 'A rectangle in Python, with a loop - but the sides are not all the same.',
+    workspaceKind: 'monaco-sim',
+    scorePoints: 350,
+    outcomeIds: ['l3-python', 'l3-decompose', 'l3-tune'],
+    // The AB#446 example: a square's loop repeats one side and one corner,
+    // and a rectangle's cannot, so the learner has to find the part that
+    // does repeat - a long side and a short side - for themselves.
+    target: {
+      description: 'A rectangle: two long sides, two short sides, square corners.',
+      commands: Array.from({ length: 2 }, () => [
+        { command: 'forward', speed: 60, duration: 3 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 1.5 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+      ]).flat(),
+      matchWithinCm: 6,
+    },
+    steps: [
+      {
+        id: 'goal',
+        title: 'Draw a rectangle',
+        instructions: 'Use a loop to draw the target rectangle: long sides of 3 seconds, short sides of 1.5 seconds.',
+        checks: [
+          { kind: 'code-contains', pattern: 'for _ in range(' },
+          { kind: 'matches-target' },
+        ],
+      },
+    ],
+  },
+
+  /*
+   * LEVEL 4, Jezero Sample Run (AB#445). Python, like Level 3, and less
+   * guided than it: the tutorial gives the commands but not the numbers.
+   * take_photo() is the "sample": the rover's camera is real and the
+   * simulator ignores it, so the check reads the code rather than the run.
+   */
+  'sample-site': {
+    id: 'sample-site',
+    levelId: 4,
+    title: 'Drive to a Sample Site',
+    summary: 'Drive to a rock sample site with a turn on the way, and take a picture of the sample.',
+    workspaceKind: 'monaco-sim',
+    scorePoints: 300,
+    outcomeIds: ['l4-route', 'l4-sample'],
+    target: {
+      description: 'Straight ahead, one turn to the right, then stop on the sample site.',
+      commands: [
+        { command: 'forward', speed: 60, duration: 3 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 2 },
+      ],
+      arriveWithinCm: 6,
+    },
+    steps: [
+      {
+        id: 'drive-to-site',
+        title: 'Drive to the site',
+        instructions:
+          'The sample site is ahead and to the right. Drive forward, spin right a quarter turn, then drive forward again. Choose how long each part lasts so the rover stops on the site.\n\nrover.forward(60)\ntime.sleep(1)\nrover.spinRight(60)\ntime.sleep(1)\nrover.forward(60)\ntime.sleep(1)\nrover.stop()',
+        hints: ['A quarter turn at speed 60 takes about 2 seconds.', 'Change one number at a time and Run again.'],
+        checks: [{ kind: 'reaches-target' }],
+      },
+      {
+        id: 'take-sample',
+        title: 'Take the sample',
+        instructions:
+          'Perseverance photographs every rock before it takes a sample. Add this line after rover.stop():\n\ntake_photo()',
+        checks: [{ kind: 'reaches-target' }, { kind: 'code-contains', pattern: 'take_photo()' }],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'Press "Finish & Export" to carry your mission into Create Mission.',
+        checks: [],
+      },
+    ],
+  },
+
+  'sample-run-test': {
+    id: 'sample-run-test',
+    levelId: 4,
+    title: 'Level 4 Test: A New Sample Site',
+    summary: 'A new site, somewhere else. Get there and take the sample.',
+    workspaceKind: 'monaco-sim',
+    scorePoints: 400,
+    outcomeIds: ['l4-route', 'l4-sample'],
+    target: {
+      description: 'Stop on the new sample site.',
+      commands: [
+        { command: 'forward', speed: 60, duration: 6 },
+        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 3 },
+      ],
+      arriveWithinCm: 6,
+    },
+    steps: [
+      {
+        id: 'goal',
+        title: 'Collect the sample',
+        instructions: 'Stop the rover on the new sample site and take a picture of the sample there.',
+        checks: [{ kind: 'reaches-target' }, { kind: 'code-contains', pattern: 'take_photo()' }],
+      },
+    ],
+  },
+
+  /*
+   * LEVEL 5, Hazard Avoidance (AB#445). PRIMM again (AB#453): the ready-made
+   * route turns towards the target and drives straight into rock R4, which
+   * sits just left of the start mark. The fix is a plan, not a sensor - go
+   * the long way round - which is how a drive is planned at JPL.
+   */
+  'spot-the-hazard': {
+    id: 'spot-the-hazard',
+    levelId: 5,
+    title: 'Spot the Hazard',
+    summary: 'A ready-made route to a target. Will it make it? Find out, then plan a safer one.',
+    workspaceKind: 'monaco-sim',
+    scorePoints: 400,
+    outcomeIds: ['l5-hazard', 'l5-test'],
+    starterCode:
+      '# The planned route to the target\nrover.spinLeft(60)\ntime.sleep(2)\nrover.forward(60)\ntime.sleep(5.5)\nrover.stop()\n',
+    target: {
+      description: 'Reach the target without touching a rock.',
+      commands: [
+        { command: 'forward', speed: 60, duration: 5 },
+        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 5.5 },
+      ],
+      arriveWithinCm: 8,
+    },
+    steps: [
+      {
+        id: 'predict',
+        title: 'Predict',
+        instructions: 'Read the planned route in the editor. Do not run it yet!',
+        prediction: {
+          question: 'What will happen?',
+          options: ['It reaches the target', 'It hits a rock', 'It hits a wall'],
+        },
+        checks: [{ kind: 'prediction-made' }],
+      },
+      {
+        id: 'run',
+        title: 'Run',
+        instructions: 'Press Run and watch. Look at where the rover stopped, and why.',
+        checks: [{ kind: 'trajectory-outcome', outcome: 'moved-forward' }],
+      },
+      {
+        id: 'replan',
+        title: 'Plan a safe route',
+        instructions:
+          'Change the route so the rover goes around the rock and still stops on the target. You can move lines, add new ones, and change the numbers.',
+        hints: [
+          'The rock is close on the left. What if the rover drove forward first, and turned later?',
+          'A quarter turn at speed 60 takes about 2 seconds.',
+        ],
+        checks: [{ kind: 'reaches-target' }, { kind: 'avoids-hazards' }],
+      },
+      {
+        id: 'export',
+        title: 'Send it to a real rover',
+        instructions: 'Your route is safe. Press "Finish & Export" to send it.',
+        checks: [],
+      },
+    ],
+  },
+
+  'hazard-test': {
+    id: 'hazard-test',
+    levelId: 5,
+    title: 'Level 5 Test: Behind the Rock',
+    summary: 'The target is on the far side of a rock. Plan your own way round.',
+    workspaceKind: 'monaco-sim',
+    scorePoints: 500,
+    outcomeIds: ['l5-hazard', 'l5-test'],
+    target: {
+      description: 'Reach the target on the far side of the rock, touching nothing.',
+      commands: [
+        { command: 'forward', speed: 60, duration: 4 },
+        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 6 },
+        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 2.7 },
+      ],
+      arriveWithinCm: 8,
+    },
+    steps: [
+      {
+        id: 'goal',
+        title: 'Get behind the rock',
+        instructions: 'Stop the rover on the target without touching a rock or a wall.',
+        checks: [{ kind: 'reaches-target' }, { kind: 'avoids-hazards' }],
       },
     ],
   },

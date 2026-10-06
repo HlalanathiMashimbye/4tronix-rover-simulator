@@ -28,6 +28,14 @@ jest.mock('@/hooks/useChallengeProgress', () => ({
     loading: false,
     isLevelUnlocked,
     isChallengeComplete: () => false,
+    // The real rule's shape, over this mock's own level and completion
+    // switches: a test also waits for its level's tutorials (AB#446).
+    isChallengeUnlocked: (id: string) => {
+      const { CHALLENGE_LEVELS: levels } = jest.requireActual('@/infrastructure/config/challenges');
+      const level = levels.find((l: { challengeIds: string[] }) => l.challengeIds.includes(id));
+      if (!level || !isLevelUnlocked(level.id)) return false;
+      return id !== level.testId || level.challengeIds.filter((c: string) => c !== level.testId).every(() => false);
+    },
     completedCount: 0,
     totalCount: 6,
     completeChallenge: jest.fn(),

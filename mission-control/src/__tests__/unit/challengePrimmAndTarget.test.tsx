@@ -18,7 +18,13 @@ import { targetGeometry } from '@/core/domain/services/challengeTarget';
 import type { SimTarget } from '@/lib/roverSimRender';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('next/dynamic', () => () => () => null);
+// The Python editor is loaded through next/dynamic; this stand-in records what
+// the challenge hands it.
+let pythonEditor: { storageKey?: string; starterCode?: string } | undefined;
+jest.mock('next/dynamic', () => () => (props: { storageKey?: string; starterCode?: string }) => {
+  pythonEditor = props;
+  return null;
+});
 jest.mock('@/components/mission-feed/MissionFeed', () => ({ MissionFeed: () => null }));
 jest.mock('@/components/layout/MobileSearch', () => ({ MobileSearch: () => null }));
 jest.mock('@/contexts/SearchContext', () => ({ useSearch: () => ({ query: '', activeFilter: 'all' }) }));
@@ -56,7 +62,7 @@ import { ChallengeWorkspace } from '@/components/challenges/ChallengeWorkspace';
 const drive = CHALLENGES['drive-to-target'];
 const geometry = targetGeometry(drive.target!);
 
-function renderPanel(extra: { holdTarget?: boolean; onRunEnd?: jest.Mock } = {}) {
+function renderPanel(extra: { holdTarget?: boolean; onRun?: jest.Mock } = {}) {
   return render(
     <ChallengeCenterPanel
       challenge={drive}
@@ -150,13 +156,34 @@ describe('the challenge editor', () => {
   });
 
   it('reports where each run ended, for the reaches-target check', () => {
-    const onRunEnd = jest.fn();
-    renderPanel({ onRunEnd });
+    const onRun = jest.fn();
+    renderPanel({ onRun });
 
     act(() => editor.onGenerateCommands([{ command: 'forward', speed: 60, duration: 5 }]));
 
-    const end = onRunEnd.mock.calls[0][0];
+    const { path, crashed } = onRun.mock.calls[0][0];
+    const end = path[path.length - 1];
+    expect(crashed).toBe(false);
     expect(Math.hypot(end.x - geometry.goal!.x, end.y - geometry.goal!.y)).toBeLessThanOrEqual(geometry.goal!.radiusCm);
+  });
+});
+
+describe('a Python challenge (AB#446: code kept between tries)', () => {
+  it('saves under its own key and starts from its ready-made code', () => {
+    const hazard = CHALLENGES['spot-the-hazard'];
+    render(
+      <ChallengeCenterPanel
+        challenge={hazard}
+        onLoadMore={() => {}}
+        onFeedState={() => {}}
+        onCodeChange={() => {}}
+        onBlocklyStateChange={() => {}}
+        onTrajectoryOutcomes={() => {}}
+      />,
+    );
+
+    expect(pythonEditor?.storageKey).toBe('challengeCode:spot-the-hazard');
+    expect(pythonEditor?.starterCode).toBe(hazard.starterCode);
   });
 });
 

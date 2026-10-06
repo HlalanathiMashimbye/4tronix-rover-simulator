@@ -30,6 +30,14 @@ interface PythonCodeEditorProps {
    * tucked behind a help button instead of taking a row of their own.
    */
   phone?: boolean;
+  /**
+   * Where this editor saves its draft. Defaults to Create Mission's. A
+   * challenge passes its own, so its code is kept between tries (AB#446)
+   * without overwriting - or being overwritten by - the Create Mission draft.
+   */
+  storageKey?: string;
+  /** Code to start from when nothing is saved under storageKey yet (a PRIMM challenge's ready-made code). */
+  starterCode?: string;
 }
 
 
@@ -80,7 +88,7 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
-export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false }: PythonCodeEditorProps) {
+export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false, storageKey = PYTHON_DRAFT_KEY, starterCode }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
   /** The phone's snippet tray, behind the help button. */
   const [helpOpen, setHelpOpen] = useState(false);
@@ -97,7 +105,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const saved = localStorage.getItem(PYTHON_DRAFT_KEY);
+    const saved = localStorage.getItem(storageKey) ?? starterCode ?? null;
 
     // SHOW THE BLOCKS' PYTHON WHEN THERE IS NOTHING TO LOSE.
     //
@@ -135,7 +143,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             if (!update.docChanged) return;
             const next = update.state.doc.toString();
             setCode(next);
-            localStorage.setItem(PYTHON_DRAFT_KEY, next);
+            localStorage.setItem(storageKey, next);
             setError(null);
             onCodeChangeRef.current?.(next);
           }),

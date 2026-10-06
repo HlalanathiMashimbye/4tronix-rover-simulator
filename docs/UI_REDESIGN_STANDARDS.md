@@ -40,6 +40,8 @@ changing what is being taught.
 | Step progress as dots, plus a checklist of the step's checks shown on the panel (previously hidden behind an icon) | `components/challenges/ChallengeInstructionsPanel.tsx` |
 | Each level's learning outcomes (AB#444) folded behind one "What you'll learn" line, under the map and on the level's first briefing, so the nodes and Start Mission are the first things a child sees | `components/challenges/LevelOutcomes.tsx` (`LevelOutcomesFold`) |
 | The target overlay (AB#447): the finished shape drawn on the simulator with a one-line description, hidden once the learner starts building, back for 5 seconds on "Show target" | `components/challenges/ChallengeCenterPanel.tsx`, `lib/roverSimRender.ts`, `core/domain/services/challengeTarget.ts` |
+| A test ends every level (AB#446): a trophy node on the map, locked until the level's tutorials are done, and a briefing that gives the goal alone ("Your Goal", no step list, no hints) | `components/challenges/ChallengesHub.tsx`, `components/challenges/ChallengeBriefing.tsx` |
+| Two NASA-style levels after Level 3 (AB#445): Jezero Sample Run and Hazard Avoidance, each a tutorial then a test | `infrastructure/config/challenges.ts` |
 | A PRIMM first mission, "Drive to the Target" (AB#453): ready-made blocks, a Predict question answered by tapping one of four pills, then one number to change until the rover stops on a bullseye | `infrastructure/config/challenges.ts`, `components/challenges/ChallengeInstructionsPanel.tsx` |
 
 ### What was not built, and is not claimed
@@ -171,6 +173,7 @@ drops any pair under 4.5:1 fails the build.
 | Teacher metadata | Previously CAPS/CSTA pills on the learner's panel (later removed) | Collapsed "Teacher & Standards Info" panel on the briefing | Out of the child's way; one tap for the teacher | AccessForAll principle |
 | Learning outcomes on the map | Three "You will be able to..." paragraphs open on every level card | One collapsed "What you'll learn" line, on the map and on the briefing | The map stays a map and the briefing stays Mission Goals and Start; the outcomes are one tap away for a parent or teacher | Cognitive load; UDL representation |
 | Knowing the goal | Instructions in words only | The target shape drawn on the simulator, one line of text, hidden while building and back on request | The learner can see what "done" looks like and compare their run with it, without being shown how | UDL representation; PRIMM |
+| End of a level | The level simply ran out of challenges | A test with one goal and no help, behind a trophy; the next level opens when it passes | Applying an idea to something new, with the scaffolding taken away | UDL action & expression; PRIMM "Make" |
 | First code a learner meets | An empty canvas | Ready-made blocks to read and predict before running (PRIMM); any guess is accepted | Reading before writing; a wrong guess is information, never a failure | PRIMM (Sentance et al.) |
 | Step progress | "STEP 2 OF 4" caption | Dot row (done green, current blue), text kept for screen readers | Chunked, visual, countable | UDL representation |
 | Step checks | Hidden in a popover behind an icon with no accessible name | Shown on the panel as a checklist that ticks green live | Immediate feedback; fixes an unlabelled button | UDL engagement; WCAG 4.1.2 |

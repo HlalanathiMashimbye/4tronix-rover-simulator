@@ -47,6 +47,28 @@ export function isLevelUnlocked(
   return previous.challengeIds.every((id) => isChallengeComplete(id, progress));
 }
 
+/**
+ * Whether a learner may open this challenge: its level is unlocked, and - if
+ * it is the level's test - every other challenge in the level is complete.
+ *
+ * "Tutorial first, then a test" (AB#446): a test asks for something new built
+ * from the level's idea, which is unfair to set before the idea has been
+ * taught. The next level needs no rule of its own here - isLevelUnlocked
+ * already waits for every challenge in the level, the test included.
+ */
+export function isChallengeUnlocked(
+  challengeId: ChallengeId,
+  levels: ChallengeLevel[],
+  progress: ChallengeProgress,
+): boolean {
+  const level = levels.find((l) => l.challengeIds.includes(challengeId));
+  if (!level || !isLevelUnlocked(level.id, levels, progress)) return false;
+  if (challengeId !== level.testId) return true;
+  return level.challengeIds
+    .filter((id) => id !== level.testId)
+    .every((id) => isChallengeComplete(id, progress));
+}
+
 /** Every challenge across every level that is not yet complete. */
 export function remainingChallenges(levels: ChallengeLevel[], progress: ChallengeProgress): ChallengeId[] {
   return levels.flatMap((l) => l.challengeIds).filter((id) => !isChallengeComplete(id, progress));

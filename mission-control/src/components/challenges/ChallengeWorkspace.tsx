@@ -76,7 +76,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const [finishResult, setFinishResult] = useState<FinishResult | null>(null);
   /** The learner's answer to a PRIMM Predict step - kept so later steps can show it back. */
   const [prediction, setPrediction] = useState<string | null>(null);
-  const [runEnd, setRunEnd] = useState<TargetPoint | undefined>(undefined);
+  const [lastRun, setLastRun] = useState<{ path: TargetPoint[]; crashed: boolean } | null>(null);
   const geometry = useMemo(() => (challenge.target ? targetGeometry(challenge.target) : null), [challenge.target]);
 
   const step = challenge.steps[stepIndex];
@@ -91,10 +91,13 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
       visitedRoutes: milestones.visitedRoutes,
       missionCreated: milestones.missionCreated,
       predictionMade: prediction !== null,
-      runEnd,
+      runEnd: lastRun?.path[lastRun.path.length - 1],
+      runPath: lastRun?.path,
+      runCrashed: lastRun?.crashed,
+      target: geometry,
       targetGoal: geometry?.goal ?? null,
     }),
-    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes, milestones, prediction, runEnd, geometry],
+    [query, activeFilter, loadMoreCalled, feedHasMore, generatedCode, trajectoryOutcomes, milestones, prediction, lastRun, geometry],
   );
 
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
@@ -174,7 +177,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
             onCodeChange={setGeneratedCode}
             onBlocklyStateChange={setBlocklyState}
             onTrajectoryOutcomes={setTrajectoryOutcomes}
-            onRunEnd={setRunEnd}
+            onRun={setLastRun}
             target={geometry}
             // The guess has to be the learner's own: the target's path would
             // answer the Predict question for them, so it waits until they

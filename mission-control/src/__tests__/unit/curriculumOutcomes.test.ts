@@ -36,6 +36,7 @@ function fixture(): { levels: ChallengeLevel[]; challenges: Record<ChallengeId, 
         title: 'Level 1',
         description: '',
         challengeIds: ['basic-movement', 'loop-structures'],
+        testId: 'loop-structures',
         outcomes: [
           { id: 'a', text: 'You will be able to drive.', alignment: { csta: ['1B-AP-10'] } },
           { id: 'b', text: 'You will be able to loop.', alignment: { nasaJpl: 'Grid survey' } },
