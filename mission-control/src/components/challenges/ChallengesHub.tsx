@@ -145,6 +145,10 @@ function LevelZone({
         </div>
       </header>
 
+      <div className="mt-4 rounded-2xl border-2 border-kid-panel-edge px-4 py-3">
+        <LevelOutcomes level={level} linkChallenges={unlocked} />
+      </div>
+
       <ol className="mt-5 flex flex-col items-center sm:flex-row sm:flex-wrap sm:items-start sm:justify-center">
         {level.challengeIds.map((id, i) => (
           <li key={id} className="flex flex-col items-center sm:flex-row sm:items-start">

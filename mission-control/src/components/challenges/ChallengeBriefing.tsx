@@ -1,11 +1,24 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Check, GraduationCap, Rocket } from 'lucide-react';
-import type { Challenge } from '@/core/domain/entities/Challenge';
+import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
+import { CHALLENGE_LEVELS } from '@/infrastructure/config/challenges';
 import { ChallengeWorkspace } from './ChallengeWorkspace';
+import { LevelOutcomes } from './LevelOutcomes';
 import { describeCheck } from './describeCheck';
 import { pillClass } from './pill';
+
+interface BriefingProps {
+  challenge: Challenge;
+  /**
+   * Set only when this is its level's first challenge: the level's outcomes
+   * then lead the briefing, so a learner knows what the level is building
+   * towards before its first step (AB#444). Later challenges in the level
+   * skip them - the learner has already been briefed.
+   */
+  briefingLevel?: ChallengeLevel;
+}
 
 /**
  * The challenge page shows a short briefing first and the workspace only once
@@ -16,10 +29,12 @@ import { pillClass } from './pill';
  * no reason to know a briefing came before it. Keeping the two apart also
  * keeps the workspace's own tests rendering the workspace directly.
  */
-export function ChallengeBriefingGate({ challenge }: { challenge: Challenge }) {
+export function ChallengeBriefingGate({ challenge, briefingLevel }: BriefingProps) {
   const [started, setStarted] = useState(false);
   if (started) return <ChallengeWorkspace challenge={challenge} />;
-  return <ChallengeBriefing challenge={challenge} onStart={() => setStarted(true)} />;
+  return (
+    <ChallengeBriefing challenge={challenge} briefingLevel={briefingLevel} onStart={() => setStarted(true)} />
+  );
 }
 
 const EDITOR_LABEL: Record<Challenge['workspaceKind'], string> = {
@@ -35,13 +50,26 @@ const EDITOR_LABEL: Record<Challenge['workspaceKind'], string> = {
  * learner will be asked to do - a second list would be a second copy of the
  * content to keep in step with the first.
  */
-export function ChallengeBriefing({ challenge, onStart }: { challenge: Challenge; onStart: () => void }) {
+export function ChallengeBriefing({
+  challenge,
+  briefingLevel,
+  onStart,
+}: BriefingProps & { onStart: () => void }) {
   return (
     <div className="scroll-panel min-h-0 flex-1 overflow-y-auto pb-4">
       <section
         aria-labelledby="mission-goals-title"
         className="mx-auto mt-2 max-w-2xl rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-5 sm:p-7"
       >
+        {false && (
+          <div className="mb-6 rounded-2xl border-2 border-kid-panel-edge px-4 py-3">
+            <p className="mb-2 font-display text-sm font-bold uppercase tracking-wide text-kid-blue-text">
+              Level {briefingLevel.id}: {briefingLevel.title}
+            </p>
+            <LevelOutcomes level={briefingLevel} linkChallenges />
+          </div>
+        )}
+
         <h2 id="mission-goals-title" className="font-display text-2xl font-bold text-foreground">
           Mission Goals
         </h2>
@@ -80,21 +108,29 @@ export function ChallengeBriefing({ challenge, onStart }: { challenge: Challenge
  * A native <details>: keyboard and screen-reader support come with the
  * element, and it works before hydration.
  *
- * NO CURRICULUM CODES. The panel says so rather than leaving the reader to
- * wonder. CAPS/CSTA codes were taken out of the content because nobody on the
- * team can vouch for the mapping (see infrastructure/config/challenges.ts),
- * and moving an unverified claim into a teacher panel does not make it
- * verified - a teacher is the one reader who would check it. What is listed
- * here is what the code actually enforces: the checks each step runs.
+ * Standards are read off the level outcomes this challenge practises (AB#444)
+ * rather than written per challenge, so the two cannot disagree. Only codes
+ * with CSTA's own wording behind them in curriculumStandards.ts are cited -
+ * curriculumOutcomes' test fails CI otherwise - which is what lets a teacher
+ * check the claim instead of taking a bare code on trust.
  */
 function TeacherInfo({ challenge }: { challenge: Challenge }) {
+  const level = CHALLENGE_LEVELS.find((l) => l.id === challenge.levelId);
+  const standards = [
+    ...new Set(
+      (level?.outcomes ?? [])
+        .filter((outcome) => challenge.outcomeIds.includes(outcome.id))
+        .flatMap((outcome) => outcome.alignment.csta ?? []),
+    ),
+  ];
+
   return (
     <details className="group mt-6 rounded-2xl border-2 border-kid-panel-edge">
       <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold text-kid-muted-text hover:text-foreground focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-kid-blue/60 [&::-webkit-details-marker]:hidden">
         <GraduationCap className="h-5 w-5" aria-hidden="true" />
         Teacher &amp; Standards Info
         <span aria-hidden="true" className="ml-auto transition-transform group-open:rotate-180">
-          ▾
+          â–¾
         </span>
       </summary>
 
@@ -107,7 +143,10 @@ function TeacherInfo({ challenge }: { challenge: Challenge }) {
           <dt className="font-bold text-kid-muted-text">Points</dt>
           <dd>{challenge.scorePoints}</dd>
           <dt className="font-bold text-kid-muted-text">Standards</dt>
-          <dd>Not mapped. A curriculum code is listed here only once a teacher has checked the mapping.</dd>
+          <dd>
+            {standards.length > 0
+              ? standards.map((code) => `CSTA ${code}`)              : 'No CSTA standard cited - see the level outcomes for its NASA JPL alignment.'}
+          </dd>
         </dl>
 
         <div>

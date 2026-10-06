@@ -45,7 +45,7 @@ jest.mock('@/components/challenges/ChallengeInstructionsPanel', () => ({
 }));
 
 import { ChallengesHub } from '@/components/challenges/ChallengesHub';
-import { ChallengeWorkspace } from '@/components/challenges/ChallengeWorkspace';
+import { ChallengeBriefingGate } from '@/components/challenges/ChallengeBriefing';
 
 const level2 = CHALLENGE_LEVELS.find((l) => l.id === 2)!;
 
@@ -98,23 +98,42 @@ describe('level outcomes on the hub', () => {
 
 describe("briefing before a level's first challenge", () => {
   it('shows the level outcomes first, and the workspace only after Start', () => {
-    render(<ChallengeWorkspace challenge={CHALLENGES['basic-movement']} briefingLevel={level2} />);
+    render(<ChallengeBriefingGate challenge={CHALLENGES['basic-movement']} briefingLevel={level2} />);
 
     for (const outcome of level2.outcomes) {
       expect(screen.getByText(outcome.text)).toBeInTheDocument();
     }
     expect(screen.queryByTestId('center-panel')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /start challenge/i }));
+    fireEvent.click(screen.getByRole('button', { name: /start mission/i }));
 
     expect(screen.getByTestId('center-panel')).toBeInTheDocument();
     expect(screen.queryByText(level2.outcomes[0].text)).not.toBeInTheDocument();
   });
 
-  it('goes straight to the workspace when there is no briefing', () => {
-    render(<ChallengeWorkspace challenge={CHALLENGES['loop-structures']} />);
+  it("leaves the outcomes out of a later challenge's briefing", () => {
+    render(<ChallengeBriefingGate challenge={CHALLENGES['loop-structures']} />);
 
-    expect(screen.getByTestId('center-panel')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /start challenge/i })).not.toBeInTheDocument();
+    for (const outcome of level2.outcomes) {
+      expect(screen.queryByText(outcome.text)).not.toBeInTheDocument();
+    }
+    expect(screen.getByRole('heading', { name: 'Mission Goals' })).toBeInTheDocument();
+  });
+
+  it("cites the CSTA codes of the outcomes the challenge practises in its teacher info", () => {
+    const challenge = CHALLENGES['loop-structures'];
+    const expected = [
+      ...new Set(
+        level2.outcomes
+          .filter((o) => challenge.outcomeIds.includes(o.id))
+          .flatMap((o) => o.alignment.csta ?? []),
+      ),
+    ];
+    expect(expected.length).toBeGreaterThan(0);
+
+    render(<ChallengeBriefingGate challenge={challenge} />);
+
+    const standards = screen.getByText('Standards').nextElementSibling!;
+    expect(standards.textContent).toBe(expected.map((code) => `CSTA ${code}`).join(', '));
   });
 });

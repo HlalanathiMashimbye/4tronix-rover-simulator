@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { CHALLENGE_LEVELS, CHALLENGES } from '@/infrastructure/config/challenges';
 import { isFirstChallengeOfLevel } from '@/core/domain/services/curriculumOutcomes';
-import { ChallengeWorkspace } from '@/components/challenges/ChallengeWorkspace';
+import { ChallengeBriefingGate } from '@/components/challenges/ChallengeBriefing';
 
 export default async function ChallengeWorkspacePage({
   params,
@@ -28,7 +28,7 @@ export default async function ChallengeWorkspacePage({
           <p className="text-sm text-kid-muted-text md:text-base">{challenge.summary}</p>
         </header>
 
-        <ChallengeWorkspace challenge={challenge} briefingLevel={briefingLevel} />
+        <ChallengeBriefingGate challenge={challenge} briefingLevel={briefingLevel} />
       </div>
     </main>
   );
