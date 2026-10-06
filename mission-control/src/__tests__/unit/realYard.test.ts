@@ -9,7 +9,7 @@
 
 import { simulateCommands, STEP_SECONDS, type TrajectoryPoint } from '@/lib/simulateCommands';
 import { YARD, roverToYard, yardToRover, spinSecondsForDegrees } from '@/lib/rover-physics';
-import { computeFillLayout, computeLayout, startMark, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
+import { computeFillLayout, computeLayout, drawnBearing, startMark, worldToScreen, type SimLayout } from '@/lib/roverSimRender';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const SPEED_60_CM_PER_SECOND = 9;
@@ -86,14 +86,35 @@ describe('the rover in the real yard', () => {
 });
 
 describe('the yard on screen', () => {
-  // A canvas in the yard's own shape (YardFrame), at 1 px per cm.
+  // A canvas the yard's own shape, at 1 px per cm.
   const L = computeLayout(YARD.widthCm, YARD.depthCm);
 
-  it('fills a yard-shaped canvas corner to corner, with no band of empty ground', () => {
-    const big = computeLayout(YARD.widthCm * 2, YARD.depthCm * 2);
-    expect(big.ox).toBeCloseTo(0, 6);
-    expect(big.oy).toBeCloseTo(0, 6);
-    expect(big.s).toBeCloseTo(2, 6);
+  it('stretches the yard to fill a canvas of any shape, corner to corner', () => {
+    // A phone's strip: far wider than the yard is.
+    const strip = computeLayout(351, 244);
+    const [nwX, nwY] = worldToScreen(strip, ...yardToRover(0, 0));
+    const [seX, seY] = worldToScreen(strip, ...yardToRover(YARD.widthCm, YARD.depthCm));
+    expect([nwX, nwY].map((v) => Math.round(v * 1e6) / 1e6)).toEqual([0, 0]);
+    expect(seX).toBeCloseTo(351, 6);
+    expect(seY).toBeCloseTo(244, 6);
+  });
+
+  it('draws the rover pointing the way its trail runs on a stretched yard', () => {
+    // Stretched across: a rover heading south-west (clear of every rock)
+    // moves more across than down on screen, and must be drawn turned that
+    // way, not at its compass bearing of 225 degrees.
+    const wide = computeLayout(YARD.widthCm * 2, YARD.depthCm);
+    const run = drive(
+      { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(45, 60) },
+      { command: 'forward', speed: 60, duration: 3 },
+    );
+    const [a, b] = [run[run.length - 20], run[run.length - 1]];
+    const [ax, ay] = worldToScreen(wide, a.x, a.y);
+    const [bx, by] = worldToScreen(wide, b.x, b.y);
+    const trailAngle = (Math.atan2(bx - ax, -(by - ay)) * 180) / Math.PI;
+    expect(drawnBearing(wide, b.heading)).toBeCloseTo(trailAngle, 3);
+    expect(run.some((point) => point.hitRock || point.hitWall)).toBe(false);
+    expect(Math.abs(drawnBearing(wide, b.heading) - -135)).toBeGreaterThan(10);
   });
 
   it('puts the start where it is in the yard, with north at the top', () => {

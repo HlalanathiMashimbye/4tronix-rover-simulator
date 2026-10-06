@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { Blocks, ChevronLeft, Code2, Maximize2, Minimize2, Play } from 'lucide-react';
 import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
 import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
-import { YARD } from '@/lib/rover-physics';
 
 /**
  * Create Mission on a phone: the "docked sim" layout (AB#455).
@@ -90,11 +89,7 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
     // globals.css (.phoneWorkspace): the simulator grows, the launch controls
     // slide up, the editor slides away, and back. Everything stays mounted so
     // there is something to animate, and what is off screen is inert.
-    <div
-      data-launch={launching}
-      className="phoneWorkspace flex h-full min-h-0 flex-col"
-      style={{ ['--yard-ratio' as string]: YARD.widthCm / YARD.depthCm }}
-    >
+    <div data-launch={launching} className="phoneWorkspace flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center justify-between gap-2">
         <Link
           href="/"
@@ -138,10 +133,8 @@ export function PhoneWorkspace({ editor, simulator, submitBar, onRun, editorKind
         data-expanded={simExpanded}
         data-keyboard={keyboard.open && !launching}
         data-launch={launching}
-        // No frame of its own: the simulator draws the yard in the yard's own
-        // shape and frames that (AB#464), so a frame here would be a second
-        // outline with empty ground between the two. Whatever width the yard
-        // does not need is the page's, and the enlarge button sits in it.
+        // No frame of its own: the simulator frames itself, and stretches the
+        // yard to fill it (AB#464), so a frame here would be a second outline.
         className="phoneSimStrip relative"
       >
         {simulator}
