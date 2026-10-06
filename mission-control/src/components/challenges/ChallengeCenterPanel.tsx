@@ -141,7 +141,12 @@ export function ChallengeCenterPanel({
 
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
+    // isolate: Blockly stacks its own parts high (toolbox 70, workspace
+    // scrollbars 20), and without a stacking context of its own here they
+    // painted over the workspace's "Challenge complete!" overlay (z-10) - the
+    // toolbox and scrollbars showed through the blur and cut across the card.
+    // Contained, they only compete with each other.
+    <div data-testid="challenge-code-workspace" className="isolate flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel">
         {challenge.workspaceKind === 'blockly-sim' && (
           <div className="flex shrink-0 gap-1.5 border-b-2 border-kid-panel-edge p-1.5">

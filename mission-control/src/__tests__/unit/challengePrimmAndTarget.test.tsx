@@ -160,6 +160,17 @@ describe('the challenge editor', () => {
   });
 });
 
+describe('the finish overlay', () => {
+  it('is not painted over by the editor', () => {
+    // Asserted at the class because jsdom has no stacking: the editor's panel
+    // must be its own stacking context, or Blockly's toolbox (z-index 70) and
+    // scrollbars (20) draw over the workspace's z-10 "Challenge complete!"
+    // overlay, which is what a learner saw.
+    renderPanel();
+    expect(screen.getByTestId('challenge-code-workspace')).toHaveClass('isolate');
+  });
+});
+
 describe('PRIMM Predict (AB#453)', () => {
   it('lets any guess through, and never marks one wrong', () => {
     render(<ChallengeWorkspace challenge={drive} />);
