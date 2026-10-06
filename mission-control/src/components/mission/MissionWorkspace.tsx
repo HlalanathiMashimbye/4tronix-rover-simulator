@@ -91,6 +91,12 @@ export function MissionWorkspace() {
   const [missionSentOpen, setMissionSentOpen] = useState(false);
   /** The phone layout's launch view. Owned here so a successful send can close it. */
   const [launchOpen, setLaunchOpen] = useState(false);
+  /** A run is playing out in the simulator now: the phone's Run reads Stop. */
+  const [simRunning, setSimRunning] = useState(false);
+  /** Bumped by Stop, to pause the simulator where the rover is. */
+  const [pauseVersion, setPauseVersion] = useState(0);
+  /** How many runs have been watched to the end: the phone opens its launch view on each. */
+  const [runsEnded, setRunsEnded] = useState(0);
   // null on the server and during hydration: see usePhoneLayout for why
   // neither layout renders until this is known.
   const phoneLayout = usePhoneLayout();
@@ -371,7 +377,12 @@ export function MissionWorkspace() {
     onSourceChange: setRunningSource,
     // Records the code that was RUN, not whatever is in the editor now: an
     // edit made while the rover was still moving has not been watched.
-    onFinished: () => setWatchedCode(simulatedCode),
+    onFinished: () => {
+      setWatchedCode(simulatedCode);
+      setRunsEnded((ended) => ended + 1);
+    },
+    onRunningChange: setSimRunning,
+    pauseVersion,
   };
 
   return (
@@ -390,6 +401,9 @@ export function MissionWorkspace() {
           simulator={<RoverSimulator {...simulatorProps} bare />}
           submitBar={submitBar}
           onRun={() => runEditorRef.current?.()}
+          running={simRunning}
+          onStop={() => setPauseVersion((version) => version + 1)}
+          runEnded={runsEnded}
           editorKind={editorMode === 'code' ? 'code' : 'blocks'}
           launchOpen={launchOpen}
           onLaunchOpenChange={setLaunchOpen}

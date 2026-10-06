@@ -107,13 +107,11 @@ export function RunStackCarousel({
 
   return (
     <section
-      // Takes the column's leftover height from md up, which is where the
-      // page is pinned to the viewport: with the stats and the notes row
-      // compressed to a line each, the leftover is what makes the player the
-      // same height as the code panel beside it. On a phone the page scrolls
-      // and nothing bounds the column, so there is no leftover to take and the
-      // frame falls back to its own shape.
-      className="flex min-h-0 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring md:flex-1"
+      // Takes the column's leftover height at every size: the page is pinned
+      // to the viewport, so the leftover is what makes the player the same
+      // height as the code panel beside it, or on a phone, half the screen
+      // above it.
+      className="flex min-h-0 flex-1 flex-col focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
       aria-roledescription="carousel"
       aria-label="Rover run videos"
       aria-describedby="run-carousel-status"
@@ -136,17 +134,18 @@ export function RunStackCarousel({
         {describeRuns(runs)}. Showing {selectedRun.label}, {selectedRun.sublabel}, {positionLabel}.
       </p>
 
-      {/* Fills the column from md up so the player matches the code panel,
-          and falls back to the footage's own 16:9 on a phone, where there is
-          no column height to fill.
+      {/* Fills the column, so the player matches the code panel beside it, or
+          on a phone takes its half of the screen (globals.css,
+          .workspaceSplitGrid--fixed). A phone used to get the footage's own
+          16:9, which on a tall phone left the player a strip at the top.
 
           Filling means the frame is taller than 16:9, so the video is centred
           in it with black above and below. That is the trade for matching
           heights, and it is not wasted: the scrims sit in those bands rather
           than over the footage, so the chrome now covers no picture at all. */}
-      <div className="flex min-h-0 items-start justify-center md:min-h-0 md:flex-1 md:items-stretch">
+      <div className="flex min-h-0 flex-1 items-stretch justify-center">
       <div
-        className="relative aspect-video w-full touch-pan-y md:aspect-auto md:h-full"
+        className="relative h-full w-full touch-pan-y"
         onPointerDown={(event) => {
           if (!canNavigate) return;
           setDragStart(event.clientX);

@@ -827,12 +827,15 @@
     grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
-  /* A mission's page (the fixed variant) docks its player at the top, at
-     its natural 16:9 height, and gives the code everything else, the same
-     shape as Create Mission. It used to grow and scroll, with a 45vh floor
-     on the code, which made the blocks a second screen down. */
+  /* A mission's page (the fixed variant): the player on top, the code
+     below, half each, the same shape as Create Mission. It used to grow and
+     scroll, with a 45vh floor on the code, which made the blocks a second
+     screen down; then the player kept its 16:9 height and the code had the
+     rest, which on a tall phone left the video a strip at the top (6 Oct
+     2026). The simulator stretches to its half and the video sits centred
+     in it on black, as any player letterboxes. */
   .workspaceSplitGrid--fixed {
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 }
 
@@ -1093,36 +1096,36 @@
 /*
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
- * Editing: the docked simulator takes 30% of the screen so the blocks keep
- * most of it, and grows to up to 62% when the learner wants a proper look.
- * Launching (after Run): the simulator takes everything the launch controls
- * leave, the controls rise in under it and the editor sinks away; Back to
- * blocks plays it in reverse. The yard stretches to fill the strip at every
- * size (computeLayout), so the strip is sized for the screen, not the yard.
+ * Editing and running: the simulator and the editor have half each, so a
+ * run plays with its program in view and the running block lit up in it
+ * (6 Oct 2026: it was 30% for the simulator, and a run hid the editor).
+ * Enlarged, the simulator has about 70%. Launching (when a run ends): the
+ * simulator takes everything the launch controls leave, the controls rise in
+ * under it and the editor sinks away; Back to blocks plays it in reverse. The
+ * yard stretches to fill the strip at every size (computeLayout), so the
+ * strip is sized for the screen, not the yard.
  *
- * Sized with FLEX, not height, because the launch size is "whatever is
- * left", which height cannot express and flex can interpolate: flex-grow and
- * flex-basis both animate, so the simulator glides between a fixed share and
- * the remainder. The launch controls use the grid 0fr-to-1fr trick, the one
- * way to animate to their natural height. dvh, not vh: mobile Safari's vh
- * includes the strip under the URL bar, which is the clipping this layout
- * exists to get rid of.
+ * Sized with FLEX, not height, because every size here is a share of what
+ * is left, which height cannot express and flex can interpolate: flex-grow
+ * and flex-basis both animate, so the simulator glides between half, more
+ * than half and the remainder. The launch controls use the grid 0fr-to-1fr
+ * trick, the one way to animate to their natural height.
  */
 .phoneWorkspace {
   --phone-move: 420ms var(--ease-drawer);
 }
 .phoneSimStrip {
-  flex: 0 0 30dvh;
+  flex: 1 1 0;
   min-height: 0;
   transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  flex-basis: 62dvh;
+  flex-grow: 2.4;
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
 .phoneSimStrip[data-keyboard="true"] {
-  flex-basis: 2.25rem;
+  flex: 0 0 2.25rem;
 }
 .phoneWorkspace[data-launch="true"] .phoneSimStrip {
   flex: 1 1 0;
@@ -1176,9 +1179,35 @@
   .phoneSimStrip,
   .phoneLaunchSlot,
   .phoneLaunch,
-  .phoneEditorSlot {
+  .phoneEditorSlot,
+  .roverBin {
     transition: none;
   }
+}
+
+/*
+ * The bin on a phone's block canvas (blockCanvasControls.tsx). Quiet while
+ * nothing is moving, so it does not compete with the program; red and a
+ * little bigger while a block is being dragged, so the place to drop it is
+ * plain; bigger again and filled once the block is over it, which is the
+ * moment letting go deletes.
+ */
+.roverBin {
+  background: color-mix(in oklab, var(--card) 90%, transparent);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+  transition: transform 180ms var(--ease-spring), background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+.roverBin[data-bin="dragging"] {
+  transform: scale(1.15);
+  border-color: color-mix(in oklab, var(--destructive) 55%, transparent);
+  color: var(--destructive);
+}
+.roverBin[data-bin="over"] {
+  transform: scale(1.35);
+  background: var(--destructive);
+  border-color: var(--destructive);
+  color: var(--destructive-foreground);
 }
 
 /* The Python editor's hover and autocomplete help card. */

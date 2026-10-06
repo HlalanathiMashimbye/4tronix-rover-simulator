@@ -143,3 +143,43 @@ describe('the floor photo arriving', () => {
     expect(playhead()).toBeGreaterThanOrEqual(before);
   });
 });
+
+/**
+ * Stop, from the phone's top bar (6 Oct 2026). The bar has to know when a run
+ * is playing, to offer Stop at all, and Stop has to leave the rover where it
+ * got to, with its trail, rather than wiping the run as Reset does.
+ */
+describe('stopping from outside the simulator', () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it('says when a run starts playing and when it has played out', async () => {
+    const running: boolean[] = [];
+    const onRunningChange = (now: boolean) => running.push(now);
+    render(<RoverSimulator trajectory={trajectoryOf(20)} isPlaying editorMode="code" onRunningChange={onRunningChange} />);
+    await runFrames(5);
+    expect(running.at(-1)).toBe(true);
+    await runFrames(80);
+    expect(playhead()).toBe(19);
+    expect(running.at(-1)).toBe(false);
+  });
+
+  it('pauses where the rover is when told to', async () => {
+    const running: boolean[] = [];
+    const onRunningChange = (now: boolean) => running.push(now);
+    const run = trajectoryOf(200);
+    const { rerender } = render(
+      <RoverSimulator trajectory={run} isPlaying editorMode="code" onRunningChange={onRunningChange} pauseVersion={0} />,
+    );
+    await runFrames(10);
+    rerender(<RoverSimulator trajectory={run} isPlaying editorMode="code" onRunningChange={onRunningChange} pauseVersion={1} />);
+    const stoppedAt = playhead();
+    expect(stoppedAt).toBeGreaterThan(0);
+    expect(running.at(-1)).toBe(false);
+
+    // And stays there: not rewound as Reset would, not still moving.
+    await runFrames(10);
+    expect(playhead()).toBe(stoppedAt);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+  });
+});

@@ -53,6 +53,18 @@ interface RoverSimulatorProps {
    */
   onFinished?: () => void;
   /**
+   * Whether a run is playing out right now: started, not paused, not yet at
+   * its last frame. For a Stop button outside the simulator (the phone's top
+   * bar), which has to know when there is something to stop.
+   */
+  onRunningChange?: (running: boolean) => void;
+  /**
+   * Bumped to pause the run where it is, from outside: Stop. Like
+   * resetVersion, but the rover stays where it got to, with its trail, so
+   * the learner can see what it had done.
+   */
+  pauseVersion?: number;
+  /**
    * The yard the run is in (AB#468): its layout is what is drawn, and its
    * photo the floor. The trajectory must have been simulated in the same yard,
    * which useYardLayout guarantees by giving every caller the same layout.
@@ -71,6 +83,8 @@ export function RoverSimulator({
   frameless = false,
   onSourceChange,
   onFinished,
+  onRunningChange,
+  pauseVersion = 0,
   yardId,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -87,10 +101,12 @@ export function RoverSimulator({
   // not restart the playback loop, whose effect depends on syncHud.
   const onSourceChangeRef = useRef(onSourceChange);
   const onFinishedRef = useRef(onFinished);
+  const onRunningChangeRef = useRef(onRunningChange);
   const lastSourceRef = useRef<CommandSource | null>(null);
   useEffect(() => {
     onSourceChangeRef.current = onSourceChange;
     onFinishedRef.current = onFinished;
+    onRunningChangeRef.current = onRunningChange;
   });
   const reportSource = useCallback((source: CommandSource | null) => {
     if (source === lastSourceRef.current) return;
@@ -333,6 +349,13 @@ export function RoverSimulator({
     syncHud();
   }, [resetVersion, drawScene, syncHud]);
 
+  // Stop, from outside: pause where the rover is.
+  useEffect(() => {
+    if (pauseVersion === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- react to the shared pause signal from the workspace's Stop
+    setIsPaused(true);
+  }, [pauseVersion]);
+
   const handleScrub = (value: number) => {
     setIsPaused(true);
     playheadRef.current = value;
@@ -363,6 +386,9 @@ export function RoverSimulator({
   const hasTrajectory = trajectory.length > 0;
   // A run is playing out right now: the header's dot pings while it does.
   const running = !isManual && isPlaying && !isPaused && hasTrajectory && hud.frame < hud.total;
+  useEffect(() => {
+    onRunningChangeRef.current?.(running);
+  }, [running]);
 
   const controls = hasTrajectory && (
     // ONE ROW, like a video player, laid over the bottom of the yard rather
