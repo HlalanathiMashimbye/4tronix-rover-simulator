@@ -386,16 +386,23 @@ export function MissionWorkspace() {
         // drag reshaped the rocks: from 0.6 to 1.6 times the real yard's
         // width for its depth. The simulator's column is sized from the
         // yard's real shape instead (.buildSim) and the editor has the rest.
+        //
+        // Name, checks and Send are a card of their own, placed by the grid
+        // (globals.css): under the editor on a laptop, beside the simulator on
+        // a tablet. Under the simulator they took 116px of its height, and a
+        // yard kept to its real shape is as wide as it is tall, so they cost
+        // it width too: the simulator had 40% of the page and the editor 60%.
+        // Drive fills the same card with its reset, so nothing moves when the
+        // mode changes.
         <div className="workspaceSplitGrid">
-          {editorPanel}
-          <SimulationPanel
-            {...simulatorProps}
-            // Name and launch live under the simulator so the block canvas
-            // keeps the full height of its own column. Drive fills the same
-            // fixed slot with its reset, so the yard is one size in every
-            // mode.
-            footer={submitBar ?? <DriveFooter onResetPosition={handleResetSimulation} />}
-          />
+          <div className="buildEditor min-h-0 min-w-0">{editorPanel}</div>
+          <SimulationPanel {...simulatorProps} />
+          <div
+            className="buildFooter panel @container min-w-0 overflow-hidden border border-border/60 bg-card/40 clay"
+            data-build-footer=""
+          >
+            {submitBar ?? <DriveFooter onResetPosition={handleResetSimulation} />}
+          </div>
         </div>
       )}
 

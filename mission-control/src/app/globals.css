@@ -116,6 +116,10 @@
      plain array - keep the two in sync if this value ever changes. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* A settle with a little overshoot: things that land, pop or spring back.
+     The site read as flat with every curve a plain decelerate; this is the
+     bounce of the clay style, kept short so it never wobbles. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* reserved for a future sheet/drawer */
 }
 
@@ -485,17 +489,38 @@
     border-radius: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border));
   }
 
-  .clay-press {
-    /* The pressed-state transform gets a custom curve - the built-in
-       easings are too weak to read as an intentional press. Hover/filter
-       stays on plain ease, which is the right curve for a colour change. */
+  /* Doubled class: a button often also carries transition-colors, and in the
+     same layer whichever came last would win and drop the spring. This lists
+     the colour transitions itself, so nothing is lost by winning. */
+  .clay-press.clay-press {
+    /* Released, it springs back past its size and settles, like clay; pressed,
+       it squashes at once. A 1px nudge was the whole press before and read as
+       nothing happening. Colours and filter stay on plain ease, the right
+       curve for a colour change. */
     transition:
-      transform 120ms var(--ease-out),
+      transform 320ms var(--ease-spring),
       filter 150ms ease,
-      box-shadow 150ms ease;
+      box-shadow 150ms ease,
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
-  .clay-press:hover { filter: brightness(1.06); }
-  .clay-press:active { transform: translateY(1px); }
+  .clay-press:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 90ms;
+    transition-timing-function: var(--ease-out);
+  }
+  /* Lift only under a real pointer: touch fires :hover on tap, and a tapped
+     button left floating until something else was touched. */
+  @media (hover: hover) and (pointer: fine) {
+    .clay-press:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .clay-press:hover:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+  }
 
   /* Thin, themed scrollbar for panels that scroll internally. */
   .scroll-panel { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
@@ -534,7 +559,16 @@
   .animate-shoot,
   .animate-twinkle,
   .animate-blast,
-  .page-transition-enter {
+  .page-transition-enter,
+  .check-chip,
+  .send-ready,
+  .send-ready::after,
+  .live-dot::after,
+  .launch-rocket,
+  .launch-trail > span,
+  .launch-ring,
+  .pop-in,
+  .skeleton {
     animation: none !important;
   }
   *,
@@ -593,6 +627,124 @@
 .animate-shoot { animation: shoot 6s ease-in infinite; }
 .animate-twinkle { animation: twinkle 2.6s ease-in-out infinite; }
 .animate-blast { animation: blast-off 1.6s ease-in-out infinite; }
+
+/*
+ * Moments: one-shot motion that says something happened, never decoration
+ * on a loop. Each is off under reduced motion (above).
+ */
+
+/* A pre-flight check turning green pops, so ticking one off is felt rather
+   than noticed later (PreFlightChecklist). It plays once when the chip turns
+   green, which is when the selector starts to match. */
+.check-chip[data-passed="true"] {
+  animation: check-pop 420ms var(--ease-spring);
+}
+@keyframes check-pop {
+  0% { transform: scale(0.82); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* Send turning green: two slow breaths of glow and one shine across it, then
+   still. "Your turn" without blinking at the learner forever. */
+.send-ready {
+  position: relative;
+  overflow: hidden;
+  animation: send-breathe 1.4s ease-out 2;
+}
+.send-ready::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: send-shine 900ms var(--ease-out) 200ms both;
+  pointer-events: none;
+}
+@keyframes send-breathe {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--buzz) 55%, transparent); }
+  100% { box-shadow: 0 0 0 12px color-mix(in oklab, var(--buzz) 0%, transparent); }
+}
+@keyframes send-shine {
+  to { transform: translateX(120%); }
+}
+
+/* The simulator's status dot while a run is playing: a ring that keeps
+   going out from it, the one loop on the page, because it is a status. */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: live-ping 1.2s var(--ease-out) infinite;
+}
+@keyframes live-ping {
+  from { transform: scale(1); opacity: 0.7; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+/* Mission sent (MissionSentDialog): the rocket lifts off its pad with a puff
+   of exhaust and a ring goes out, once. */
+.launch-rocket {
+  animation: launch-rocket 900ms var(--ease-spring) 120ms both;
+}
+@keyframes launch-rocket {
+  0% { transform: translateY(18px) scale(0.6); opacity: 0; }
+  35% { transform: translateY(4px) scale(1); opacity: 1; }
+  45% { transform: translate(-1px, 5px); }
+  55% { transform: translate(1px, 4px); }
+  100% { transform: translateY(-4px); }
+}
+.launch-trail > span {
+  animation: launch-puff 900ms var(--ease-out) both;
+}
+.launch-trail > span:nth-child(2) { animation-delay: 380ms; }
+.launch-trail > span:nth-child(3) { animation-delay: 460ms; }
+.launch-trail > span:first-child { animation-delay: 300ms; }
+@keyframes launch-puff {
+  0% { transform: translateY(0) scale(0.4); opacity: 0; }
+  30% { opacity: 0.9; }
+  100% { transform: translateY(14px) scale(1.4); opacity: 0; }
+}
+.launch-ring {
+  animation: launch-ring 800ms var(--ease-out) 420ms both;
+}
+@keyframes launch-ring {
+  from { transform: scale(0.7); opacity: 0.8; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+
+/* A placeholder in the shape of what is loading, with light passing across
+   it: loading, not empty. Still under reduced motion (above). */
+.skeleton {
+  background: linear-gradient(
+      100deg,
+      transparent 40%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 50%,
+      transparent 60%
+    )
+    var(--secondary);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+
+/* Lands with a small bounce. For an element arriving once: a heading after a
+   moment, an empty state's icon. */
+.pop-in {
+  animation: pop-in 520ms var(--ease-spring) both;
+}
+@keyframes pop-in {
+  from { transform: translateY(10px) scale(0.92); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
 
 /* Planets and decorative objects */
 .planet {
@@ -684,18 +836,60 @@
   }
 }
 
-/* Tablets, narrow laptop windows and portrait screens: the same 3:2 split,
-   build over simulator, for the same reason as the phone rule above but a
-   later one. Left to auto, these rows were sized by their content, so the
-   simulator's row was a different height in Drive, Blocks and Python. Its
-   yard is sized from that row (AB#464), and must be one size in every mode.
+/* Create Mission from 768px: three cards in one grid (MissionWorkspace). The
+   simulator's column is sized from the yard's real shape (AB#464), because
+   the yard stretches to fill whatever it is given and a column sized any
+   other way reshapes the rocks. Its card is only a header over the yard:
+   name, checks and Send are the footer card, placed below.
+
+   What the simulator's card puts around the yard: across, 0.75rem padding
+   and a 1px border each side, and the yard's own 1px border; down, those
+   again plus the 1.5rem header and the 0.5rem gap under it. */
+@media (min-width: 768px) {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    container-type: size;
+  }
+  .buildEditor {
+    grid-area: editor;
+  }
+  .buildSim {
+    grid-area: sim;
+    --sim-chrome-x: calc(1.5rem + 4px);
+    --sim-chrome-y: calc(3.5rem + 4px);
+  }
+  .buildFooter {
+    grid-area: footer;
+  }
+}
+
+/* Tablets, narrow laptop windows and portrait screens: build over a row of
+   simulator and footer, half and half. At 3:2 the simulator was a 300px
+   square under a canvas with height to spare. Left to auto, these rows were
+   sized by their content, so the simulator's row was a different height in
+   Drive, Blocks and Python, and its yard is sized from that row.
 
    Portrait from 1024px too: side by side, a yard as tall as a portrait
    screen needs more than half its width to keep its shape, and a 1024x1366
-   window squashed it to half its real width. */
+   window squashed it to half its real width.
+
+   The yard takes its row's height and its real shape across, and the footer
+   the rest of the row. Never under 16rem or over 60% of the row, which only
+   an unusually short window reaches; there the yard stretches a little
+   rather than leave a gap beside it. */
 @media (min-width: 768px) and (max-width: 1023px), (min-width: 1024px) and (orientation: portrait) {
   .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
-    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "editor editor"
+      "sim footer";
+  }
+  .buildSim {
+    width: clamp(
+      16rem,
+      calc(((100cqh - 0.5rem) * 0.5 - var(--sim-chrome-y)) * var(--yard-aspect) + var(--sim-chrome-x)),
+      60cqw
+    );
   }
 }
 
@@ -710,35 +904,31 @@
   }
 }
 
-/* Create Mission side by side, on landscape screens (portrait stacks, above). */
+/* Create Mission side by side, on landscape screens (portrait stacks, above):
+   the editor with name, checks and Send under it, and the simulator the full
+   height of the page beside them. Full height is what makes it big: the yard
+   keeps its real shape, so every pixel of height is most of a pixel of width.
+   At 1440x900 that is half the page, where it used to be 40%.
+
+   Never under 20rem or over half the page. At either limit, which only a
+   window close to square reaches, the yard stretches a little rather than
+   leave a gap beside it.
+
+   The footer row is as tall as what fills it: the simulator spans both rows,
+   so the footer can never change the yard's size. The checklist holds its
+   own shape (PreFlightChecklist), so it does not move the editor either. */
 @media (min-width: 1024px) and (orientation: landscape) {
-  /* The editor takes whatever the simulator leaves. A size container so the
-     simulator's column can be sized from this grid's height (.buildSim). */
   .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
-    container-type: size;
     grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "editor sim"
+      "footer sim";
   }
-
-  /* Create Mission's simulator column, as wide as the yard's real shape at
-     the height the page gives it (AB#464). The yard is stretched to fill
-     whatever it is given, so a column sized any other way reshapes the rocks:
-     a fixed 60/40 split stretched it from 0.86 to 1.23 times its real width
-     across ordinary laptop windows.
-
-     What the card puts around the yard (RoverSimulator, .simCard), across:
-     0.75rem padding and a 1px border each side, and the yard's own 1px
-     border. Down, those again plus the 1.5rem header, the 6.75rem footer
-     (.simFooter) and the 0.5rem gap after each of the first two.
-
-     Clamped: never under 20rem, which the name and Send need, and never more
-     than half the page. At either limit, which only a window close to square
-     reaches, the yard stretches a little rather than leave a gap beside it. */
   .buildSim {
-    --chrome-x: calc(1.5rem + 4px);
-    --chrome-y: calc(10.75rem + 4px);
     width: clamp(
       20rem,
-      calc((100cqh - var(--chrome-y)) * var(--yard-aspect) + var(--chrome-x)),
+      calc((100cqh - var(--sim-chrome-y)) * var(--yard-aspect) + var(--sim-chrome-x)),
       50cqw
     );
   }
@@ -901,50 +1091,6 @@
 }
 
 /*
- * The simulator card (RoverSimulator, AB#464): its yard over a footer slot of
- * one fixed size, so the yard is the same size in every mode.
- *
- * Over, unless the card is much wider than it is tall. That is the shape it
- * takes under the editor in the stacked layout (narrow laptop windows,
- * tablets), where a 108px footer under the yard left the yard 5px of a 179px
- * card. Beside it, the yard gets the card's whole height and the footer the
- * rest of the width, which keeps the yard one size there too. An aspect-ratio
- * container query, because width alone cannot tell a wide card from a big one.
- */
-.simCard {
-  container: sim / size;
-}
-.simBody {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-height: 0;
-}
-.simFooter {
-  height: 6.75rem;
-}
-@container sim (min-aspect-ratio: 3 / 2) {
-  .simBody {
-    flex-direction: row;
-  }
-  /* The yard the card's height and its real shape across, and the footer
-     the rest. The yard stretches to fill whatever it is given
-     (computeLayout), so this is what keeps the rocks their real shape here,
-     and its size still depends only on the card, so it is the same in every
-     mode. 2rem is the header and the gap under it, 2px the yard's border.
-     --yard-aspect comes from SimulationPanel. */
-  .simBody > .simYard {
-    flex: 0 1 calc((100cqh - 2rem - 2px) * var(--yard-aspect) + 2px);
-  }
-  .simFooter {
-    flex: 1 1 0;
-    height: auto;
-    min-width: 16rem;
-  }
-}
-
-/*
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
  * Editing: the docked simulator takes 30% of the screen so the blocks keep
@@ -993,6 +1139,10 @@
 .phoneLaunch {
   min-height: 0;
   overflow: hidden;
+  /* The line under the simulator. The bar itself has none: on a laptop it is
+     a card of its own (.buildFooter). */
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  padding-top: 0.375rem;
   opacity: 0;
   transform: translateY(28px);
   transition: opacity 260ms ease, transform var(--phone-move);
@@ -1075,12 +1225,47 @@
   }
 }
 
+/*
+ * The category column on a laptop (DESKTOP_TOOLBOX): one row per category, its
+ * icon in the category's colour beside its name, no 8px colour bar (the icon
+ * wears the colour). The phone strip below overrides the shape.
+ */
+.blocklyToolbox {
+  background-color: #f8fafc !important;
+  border-right: 1px solid #e2e8f0;
+}
 .blocklyToolboxCategory {
-  background-color: transparent !important;
   color: #1e293b !important;
-  padding: 5px 7px !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
+  height: auto !important;
+  line-height: 1.2 !important;
+  margin: 1px 6px;
+  padding: 7px 12px 7px 9px !important;
+  border-left-width: 0 !important;
+  border-radius: 10px;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  transition: background-color 150ms ease;
+}
+/* Closed rows show the column through them. Open, Blockly fills the row with
+   the category's colour (an inline style) and its icon and label turn white
+   on it. This used to force EVERY row transparent, the open one included, so
+   opening a category turned its name white on white and it vanished. */
+.blocklyToolboxCategory:not(.blocklyToolboxSelected) {
+  background-color: transparent !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover {
+    background-color: color-mix(in srgb, var(--cat, #64748b) 14%, transparent) !important;
+  }
+}
+.blocklyTreeRowContentContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.blocklyToolboxCategoryLabel {
+  font-size: 12px;
+  font-weight: 700;
 }
 
 /*
@@ -1091,6 +1276,7 @@
  */
 .roverBlocklyPhone .blocklyToolbox {
   padding: 3px 4px !important;
+  border-right: 0;
   border-top: 1px solid #e2e8f0;
   background-color: #f8fafc;
   overflow-x: auto;
@@ -1119,6 +1305,7 @@
   height: auto !important;
   line-height: 1.2 !important;
   padding: 4px 2px !important;
+  margin: 0;
   border-left-width: 0 !important;
   border-radius: 8px;
 }
@@ -1129,8 +1316,8 @@
 }
 
 /*
- * The category icons on the phone strip (PHONE_TOOLBOX in
- * blocklyInjectOptions.ts), drawn on the empty icon span Blockly renders
+ * The category icons, in the laptop column and on the phone strip
+ * (blocklyInjectOptions.ts), drawn on the empty icon span Blockly renders
  * in each category. Masks rather than <img> or an icon font: the
  * shape comes from the SVG, the colour from background-color, so each icon
  * wears its category's colour and turns white when its category is open.
@@ -1142,27 +1329,34 @@
   align-items: center;
   gap: 1px;
 }
-.roverBlocklyPhone [id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+[id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
   display: block !important;
-  width: 20px;
-  height: 20px;
+  /* Blockly hides the span in a vertical toolbox with no icon class. */
+  visibility: visible !important;
+  flex: none;
+  width: 16px;
+  height: 16px;
   background-color: var(--cat);
   -webkit-mask: var(--icon) center / contain no-repeat;
   mask: var(--icon) center / contain no-repeat;
 }
-/* Blockly fills an open category's chip with its colour, so the icon and
+.roverBlocklyPhone [id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+  width: 20px;
+  height: 20px;
+}
+/* Blockly fills an open category's row with its colour, so the icon and
    label turn white on it. */
-.roverBlocklyPhone .blocklyToolboxSelected .blocklyTreeRowContentContainer > span:first-child {
+.blocklyToolboxSelected .blocklyTreeRowContentContainer > span:first-child {
   background-color: #fff;
 }
-.roverBlocklyPhone .blocklyToolboxSelected .blocklyToolboxCategoryLabel {
+.blocklyToolboxSelected .blocklyToolboxCategoryLabel {
   color: #fff;
 }
-.roverBlocklyPhone #roverCat-uplink { --cat: #FF6D00; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/%3E%3Cpath d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Cpath d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/%3E%3Cpath d='M19.1 4.9C23 8.8 23 15.1 19.1 19'/%3E%3C/svg%3E"); }
-.roverBlocklyPhone #roverCat-move { --cat: #2196F3; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 9 2 12 5 15'/%3E%3Cpolyline points='9 5 12 2 15 5'/%3E%3Cpolyline points='15 19 12 22 9 19'/%3E%3Cpolyline points='19 9 22 12 19 15'/%3E%3Cline x1='2' x2='22' y1='12' y2='12'/%3E%3Cline x1='12' x2='12' y1='2' y2='22'/%3E%3C/svg%3E"); }
-.roverBlocklyPhone #roverCat-mast { --cat: #00897B; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E"); }
-.roverBlocklyPhone #roverCat-lights { --cat: #673AB7; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E"); }
-.roverBlocklyPhone #roverCat-control { --cat: #FF9800; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E"); }
+#roverCat-uplink { --cat: #FF6D00; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/%3E%3Cpath d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Cpath d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/%3E%3Cpath d='M19.1 4.9C23 8.8 23 15.1 19.1 19'/%3E%3C/svg%3E"); }
+#roverCat-move { --cat: #2196F3; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 9 2 12 5 15'/%3E%3Cpolyline points='9 5 12 2 15 5'/%3E%3Cpolyline points='15 19 12 22 9 19'/%3E%3Cpolyline points='19 9 22 12 19 15'/%3E%3Cline x1='2' x2='22' y1='12' y2='12'/%3E%3Cline x1='12' x2='12' y1='2' y2='22'/%3E%3C/svg%3E"); }
+#roverCat-mast { --cat: #00897B; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E"); }
+#roverCat-lights { --cat: #673AB7; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E"); }
+#roverCat-control { --cat: #FF9800; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E"); }
 
 .blocklyFlyoutBackground {
   fill: #f1f5f9 !important;

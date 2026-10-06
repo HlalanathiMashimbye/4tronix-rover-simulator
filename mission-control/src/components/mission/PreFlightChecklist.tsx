@@ -85,8 +85,8 @@ const CHIP: Record<PreFlightCheckId, { icon: LucideIcon; label: string }> = {
  * The pre-flight checks above the Send button: one row of chips and one line
  * that says what to do next.
  *
- * ONE FIXED SHAPE. This sits in the simulator's footer slot, which is the same
- * height in every mode so the yard above never changes size (AB#464). It was a
+ * ONE FIXED SHAPE. This sits in Create Mission's footer card, which is the
+ * same height in every mode so nothing around it moves (AB#464). It was a
  * titled list of four sentences in one or two columns, plus a hint that
  * wrapped to three lines, and it pushed the yard around as it filled in. Now
  * the four checks are chips (the full sentence is each chip's name and
@@ -98,6 +98,9 @@ const CHIP: Record<PreFlightCheckId, { icon: LucideIcon; label: string }> = {
  *
  * Only the FIRST unmet check explains itself: the checks are close enough to
  * sequential that the first one is nearly always the one to act on.
+ *
+ * Wide (the card under a laptop's editor), the line sits beside the chips
+ * rather than under them, which is a row the simulator gets back in height.
  */
 interface PreFlightChecklistProps {
   result: PreFlightResult;
@@ -114,14 +117,14 @@ interface PreFlightChecklistProps {
 export function PreFlightChecklist({ result, started = true, message }: PreFlightChecklistProps) {
   const firstUnmet = result.checks.find((check) => !check.passed);
   const hint = !started
-    ? 'Build a mission, then press Run to watch it here.'
+    ? 'Build a mission, then press Run to watch it in the simulator.'
     : firstUnmet
       ? explainCheck(firstUnmet.id, result)
       : null;
 
   return (
-    <div className="min-w-0">
-      <ul aria-label="Pre-flight checks" className="flex items-center gap-1">
+    <div className="min-w-0 @min-[40rem]:flex @min-[40rem]:items-center @min-[40rem]:gap-3">
+      <ul aria-label="Pre-flight checks" className="flex shrink-0 items-center gap-1">
         {result.checks.map((check) => {
           const { icon: Icon, label } = CHIP[check.id];
           const sentence = describeCheck(check.id);
@@ -131,19 +134,22 @@ export function PreFlightChecklist({ result, started = true, message }: PreFligh
               aria-label={`${sentence}: ${check.passed ? 'done' : 'not yet'}`}
               title={sentence}
               data-passed={check.passed}
-              className={`flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold ${
+              className={`check-chip flex h-6 min-w-0 items-center gap-1 rounded-md px-1.5 text-[11px] font-semibold transition-colors duration-300 ${
                 check.passed ? 'bg-buzz/15 text-buzz' : 'bg-muted/70 text-muted-foreground'
               }`}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              <span className="hidden truncate @min-[19rem]:inline">{label}</span>
+              {/* Words only where all five fit (about 23rem). Below that they
+                  cut to "Watch..." and "2...", which says less than the icon;
+                  the full sentence is each chip's name and tooltip. */}
+              <span className="hidden truncate @min-[24rem]:inline">{label}</span>
             </li>
           );
         })}
       </ul>
 
       <p
-        className="mt-1 line-clamp-2 min-h-[2lh] text-[11px] leading-snug text-muted-foreground"
+        className="mt-1 line-clamp-2 min-h-[2lh] text-[11px] leading-snug text-muted-foreground @min-[40rem]:mt-0 @min-[40rem]:min-w-0 @min-[40rem]:flex-1"
         title={typeof hint === 'string' ? hint : undefined}
       >
         {message ?? (hint ?? <span className="font-bold text-buzz">Ready to send</span>)}

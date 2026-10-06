@@ -8,21 +8,23 @@ import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import type { Crash } from '@/core/domain/safety/crashCheck';
 
 /**
- * Checks, name and launch, in the simulator's footer slot.
+ * Checks, name and launch, in Create Mission's footer card (MissionWorkspace):
+ * under the editor on a laptop, beside the simulator on a tablet, in the
+ * launch sheet on a phone.
  *
- * These used to be stacked under the block canvas, where they cost 147px of a
- * workspace locked to the viewport. Under the simulator they cost nothing the
- * editor needs, and now nothing the simulator needs either: the slot is one
- * fixed height in every mode (RoverSimulator's footer), and this fills it in
- * one shape whatever the checks say, so the yard above never changes size
- * (AB#464). Drive mode puts DriveFooter in the same slot.
+ * They have moved twice. Under the block canvas they cost 147px of a
+ * workspace locked to the viewport, so they went under the simulator; there
+ * they cost the simulator 116px of height and, with its yard kept to its real
+ * shape, as much again in width. The card is one fixed height in every mode
+ * and this fills it in one shape whatever the checks say, so nothing around
+ * it moves (AB#464). Drive mode puts DriveFooter in the same card.
  *
  * The "Mission sent" news takes the checks' line rather than appearing under
  * the button: appearing would change the height, and MissionSentDialog is the
  * celebration anyway.
  *
- * Sizing responds to the CONTAINER, not the viewport: the split slider can
- * squeeze this column to 320px while the window stays wide. Narrow, the chips
+ * Sizing responds to the CONTAINER, not the viewport: the card is wide under
+ * a laptop's editor and narrow beside a tablet's simulator. Narrow, the chips
  * drop their words and the button says only "Send".
  */
 interface MissionSubmitBarProps {
@@ -59,7 +61,7 @@ export function MissionSubmitBar({
   const hasCode = currentCode.trim().length > 0;
 
   return (
-    <div className="@container flex h-full flex-col justify-between gap-1.5 border-t border-border/60 pt-1.5">
+    <div className="@container flex h-full flex-col justify-between gap-1.5">
       <PreFlightChecklist
         result={preFlight}
         started={hasCode}
@@ -86,9 +88,11 @@ export function MissionSubmitBar({
           // is disabled for exactly the same condition, so the colour is not a
           // second thing to keep in step - it is the disabled state wearing a
           // visible answer to "is it my turn yet".
+          // send-ready: two breaths of glow and a shine as it turns green,
+          // once, so the moment it becomes the learner's turn is seen.
           className={`clay clay-press flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 ${
             preFlight.ready ? 'bg-gradient-buzz' : 'bg-gradient-mars'
-          }`}
+          } ${preFlight.ready && hasCode && missionName.trim() && !submitting ? 'send-ready' : ''}`}
         >
           {submitting ? (
             <>

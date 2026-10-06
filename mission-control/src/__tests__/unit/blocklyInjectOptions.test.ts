@@ -6,7 +6,7 @@
  * differences that matter are pinned here.
  */
 
-import { blocklyInjectOptions, PHONE_TOOLBOX } from '@/components/mission/blocklyInjectOptions';
+import { blocklyInjectOptions, DESKTOP_TOOLBOX, PHONE_TOOLBOX } from '@/components/mission/blocklyInjectOptions';
 import { ROVER_TOOLBOX } from '@/lib/roverBlockly';
 
 describe('on a phone', () => {
@@ -36,20 +36,29 @@ describe('everywhere else', () => {
     expect(desktop.horizontalLayout).toBeUndefined();
     expect(desktop.zoom.controls).toBe(true);
     expect(desktop.trashcan).toBe(true);
-    expect(desktop.toolbox).toBe(ROVER_TOOLBOX);
+    expect(desktop.toolbox).toBe(DESKTOP_TOOLBOX);
   });
 });
 
-describe('the icon toolbox', () => {
+describe.each([
+  ['phone', PHONE_TOOLBOX],
+  ['desktop', DESKTOP_TOOLBOX],
+])('the %s icon toolbox', (_, toolbox) => {
   it('gives every category an icon id, so none shows as a bare label', () => {
-    for (const category of PHONE_TOOLBOX.contents as { toolboxitemid?: string }[]) {
+    for (const category of toolbox.contents as { toolboxitemid?: string }[]) {
       expect(category.toolboxitemid).toMatch(/^roverCat-/);
     }
   });
 
-  it('offers exactly the same blocks, so a phone program is the same program', () => {
-    const blocks = (toolbox: typeof ROVER_TOOLBOX) =>
-      toolbox.contents.map((category) => JSON.stringify((category as { contents: unknown }).contents));
-    expect(blocks(PHONE_TOOLBOX)).toEqual(blocks(ROVER_TOOLBOX));
+  it('names categories in words, with the icon as the only picture', () => {
+    for (const category of toolbox.contents as { name: string }[]) {
+      expect(category.name).toMatch(/^[A-Za-z]+$/);
+    }
+  });
+
+  it('offers exactly the same blocks, so a program is the same program everywhere', () => {
+    const blocks = (box: typeof ROVER_TOOLBOX) =>
+      box.contents.map((category) => JSON.stringify((category as { contents: unknown }).contents));
+    expect(blocks(toolbox)).toEqual(blocks(ROVER_TOOLBOX));
   });
 });

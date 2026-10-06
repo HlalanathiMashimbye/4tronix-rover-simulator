@@ -134,9 +134,13 @@ function FilterChips({ className = '' }: { className?: string }) {
       {/* Content-width and scrollable on a phone, where four labelled chips
           cannot share 375px without truncating to nonsense. From sm they
           stretch to fill instead, so the row lines up with the field above it
-          rather than stopping short and reading as unfinished. */}
+          rather than stopping short and reading as unfinished.
+
+          Below sm the right edge fades, so a chip cut off by the screen reads
+          as "more this way" rather than a broken label ("Co"), and the row
+          ends with room to scroll the last chip clear of the fade. */}
       <div
-        className={`flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] sm:overflow-visible ${className}`}
+        className={`flex items-center gap-1.5 overflow-x-auto pb-0.5 pr-8 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] [scrollbar-width:none] sm:overflow-visible sm:pr-0 sm:[mask-image:none] ${className}`}
         role="group"
         aria-label="Filter missions by status"
       >
@@ -152,7 +156,7 @@ function FilterChips({ className = '' }: { className?: string }) {
               // label length, so the longest one wrapped to two lines and made
               // the whole row ragged. Nowrap holds each chip's content width as
               // its floor, and the spare width is shared from there.
-              className={`relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors sm:flex-1 sm:shrink ${
+              className={`relative isolate inline-flex shrink-0 items-center justify-center gap-1.5 overflow-hidden whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-semibold transition-[color,background-color,border-color,scale] duration-200 active:scale-95 sm:flex-1 sm:shrink ${
                 active
                   ? 'border-transparent text-primary-foreground'
                   : 'border-border/60 bg-card/50 text-muted-foreground'

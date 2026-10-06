@@ -21,6 +21,8 @@ import {
   Moon,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
+import { useReducedMotion } from 'motion/react';
+import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
@@ -88,6 +90,8 @@ export function Navbar() {
   // Including this top bar: the build page brings its own slimmer one with a
   // way back, and the 64px is a fifth of what the blocks get on a phone.
 
+  const reduceMotion = useReducedMotion();
+
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
     return pathname === path || pathname.startsWith(path + '/');
@@ -97,9 +101,11 @@ export function Navbar() {
   const desktopLinkClass = (path: string): string => {
     // Deliberately smaller than the Create Mission button beside them: these
     // are wayfinding, that is the action, and at equal weight they competed.
+    // The active fill is ActivePillBackground, so it slides from the page
+    // you left to the one you opened instead of blinking across.
     const base =
-      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors';
-    const active = 'bg-gradient-mars text-primary-foreground clay';
+      'relative isolate flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors';
+    const active = 'text-primary-foreground';
     const inactive =
       'text-muted-foreground hover:text-foreground hover:bg-card/60';
 
@@ -159,8 +165,13 @@ export function Navbar() {
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href} className={desktopLinkClass(href)}>
-                  <Icon className="h-4 w-4" />
-                  {label}
+                  {isActive(href) && (
+                    <ActivePillBackground layoutId="nav-pill" className="rounded-full bg-gradient-mars clay" reduceMotion={reduceMotion} />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </span>
                 </Link>
               ))}
 
@@ -227,21 +238,27 @@ export function Navbar() {
         <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
           <Link
             href="/"
-            className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
+            className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
               isActive('/') ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
-            <Home className="h-5 w-5" />
+            {isActive('/') && (
+              <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
+            )}
+            <Home className={`h-5 w-5 ${isActive('/') ? 'pop-in' : ''}`} />
             Home
           </Link>
 
           <Link
             href="/history"
-            className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
+            className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
               isActive('/history') ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
-            <HistoryIcon className="h-5 w-5" />
+            {isActive('/history') && (
+              <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
+            )}
+            <HistoryIcon className={`h-5 w-5 ${isActive('/history') ? 'pop-in' : ''}`} />
             History
           </Link>
 

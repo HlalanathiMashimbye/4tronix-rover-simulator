@@ -10,7 +10,7 @@ import { ROVER_MAX_INSTANCES, ROVER_TOOLBOX } from '@/lib/roverBlockly';
  */
 export function blocklyInjectOptions(phone: boolean) {
   return {
-    toolbox: phone ? PHONE_TOOLBOX : ROVER_TOOLBOX,
+    toolbox: phone ? PHONE_TOOLBOX : DESKTOP_TOOLBOX,
     // The actual cap - Blockly reads maxInstances only from here, never
     // from a toolbox content entry, so this must live on inject() itself.
     maxInstances: ROVER_MAX_INSTANCES,
@@ -68,42 +68,50 @@ const PHONE = {
 };
 
 /**
- * Each category's icon on the phone strip, by its name in ROVER_TOOLBOX.
+ * Each category's icon and names, by its name in ROVER_TOOLBOX.
  *
- * Icons because five worded chips did not fit a 320px strip, and a child who
- * cannot yet read "Movement" can still find the arrows. Each keeps a short
- * label under it: a bulb or a camera on its own is a guess. The icon is drawn
- * in the category's colour by globals.css (#roverCat-*), so the strip still
- * matches the blocks it opens.
+ * Icons because five worded chips did not fit a 320px phone strip, and a
+ * child who cannot yet read "Movement" can still find the arrows. Each keeps
+ * a label beside or under it: a bulb or a camera on its own is a guess. The
+ * icon is drawn in the category's colour by globals.css (#roverCat-*), so
+ * the column or strip still matches the blocks it opens, and it replaces the
+ * satellite emoji Uplink wore on a laptop, which rendered differently on
+ * every machine and was the one picture in a list of words.
  */
-const PHONE_CATEGORIES: Record<string, { label: string; icon: string }> = {
-  '🛰️ Uplink': { label: 'Uplink', icon: 'uplink' },
-  Movement: { label: 'Move', icon: 'move' },
-  Mast: { label: 'Mast', icon: 'mast' },
-  Lights: { label: 'Lights', icon: 'lights' },
-  Control: { label: 'Control', icon: 'control' },
+const CATEGORIES: Record<string, { name: string; phoneName: string; icon: string }> = {
+  '🛰️ Uplink': { name: 'Uplink', phoneName: 'Uplink', icon: 'uplink' },
+  Movement: { name: 'Movement', phoneName: 'Move', icon: 'move' },
+  Mast: { name: 'Mast', phoneName: 'Mast', icon: 'mast' },
+  Lights: { name: 'Lights', phoneName: 'Lights', icon: 'lights' },
+  Control: { name: 'Control', phoneName: 'Control', icon: 'control' },
 };
 
 /**
- * The shared toolbox with icons and short names for the phone strip.
+ * The shared toolbox with icons, and short names for the phone strip.
  *
  * Derived here rather than written into ROVER_TOOLBOX, which the yard's
- * offline editor is built from (see src/lib/README.md): the yard runs on a
- * tablet with a left-hand column, and has no use for these. Blocks are
- * untouched, so a program built on a phone is the same program everywhere.
+ * offline editor is built from (see src/lib/README.md): the yard has its own
+ * look and no use for these. Blocks are untouched, so a program built here is
+ * the same program everywhere.
  */
-export const PHONE_TOOLBOX = {
-  ...ROVER_TOOLBOX,
-  contents: ROVER_TOOLBOX.contents.map((category) => {
-    const phone = PHONE_CATEGORIES[category.name];
-    if (!phone) return category;
-    return {
-      ...category,
-      name: phone.label,
-      // An id rather than cssConfig.icon: Blockly 12 ignores category icon
-      // classes in a horizontal toolbox (createIconDom_ checks isHorizontal),
-      // so globals.css draws the icon on the empty icon span by this id.
-      toolboxitemid: `roverCat-${phone.icon}`,
-    };
-  }),
-};
+function withIcons(phone: boolean) {
+  return {
+    ...ROVER_TOOLBOX,
+    contents: ROVER_TOOLBOX.contents.map((category) => {
+      const look = CATEGORIES[category.name];
+      if (!look) return category;
+      return {
+        ...category,
+        name: phone ? look.phoneName : look.name,
+        // An id rather than cssConfig.icon: Blockly 12 ignores category icon
+        // classes in a horizontal toolbox (createIconDom_ checks isHorizontal),
+        // so globals.css draws the icon on the empty icon span by this id, the
+        // same way in both layouts.
+        toolboxitemid: `roverCat-${look.icon}`,
+      };
+    }),
+  };
+}
+
+export const PHONE_TOOLBOX = withIcons(true);
+export const DESKTOP_TOOLBOX = withIcons(false);

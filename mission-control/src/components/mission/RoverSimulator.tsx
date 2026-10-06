@@ -21,13 +21,6 @@ interface RoverSimulatorProps {
   editorMode?: 'manual' | 'blockly' | 'code';
   resetVersion?: number;
   /**
-   * Rendered inside this card, under the yard, in a slot of ONE fixed height
-   * whatever is in it. The yard is sized from what is left, so the checks
-   * appearing, a hint wrapping or Drive's controls replacing Send can never
-   * change its size. Leave it out for no slot at all.
-   */
-  footer?: React.ReactNode;
-  /**
    * Drop the card, the header and the padding, and let the arena fill whatever
    * box it is given.
    *
@@ -65,7 +58,6 @@ export function RoverSimulator({
   onReset,
   editorMode,
   resetVersion = 0,
-  footer,
   bare = false,
   frameless = false,
   onSourceChange,
@@ -343,6 +335,8 @@ export function RoverSimulator({
   };
 
   const hasTrajectory = trajectory.length > 0;
+  // A run is playing out right now: the header's dot pings while it does.
+  const running = !isManual && isPlaying && !isPaused && hasTrajectory && hud.frame < hud.total;
 
   const controls = hasTrajectory && (
     // ONE ROW, like a video player, laid over the bottom of the yard rather
@@ -421,14 +415,15 @@ export function RoverSimulator({
   if (bare) return yard;
 
   return (
-    // simCard / simBody / simFooter: see globals.css. The footer goes beside
-    // the yard instead of under it when the card is much wider than tall.
-    <div className="simCard panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
+    // Just the header and the yard. Name, checks and Send are the
+    // workspace's, in a card of their own (MissionWorkspace), so nothing can
+    // take height from the yard and the yard can be as big as the page allows.
+    <div className="panel flex h-full flex-col gap-2 border border-border/60 bg-card/40 clay">
       {/* A fixed height: the position readout appears once a run starts and
           is taller than the title, and the yard is sized from what is left. */}
       <div className="flex h-6 shrink-0 items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-block-move" />
+          <span className={`h-2.5 w-2.5 rounded-full bg-block-move ${running ? 'live-dot' : ''}`} />
           <p className="text-xs font-bold uppercase tracking-wider text-primary">Simulator</p>
         </div>
         {hasTrajectory && (
@@ -440,15 +435,7 @@ export function RoverSimulator({
         )}
       </div>
 
-      <div className="simBody">
-        {yard}
-
-        {footer !== undefined && (
-          <div className="simFooter @container shrink-0 overflow-hidden" data-sim-footer="">
-            {footer}
-          </div>
-        )}
-      </div>
+      {yard}
     </div>
   );
 }
