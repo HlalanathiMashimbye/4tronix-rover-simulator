@@ -24,8 +24,9 @@ describe('on a phone', () => {
     expect(phone.zoom.pinch).toBe(true);
   });
 
-  it('has a bin to drag blocks into, the way to delete one that a child will find', () => {
-    expect(phone.trashcan).toBe(true);
+  it("leaves out Blockly's trashcan, drawn too big for a phone, for a bin of our own", () => {
+    // The bin itself is blockCanvasFit.test.ts and blockCanvasControls.test.tsx.
+    expect(phone.trashcan).toBe(false);
   });
 
   it('uses the icon toolbox', () => {

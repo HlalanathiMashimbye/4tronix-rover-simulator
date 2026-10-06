@@ -157,7 +157,8 @@ export default function MissionVideoClient({
     // Pinned to the viewport at every size, like Create Mission (AB#455). On a
     // phone this used to stack the panels and scroll, with the tab bar and the
     // floating button on top of the blocks. Now the player docks at the top
-    // and the code takes the rest (.workspaceSplitGrid--fixed in globals.css).
+    // and the code is below it, half each (.workspaceSplitGrid--fixed in
+    // globals.css).
     // It once clipped the code entirely under overflow-hidden; the fix then
     // was to let it scroll, the fix now is a layout that fits.
     <main data-surface="mission" className="h-page overflow-hidden px-3 py-2">
