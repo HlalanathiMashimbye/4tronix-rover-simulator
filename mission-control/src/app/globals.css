@@ -568,6 +568,8 @@
   .launch-trail > span,
   .launch-ring,
   .pop-in,
+  .dice-roll,
+  .nameReel,
   .skeleton {
     animation: none !important;
   }
@@ -734,6 +736,40 @@
 @keyframes skeleton-shimmer {
   from { background-position: 120% 0; }
   to { background-position: -120% 0; }
+}
+
+/* Rolling a new mission name (MissionNameInput): the die is thrown, tumbling
+   two full turns with a hop and a smaller one, and settles the way up it
+   started. Meanwhile the names roll up through the box like a slot machine's
+   reel, dimmed while they are only passing, and the new one lands with a
+   bounce as the die stops. */
+.dice-roll {
+  transform-origin: center;
+  animation: dice-roll 560ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes dice-roll {
+  0% { transform: translateY(0) rotate(0deg) scale(1); }
+  20% { transform: translateY(-7px) rotate(170deg) scale(1.2); }
+  45% { transform: translateY(0) rotate(430deg) scale(0.9); }
+  62% { transform: translateY(-3px) rotate(580deg) scale(1.06); }
+  80% { transform: translateY(0) rotate(700deg) scale(0.97); }
+  92% { transform: translateY(0) rotate(728deg) scale(1); }
+  100% { transform: translateY(0) rotate(720deg) scale(1); }
+}
+.nameReel[data-name-reel="passing"] {
+  color: var(--muted-foreground);
+  animation: name-pass 90ms ease-out;
+}
+.nameReel[data-name-reel="landed"] {
+  animation: name-land 420ms var(--ease-spring);
+}
+@keyframes name-pass {
+  from { transform: translateY(75%); opacity: 0.2; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes name-land {
+  from { transform: translateY(85%); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 
 /* Lands with a small bounce. For an element arriving once: a heading after a
