@@ -1,21 +1,26 @@
 'use client';
 
+import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { useReducedMotion } from 'motion/react';
 import { Gamepad2, Blocks, Code2, AlertTriangle } from 'lucide-react';
 import { ManualControlRealtime } from '@/components/mission/ManualControlRealtime';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
-import { MonacoCodeEditor } from '@/components/mission/MonacoCodeEditor';
+import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
+import { prefetchBlockly } from '@/infrastructure/browser/loadBlockly';
+import { loadPythonEditor, prefetchPythonEditor } from '@/components/mission/loadPythonEditor';
+
+// Its own chunk, fetched when the Python tab is wanted (see loadPythonEditor).
+// Client-only: the editor measures and edits the DOM it is given.
+const PythonCodeEditor = dynamic(() => loadPythonEditor().then((m) => m.PythonCodeEditor), {
+  ssr: false,
+  loading: () => <div className="h-full animate-pulse rounded-xl border border-border bg-[#1e1e1e]" />,
+});
 
 export type EditorMode = 'manual' | 'blockly' | 'code';
-
-type SimulationCommand = {
-  command: string;
-  speed?: number;
-  duration?: number;
-  degrees?: number;
-};
 
 // Blocks-first ordering: tap-to-drive on-ramp, then the block editor (the hero),
 // then Python for those ready for it.
@@ -31,7 +36,6 @@ interface EditorPanelProps {
   error: string | null;
 
   onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
-  onResetSimulation: () => void;
   manualResetVersion: number;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;
@@ -39,6 +43,10 @@ interface EditorPanelProps {
   blocklyCode: string;
   onShowAsPython: () => void;
   onBlocklyStateChange?: (state: string) => void;
+  /** What the simulator is running right now, to light up in the editor. */
+  highlight?: CommandSource | null;
+  /** Hands the active editor's Run up, for a Run button outside the editor. */
+  onRegisterRun?: (run: (() => void) | null) => void;
 }
 
 export function EditorPanel({
@@ -46,7 +54,6 @@ export function EditorPanel({
   onEditorModeChange,
   error,
   onManualTrajectory,
-  onResetSimulation,
   manualResetVersion,
   onGenerateCommands,
   onCodeChange,
@@ -54,8 +61,21 @@ export function EditorPanel({
   blocklyCode,
   onShowAsPython,
   onBlocklyStateChange,
+  highlight = null,
+  onRegisterRun,
 }: EditorPanelProps) {
   const reduceMotion = useReducedMotion();
+  // Blockly reads its layout options once, at inject, so a change of layout
+  // (rotating a tablet, resizing a window) remounts the block editor, keyed
+  // below, rather than leaving a phone with the desktop's toolbox. The
+  // workspace autosaves on every change, so the remount loses nothing.
+  const isPhone = useIsPhoneLayout();
+
+  // The Blocks and Python tabs each used to start downloading their editor
+  // only when clicked, which is most of why opening them took seconds. Blockly
+  // is fetched while the page is idle; the Python editor on the first sign of
+  // interest in its tab (see loadPythonEditor).
+  useEffect(() => prefetchBlockly(), []);
 
   return (
     <div className="panel flex h-full flex-col gap-1.5 overflow-hidden border border-border/60 bg-card/40 clay">
@@ -67,8 +87,12 @@ export function EditorPanel({
             <button
               key={mode}
               onClick={() => onEditorModeChange(mode)}
+              onPointerEnter={mode === 'code' ? prefetchPythonEditor : undefined}
+              onFocus={mode === 'code' ? prefetchPythonEditor : undefined}
               aria-pressed={active}
-              className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-2 text-sm font-bold transition-colors ${
+              // Smaller on a phone, where these share the screen with the
+              // docked simulator.
+              className={`panel-inner relative isolate flex flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-1.5 text-xs font-bold transition-colors md:py-2 md:text-sm ${
                 active
                   ? 'text-primary-foreground'
                   : 'border border-border/60 bg-secondary/40 text-muted-foreground hover:text-foreground'
@@ -98,12 +122,11 @@ export function EditorPanel({
         {editorMode === 'manual' && (
           <ManualControlRealtime
             onTrajectoryUpdate={onManualTrajectory}
-            onReset={onResetSimulation}
             resetVersion={manualResetVersion}
           />
         )}
-        {editorMode === 'blockly' && <BlocklyEditor onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={onShowAsPython} />}
-        {editorMode === 'code' && <MonacoCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} />}
+        {editorMode === 'blockly' && <BlocklyEditor key={isPhone ? 'phone' : 'desktop'} phone={isPhone} onGenerateCommands={onGenerateCommands} onCodeChange={(c) => { onCodeChange(c); onBlocklyCode(c); }} onBlocklyStateChange={onBlocklyStateChange} onShowAsPython={isPhone ? undefined : onShowAsPython} highlight={highlight} onRegisterRun={onRegisterRun} />}
+        {editorMode === 'code' && <PythonCodeEditor onGenerateCommands={onGenerateCommands} onCodeChange={onCodeChange} blocklyCode={blocklyCode} highlight={highlight} onRegisterRun={onRegisterRun} phone={isPhone} />}
       </div>
 
     </div>

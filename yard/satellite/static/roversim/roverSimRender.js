@@ -4,9 +4,13 @@
 /**
  * 2D rover-simulator drawing for the live simulator panel (RoverSimulator).
  *
- * Inspired by the 4tronix Qt simulator: a top-down yard with a vector
- * rover whose four wheels steer to their servo angles.
+ * The real yard from above, north up (AB#464): the floor is a photo of it,
+ * straightened and measured, with a vector overlay on top so it still reads
+ * as a simulator rather than a photo, like a map. The rover is drawn, not
+ * photographed, and steers its four wheels to their servo angles.
  */
+import { YARD, roverToYard } from './rover-physics.js';
+import { crashFrame } from './simulateCommands.js';
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE = {
     groundInner: '#7c4a2b',
@@ -15,10 +19,12 @@ export const DARK_SIM_PALETTE = {
     craterCore: 'rgba(0,0,0,0.28)',
     craterMid: 'rgba(0,0,0,0.10)',
     craterRim: 'rgba(255,210,170,0.05)',
-    grid: 'rgba(255,190,150,0.08)',
+    grid: 'rgba(255,225,200,0.16)',
     vignetteTop: 'rgba(0,0,0,0.30)',
     vignetteBottom: 'rgba(0,0,0,0.35)',
     trail: '#2196f3',
+    floorShade: 'rgba(14,6,2,0.30)',
+    label: 'rgba(255,225,200,0.75)',
 };
 /**
  * Paper & Ink: sunlit regolith rather than night. Tuned to sit inside the
@@ -33,66 +39,19 @@ export const LIGHT_SIM_PALETTE = {
     craterCore: 'rgba(88,66,42,0.20)',
     craterMid: 'rgba(88,66,42,0.08)',
     craterRim: 'rgba(255,252,245,0.55)',
-    grid: 'rgba(88,66,42,0.12)',
+    grid: 'rgba(255,248,235,0.24)',
     vignetteTop: 'rgba(88,66,42,0.16)',
     vignetteBottom: 'rgba(88,66,42,0.20)',
     trail: '#1668c9',
+    floorShade: 'rgba(255,250,240,0.04)',
+    label: 'rgba(70,50,30,0.8)',
 };
-// The physical yard (matches the Qt simulator: 400 x 300 cm).
-/**
- * The driveable yard, in centimetres.
- *
- * SIZED SO THE ROVER'S REAL SPEED READS AS MOVEMENT.
- *
- * The rover covers 6cm a second at speed 60, which is what the hardware
- * actually does. In a 640cm yard that made a default square about 4% of the
- * width - smaller than the rover icon - so a child drew a perfect square and
- * saw nothing happen.
- *
- * The fix is the yard, not the speed. FULL_SPEED_CM_PER_SECOND is tied to real
- * hardware, and inflating it would make the simulator trace a neat square on
- * screen while the real rover traced something else, which destroys the only
- * thing a simulator is for. The old 400x300 was inherited from the 4tronix Qt
- * simulator rather than measured from anything, so the yard was always the
- * free parameter.
- *
- * CHOSEN FOR HOW IT LOOKS, not to match a room anyone has measured. 400x300
- * came from the old Qt simulator and nothing since has been a physical fact, so
- * this is the one number here free to be picked.
- *
- * With the rover drawn at its true 20cm, its size on screen IS the yard size:
- * an eighth of the width at 240, a sixth at 120. Wanting a small rover and a
- * big square pulls this in opposite directions, and the way out is a larger
- * world with longer default drives - which is why the drive blocks default to
- * 5 seconds rather than 1. Together they give a rover at 8% and a default
- * square at 18%, so the shape is comfortably bigger than the thing drawing it.
- *
- * rover-physics.ts bounds the rover to the same numbers, and the two must not
- * drift.
- */
-export const YARD_W = 240;
-export const YARD_H = 180;
 export const SIM_FPS = 10; // trajectory is sampled at 0.1s steps
-const MARGIN = 10; // px inset so the rover never clips the panel edge
 // Servo ids for the four steerable wheels (front/rear, left/right).
 const FL = '9';
 const FR = '15';
 const RL = '11';
 const RR = '13';
-// Deterministic crater field (world cm) so the terrain reads as Mars without a
-// muddy photo. Each is [x, y, radius].
-/**
- * The original six craters, scaled with the yard so they sit exactly where they
- * always did as a fraction of the ground.
- */
-const CRATERS = [
-    [-78, 48, 20],
-    [54, 36, 16],
-    [84, -42, 24],
-    [-54, -54, 13],
-    [12, 72, 11],
-    [-96, -18, 10],
-];
 /**
  * One light direction for the whole scene, up and to the left.
  *
@@ -102,14 +61,98 @@ const CRATERS = [
  * of it.
  */
 const LIGHT = { x: -0.55, y: -0.83 };
-export function computeLayout(w, h) {
-    // Clamp to >= 0: a container briefly smaller than the margins (mid-layout)
+/**
+ * The yard STRETCHED to fill the canvas, whatever its shape (AB#464).
+ *
+ * The yard is near square and almost no panel is. Three other answers were
+ * tried and each lost something: fitting it left bars of empty ground beside
+ * it, cropping it lost rocks and corners, and framing it in its own shape
+ * shrank it to a postage stamp on a phone. Stretched, every rock and corner
+ * shows and the simulator is the full size of its panel everywhere.
+ *
+ * So across and down have their own scales (sx, sy). Positions use them, so
+ * the trail, the rocks and the walls stay exactly on the stretched photo.
+ * Sizes use their geometric mean (s), so the rover is drawn its own shape
+ * rather than squashed, and is turned to where it moves on screen
+ * (drawnBearing).
+ */
+export function computeLayout(w, h, yard = YARD) {
+    // Clamp to >= 0: a container briefly smaller than nothing (mid-layout)
     // would otherwise yield a negative scale and an illegal gradient radius.
-    const s = Math.max(0, Math.min((w - 2 * MARGIN) / YARD_W, (h - 2 * MARGIN) / YARD_H));
-    return { w, h, s, ox: (w - YARD_W * s) / 2, oy: (h - YARD_H * s) / 2 };
+    const sx = Math.max(0, w / yard.widthCm);
+    const sy = Math.max(0, h / yard.depthCm);
+    return { w, h, sx, sy, s: Math.sqrt(sx * sy), ox: 0, oy: 0, yard };
 }
-function worldToScreen(L, wx, wy) {
-    return [L.ox + (wx + YARD_W / 2) * L.s, L.oy + (YARD_H / 2 - wy) * L.s];
+/** Room around the crop for the rover's body, which the path does not include. */
+const FILL_PAD_CM = 15;
+/**
+ * A layout where the yard FILLS the canvas, cropped, for a mission's cover on
+ * the home feed (AB#464).
+ *
+ * Only the covers. Everywhere a rover is driven or watched the yard is
+ * stretched to fill (computeLayout), so every rock and corner shows. A cover
+ * is a thumbnail in a card twice as wide as it is tall, where stretching would
+ * flatten every rock to a sliver, so there the crop is the better trade,
+ * placed for the run:
+ *
+ *  - Centred on the whole trail, so a run that fits is framed once and the
+ *    view holds still while it plays.
+ *  - Never so far off the rover (`at`, where it is now) that it leaves the
+ *    canvas. A trail longer than the view therefore follows the rover rather
+ *    than losing it, and a cover, where the rover is parked at the end,
+ *    keeps the end rather than the start.
+ *  - Never past a wall, which would bring the bars back.
+ *
+ * Before anything has run, it is centred on the start spot.
+ */
+export function computeFillLayout(w, h, traj, at = traj[traj.length - 1], yard = YARD) {
+    const s = Math.max(w / yard.widthCm, h / yard.depthCm);
+    if (!(s > 0))
+        return computeLayout(w, h, yard);
+    const viewW = w / s;
+    const viewH = h / s;
+    const [nowX, nowY] = roverToYard(at?.x ?? 0, at?.y ?? 0, yard);
+    let minX = nowX, maxX = nowX, minY = nowY, maxY = nowY;
+    for (const point of traj) {
+        const [x, y] = roverToYard(point.x, point.y, yard);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+    }
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    // The trail's middle, held within reach of the rover. When the trail fits,
+    // its middle is always within reach of every point on it, so this only
+    // moves the view for a trail that does not fit.
+    const centre = (lo, hi, view, now) => {
+        const reach = Math.max(0, view / 2 - FILL_PAD_CM);
+        return clamp((lo + hi) / 2, now - reach, now + reach);
+    };
+    const left = clamp(centre(minX, maxX, viewW, nowX) - viewW / 2, 0, yard.widthCm - viewW);
+    const top = clamp(centre(minY, maxY, viewH, nowY) - viewH / 2, 0, yard.depthCm - viewH);
+    return { w, h, sx: s, sy: s, s, ox: -left * s, oy: -top * s, yard };
+}
+/** A point in the yard's measured frame (cm from the west and back walls) on screen. */
+function yardToScreen(L, x, y) {
+    return [L.ox + x * L.sx, L.oy + y * L.sy];
+}
+/** A point in the rover's frame, as the physics reports it, on screen. */
+export function worldToScreen(L, wx, wy) {
+    const [x, y] = roverToYard(wx, wy, L.yard);
+    return yardToScreen(L, x, y);
+}
+/**
+ * The angle to draw the rover at, clockwise from screen-up, for a heading in
+ * its own frame.
+ *
+ * Its compass bearing, on a map drawn to one scale. On a stretched map a
+ * direction on the ground is not the same direction on screen (a rover
+ * heading south-east moves more across than down when the yard is stretched
+ * across), so the rover is turned to the way its trail actually runs.
+ */
+export function drawnBearing(L, heading) {
+    const bearing = ((L.yard.start.facingDegrees + heading) * Math.PI) / 180;
+    return (Math.atan2(Math.sin(bearing) * L.sx, Math.cos(bearing) * L.sy) * 180) / Math.PI;
 }
 const lerp = (a, b, t) => a + (b - a) * t;
 export function interpolate(traj, p) {
@@ -126,6 +169,7 @@ export function interpolate(traj, p) {
         heading: lerp(a.heading, b.heading, f),
         servos: { [FL]: sv(FL), [FR]: sv(FR), [RL]: sv(RL), [RR]: sv(RR) },
         hitWall: a.hitWall || b.hitWall,
+        hitRock: a.hitRock ?? b.hitRock ?? null,
         // Lamps do not blend between two colours: they are on or off at a given
         // frame. Take the frame the playhead is actually on.
         leds: a.leds,
@@ -144,95 +188,143 @@ export function interpolate(traj, p) {
  * nothing else does.
  */
 let terrainCache = null;
-function drawTerrain(ctx, L, P) {
-    const key = `${L.w}x${L.h}@${L.s.toFixed(4)}:${P.groundInner}`;
+function drawTerrain(ctx, L, P, floor) {
+    // The floor photo arrives after the first frames, so having it is part of
+    // the key: the yard repaints once when it lands, and not again. So is where
+    // the yard sits, because the crop is placed for each run, and follows the
+    // rover through one that does not fit.
+    const key = `${L.w}x${L.h}@${L.sx.toFixed(4)},${L.sy.toFixed(4)}+${L.ox.toFixed(1)},${L.oy.toFixed(1)}:${P.groundInner}:${floor ? 'photo' : 'plain'}`;
     if (terrainCache?.key !== key) {
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
         const off = typeof document !== 'undefined' ? document.createElement('canvas') : null;
         const g = off?.getContext('2d');
         if (!off || !g) {
             // No offscreen canvas (test environments) - paint straight through.
-            paintTerrain(ctx, L, P);
+            paintTerrain(ctx, L, P, floor);
             return;
         }
         off.width = Math.max(1, Math.round(L.w * dpr));
         off.height = Math.max(1, Math.round(L.h * dpr));
         g.scale(dpr, dpr);
-        paintTerrain(g, L, P);
+        paintTerrain(g, L, P, floor);
         terrainCache = { key, canvas: off };
     }
     ctx.drawImage(terrainCache.canvas, 0, 0, L.w, L.h);
 }
-function paintTerrain(ctx, L, P) {
-    const { w, h, s } = L;
-    /**
-     * The original ground, simply stretched to the whole panel.
-     *
-     * A previous pass layered mottled drifts, wind ripples, grit and boulders on
-     * top of this. It was busier, not better: the yard is the backdrop a child
-     * reads their rover's path against, and every extra mark competed with the
-     * one thing that matters on the canvas. Simple wash, six craters, faint
-     * grid - as it was.
-     */
-    const ground = ctx.createRadialGradient(w / 2, h * 0.42, Math.min(w, h) * 0.1, w / 2, h / 2, Math.max(w, h) * 0.75);
-    ground.addColorStop(0, P.groundInner);
-    ground.addColorStop(0.55, P.groundMid);
-    ground.addColorStop(1, P.groundOuter);
-    ctx.fillStyle = ground;
+function paintTerrain(ctx, L, P, floor) {
+    const { w, h, yard } = L;
+    const [x0, y0] = yardToScreen(L, 0, 0);
+    const yw = yard.widthCm * L.sx;
+    const yh = yard.depthCm * L.sy;
+    // Beyond the walls: the panel's own colour, so the yard sits on it like a
+    // map on a table. The yard is near square and the panels are not.
+    ctx.fillStyle = P.groundOuter;
     ctx.fillRect(0, 0, w, h);
-    // Craters: a darker bowl with a faint sunlit rim for depth.
-    for (const [cx, cy, cr] of CRATERS) {
-        const [px, py] = worldToScreen(L, cx, cy);
-        const r = cr * s;
-        if (r <= 0.5)
-            continue;
-        const cg = ctx.createRadialGradient(px, py - r * 0.2, r * 0.2, px, py, r);
-        cg.addColorStop(0, P.craterCore);
-        cg.addColorStop(0.8, P.craterMid);
-        cg.addColorStop(1, P.craterRim);
-        ctx.fillStyle = cg;
-        ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
-        ctx.fill();
+    if (floor) {
+        ctx.drawImage(floor, x0, y0, yw, yh);
+        ctx.fillStyle = P.floorShade;
+        ctx.fillRect(x0, y0, yw, yh);
     }
-    // Faint measurement grid every 30cm, keeping the same handful of divisions.
+    else {
+        // Until the photo has loaded, or wherever there is none: plain ground.
+        // Never invented craters: this is a real yard, and a mark on its floor
+        // reads as something that is there.
+        const ground = ctx.createRadialGradient(x0 + yw / 2, y0 + yh * 0.42, Math.min(yw, yh) * 0.1, x0 + yw / 2, y0 + yh / 2, Math.max(yw, yh) * 0.75);
+        ground.addColorStop(0, P.groundInner);
+        ground.addColorStop(0.55, P.groundMid);
+        ground.addColorStop(1, P.groundOuter);
+        ctx.fillStyle = ground;
+        ctx.fillRect(x0, y0, yw, yh);
+    }
+    // The map overlay. A 50 cm grid, so distance can be read off the floor.
     ctx.strokeStyle = P.grid;
     ctx.lineWidth = 1;
-    for (let gx = -YARD_W * 1.5; gx <= YARD_W * 1.5; gx += 30) {
-        const [sx] = worldToScreen(L, gx, 0);
-        if (sx < -2 || sx > w + 2)
-            continue;
-        ctx.beginPath();
-        ctx.moveTo(sx, 0);
-        ctx.lineTo(sx, h);
-        ctx.stroke();
-    }
-    for (let gy = -YARD_H * 1.5; gy <= YARD_H * 1.5; gy += 30) {
-        const [, sy] = worldToScreen(L, 0, gy);
-        if (sy < -2 || sy > h + 2)
-            continue;
-        ctx.beginPath();
-        ctx.moveTo(0, sy);
-        ctx.lineTo(w, sy);
-        ctx.stroke();
-    }
-    // Edge shadow, over the whole panel since nothing frames it now.
-    const vg = ctx.createLinearGradient(0, 0, 0, h);
-    vg.addColorStop(0, P.vignetteTop);
-    vg.addColorStop(0.15, 'rgba(0,0,0,0)');
-    vg.addColorStop(0.85, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, P.vignetteBottom);
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, w, h);
-    // Start pad at the origin, where every run begins.
-    const [hx, hy] = worldToScreen(L, 0, 0);
-    ctx.strokeStyle = 'rgba(52,211,153,0.9)';
-    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+    for (let cm = 50; cm < yard.widthCm; cm += 50) {
+        const [gx] = yardToScreen(L, cm, 0);
+        ctx.moveTo(gx, y0);
+        ctx.lineTo(gx, y0 + yh);
+    }
+    for (let cm = 50; cm < yard.depthCm; cm += 50) {
+        const [, gy] = yardToScreen(L, 0, cm);
+        ctx.moveTo(x0, gy);
+        ctx.lineTo(x0 + yw, gy);
+    }
     ctx.stroke();
-    ctx.fillStyle = 'rgba(52,211,153,0.18)';
-    ctx.fill();
+    // Each rock ringed at its measured size: the photo shows the rock, the ring
+    // says the simulator knows it is there.
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    for (const rock of yard.rocks) {
+        const [rx, ry] = yardToScreen(L, rock.x, rock.y);
+        // An oval on a stretched yard, as the stretched photo draws the rock.
+        const r = Math.max(rock.widthCm, rock.depthCm) / 2 + 2;
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(20,8,2,0.5)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,240,220,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    }
+    ctx.restore();
+    // The walls.
+    ctx.strokeStyle = 'rgba(20,8,2,0.6)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x0, y0, yw, yh);
+    // North, on the backdrop wall: the map is drawn north up.
+    ctx.fillStyle = P.label;
+    ctx.font = '600 10px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Inside the top edge when the back wall is cropped off or too close to it.
+    ctx.fillText('N', x0 + yw / 2, y0 > 14 ? y0 - 7 : Math.max(y0, 0) + 9);
+    drawStartMark(ctx, L);
+}
+/**
+ * The start mark (AB#465): a cross of tape where the rover's centre goes, one
+ * arm along the seam and one across it. In centimetres. yard-measurements.md
+ * tells a person how to tape it from the same number, and
+ * yardMeasurements.test.ts holds the two together, so the mark on screen is
+ * the mark on the floor.
+ *
+ * A CROSS, NOT AN ARROW. It was an arrow pointing the way the rover faces,
+ * and an arrow reads as "drive this way" when a mission can just as well start
+ * by reversing. Which way the rover faces is said in words instead, "facing
+ * the front wall", which in the room is unmistakable.
+ *
+ * Each arm runs 14 cm from the centre, past the rover's body on every side
+ * (it is 20 x 18.5 cm), so with the rover parked on it all four tips show:
+ * that is what centres it, on screen and on the floor.
+ */
+export const START_MARK_CM = { arm: 14 };
+/** Where the start mark's centre and the tips of its four arms are on screen. */
+export function startMark(L) {
+    const arm = START_MARK_CM.arm;
+    return {
+        centre: worldToScreen(L, 0, 0),
+        tips: [worldToScreen(L, 0, arm), worldToScreen(L, 0, -arm), worldToScreen(L, arm, 0), worldToScreen(L, -arm, 0)],
+    };
+}
+function drawStartMark(ctx, L) {
+    const { tips } = startMark(L);
+    const [ahead, behind, right, left] = tips;
+    const width = Math.max(2, 2.5 * L.s);
+    ctx.save();
+    ctx.lineCap = 'round';
+    // A dark edge first, so the tape reads on the bright parts of the floor.
+    for (const [colour, extra] of [['rgba(20,8,2,0.55)', 2], ['rgba(52,211,153,0.95)', 0]]) {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = width + extra;
+        ctx.beginPath();
+        ctx.moveTo(behind[0], behind[1]);
+        ctx.lineTo(ahead[0], ahead[1]);
+        ctx.moveTo(left[0], left[1]);
+        ctx.lineTo(right[0], right[1]);
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 function drawTrail(ctx, L, traj, endIdx, P) {
     if (endIdx <= 0)
@@ -292,7 +384,8 @@ function drawTrail(ctx, L, traj, endIdx, P) {
 function drawRover(ctx, L, st, t = 0, odo = 0) {
     const [cx, cy] = worldToScreen(L, st.x, st.y);
     /**
-     * TRUE SCALE, near enough, now the yard is 160cm rather than 640.
+     * TRUE SCALE, near enough: the rover and the yard are in the same measured
+     * centimetres.
      *
      * This used to be inflated about 2.5x, because a real 20cm rover in a 640cm
      * yard came out three pixels long and a learner could not see which way it
@@ -313,13 +406,16 @@ function drawRover(ctx, L, st, t = 0, odo = 0) {
     const bh = 38 * scale;
     const halfW = bw / 2;
     const halfH = bh / 2;
+    // Drawn with its nose up and turned to its compass bearing: the map is north
+    // up, so a rover that starts facing south starts pointing down the screen.
+    const bearing = drawnBearing(L, st.heading);
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate((st.heading * Math.PI) / 180); // front points along heading
-    // Contact shadow, thrown by the same light as the terrain. Drawn in an
-    // unrotated frame so it stays on the ground as the body turns.
+    ctx.rotate((bearing * Math.PI) / 180);
+    // Contact shadow, thrown by the same light as the rover's highlights. Drawn
+    // in an unrotated frame so it stays on the ground as the body turns.
     ctx.save();
-    ctx.rotate((-st.heading * Math.PI) / 180);
+    ctx.rotate((-bearing * Math.PI) / 180);
     ctx.fillStyle = 'rgba(20,8,2,0.38)';
     ctx.beginPath();
     ctx.ellipse(-LIGHT.x * 7, -LIGHT.y * 7, halfW + 6, halfH * 0.72, 0, 0, Math.PI * 2);
@@ -559,19 +655,6 @@ function drawRover(ctx, L, st, t = 0, odo = 0) {
     });
     ctx.restore();
 }
-function drawWallHit(ctx, L, st) {
-    const [cx, cy] = worldToScreen(L, st.x, st.y);
-    const radius = 18 * Math.max(0.7, Math.min(1.7, L.s / 1.4));
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    glow.addColorStop(0, 'rgba(239,68,68,0.55)');
-    glow.addColorStop(1, 'rgba(239,68,68,0)');
-    ctx.fillStyle = glow;
-    ctx.fill();
-    ctx.restore();
-}
 /**
  * Draw a full simulator frame (terrain + trail + rover) for a given playhead.
  * `playhead` may be fractional; the rover position is interpolated for smooth
@@ -580,17 +663,23 @@ function drawWallHit(ctx, L, st) {
 export function drawSimFrame(ctx, L, traj, playhead, 
 // Defaulted so any caller that has not been told about themes yet keeps the
 // original night-time yard rather than rendering colourless.
-P = DARK_SIM_PALETTE) {
+P = DARK_SIM_PALETTE, 
+/** The yard's floor photo, once loaded (useYardFloor). Plain ground until then. */
+floor = null) {
     // Skip degenerate layouts (container not laid out yet) to avoid drawing with
     // a zero/negative scale.
     if (L.w <= 0 || L.h <= 0 || L.s <= 0)
         return;
-    drawTerrain(ctx, L, P);
+    drawTerrain(ctx, L, P, floor);
     if (traj.length === 0) {
         drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} }, 0);
         return;
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
+    // Under the rover, so the rover sits against what it hit.
+    const impact = crashImpact(L, traj);
+    if (impact && playhead >= impact.frame)
+        drawCrashMark(ctx, L, impact);
     const current = interpolate(traj, playhead);
     /**
      * Odometer, in screen px, up to the playhead: how far the wheels have
@@ -606,7 +695,78 @@ P = DARK_SIM_PALETTE) {
         odo += Math.abs(traj[i].heading - traj[i - 1].heading) * 0.35;
     }
     drawRover(ctx, L, current, playhead, odo);
-    if (current.hitWall) {
-        drawWallHit(ctx, L, current);
+}
+export function crashImpact(L, traj) {
+    const frame = crashFrame(traj);
+    if (frame < 0)
+        return null;
+    const point = traj[frame];
+    const [cx, cy] = roverToYard(point.x, point.y, L.yard);
+    const rock = point.hitRock ? L.yard.rocks.find((r) => r.name === point.hitRock) ?? null : null;
+    if (rock) {
+        // On the rock's edge, on the line to the rover: the side it was hit from.
+        const radius = rockRadius(rock);
+        const dx = cx - rock.x;
+        const dy = cy - rock.y;
+        const d = Math.hypot(dx, dy) || 1;
+        return {
+            frame,
+            contact: [rock.x + (dx / d) * radius, rock.y + (dy / d) * radius],
+            away: [dx / d, dy / d],
+            rock,
+            wall: null,
+        };
     }
+    // The physics holds the rover's centre a fixed distance off whichever wall
+    // stopped it, so that wall is the nearest one.
+    const { widthCm: w, depthCm: d } = L.yard;
+    const walls = [
+        { wall: 'west', contact: [0, cy], away: [1, 0] },
+        { wall: 'east', contact: [w, cy], away: [-1, 0] },
+        { wall: 'north', contact: [cx, 0], away: [0, 1] },
+        { wall: 'south', contact: [cx, d], away: [0, -1] },
+    ];
+    const gaps = [cx, w - cx, cy, d - cy];
+    const nearest = walls[gaps.indexOf(Math.min(...gaps))];
+    return { frame, ...nearest, rock: null };
+}
+function rockRadius(rock) {
+    return Math.max(rock.widthCm, rock.depthCm) / 2;
+}
+/**
+ * Where a run crashed: the rock it hit ringed in red, or the stretch of wall
+ * it ran into. Nothing moves: the real rover stops against a rock and pushes,
+ * and the rock stays put, so the simulator shows exactly that (AB#466). An
+ * earlier version shook the yard, bounced the rover back, knocked the rock
+ * and threw grit, which made the simulator less like the yard it predicts.
+ *
+ * Kept on screen after the crash frame, so a learner who looked away, or a
+ * run that backs off and carries on, still sees the spot the pre-flight check
+ * is complaining about.
+ */
+function drawCrashMark(ctx, L, impact) {
+    const s = L.s;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(239,68,68,0.95)';
+    if (impact.rock) {
+        const [rx, ry] = yardToScreen(L, impact.rock.x, impact.rock.y);
+        const r = rockRadius(impact.rock) + 2;
+        ctx.lineWidth = Math.max(2, 0.6 * s);
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    else {
+        const [x, y] = impact.contact;
+        const along = [impact.away[1], -impact.away[0]];
+        const [ax, ay] = yardToScreen(L, x - along[0] * 16, y - along[1] * 16);
+        const [bx, by] = yardToScreen(L, x + along[0] * 16, y + along[1] * 16);
+        ctx.lineWidth = Math.max(3, 1.2 * s);
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+    }
+    ctx.restore();
 }

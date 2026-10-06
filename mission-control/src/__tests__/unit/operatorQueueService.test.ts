@@ -29,6 +29,7 @@ import {
   SETTLED_STATUSES,
   subscribeToYardCompleted,
   QUEUE_LIMIT,
+  DONE_LIMIT,
 } from '@/infrastructure/persistence/operatorQueueService';
 
 function doc(id: string, data: Record<string, unknown>) {
@@ -67,12 +68,17 @@ describe('the query', () => {
 
   it('is bounded, because a listener re-reads everything on attach', () => {
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT);
+    // One past the cap, to tell the console that older ones were left out.
+    expect(limitFn).toHaveBeenCalledWith(QUEUE_LIMIT + 1);
   });
 
-  it('orders oldest first, which is the order a queue is worked', () => {
+  it('orders newest first, so the cap drops the stale end and never new work', () => {
+    // It was oldest first, which hid every new mission once 50 were waiting
+    // (3 Oct 2026), and #259 briefly made it so again. Showing the next job
+    // at the top is the console's sort, not this query: see
+    // operatorQueueNewestFirstView.test.tsx.
     subscribeToYardQueue('curiosity', () => {}, () => {});
-    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'asc');
+    expect(orderBy).toHaveBeenCalledWith('submittedAt', 'desc');
   });
 
   it('returns the unsubscribe handle so a yard switch tears down', () => {
@@ -129,6 +135,70 @@ describe('the settled list, which is the only way back to a finished mission', (
     ]);
 
     expect(seen[0].completedAt).toBe('z');
+  });
+});
+
+describe('paging back through the settled list', () => {
+  /** `n` settled missions, newest first, as Firestore would return them. */
+  function settled(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      doc(`m${i}`, { code: '', status: 'completed', submittedAt: String(1000 - i) }),
+    );
+  }
+
+  function subscribe(pages?: number) {
+    const seen: { missions: { id: string }[]; hasMore: boolean }[] = [];
+    subscribeToYardCompleted(
+      'curiosity',
+      (missions, hasMore) => seen.push({ missions, hasMore }),
+      () => {},
+      pages,
+    );
+    return seen;
+  }
+
+  it('reads one document past the page, to know if anything older exists', () => {
+    subscribe();
+    expect(limitFn).toHaveBeenCalledWith(DONE_LIMIT + 1);
+  });
+
+  it('widens the same listener for each page asked for', () => {
+    subscribe(3);
+    expect(limitFn).toHaveBeenCalledWith(3 * DONE_LIMIT + 1);
+  });
+
+  it('says there is more, and shows only the page, when Firestore returns the extra one', () => {
+    const seen = subscribe();
+
+    emit(settled(DONE_LIMIT + 1));
+
+    expect(seen[0].hasMore).toBe(true);
+    expect(seen[0].missions).toHaveLength(DONE_LIMIT);
+    // The one read past the page is the oldest, and it belongs to the next page.
+    expect(seen[0].missions.map((m) => m.id)).not.toContain(`m${DONE_LIMIT}`);
+  });
+
+  it('says there is no more when the page is exactly full', () => {
+    const seen = subscribe();
+
+    emit(settled(DONE_LIMIT));
+
+    expect(seen[0].hasMore).toBe(false);
+    expect(seen[0].missions).toHaveLength(DONE_LIMIT);
+  });
+
+  it('judges "more" on what Firestore returned, not on what survived the soft-delete filter', () => {
+    /**
+     * Deleted missions are dropped after the limit. Counting survivors instead
+     * would hide the button at a yard whose newest page held a deleted
+     * mission, with older finished missions still behind it.
+     */
+    const seen = subscribe();
+
+    emit([doc('gone', { code: '', status: 'completed', deleted: true }), ...settled(DONE_LIMIT)]);
+
+    expect(seen[0].hasMore).toBe(true);
+    expect(seen[0].missions.map((m) => m.id)).not.toContain('gone');
   });
 });
 

@@ -21,11 +21,18 @@ import {
   RoverPhysics,
   DEFAULT_STEER_DEGREES,
   spinDegreesPerSecond,
+  type Yard,
 } from '@/lib/rover-physics';
+
+/**
+ * Nothing to hit. These pin how the rover MOVES; since AB#466 the real yard's
+ * rocks stop it, and a square that clips R4 would be measuring the rock.
+ */
+const OPEN: Yard = { widthCm: 100000, depthCm: 100000, start: { x: 50000, y: 50000, facingDegrees: 0 }, rocks: [] };
 
 /** The pose a program ends in, which is what a learner is actually judged on. */
 function endPose(code: string) {
-  const trajectory = simulateCommands(parseRoverCode(code));
+  const trajectory = simulateCommands(parseRoverCode(code), OPEN);
   return trajectory[trajectory.length - 1];
 }
 
@@ -120,7 +127,7 @@ describe('spinning on the spot', () => {
       'time.sleep(1.5)',
       'rover.stop()',
     ].join('\n');
-    const trajectory = simulateCommands(parseRoverCode(code));
+    const trajectory = simulateCommands(parseRoverCode(code), OPEN);
 
     const beforeSpin = trajectory.find((p) => p.speedL < 0 && p.speedR > 0);
     const last = trajectory[trajectory.length - 1];
@@ -204,13 +211,42 @@ describe('a steered square, the shape that exposed all of this', () => {
 describe('driving in a line', () => {
   it('is unaffected by all of the above', () => {
     // The spin branch and the steering angle must not have disturbed the one
-    // motion that was already correct. 2s at speed 60 is 12cm, straight up.
+    // motion. 2s at speed 60 is 18cm, straight up: measured on the rover on
+    // 3 October 2026 (it was 12 at the inherited 6cm a second).
     const after = endPose(
       'rover.setServo(9, 0)\nrover.forward(60)\ntime.sleep(2)\nrover.stop()'
     );
 
     expect(after.x).toBeCloseTo(0, 9);
-    expect(after.y).toBeCloseTo(12, 6);
+    expect(after.y).toBeCloseTo(18, 6);
     expect(after.heading).toBeCloseTo(0, 9);
+  });
+});
+
+/**
+ * Driving straight, against the rover (3 October 2026): forward at speed 60
+ * for 1s and 2s, timed by the rover's own queue, measured with a ruler.
+ *
+ *     1s -> 9cm, 9cm        2s -> 18cm, 18cm
+ *
+ * The simulator had it at 6cm a second, so every drive on screen was two
+ * thirds of the real one.
+ */
+describe('driving straight', () => {
+  function distanceAfter(seconds: number): number {
+    const physics = new RoverPhysics();
+    physics.setCommand('forward', 60);
+    // Whole steps: adding 0.1 to a float ran one step too many.
+    for (let step = 0; step < Math.round(seconds / 0.1); step++) physics.update(0.1);
+    const { x, y } = physics.getState();
+    return Math.hypot(x, y);
+  }
+
+  it('covers 9cm in a second at speed 60, as the rover does', () => {
+    expect(distanceAfter(1)).toBeCloseTo(9, 1);
+  });
+
+  it('covers 18cm in two, with no start-up loss, as the rover does', () => {
+    expect(distanceAfter(2)).toBeCloseTo(18, 1);
   });
 });

@@ -118,6 +118,21 @@ app.secret_key = os.urandom(32)
 # environment default, so field edits survive a systemd restart
 ROVER_URL = _load_config().get('rover_url') or os.environ.get('ROVER_URL', 'http://marspi.local:8523')
 
+
+def _restore_camera_index():
+    """The camera picked on Settings, back in force after a restart.
+
+    Settings has always saved camera_index, and nothing read it back: every
+    restart quietly returned to camera 0, which on a Mac with an iPhone nearby
+    is often not the camera anyone chose. Same precedence as the rover URL.
+    """
+    index = _load_config().get('camera_index')
+    if isinstance(index, int) and not isinstance(index, bool) and 0 <= index <= 15:
+        os.environ['CAMERA_INDEX'] = str(index)
+
+
+_restore_camera_index()
+
 # What is left of /operator/: camera control and the satellite's tunables. The
 # mission queue that used to live there went with the Firestore mirror. The
 # getter indirection means a rover path edited on Settings applies everywhere.
@@ -145,7 +160,12 @@ def _console_chrome():
     A per-route render_template argument would have to be repeated in five
     places and forgotten in the sixth.
     """
-    return {'mission_control_url': MISSION_CONTROL_URL}
+    return {
+        'mission_control_url': MISSION_CONTROL_URL,
+        # The operator console, not the hub's home page: that is the learner
+        # feed, and an operator pressing "back" was never there.
+        'mission_control_back_url': MISSION_CONTROL_URL.rstrip('/') + '/operator',
+    }
 
 
 @app.route('/')

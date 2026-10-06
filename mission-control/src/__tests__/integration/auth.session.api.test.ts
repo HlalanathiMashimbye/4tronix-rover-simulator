@@ -11,6 +11,11 @@ const verifyIdToken = jest.fn();
 const createSessionCookie = jest.fn();
 const verifySessionCookie = jest.fn();
 const revokeRefreshTokens = jest.fn();
+const claimInvite = jest.fn();
+
+jest.mock('@/infrastructure/auth/operatorInvites', () => ({
+  claimInvite: (...a: unknown[]) => claimInvite(...a),
+}));
 
 // The yard is validated against the live list at sign-in, so the repository
 // is stubbed with one selectable yard rather than reaching Firestore.
@@ -46,6 +51,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(Date, 'now').mockReturnValue(NOW);
   createSessionCookie.mockResolvedValue('a-real-session-cookie');
+  claimInvite.mockResolvedValue(null);
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -91,6 +97,75 @@ describe('POST /api/auth/session', () => {
 
     expect(res.status).toBe(403);
     expect(createSessionCookie).not.toHaveBeenCalled();
+  });
+
+  describe('a first Google sign-in', () => {
+    /** A token as a first Google sign-in produces it: verified, no role yet. */
+    const google = (extra: Record<string, unknown> = {}) => ({
+      uid: 'g1',
+      email: 'Thandi@School.org',
+      email_verified: true,
+      firebase: { sign_in_provider: 'google.com' },
+      auth_time: recentSignIn(),
+      ...extra,
+    });
+
+    it('applies the access an admin saved for that address, then asks for a fresh token', async () => {
+      verifyIdToken.mockResolvedValue(google());
+      claimInvite.mockResolvedValue('operator');
+
+      const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+      const body = await res.json();
+
+      // Matched however the admin capitalised it.
+      expect(claimInvite).toHaveBeenCalledWith('g1', 'thandi@school.org');
+      // The token in hand predates the role, so no session from it.
+      expect(res.status).toBe(409);
+      expect(body.refresh).toBe(true);
+      expect(createSessionCookie).not.toHaveBeenCalled();
+    });
+
+    it('names the address when nobody has given it access, so the admin knows what to add', async () => {
+      verifyIdToken.mockResolvedValue(google());
+
+      const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+      const body = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(body.error).toContain('Thandi@School.org');
+      expect(body.error).toMatch(/Manage access/);
+    });
+
+    it('does not let a password account collect access meant for that address', async () => {
+      // A password account proves nothing about the email it was created as.
+      verifyIdToken.mockResolvedValue(google({ firebase: { sign_in_provider: 'password' } }));
+      claimInvite.mockResolvedValue('operator');
+
+      const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+
+      expect(claimInvite).not.toHaveBeenCalled();
+      expect(res.status).toBe(403);
+    });
+
+    it('does not trust an address Google has not verified', async () => {
+      verifyIdToken.mockResolvedValue(google({ email_verified: false }));
+      claimInvite.mockResolvedValue('operator');
+
+      const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+
+      expect(claimInvite).not.toHaveBeenCalled();
+      expect(res.status).toBe(403);
+    });
+
+    it('signs straight in once the role is on the token', async () => {
+      verifyIdToken.mockResolvedValue(google({ role: 'operator' }));
+
+      const res = await POST(post({ token: 'id-token', yardId: 'curiosity' }));
+
+      expect(res.status).toBe(200);
+      expect(claimInvite).not.toHaveBeenCalled();
+      expect(res.cookies.get('session')?.value).toBe('a-real-session-cookie');
+    });
   });
 
   it('refuses a token from a sign-in that is not recent', async () => {

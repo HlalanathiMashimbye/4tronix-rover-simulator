@@ -227,13 +227,15 @@ ip neigh show dev wlan0                # who is actually on the network
 Sudo differs between the two machines, which is confusing until you know:
 
 - **Rover:** passwordless sudo for everything.
-- **Satellite:** sudo needs a password, except specific systemctl commands.
-  Restarts must be **two separate commands** - `systemctl restart a b` matches
-  no sudoers rule and silently prompts for a password:
+- **Satellite:** sudo needs the `mars` password, including for restarting
+  its services (checked 3 October 2026: there is no sudoers rule for them).
+  Restart from an interactive `ssh` session, one command each:
   ```bash
   sudo systemctl restart satellite-web
   sudo systemctl restart satellite-camera
   ```
+  See [satellite.md](satellite.md) for why, and for the rule that would make
+  them passwordless.
 
 ## Keeping the satellite current
 

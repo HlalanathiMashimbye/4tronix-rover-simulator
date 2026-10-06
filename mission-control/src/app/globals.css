@@ -119,6 +119,10 @@
      plain array - keep the two in sync if this value ever changes. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* A settle with a little overshoot: things that land, pop or spring back.
+     The site read as flat with every curve a plain decelerate; this is the
+     bounce of the clay style, kept short so it never wobbles. */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1); /* reserved for a future sheet/drawer */
 }
 
@@ -363,11 +367,14 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
-/* The operator console does not render the learner's tab bar below md
-   (Navbar.tsx) and lays its own inside the page instead, so there is no
-   fixed chrome to keep clear of. Read from the attribute the operator layout
-   sets rather than from the route, so the CSS never learns the path. */
-:root:has([data-surface="operator"]) { --app-bottom-chrome: 0px; }
+/* The operator console, the build page and a mission's own page do not
+   render the learner's tab bar below md (Navbar.tsx; the operator console
+   lays its own inside the page), so there is no fixed chrome to keep clear of. Read from the
+   attribute each surface sets rather than from the route, so the CSS never
+   learns the path. */
+:root:has([data-surface="operator"]),
+:root:has([data-surface="build"]),
+:root:has([data-surface="mission"]) { --app-bottom-chrome: 0px; }
 
 /*
  * A page that fills what is left of the viewport, chrome at both ends
@@ -551,17 +558,38 @@
     border-radius: calc(var(--radius-2xl) - var(--panel-pad) - var(--panel-border));
   }
 
-  .clay-press {
-    /* The pressed-state transform gets a custom curve - the built-in
-       easings are too weak to read as an intentional press. Hover/filter
-       stays on plain ease, which is the right curve for a colour change. */
+  /* Doubled class: a button often also carries transition-colors, and in the
+     same layer whichever came last would win and drop the spring. This lists
+     the colour transitions itself, so nothing is lost by winning. */
+  .clay-press.clay-press {
+    /* Released, it springs back past its size and settles, like clay; pressed,
+       it squashes at once. A 1px nudge was the whole press before and read as
+       nothing happening. Colours and filter stay on plain ease, the right
+       curve for a colour change. */
     transition:
-      transform 120ms var(--ease-out),
+      transform 320ms var(--ease-spring),
       filter 150ms ease,
-      box-shadow 150ms ease;
+      box-shadow 150ms ease,
+      color 150ms ease,
+      background-color 150ms ease,
+      border-color 150ms ease;
   }
-  .clay-press:hover { filter: brightness(1.06); }
-  .clay-press:active { transform: translateY(1px); }
+  .clay-press:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 90ms;
+    transition-timing-function: var(--ease-out);
+  }
+  /* Lift only under a real pointer: touch fires :hover on tap, and a tapped
+     button left floating until something else was touched. */
+  @media (hover: hover) and (pointer: fine) {
+    .clay-press:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+    .clay-press:hover:active:not(:disabled) {
+      transform: scale(0.96);
+    }
+  }
 
   /* Thin, themed scrollbar for panels that scroll internally. */
   .scroll-panel { scrollbar-width: thin; scrollbar-color: var(--color-border) transparent; }
@@ -601,7 +629,16 @@
   .animate-twinkle,
   .animate-blast,
   .animate-node-glow,
-  .page-transition-enter {
+  .page-transition-enter,
+  .check-chip,
+  .send-ready,
+  .send-ready::after,
+  .live-dot::after,
+  .launch-rocket,
+  .launch-trail > span,
+  .launch-ring,
+  .pop-in,
+  .skeleton {
     animation: none !important;
   }
   *,
@@ -670,6 +707,124 @@
 }
 .animate-node-glow { animation: node-glow 2.2s ease-in-out infinite; }
 
+/*
+ * Moments: one-shot motion that says something happened, never decoration
+ * on a loop. Each is off under reduced motion (above).
+ */
+
+/* A pre-flight check turning green pops, so ticking one off is felt rather
+   than noticed later (PreFlightChecklist). It plays once when the chip turns
+   green, which is when the selector starts to match. */
+.check-chip[data-passed="true"] {
+  animation: check-pop 420ms var(--ease-spring);
+}
+@keyframes check-pop {
+  0% { transform: scale(0.82); }
+  60% { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* Send turning green: two slow breaths of glow and one shine across it, then
+   still. "Your turn" without blinking at the learner forever. */
+.send-ready {
+  position: relative;
+  overflow: hidden;
+  animation: send-breathe 1.4s ease-out 2;
+}
+.send-ready::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: send-shine 900ms var(--ease-out) 200ms both;
+  pointer-events: none;
+}
+@keyframes send-breathe {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--buzz) 55%, transparent); }
+  100% { box-shadow: 0 0 0 12px color-mix(in oklab, var(--buzz) 0%, transparent); }
+}
+@keyframes send-shine {
+  to { transform: translateX(120%); }
+}
+
+/* The simulator's status dot while a run is playing: a ring that keeps
+   going out from it, the one loop on the page, because it is a status. */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: live-ping 1.2s var(--ease-out) infinite;
+}
+@keyframes live-ping {
+  from { transform: scale(1); opacity: 0.7; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+/* Mission sent (MissionSentDialog): the rocket lifts off its pad with a puff
+   of exhaust and a ring goes out, once. */
+.launch-rocket {
+  animation: launch-rocket 900ms var(--ease-spring) 120ms both;
+}
+@keyframes launch-rocket {
+  0% { transform: translateY(18px) scale(0.6); opacity: 0; }
+  35% { transform: translateY(4px) scale(1); opacity: 1; }
+  45% { transform: translate(-1px, 5px); }
+  55% { transform: translate(1px, 4px); }
+  100% { transform: translateY(-4px); }
+}
+.launch-trail > span {
+  animation: launch-puff 900ms var(--ease-out) both;
+}
+.launch-trail > span:nth-child(2) { animation-delay: 380ms; }
+.launch-trail > span:nth-child(3) { animation-delay: 460ms; }
+.launch-trail > span:first-child { animation-delay: 300ms; }
+@keyframes launch-puff {
+  0% { transform: translateY(0) scale(0.4); opacity: 0; }
+  30% { opacity: 0.9; }
+  100% { transform: translateY(14px) scale(1.4); opacity: 0; }
+}
+.launch-ring {
+  animation: launch-ring 800ms var(--ease-out) 420ms both;
+}
+@keyframes launch-ring {
+  from { transform: scale(0.7); opacity: 0.8; }
+  to { transform: scale(1.9); opacity: 0; }
+}
+
+/* A placeholder in the shape of what is loading, with light passing across
+   it: loading, not empty. Still under reduced motion (above). */
+.skeleton {
+  background: linear-gradient(
+      100deg,
+      transparent 40%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 50%,
+      transparent 60%
+    )
+    var(--secondary);
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.5s linear infinite;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+
+/* Lands with a small bounce. For an element arriving once: a heading after a
+   moment, an empty state's icon. */
+.pop-in {
+  animation: pop-in 520ms var(--ease-spring) both;
+}
+@keyframes pop-in {
+  from { transform: translateY(10px) scale(0.92); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 /* Planets and decorative objects */
 .planet {
   border-radius: 9999px;
@@ -724,125 +879,137 @@
      bail it out. */
   flex: 1 1 0%;
   min-height: 0;
-  /* No transition on grid-template-columns, deliberately, and this has now
-     been established the hard way twice:
-       1. It is a layout property on a container that both Blockly and the
-          simulator canvas watch with a ResizeObserver, so interpolating it
-          fires a full svgResize + canvas redraw on every frame of the ease.
-       2. Worse, and the reason it cannot simply be tuned: retargeting the
-          value rapidly (which a drag does, via the --workspace-* variables)
-          leaves Chrome's interpolation stuck. Measured directly - vars set
-          to 47fr/53fr rendered as 655.9px/573.1px and STAYED there after
-          settling, instead of the correct 577.6px/651.4px. The panels end up
-          at the wrong sizes, permanently, until the next change.
-     The split is dragged, and a drag wants the layout pinned to the cursor
-     anyway - there is no easing to miss here. */
+  /* No transition on grid-template-columns, deliberately: it is a layout
+     property on a container that both Blockly and the simulator canvas watch
+     with a ResizeObserver, so interpolating it fires a full svgResize and
+     canvas redraw on every frame of the ease. Retargeting it quickly also
+     left Chrome's interpolation stuck at the wrong sizes, measured while
+     this grid still had a drag divider. */
 }
 
-/*
- * The draggable divider between the build and simulator panels.
- *
- * This exists because a divider is the right mouse control for this job: it
- * sits under the cursor and moves exactly with it, 1:1, at any container
- * width. The keyboard path lives on the divider itself for precise stepping.
- */
-.workspaceSplitDivider {
-  display: none;
-}
+/* Phones only.
 
-.workspaceSplitDivider::before {
-  content: "";
-  width: 3px;
-  height: 42px;
-  border-radius: 999px;
-  background: var(--border);
-  transition: background-color 120ms var(--ease-out);
-}
+   Create Mission used to let this grid grow on a phone, with a 70vh floor per
+   stacked panel, and let the page scroll. That made blocks and the simulator
+   two separate screens: you could never watch the rover and the program
+   together, and a drag on the block canvas fought the page's own scroll.
+   It now fits one screen like every other size (AB#455), the build panel
+   taking the larger share because it is where the work happens.
 
-.workspaceSplitDivider:hover::before,
-.workspaceSplitDivider[data-dragging="true"]::before {
-  background: var(--primary);
-}
-
-.workspaceSplitDivider:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-  border-radius: 999px;
-}
-
-/* Phones only. The grid is sized to one viewport height, which is right when
-   the panels sit side by side and fine on a tablet, but on a phone they stack
-   - so two panels shared ~690px, leaving Blockly and the simulator about 340px
-   each. Let the column grow and the page scroll instead: a phone scrolls
-   anyway, and half a screen of Blockly is not usable.
+   The mission VIEW (the fixed variant) fits one screen too, player above
+   code: see below.
 
    Deliberately max-width 767px and not the lg breakpoint the columns use:
    tablets are the device the yard runs on, and their layout is already good. */
 @media (max-width: 767px) {
-  .workspaceSplitGrid {
-    height: auto;
-    max-height: none;
-    /* Not a flexible track down here: the parent column is auto-height and the
-       page scrolls, so the grid takes its children's height (the 70vh floors
-       below) rather than being squeezed into a remainder. */
-    flex: 0 0 auto;
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
 
-  /* The 70vh floor is for Create Mission, where both stacked panels are things
-     you work inside - Blockly and the simulator - and neither is usable at
-     half a screen. The mission VIEW is the fixed variant, and its panels are a
-     16:9 player, a stats row and one line of feedback: about 300px of content
-     that the floor stretched to 568px, putting a screenful of empty page
-     between the operator's comment and the code. A floor that guarantees a
-     minimum is wrong on a panel that already knows its own height. */
-  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) > * {
-    min-height: 70vh;
+  /* A mission's page (the fixed variant) docks its player at the top, at
+     its natural 16:9 height, and gives the code everything else, the same
+     shape as Create Mission. It used to grow and scroll, with a 45vh floor
+     on the code, which made the blocks a second screen down. */
+  .workspaceSplitGrid--fixed {
+    grid-template-rows: auto minmax(0, 1fr);
   }
+}
 
-  /* The code panel still needs a floor, just a smaller one: it is flex-1
-     inside an auto-height row, so a two-line mission would otherwise collapse
-     it to two lines. */
-  .workspaceSplitGrid--fixed > * + * {
-    min-height: 45vh;
+/* Create Mission from 768px: three cards in one grid (MissionWorkspace). The
+   simulator's column is sized from the yard's real shape (AB#464), because
+   the yard stretches to fill whatever it is given and a column sized any
+   other way reshapes the rocks. Its card is only a header over the yard:
+   name, checks and Send are the footer card, placed below.
+
+   What the simulator's card puts around the yard: across, 0.75rem padding
+   and a 1px border each side, and the yard's own 1px border; down, those
+   again plus the 1.5rem header and the 0.5rem gap under it. */
+@media (min-width: 768px) {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    container-type: size;
+  }
+  .buildEditor {
+    grid-area: editor;
+  }
+  .buildSim {
+    grid-area: sim;
+    --sim-chrome-x: calc(1.5rem + 4px);
+    --sim-chrome-y: calc(3.5rem + 4px);
+  }
+  .buildFooter {
+    grid-area: footer;
+  }
+}
+
+/* Tablets, narrow laptop windows and portrait screens: build over a row of
+   simulator and footer, half and half. At 3:2 the simulator was a 300px
+   square under a canvas with height to spare. Left to auto, these rows were
+   sized by their content, so the simulator's row was a different height in
+   Drive, Blocks and Python, and its yard is sized from that row.
+
+   Portrait from 1024px too: side by side, a yard as tall as a portrait
+   screen needs more than half its width to keep its shape, and a 1024x1366
+   window squashed it to half its real width.
+
+   The yard takes its row's height and its real shape across, and the footer
+   the rest of the row. Never under 16rem or over 60% of the row, which only
+   an unusually short window reaches; there the yard stretches a little
+   rather than leave a gap beside it. */
+@media (min-width: 768px) and (max-width: 1023px), (min-width: 1024px) and (orientation: portrait) {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "editor editor"
+      "sim footer";
+  }
+  .buildSim {
+    width: clamp(
+      16rem,
+      calc(((100cqh - 0.5rem) * 0.5 - var(--sim-chrome-y)) * var(--yard-aspect) + var(--sim-chrome-x)),
+      60cqw
+    );
   }
 }
 
 @media (min-width: 1024px) {
   .workspaceSplitGrid {
     align-items: stretch;
-    /* The middle track is the drag divider. Below this breakpoint the grid
-       collapses to one column and the divider is display:none, so there is
-       nothing to split and no third track to reserve. */
-    grid-template-columns:
-      minmax(0, var(--workspace-left, 60fr))
-      auto
-      minmax(320px, var(--workspace-right, 40fr));
   }
 
-  /* No divider, so no middle track. Without this the right panel falls into
-     the auto track meant for the divider and the third track sits empty - the
-     code panel ends up centred with dead space beside it. */
+  /* A mission's page: video and code at 60/40 (see MissionVideoClient). */
   .workspaceSplitGrid--fixed {
-    grid-template-columns:
-      minmax(0, var(--workspace-left, 60fr))
-      minmax(320px, var(--workspace-right, 40fr));
+    grid-template-columns: minmax(0, 60fr) minmax(320px, 40fr);
   }
+}
 
-  .workspaceSplitDivider {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* Narrow visually (the 3px pill in ::before) but a comfortably wide
-       target - a 3px-wide grab area would be a precision test, not a
-       control. */
-    width: 11px;
-    cursor: col-resize;
-    /* The pointer belongs to the divider for the whole drag, including the
-       frames where the cursor outruns the layout and leaves the element. */
-    touch-action: none;
-    background: none;
-    border: none;
-    padding: 0;
+/* Create Mission side by side, on landscape screens (portrait stacks, above):
+   the editor with name, checks and Send under it, and the simulator the full
+   height of the page beside them. Full height is what makes it big: the yard
+   keeps its real shape, so every pixel of height is most of a pixel of width.
+   At 1440x900 that is half the page, where it used to be 40%.
+
+   Never under 20rem or over half the page. At either limit, which only a
+   window close to square reaches, the yard stretches a little rather than
+   leave a gap beside it.
+
+   The footer row is as tall as what fills it: the simulator spans both rows,
+   so the footer can never change the yard's size. The checklist holds its
+   own shape (PreFlightChecklist), so it does not move the editor either. */
+@media (min-width: 1024px) and (orientation: landscape) {
+  .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "editor sim"
+      "footer sim";
+  }
+  .buildSim {
+    width: clamp(
+      20rem,
+      calc((100cqh - var(--sim-chrome-y)) * var(--yard-aspect) + var(--sim-chrome-x)),
+      50cqw
+    );
   }
 }
 
@@ -870,35 +1037,409 @@
   fill: #ffffff !important;
 }
 
-.blocklyToolboxDiv {
-  background-color: #f8fafc !important;
-  border-right: 1px solid #e2e8f0 !important;
-  min-width: 140px !important;
-  width: min(28vw, 176px) !important;
+/*
+ * What the simulator is running (AB#450), on the block canvas.
+ *
+ * Built to be unmissable, after a green outline proved easy to overlook on a
+ * busy program:
+ *   - the SPOTLIGHT: every block not running fades back, so the running one is
+ *     the single bright thing on the canvas;
+ *   - the running block gets a thick yellow edge with a warm glow (yellow
+ *     rather than green: it reads as "now" against every category colour, and
+ *     the glow carries it on the white canvas where a yellow line alone would
+ *     not), and pops each time it starts;
+ *   - a "now" tag beside it glides from block to block, and each Repeat wears
+ *     a "2 / 3" badge for its pass (both drawn in BlocklyEditor.tsx).
+ * .blocklyBlock, not .blocklyDraggable: every block carries the first, but a
+ * read-only viewer's blocks (a mission's page, the operator preview) are not
+ * draggable, and the spotlight silently dimmed nothing there.
+ * Paths only, never the block's <g>: that carries Blockly's position as a
+ * transform attribute, and blocks nest inside each other's groups, so an
+ * opacity or transform there would hit every block stacked below too.
+ */
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyPath {
+  opacity: 0.28;
+  transition: opacity 250ms ease;
+}
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyText,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyField,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyEditableField,
+.roverSpotlight .blocklyBlock:not(.rover-running-step):not(.rover-running-loop) > .blocklyNonEditableField {
+  opacity: 0.45;
+}
+.rover-running-step > .blocklyPath {
+  stroke: #ffc800 !important;
+  stroke-width: 5px !important;
+  filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95));
+  animation:
+    rover-step-pop 600ms cubic-bezier(0.22, 1, 0.36, 1),
+    rover-step-glow 3.5s ease-in-out 600ms infinite;
+}
+.rover-running-loop > .blocklyPath {
+  stroke: #ffc800 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 10 6;
+  animation: rover-loop-march 1.8s linear infinite;
+}
+@keyframes rover-step-pop {
+  from { stroke-width: 10px; filter: drop-shadow(0 0 16px rgb(255 170 0 / 1)); }
+  to { stroke-width: 5px; filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95)); }
+}
+@keyframes rover-step-glow {
+  0%, 100% { filter: drop-shadow(0 0 7px rgb(255 170 0 / 0.95)); }
+  50% { filter: drop-shadow(0 0 13px rgb(255 170 0 / 1)); }
+}
+@keyframes rover-loop-march {
+  to { stroke-dashoffset: -16; }
 }
 
-.blocklyToolboxCategory {
-  background-color: transparent !important;
-  color: #1e293b !important;
-  padding: 5px 7px !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
+/* The "now" tag: a pointer pinned to the running block's right edge, gliding
+   to the next block as the program moves on. */
+.roverNowTag {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 6px;
+  border-radius: 999px;
+  background: #ffc800;
+  color: #1f2937;
+  font: 800 11px/1.2 var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+  transition: left 320ms cubic-bezier(0.22, 1, 0.36, 1), top 320ms cubic-bezier(0.22, 1, 0.36, 1);
 }
+/* The tag's arrow, pointing back at the block. */
+.roverNowTag::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left-width: 0;
+  border-right-color: #ffc800;
+}
+/* The Repeat's pass, on its top-right corner. */
+.roverPassBadge {
+  position: absolute;
+  z-index: 30;
+  pointer-events: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #1f2937;
+  color: #ffc800;
+  border: 2px solid #ffc800;
+  font: 800 11px/1.3 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
+}
+
+/*
+ * The same on the Python editor's running lines (always the dark theme), in
+ * the same yellow, so "running now" is one colour across both editors. The
+ * band sweeps in from the left as each command starts - the class arrives on
+ * a line as the command reaches it, which replays the animation - and a
+ * marker beside the line number points at it.
+ */
+.rover-running-line {
+  background: linear-gradient(90deg, rgb(255 200 0 / 0.28), rgb(255 200 0 / 0.08)) no-repeat;
+  box-shadow: inset 3px 0 0 #ffc800;
+  animation: rover-line-sweep 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rover-running-marker::before {
+  content: '\25B6';
+  float: left;
+  margin-right: 4px;
+  color: #ffc800;
+  font-size: 10px;
+  line-height: inherit;
+  animation: rover-marker-nudge 1.8s ease-in-out infinite;
+}
+@keyframes rover-line-sweep {
+  from { background-size: 0% 100%; }
+  to { background-size: 100% 100%; }
+}
+@keyframes rover-marker-nudge {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(2px); }
+}
+
+/*
+ * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
+ *
+ * Editing: the docked simulator takes 30% of the screen so the blocks keep
+ * most of it, and grows to up to 62% when the learner wants a proper look.
+ * Launching (after Run): the simulator takes everything the launch controls
+ * leave, the controls rise in under it and the editor sinks away; Back to
+ * blocks plays it in reverse. The yard stretches to fill the strip at every
+ * size (computeLayout), so the strip is sized for the screen, not the yard.
+ *
+ * Sized with FLEX, not height, because the launch size is "whatever is
+ * left", which height cannot express and flex can interpolate: flex-grow and
+ * flex-basis both animate, so the simulator glides between a fixed share and
+ * the remainder. The launch controls use the grid 0fr-to-1fr trick, the one
+ * way to animate to their natural height. dvh, not vh: mobile Safari's vh
+ * includes the strip under the URL bar, which is the clipping this layout
+ * exists to get rid of.
+ */
+.phoneWorkspace {
+  --phone-move: 420ms var(--ease-drawer);
+}
+.phoneSimStrip {
+  flex: 0 0 30dvh;
+  min-height: 0;
+  transition: flex var(--phone-move);
+}
+.phoneSimStrip[data-expanded="true"] {
+  flex-basis: 62dvh;
+}
+/* Typing: one line, whatever the strip was. Declared after expanded so it
+   wins over it. */
+.phoneSimStrip[data-keyboard="true"] {
+  flex-basis: 2.25rem;
+}
+.phoneWorkspace[data-launch="true"] .phoneSimStrip {
+  flex: 1 1 0;
+}
+
+.phoneLaunchSlot {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneLaunchSlot {
+  grid-template-rows: 1fr;
+}
+.phoneLaunch {
+  min-height: 0;
+  overflow: hidden;
+  /* The line under the simulator. The bar itself has none: on a laptop it is
+     a card of its own (.buildFooter). */
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  padding-top: 0.375rem;
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 260ms ease, transform var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneLaunch {
+  opacity: 1;
+  transform: none;
+  /* After the simulator has started to grow, so the eye follows it up. */
+  transition-delay: 80ms;
+}
+
+.phoneEditorSlot {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-top: 0.375rem;
+  transition: flex var(--phone-move), opacity 220ms ease, transform var(--phone-move), margin var(--phone-move);
+}
+.phoneWorkspace[data-launch="true"] .phoneEditorSlot {
+  flex: 0 0 0;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(40px);
+  overflow: hidden;
+}
+.phoneSimStrip,
+.phoneLaunchSlot {
+  margin-top: 0.375rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phoneSimStrip,
+  .phoneLaunchSlot,
+  .phoneLaunch,
+  .phoneEditorSlot {
+    transition: none;
+  }
+}
+
+/* The Python editor's hover and autocomplete help card. */
+.rover-help {
+  max-width: 280px;
+  padding: 6px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.rover-help p {
+  margin-top: 4px;
+}
+.rover-help code {
+  display: block;
+  margin-top: 6px;
+  color: #dcdcaa;
+}
+
+/*
+ * Smaller on a phone, where a whole program has to fit a narrow column. Not
+ * 16px, which is what stops iOS Safari zooming the page on tap: that zoom is
+ * prevented directly instead (infrastructure/browser/iosInputZoom.ts), because
+ * 16px code was too big to read a program by.
+ */
+.rover-python-editor .cm-editor {
+  font-size: 14px;
+}
+@media (pointer: coarse) {
+  .rover-python-editor .cm-editor {
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .roverNowTag,
+  .roverSpotlight .blocklyPath {
+    transition: none;
+  }
+  .rover-running-step > .blocklyPath,
+  .rover-running-loop > .blocklyPath,
+  .rover-running-line,
+  .rover-running-marker::before {
+    animation: none;
+  }
+}
+
+/*
+ * The category column on a laptop (DESKTOP_TOOLBOX): one row per category, its
+ * icon in the category's colour beside its name, no 8px colour bar (the icon
+ * wears the colour). The phone strip below overrides the shape.
+ */
+.blocklyToolbox {
+  background-color: #f8fafc !important;
+  border-right: 1px solid #e2e8f0;
+}
+.blocklyToolboxCategory {
+  color: #1e293b !important;
+  height: auto !important;
+  line-height: 1.2 !important;
+  margin: 1px 6px;
+  padding: 7px 12px 7px 9px !important;
+  border-left-width: 0 !important;
+  border-radius: 10px;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  transition: background-color 150ms ease;
+}
+/* Closed rows show the column through them. Open, Blockly fills the row with
+   the category's colour (an inline style) and its icon and label turn white
+   on it. This used to force EVERY row transparent, the open one included, so
+   opening a category turned its name white on white and it vanished. */
+.blocklyToolboxCategory:not(.blocklyToolboxSelected) {
+  background-color: transparent !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .blocklyToolboxCategory:not(.blocklyToolboxSelected):hover {
+    background-color: color-mix(in srgb, var(--cat, #64748b) 14%, transparent) !important;
+  }
+}
+.blocklyTreeRowContentContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.blocklyToolboxCategoryLabel {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/*
+ * The category strip along the bottom of the block editor on a phone
+ * (blocklyInjectOptions.ts, AB#455). One row of chips that scrolls sideways if the
+ * categories ever outgrow the width, rather than wrapping into a second row
+ * of canvas lost.
+ */
+.roverBlocklyPhone .blocklyToolbox {
+  padding: 3px 4px !important;
+  border-right: 0;
+  border-top: 1px solid #e2e8f0;
+  background-color: #f8fafc;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+/* The workspace scrollbars sat over the program as grey pills. A finger
+   drags the canvas to pan, so on a phone they are only in the way. */
+.roverBlocklyPhone .blocklyMainWorkspaceScrollbar {
+  display: none;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryGroup {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+/* Blockly marks each category with an 8px inline left border in its colour.
+   Dropped here: the icon wears the colour instead. Equal-width chips, so the
+   five share the strip rather than crowding to one side. */
+.roverBlocklyPhone .blocklyToolboxCategoryContainer {
+  flex: 1 1 0;
+  min-width: 52px;
+}
+.roverBlocklyPhone .blocklyToolboxCategory {
+  white-space: nowrap;
+  /* Blockly pins a category row to 22px for a one-line label; an icon over
+     a label needs its own height, or the label is clipped by the strip. */
+  height: auto !important;
+  line-height: 1.2 !important;
+  padding: 4px 2px !important;
+  margin: 0;
+  border-left-width: 0 !important;
+  border-radius: 8px;
+}
+.roverBlocklyPhone .blocklyToolboxCategoryLabel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/*
+ * The category icons, in the laptop column and on the phone strip
+ * (blocklyInjectOptions.ts), drawn on the empty icon span Blockly renders
+ * in each category. Masks rather than <img> or an icon font: the
+ * shape comes from the SVG, the colour from background-color, so each icon
+ * wears its category's colour and turns white when its category is open.
+ * Shapes are Lucide's (ISC licence), the set the rest of the app uses.
+ */
+.roverBlocklyPhone .blocklyTreeRowContentContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+[id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+  display: block !important;
+  /* Blockly hides the span in a vertical toolbox with no icon class. */
+  visibility: visible !important;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  background-color: var(--cat);
+  -webkit-mask: var(--icon) center / contain no-repeat;
+  mask: var(--icon) center / contain no-repeat;
+}
+.roverBlocklyPhone [id^="roverCat-"] .blocklyTreeRowContentContainer > span:first-child {
+  width: 20px;
+  height: 20px;
+}
+/* Blockly fills an open category's row with its colour, so the icon and
+   label turn white on it. */
+.blocklyToolboxSelected .blocklyTreeRowContentContainer > span:first-child {
+  background-color: #fff;
+}
+.blocklyToolboxSelected .blocklyToolboxCategoryLabel {
+  color: #fff;
+}
+#roverCat-uplink { --cat: #FF6D00; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4.9 19.1C1 15.2 1 8.8 4.9 4.9'/%3E%3Cpath d='M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5'/%3E%3Ccircle cx='12' cy='12' r='2'/%3E%3Cpath d='M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5'/%3E%3Cpath d='M19.1 4.9C23 8.8 23 15.1 19.1 19'/%3E%3C/svg%3E"); }
+#roverCat-move { --cat: #2196F3; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='5 9 2 12 5 15'/%3E%3Cpolyline points='9 5 12 2 15 5'/%3E%3Cpolyline points='15 19 12 22 9 19'/%3E%3Cpolyline points='19 9 22 12 19 15'/%3E%3Cline x1='2' x2='22' y1='12' y2='12'/%3E%3Cline x1='12' x2='12' y1='2' y2='22'/%3E%3C/svg%3E"); }
+#roverCat-mast { --cat: #00897B; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/%3E%3Ccircle cx='12' cy='13' r='3'/%3E%3C/svg%3E"); }
+#roverCat-lights { --cat: #673AB7; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 22h4'/%3E%3C/svg%3E"); }
+#roverCat-control { --cat: #FF9800; --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E"); }
 
 .blocklyFlyoutBackground {
   fill: #f1f5f9 !important;
   fill-opacity: 1 !important;
-}
-
-.blocklyTreeRow {
-  color: #334155 !important;
-  cursor: pointer;
-  padding: 1px 6px !important;
-}
-
-.blocklyTreeLabel {
-  color: #1e293b !important;
-  font-size: 11px !important;
 }
 
 .blocklyText {

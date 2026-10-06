@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { getOperatorSession } from '@/infrastructure/auth/dal';
 import { TeamManager } from '@/components/operator/TeamManager';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
+import { listInvites } from '@/infrastructure/auth/operatorInvites';
 
 /**
  * Managing who can operate, without a shell (AB#341 follow-on).
@@ -19,11 +20,20 @@ import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
  */
 export const metadata = { title: 'Operator access' };
 
-export default async function OperatorTeamPage() {
+export default async function OperatorTeamPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ grant?: string | string[] }>;
+}) {
   const session = await getOperatorSession();
+  const { grant } = await searchParams;
+  const grantEmail = typeof grant === 'string' ? grant : undefined;
 
   if (!session) {
-    redirect('/operator');
+    // From an access-request email: sign in, then land back here with the
+    // address still filled in, rather than on the console.
+    const back = grantEmail ? `/operator/team?grant=${encodeURIComponent(grantEmail)}` : '/operator/team';
+    redirect(`/operator?next=${encodeURIComponent(back)}`);
   }
 
   if (session.role !== 'admin') {
@@ -32,7 +42,7 @@ export default async function OperatorTeamPage() {
     redirect('/operator');
   }
 
-  const accounts = await listOperatorAccounts();
+  const [accounts, invites] = await Promise.all([listOperatorAccounts(), listInvites()]);
 
   return (
     <main className="relative flex h-page flex-col overflow-hidden px-4 sm:px-6">
@@ -54,7 +64,12 @@ export default async function OperatorTeamPage() {
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col pb-5">
-        <TeamManager initialAccounts={accounts} currentUid={session.uid} />
+        <TeamManager
+          initialAccounts={accounts}
+          initialInvites={invites}
+          currentUid={session.uid}
+          initialEmail={grantEmail}
+        />
       </div>
     </main>
   );

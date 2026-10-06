@@ -27,15 +27,17 @@ export function StaggeredEntrance({
 }) {
   if (skipEntrance) return <>{children}</>;
 
+  // A spring, so each card lands with a small bounce. The old 8px fade over
+  // 220ms was too slight to see, and the feed read as appearing all at once.
   return (
     <motion.div
-      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: reduceMotion ? 0.15 : 0.22,
-        delay: reduceMotion ? 0 : Math.min(index, 8) * 0.04,
-        ease: [0.23, 1, 0.32, 1],
-      }}
+      initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 22, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={
+        reduceMotion
+          ? { duration: 0.15 }
+          : { type: 'spring', stiffness: 260, damping: 22, delay: Math.min(index, 8) * 0.05 }
+      }
     >
       {children}
     </motion.div>

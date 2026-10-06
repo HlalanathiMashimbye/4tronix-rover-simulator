@@ -3,14 +3,140 @@
  * Based on legacy/simulator/roversimui.py Rover class
  */
 
-const FULL_SPEED_CM_PER_SECOND = 10;
+/**
+ * How far the rover drives in a second at full speed (100).
+ *
+ * MEASURED ON THE ROVER, ON THE YARD FLOOR, 3 October 2026, at speed 60,
+ * timed by the rover's own queue (forward for N seconds), read off a ruler:
+ *
+ *     1s -> 9cm, 9cm        2s -> 18cm, 18cm
+ *
+ * 9cm a second, and exactly proportional: no start-up loss worth modelling.
+ * At speed 60 that is 15cm a second at full speed. It was 10, inherited from
+ * the 4tronix Qt simulator, so the simulator showed every drive at two thirds
+ * of its real length and a mission that stopped short of the edge on screen
+ * could reach it in the yard.
+ *
+ * ONLY SPEED 60 WAS MEASURED. Every Blocks mission drives at 60; other speeds
+ * (Python can ask for any) assume distance scales with speed, which is the
+ * standard model but has not been checked on this rover. To check it, drive
+ * forward at speed 100 for 1s and 2s: this predicts 15cm and 30cm.
+ *
+ * ONE BATTERY STATE. Four runs in a row from one charge; how the distance
+ * drifts as the battery drains is not measured yet (AB#467's note suggests
+ * about 20 runs from full).
+ */
+const FULL_SPEED_CM_PER_SECOND = 15;
 const VEHICLE_WIDTH_CM = 16;
 const DISTANCE_BETWEEN_WHEEL_PAIRS_CM = 8;
 
-const ROVER_MARGIN = 12; // keep the rover body visually inside the yard border
-// Must match YARD_W/YARD_H in roverSimRender.ts, which explains the size.
-const YARD_HALF_W = 120 - ROVER_MARGIN; // 240 cm wide, origin at centre
-const YARD_HALF_H = 90 - ROVER_MARGIN; // 180 cm tall, origin at centre
+/** How close the rover's centre gets to a wall: its body is 20 x 18.5 cm. */
+const ROVER_MARGIN = 12;
+
+export interface YardRock {
+  name: string;
+  /** Centre, in cm from the west wall. */
+  x: number;
+  /** Centre, in cm from the back (north) wall. */
+  y: number;
+  /** As seen from above. */
+  widthCm: number;
+  depthCm: number;
+}
+
+/**
+ * A yard, described the way it was measured: in centimetres from its west
+ * wall (x) and its back, north wall (y), north up.
+ */
+export interface Yard {
+  widthCm: number;
+  depthCm: number;
+  /** Where every mission starts, and the compass bearing the rover faces there. */
+  start: { x: number; y: number; facingDegrees: number };
+  rocks: YardRock[];
+}
+
+/**
+ * The real yard (AB#464), as yard/docs/yard-measurements.md records it.
+ * yardMeasurements.test.ts reads that doc's tables and fails if these drift
+ * from it, so the measurement and the simulator cannot quietly disagree.
+ *
+ * It replaced a 240 x 180 yard that was picked for how it looked, which was
+ * 69 cm short north to south: the simulator said a rover hit the wall when the
+ * real one had room to spare.
+ */
+export const YARD: Yard = {
+  widthCm: 233,
+  depthCm: 249,
+  // The middle of the seam between the two floor boards, facing the front wall.
+  start: { x: 116.5, y: 121, facingDegrees: 180 },
+  rocks: [
+    { name: 'R1', x: 62, y: 16, widthCm: 30, depthCm: 5 },
+    { name: 'R2', x: 138, y: 25, widthCm: 13, depthCm: 17 },
+    { name: 'R3', x: 206, y: 50, widthCm: 20, depthCm: 24 },
+    { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
+  ],
+};
+
+/**
+ * The rover's frame to the yard's.
+ *
+ * TWO FRAMES ON PURPOSE. The physics works in the rover's own frame: it starts
+ * at (0, 0), forward is +y and its right is +x, exactly as it always has, so
+ * every turn, square and calibration test still means what it says. The yard
+ * is where that frame is put down: at the start spot, turned to face the way
+ * the rover faces there. Moving the start, or turning it, is then a change to
+ * YARD and nothing else.
+ */
+export function roverToYard(rx: number, ry: number, yard: Yard = YARD): [number, number] {
+  const bearing = (yard.start.facingDegrees * Math.PI) / 180;
+  // Forward is the bearing, as (east, north); the rover's right is 90 degrees on.
+  const east = rx * Math.cos(bearing) + ry * Math.sin(bearing);
+  const north = -rx * Math.sin(bearing) + ry * Math.cos(bearing);
+  return [yard.start.x + east, yard.start.y - north];
+}
+
+/**
+ * The rover's footprint from above, per 4tronix: 20 cm long and 18.5 cm wide,
+ * wheels included. Rocks are tested against this (AB#466), not against the
+ * centre, because it is the wheels and the nose that reach a rock first.
+ */
+const ROVER_HALF_LENGTH_CM = 10;
+const ROVER_HALF_WIDTH_CM = 9.25;
+
+/**
+ * The rock, if any, that the rover's footprint overlaps at this pose.
+ *
+ * Each rock is a circle as wide as its largest measured side: rocks are
+ * irregular and were measured as boxes from above, and a circle round the box
+ * errs towards calling a near miss a crash, which is the side to err on when
+ * the alternative is the operator rescuing a stuck rover.
+ */
+export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  const [cx, cy] = roverToYard(x, y, yard);
+  const bearing = ((yard.start.facingDegrees + heading) * Math.PI) / 180;
+  for (const rock of yard.rocks) {
+    const east = rock.x - cx;
+    const north = cy - rock.y;
+    // The rock's centre in the rover's own axes: ahead of it, and to its right.
+    const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
+    const right = east * Math.cos(bearing) - north * Math.sin(bearing);
+    // The nearest point of the footprint to it.
+    const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
+    const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
+    const radius = Math.max(rock.widthCm, rock.depthCm) / 2;
+    if (Math.hypot(ahead - nearAhead, right - nearRight) < radius) return rock;
+  }
+  return null;
+}
+
+/** The yard's frame to the rover's: the inverse of roverToYard. */
+export function yardToRover(x: number, y: number, yard: Yard = YARD): [number, number] {
+  const bearing = (yard.start.facingDegrees * Math.PI) / 180;
+  const east = x - yard.start.x;
+  const north = yard.start.y - y;
+  return [east * Math.cos(bearing) - north * Math.sin(bearing), east * Math.sin(bearing) + north * Math.cos(bearing)];
+}
 
 /**
  * How far each wheel sits from the point the rover turns about.
@@ -33,12 +159,16 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  *     4.7s ->  210 deg     18.7s ->  810 deg     25.0s -> 1110 deg
  *     9.4s ->  435 deg      9.4s ->  440 deg     41.0s -> 1890 deg
  *
- * Pooled: 45.29 deg/s, against 38.44 from the geometry below. The rover turns
- * FASTER than a perfect pivot, not slower, which is why this is a calibration
- * and not the "scrub factor" it was first written as - scrub can only lose
- * rotation. The wheels sit at 50 degrees where the angle tangent to the circle
- * they trace is 26.6, so the rover pivots about a point 7.6cm from each wheel
- * rather than the 8.9cm half-diagonal, and a smaller circle turns faster.
+ * Pooled: 45.29 deg/s, and reproducing that number is this constant's whole
+ * job. The geometry below gives 57.65 at the measured drive speed of 15cm/s
+ * at full (see FULL_SPEED_CM_PER_SECOND), so the rover achieves 0.786 of a
+ * perfect pivot: ordinary tyre scrub, which can only lose rotation.
+ *
+ * It was 1.178 until 3 October 2026, fitted against the inherited 10cm/s.
+ * At that too-slow wheel speed the rover appeared to turn FASTER than its
+ * geometry allowed, and a pivot-point explanation was written to account for
+ * it. Measuring the drive speed removed the puzzle; this was re-derived from
+ * the same six runs so the spin rate, measured directly, did not move.
  *
  * Confirmed by prediction rather than by fitting: at this value a 90 degree
  * turn sleeps 1.987s, and four of them brought the rover back to its starting
@@ -47,24 +177,31 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  * IT IS ONE SURFACE AND ONE BATTERY STATE. Grip changes how much the tyres
  * slide, so a smooth floor will not give the same number. To recalibrate, spin
  * at speed 60 for a known time, count the degrees turned, and set this to
- * (measured degrees per second) / 38.44.
+ * (measured degrees per second) / 57.65.
  */
-export const SPIN_RATE_CALIBRATION = 1.178;
+export const SPIN_RATE_CALIBRATION = 0.7856;
 
 /**
  * How much of the geometric turn the rover actually achieves when steering.
  *
  * MEASURED ON THE ROVER, 5 September 2026, high-grip floor, speed 60:
  *
- *     4s at 45 degrees ->  90 deg turned   (geometry says 121.5) ratio 0.74
- *     8s at 20 degrees -> ~102 deg turned  (geometry says 117.6) ratio 0.87
- *     6s at 30 degrees ->  90 deg turned   (geometry says 129.0) ratio 0.70
+ *     4s at 45 degrees ->  90 deg turned   (geometry said 121.5) ratio 0.74
+ *     8s at 20 degrees -> ~102 deg turned  (geometry said 117.6) ratio 0.87
+ *     6s at 30 degrees ->  90 deg turned   (geometry said 129.0) ratio 0.70
+ *
+ * Those geometry figures, and the 0.75 fitted from them, were at the old
+ * drive speed of 10cm/s at full. At the measured 15 (3 October) the geometric
+ * turn is 1.5 times larger, so the same measured turns give 0.75 / 1.5 = 0.5.
+ * The rover's turns do not change; the arcs do, for the better: at 0.75 and
+ * the old speed the simulator drew a ~15cm turning circle where the rover
+ * drives ~23cm (9cm/s at 22.5 degrees a second).
  *
  * The 30 degree run was an out-of-sample check, not part of the fit: with the
  * constant already set from 45 and 20, the simulator predicted 97 degrees
  * there and the rover turned about 90. Uncalibrated it would have been 129.
  *
- * The ratios scatter around 0.75 with no trend against angle, so
+ * The ratios scattered around 0.75 with no trend against angle, so
  * the formula's shape is right and it simply over-turns by a fixed proportion.
  * The rover understeers: the tyres slip outward and it traces a wider arc than
  * the wheel angle implies. Applied to the turning radius rather than to the
@@ -81,7 +218,7 @@ export const SPIN_RATE_CALIBRATION = 1.178;
  * same way: steer a known angle for a known time, measure the degrees turned,
  * and set this to (measured) / (what the simulator draws uncalibrated).
  */
-export const STEER_RATE_CALIBRATION = 0.75;
+export const STEER_RATE_CALIBRATION = 0.5;
 
 /** The wheel angle a steer block uses when the caller does not name one. */
 export const DEFAULT_STEER_DEGREES = 30;
@@ -99,13 +236,21 @@ export interface RoverState {
   speedR: number;
   servos: number[];
   hitWall: boolean;
+  /**
+   * The rock this step would have driven into, so did not (AB#466), or null.
+   * Like a wall, a rock stops the rover where it is for as long as it is
+   * driven at it; the real rover would push, climb or stall, and the operator
+   * would have to rescue it, which is what the pre-flight check exists to stop.
+   */
+  hitRock: string | null;
 }
 
 export class RoverPhysics {
   private state: RoverState;
   private lastUpdate: number;
 
-  constructor() {
+  /** The yard whose walls stop the rover. */
+  constructor(private readonly yard: Yard = YARD) {
     this.state = {
       x: 0,
       y: 0,
@@ -114,6 +259,7 @@ export class RoverPhysics {
       speedR: 0,
       servos: new Array(16).fill(0),
       hitWall: false,
+      hitRock: null,
     };
     this.lastUpdate = Date.now();
   }
@@ -272,9 +418,13 @@ export class RoverPhysics {
       const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
       const radiansPerSecond =
         (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_RATE_CALIBRATION;
-      this.state.heading += (radiansPerSecond * dt * 180) / Math.PI;
-      // It cannot reach a wall without moving, and it did not move.
+      const heading = this.state.heading + (radiansPerSecond * dt * 180) / Math.PI;
+      // It cannot reach a wall without moving, and it did not move. It can
+      // swing a corner into a rock beside it, though.
       this.state.hitWall = false;
+      const rock = rockTouching(this.state.x, this.state.y, heading, this.yard);
+      this.state.hitRock = rock?.name ?? null;
+      if (!rock) this.state.heading = heading;
       return { ...this.state };
     }
 
@@ -289,14 +439,33 @@ export class RoverPhysics {
     // Average the results
     const newX = (xFL + xFR + xBL + xBR) / 4;
     const newY = (yFL + yFR + yBL + yBR) / 4;
-    this.state.heading = (hFL + hFR + hBL + hBR) / 4;
+    const newHeading = (hFL + hFR + hBL + hBR) / 4;
 
-    // Clamp to terrain bounds: the rover cannot leave the yard.
-    const clampedX = Math.max(-YARD_HALF_W, Math.min(YARD_HALF_W, newX));
-    const clampedY = Math.max(-YARD_HALF_H, Math.min(YARD_HALF_H, newY));
-    this.state.hitWall = clampedX !== newX || clampedY !== newY;
-    this.state.x = clampedX;
-    this.state.y = clampedY;
+    // A rock stops the step outright: the rover stays where it was, the last
+    // pose that did not overlap it. A step is a tenth of a second, under a
+    // centimetre at any speed the blocks use, so that is where it touched.
+    const rock = rockTouching(newX, newY, newHeading, this.yard);
+    this.state.hitRock = rock?.name ?? null;
+    if (rock) {
+      this.state.hitWall = false;
+      return { ...this.state };
+    }
+    this.state.heading = newHeading;
+
+    // The rover cannot leave the yard. The walls are the yard's, so the clamp
+    // happens in the yard's frame and the answer comes back to the rover's.
+    const [yardX, yardY] = roverToYard(newX, newY, this.yard);
+    const clampedX = Math.max(ROVER_MARGIN, Math.min(this.yard.widthCm - ROVER_MARGIN, yardX));
+    const clampedY = Math.max(ROVER_MARGIN, Math.min(this.yard.depthCm - ROVER_MARGIN, yardY));
+    this.state.hitWall = clampedX !== yardX || clampedY !== yardY;
+    if (this.state.hitWall) {
+      [this.state.x, this.state.y] = yardToRover(clampedX, clampedY, this.yard);
+    } else {
+      // Not round-tripped: the trigonometry would add crumbs like 1e-15 to a
+      // straight drive that the calibration tests compare exactly.
+      this.state.x = newX;
+      this.state.y = newY;
+    }
 
     return { ...this.state };
   }
@@ -325,6 +494,7 @@ export class RoverPhysics {
       speedR: 0,
       servos: new Array(16).fill(0),
       hitWall: false,
+      hitRock: null,
     };
     this.lastUpdate = Date.now();
   }

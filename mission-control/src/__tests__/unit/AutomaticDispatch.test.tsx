@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 
 jest.mock('@/lib/yardConsole', () => ({
+  ...jest.requireActual('@/lib/yardConsole'),
   readConsoleUrl: () => 'http://curiosity.local:3001/run/',
 }));
 
@@ -107,11 +108,50 @@ describe('Automatic Route dispatch', () => {
     expect(target.searchParams.get('yardId')).toBe('curiosity');
     expect(target.searchParams.get('missionId')).toBe('m1');
     expect(target.searchParams.get('code')).toBe(mission.code);
+    // The console's back link returns to this mission, open, on this origin.
+    expect(target.searchParams.get('returnTo')).toBe(`${window.location.origin}/operator?mission=m1`);
     expect(fetchMock).toHaveBeenCalledWith(
       'http://curiosity.local:3001/api/status',
       expect.objectContaining({ cache: 'no-store' }),
     );
   }, 10000);
+
+  describe('the console opens in the theme the operator is looking at', () => {
+    /**
+     * The console is on another address, so it cannot read the theme the
+     * operator picked here. Without this it follows the laptop's setting,
+     * which is the other theme for anyone who switched in Mission Control.
+     */
+    async function sendWith(theme: string | null) {
+      if (theme) document.documentElement.setAttribute('data-theme', theme);
+      else document.documentElement.removeAttribute('data-theme');
+      global.fetch = jest.fn().mockResolvedValue(answer(status()));
+      const navigate = mount();
+
+      await checkYard();
+      await waitFor(() => expect(sendButton()).toBeEnabled());
+      fireEvent.click(sendButton());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 1600));
+      });
+
+      return new URL(navigate.mock.calls[0][0]).searchParams.get('theme');
+    }
+
+    afterEach(() => document.documentElement.removeAttribute('data-theme'));
+
+    it('hands over light', async () => {
+      expect(await sendWith('light')).toBe('light');
+    }, 10000);
+
+    it('hands over dark', async () => {
+      expect(await sendWith('dark')).toBe('dark');
+    }, 10000);
+
+    it('hands over nothing when no theme is set, so the console follows the laptop', async () => {
+      expect(await sendWith(null)).toBeNull();
+    }, 10000);
+  });
 
   it('does not send when the yard stopped being ready between the check and the press', async () => {
     global.fetch = jest.fn()
@@ -280,3 +320,20 @@ describe('Automatic Route dispatch', () => {
     });
   });
 });
+
+/**
+ * A run starts from wherever the rover is standing (AB#465), and none of the
+ * yard checks can see that, so the reminder has to be where Send is pressed:
+ * in the same row, whatever state the checks are in.
+ */
+describe('the start mark', () => {
+  it('reminds the operator beside Send to Rover, before the yard is read', () => {
+    global.fetch = jest.fn();
+    mount();
+    const reminder = screen.getByTestId('start-mark-reminder');
+    // Immediately ahead of the buttons, Send among them.
+    expect(reminder.nextElementSibling).toContainElement(sendButton());
+    expect(reminder).toHaveAttribute('title', expect.stringMatching(/\S/));
+  });
+});
+

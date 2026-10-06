@@ -1,0 +1,121 @@
+/*
+ * GENERATED FILE - DO NOT EDIT.
+ * Mission Control's design tokens - both colour themes, the radius scale and
+ * the clay shadow - copied from mission-control/src/app/globals.css by
+ * mission-control/scripts/build-yard-theme.mjs. Change them there and run
+ * `npm run build:yard-theme`; CI fails while this copy is out of date.
+ */
+
+:root {
+  --radius: 0.9rem;
+  --background: oklch(0.16 0.04 270);
+  --foreground: oklch(0.97 0.02 260);
+  --card: oklch(0.21 0.05 270);
+  --card-foreground: oklch(0.97 0.02 260);
+  --popover: oklch(0.21 0.05 270);
+  --popover-foreground: oklch(0.97 0.02 260);
+  --primary: oklch(0.72 0.19 45);
+  --primary-foreground: oklch(0.16 0.04 270);
+  --secondary: oklch(0.28 0.06 270);
+  --secondary-foreground: oklch(0.97 0.02 260);
+  --muted: oklch(0.26 0.04 270);
+  --muted-foreground: oklch(0.75 0.04 260);
+  --accent: oklch(0.74 0.18 175);
+  --accent-foreground: oklch(0.16 0.04 270);
+  --destructive: oklch(0.65 0.24 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.32 0.05 270);
+  --input: oklch(0.32 0.05 270);
+  --ring: oklch(0.72 0.19 45);
+  --mars: oklch(0.68 0.21 35);
+  --mars-glow: oklch(0.78 0.18 55);
+  --buzz: oklch(0.72 0.21 145);
+  --buzz-glow: oklch(0.85 0.18 155);
+  --cosmic: oklch(0.55 0.22 285);
+  --stardust: oklch(0.92 0.06 95);
+  --block-move: #2196f3;
+  --block-spin: #9c27b0;
+  --block-steer: #00bcd4;
+  --block-stop: #f44336;
+  --block-hat: #ff6d00;
+  --block-foreground: oklch(0.99 0 0);
+  --gradient-player-top: linear-gradient(to bottom, oklch(0 0 0 / 0.7) 0%, oklch(0 0 0 / 0.34) 55%, transparent 100%);
+  --gradient-player-bottom: linear-gradient(to top, oklch(0 0 0 / 0.78) 0%, oklch(0 0 0 / 0.38) 55%, transparent 100%);
+  --gradient-mars: linear-gradient(135deg, var(--mars) 0%, var(--mars-glow) 100%);
+  --gradient-cosmic: linear-gradient(135deg, var(--cosmic) 0%, var(--mars) 100%);
+  --gradient-buzz: linear-gradient(135deg, var(--buzz) 0%, var(--buzz-glow) 100%);
+  --gradient-launch: linear-gradient(135deg, var(--primary) 0%, oklch(0.65 0.24 12) 100%);
+  --shadow-glow-mars: 0 20px 60px -15px color-mix(in oklab, var(--mars) 55%, transparent);
+  --shadow-glow-buzz: 0 20px 60px -15px color-mix(in oklab, var(--buzz) 55%, transparent);
+  --shadow-card: 0 30px 80px -30px color-mix(in oklab, var(--cosmic) 60%, transparent);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --shadow-clay: 0 10px 24px -12px rgba(0, 0, 0, 0.55), inset 0 -3px 0 rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] {
+  --background: oklch(0.13 0.04 270);
+  --foreground: oklch(0.97 0.02 260);
+  --card: oklch(0.21 0.05 270);
+  --card-foreground: oklch(0.97 0.02 260);
+  --popover: oklch(0.21 0.05 270);
+  --popover-foreground: oklch(0.97 0.02 260);
+  --primary: oklch(0.72 0.19 45);
+  --primary-foreground: oklch(0.16 0.04 270);
+  --secondary: oklch(0.28 0.06 270);
+  --secondary-foreground: oklch(0.97 0.02 260);
+  --muted: oklch(0.26 0.04 270);
+  --muted-foreground: oklch(0.75 0.04 260);
+  --accent: oklch(0.74 0.18 175);
+  --accent-foreground: oklch(0.16 0.04 270);
+  --destructive: oklch(0.65 0.24 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.32 0.05 270);
+  --input: oklch(0.32 0.05 270);
+  --ring: oklch(0.72 0.19 45);
+}
+
+[data-theme="light"] {
+  --background: oklch(0.966 0.006 85);
+  --foreground: oklch(0.18 0.005 60);
+  --card: oklch(0.99 0.004 85);
+  --card-foreground: oklch(0.18 0.005 60);
+  --popover: oklch(0.99 0.004 85);
+  --popover-foreground: oklch(0.18 0.005 60);
+  --primary: oklch(0.22 0.005 60);
+  --primary-foreground: oklch(0.97 0.005 85);
+  --secondary: oklch(0.925 0.008 85);
+  --secondary-foreground: oklch(0.22 0.005 60);
+  --muted: oklch(0.925 0.008 85);
+  --muted-foreground: oklch(0.48 0.008 70);
+  --accent: oklch(0.89 0.01 85);
+  --accent-foreground: oklch(0.2 0.005 60);
+  --destructive: oklch(0.52 0.2 27);
+  --destructive-foreground: oklch(0.97 0.005 85);
+  --border: oklch(0.88 0.008 85);
+  --input: oklch(0.88 0.008 85);
+  --ring: oklch(0.22 0.005 60);
+  --block-move: oklch(0.5 0.16 248);
+  --block-spin: oklch(0.46 0.19 318);
+  --block-steer: oklch(0.52 0.11 200);
+  --block-stop: oklch(0.52 0.2 27);
+  --block-hat: oklch(0.52 0.15 55);
+  --block-foreground: oklch(0.99 0.005 85);
+  --sand: oklch(0.93 0.008 85);
+  --clay: oklch(0.82 0.03 80);
+  --gradient-ink: linear-gradient(135deg, oklch(0.28 0.005 60), oklch(0.14 0.005 60));
+  --shadow-soft: 0 1px 2px oklch(0.2 0.01 60 / 0.07), 0 12px 30px -18px oklch(0.2 0.01 60 / 0.4);
+  --gradient-mars: var(--gradient-ink);
+  --gradient-launch: var(--gradient-ink);
+  --gradient-buzz: linear-gradient(135deg, oklch(0.47 0.15 150) 0%, oklch(0.52 0.14 158) 100%);
+  --shadow-card: var(--shadow-soft);
+}

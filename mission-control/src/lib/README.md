@@ -37,6 +37,11 @@ The reason they are shared rather than reimplemented: the yard's offline
 editor and the browser simulator must agree about what a program does. When
 they disagreed, a child saw one thing on screen and the rover did another.
 
+The yard itself lives in `rover-physics.ts` as `YARD`: its measured size,
+rocks and start spot. The physics stops the rover at its walls and the
+renderer draws it, so both read the one definition. It used to be two pairs
+of numbers, one in each file, with a comment asking them to match.
+
 ## 2. Small UI helpers
 
 ```
@@ -45,7 +50,7 @@ missionDuration.ts    a human label for how long a run took
 roverCommandHelp.ts   help text per rover command, for editor hovers
 missionRuns.ts        which runs a learner can actually watch
 missionClipboard.ts   what every Copy button puts on the clipboard
-yardConsole.ts        where this operator's yard console lives
+yardConsole.ts        where this operator's yard console lives, and whether this browser may reach it
 appSurfaces.ts        which surface of the app a path belongs to
 ```
 
@@ -55,7 +60,9 @@ Mission button on the operator console without naming the operator route.
 `Navbar.tsx` at all, deliberately: a link added in a hurry and a path compared
 in a hurry read the same in a diff. Its own filename avoids the substring for
 the same reason - an import of `@/lib/operatorSurface` would have reintroduced
-it into every file that imported it.
+it into every file that imported it. It also answers whether a path is the
+build page, which on a phone drops the tab bar and that same button so the
+workspace can have the whole screen.
 
 `yardConsole.ts` also names the other door out of the console, YouTube Studio,
 because the two are offered together - in the queue's toolbar on a laptop and

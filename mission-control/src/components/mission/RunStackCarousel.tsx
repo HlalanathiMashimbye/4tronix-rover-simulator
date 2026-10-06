@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Film, Play, Volume2, VolumeX }
 
 import { describeRuns, type RunOption } from '@/lib/missionRuns';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
+import type { CommandSource } from '@/lib/roverBlockly';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
 import {
@@ -43,12 +44,15 @@ export function RunStackCarousel({
   onSelect,
   missionName,
   trajectory,
+  onSimSourceChange,
 }: {
   runs: RunOption[];
   selectedId: string;
   onSelect: (id: string) => void;
   missionName: string;
   trajectory: TrajectoryPoint[];
+  /** What the simulation is running, so the page can light up the code (AB#450). */
+  onSimSourceChange?: (source: CommandSource | null) => void;
 }) {
   const reduceMotion = useReducedMotion();
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
@@ -71,7 +75,8 @@ export function RunStackCarousel({
   // UI, a header and a Pause/Reset bar, in exactly the two bands the scrims
   // occupy. The arrows are unaffected: they sit at the vertical middle, which
   // nothing else uses.
-  const mediaOwnsChrome = playing || selectedRun.kind === 'sim';
+  const isSim = selectedRun.kind === 'sim';
+  const mediaOwnsChrome = playing || isSim;
 
   const setPlaying = (isPlaying: boolean) => setPlayingRunId(isPlaying ? selectedRun.id : null);
 
@@ -215,10 +220,12 @@ export function RunStackCarousel({
               </div>
             ) : (
               /* No padding and no card: the simulation fills the frame the
-                 same way the video does, so switching between the two runs
-                 does not change the size of the picture. */
+                 same way the video does (the yard stretches to fill it), so
+                 switching between the two runs does not change the size of
+                 the picture. The frame is the player's own, so the simulator
+                 draws no border inside it. */
               <div className="h-full">
-                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare />
+                <RoverSimulator trajectory={trajectory} isPlaying editorMode="code" bare frameless onSourceChange={onSimSourceChange} />
               </div>
             )}
           </div>

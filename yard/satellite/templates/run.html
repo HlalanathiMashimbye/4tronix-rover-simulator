@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Run · Mars Yard</title>
+    <script src="/static/yard-theme-init.js"></script>
     <link rel="stylesheet" href="/static/yard-base.css">
     <script src="/static/camera-client.js"></script>
     <style>
@@ -33,38 +34,50 @@
         .desk-top { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; flex-wrap: wrap; }
         .desk-top .page-sub { color: var(--text-dim); font-size: var(--fs-xs); margin-top: 0.1rem; }
 
-        /* Readiness, as an instrument rather than two warning banners.
-           The colour is concentrated into a small lamp and the state word;
-           the surface stays neutral, so a healthy yard is quiet and a broken
-           one is the only thing with colour in it. Horizontal now: it shares
-           a row with the title, so it spends width, not height. */
-        .ready-strip {
-            display: flex; align-items: stretch;
-            border: 1px solid var(--border); border-radius: 11px;
-            background: var(--surface); box-shadow: var(--e1);
-            overflow: hidden;
-        }
-        .ready { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.8rem; }
-        .ready + .ready { border-left: 1px solid var(--border); }
-        .ready-txt { min-width: 0; display: flex; align-items: baseline; gap: 0.45rem; }
-        .status-name {
-            color: var(--text-dim); font-family: var(--mono);
-            font-size: var(--fs-2xs); font-weight: 600;
-            letter-spacing: 0.1em; text-transform: uppercase;
-        }
-        .status-sub { color: var(--text); font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-        .ready[data-state="ok"]   .status-sub { color: var(--ok); }
-        .ready[data-state="bad"]  .status-sub { color: var(--bad); }
-        .ready[data-state="wait"] .status-sub { color: var(--warn); }
+        /* Readiness, drawn exactly as Mission Control draws its yard checks:
+           one tile per check, a tick, a cross or an empty ring for "still
+           checking", the name, and the state in muted text at the right. The
+           operator has just read these three tiles in Mission Control; here
+           they should look like the same instrument, not a new one.
 
-        /* A lamp, not a dot: the ring is what makes an 8px circle read as lit
-           rather than as a bullet point. */
-        .status-dot {
-            width: 8px; height: 8px; flex: none; border-radius: 50%;
-            background: var(--text-faint); box-shadow: 0 0 0 3px var(--surface-3);
+           The icon carries the colour and the tile stays neutral, so a
+           healthy yard is quiet and a broken one is the only thing with
+           colour in it. */
+        .ready-strip { display: flex; align-items: stretch; gap: 0.375rem; flex-wrap: wrap; }
+        .ready {
+            display: flex; align-items: center; gap: 0.5rem; min-width: 11rem;
+            padding: 0.5rem 0.625rem; border-radius: var(--radius-lg);
+            border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+            background: color-mix(in oklab, var(--background) 50%, transparent);
+            font-size: 0.75rem;
         }
-        .status-dot.ok  { background: var(--ok);  box-shadow: 0 0 0 3px var(--ok-weak),  0 0 10px -1px var(--ok); }
-        .status-dot.bad { background: var(--bad); box-shadow: 0 0 0 3px var(--bad-weak), 0 0 10px -1px var(--bad); }
+        .ready-txt { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 0.5rem; }
+        .status-name { color: var(--foreground); font-size: 0.75rem; font-weight: 600; }
+        .status-sub {
+            margin-left: auto; color: var(--muted-foreground); font-size: 0.75rem;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+        }
+
+        /* The ring while checking; a tick or a cross once it is known. Drawn
+           with a mask so the icon takes the status colour, and so the JS that
+           sets .ok / .bad on this element did not have to change. */
+        .status-dot {
+            width: 14px; height: 14px; flex: none; border-radius: 50%;
+            border: 1px solid color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+        }
+        .status-dot.ok, .status-dot.bad {
+            border: 0; border-radius: 0;
+            -webkit-mask: var(--icon) center / contain no-repeat;
+            mask: var(--icon) center / contain no-repeat;
+        }
+        .status-dot.ok {
+            background: var(--ok);
+            --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+        }
+        .status-dot.bad {
+            background: var(--bad);
+            --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E");
+        }
         .ready .btn {
             margin-left: 0.2rem; min-height: 28px !important;
             padding: 0.25rem 0.6rem !important; font-size: var(--fs-2xs) !important;
@@ -109,26 +122,40 @@
            easier target, not the quieter sibling of the button that starts
            things moving. */
         .action-row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 0.5rem; }
+        /* Mission Control's ready-to-send green (--gradient-buzz), the colour
+           its own Send to Rover turns once the checks pass. In both themes it
+           carries --primary-foreground at 4.6:1 or better. Locked, it fades
+           the way Mission Control's does rather than turning grey, so it is
+           still recognisably the same button. */
         .btn.run-primary {
             min-height: 48px; font-size: var(--fs-sm); font-weight: 700;
-            background: var(--signal); border-color: var(--signal); color: var(--signal-ink);
-            box-shadow: 0 6px 18px -10px var(--signal);
+            background: var(--gradient-buzz); border-color: transparent; color: var(--primary-foreground);
+            box-shadow: var(--shadow-clay);
         }
-        .btn.run-primary:hover:not(:disabled) { filter: brightness(1.07); }
-        .btn.run-primary:disabled { background: var(--surface-3); border-color: var(--border); color: var(--text-faint); box-shadow: none; cursor: not-allowed; }
+        .btn.run-primary:hover:not(:disabled) { border-color: transparent; filter: brightness(1.06); }
         .btn.stop-action {
             min-height: 58px; font-size: var(--fs-md); font-weight: 800;
             color: var(--bad); border-width: 2px;
-            border-color: color-mix(in oklab, var(--bad) 55%, var(--border)); background: transparent;
+            border-color: color-mix(in oklab, var(--bad) 55%, var(--border));
+            background: color-mix(in oklab, var(--bad) 5%, var(--background));
         }
         .btn.stop-action:hover { background: var(--bad-weak); }
         .warning-box {
-            display: none; padding: 0.45rem 0.7rem; border-radius: 9px;
+            display: none; padding: 0.45rem 0.7rem; border-radius: var(--radius-xl);
             border: 1px solid color-mix(in oklab, var(--warn) 34%, transparent);
             background: var(--warn-weak); color: var(--warn);
             font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
         }
         .warning-box.show { display: block; }
+        /* The start mark (AB#465): where the rover stands is the one thing the
+           checks cannot see, so the reminder sits on the Send button's own
+           row of the page, every time. */
+        .start-mark {
+            display: flex; align-items: flex-start; gap: 0.45rem; margin: 0;
+            font-size: var(--fs-2xs); line-height: 1.45; color: var(--text-dim);
+        }
+        .start-mark svg { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--ok); }
+        .start-mark strong { color: var(--text); }
         .rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-faint); flex: none; }
         .rec-dot.on { background: var(--bad); animation: recpulse 1.4s ease-in-out infinite; }
         @keyframes recpulse { 50% { opacity: 0.35; } }
@@ -141,7 +168,7 @@
         .side { min-height: 0; display: flex; flex-direction: column; gap: 0.6rem; overflow-y: auto; overscroll-behavior: contain; }
         .side .card { flex: 0 0 auto; }
         .live-panel { overflow: hidden; }
-        .side .card { display: flex; flex-direction: column; gap: 0.55rem; box-shadow: var(--e1); padding: 0.7rem 0.85rem; }
+        .side .card { display: flex; flex-direction: column; gap: 0.55rem; padding: 0.7rem 0.85rem; }
         .side .card-head .card-title { margin-bottom: 0; }
         /* The video card grows to fill whatever height Mission Details left
            in the rail, so its bottom edge lands on Live yard's bottom edge
@@ -157,9 +184,9 @@
            button's. The label lives on for hover and screen readers. */
         .paste-btn {
             width: 34px; min-height: 34px !important; padding: 0 !important;
-            color: var(--signal); border-color: var(--signal-edge); background: transparent;
+            color: var(--muted-foreground); border-color: color-mix(in oklab, var(--border) 60%, transparent); background: transparent;
         }
-        .paste-btn:hover { background: var(--signal-weak); border-color: var(--signal); color: var(--signal) !important; }
+        .paste-btn:hover { color: var(--foreground) !important; border-color: color-mix(in oklab, var(--primary) 70%, transparent); }
         .paste-btn svg { width: 16px; height: 16px; }
 
         /* The paste target. Hidden until the operator asks to import and the
@@ -167,8 +194,8 @@
            single tap and this never appears on a secure origin. */
         .paste-box {
             width: 100%; box-sizing: border-box;
-            background: var(--bg-2); color: var(--text);
-            border: 1px solid var(--signal-edge); border-radius: 10px;
+            background: var(--background); color: var(--text);
+            border: 1px solid var(--signal-edge); border-radius: var(--radius-lg);
             padding: 0.5rem 0.6rem; font-family: var(--mono); font-size: var(--fs-xs);
             resize: none;
         }
@@ -180,8 +207,8 @@
         .meta-row {
             display: grid; grid-template-columns: 4.2em minmax(0, 1fr) auto;
             align-items: center; gap: 0.5rem;
-            padding: 0.35rem 0.55rem; border: 1px solid var(--border);
-            border-radius: 9px; background: var(--bg-2);
+            padding: 0.35rem 0.55rem; border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+            border-radius: var(--radius-lg); background: color-mix(in oklab, var(--background) 40%, transparent);
         }
         .meta-row + .meta-row { margin-top: 0.35rem; }
         .meta-label { color: var(--text-faint); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
@@ -207,8 +234,8 @@
         .code-drawer summary:hover { color: var(--text); }
         .run-code {
             margin-top: 0.45rem; width: 100%; height: 130px; resize: none; box-sizing: border-box;
-            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
-            border-radius: 10px; padding: 0.6rem 0.7rem;
+            background: var(--background); border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); color: var(--text);
+            border-radius: var(--radius-lg); padding: 0.6rem 0.7rem;
             font-family: var(--mono); font-size: var(--fs-xs); line-height: 1.6;
         }
         .run-code::placeholder { color: var(--text-faint); }
@@ -227,14 +254,14 @@
         .video-controls select.video-pick {
             width: 100%; min-width: 0; min-height: 44px;
             font-family: var(--mono); font-size: var(--fs-sm); font-weight: 600;
-            color: var(--text); background: var(--bg-2);
-            border: 1px solid var(--signal-edge); border-radius: 10px;
+            color: var(--text); background-color: var(--background);
+            border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); border-radius: var(--radius-lg);
             padding: 0.55rem 2.2rem 0.55rem 0.75rem;
             appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2376ffdd' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
             background-repeat: no-repeat; background-position: right 0.7rem center; background-size: 15px;
         }
-        .video-controls select.video-pick:hover:not(:disabled) { border-color: var(--signal); background-color: var(--surface-2); }
+        .video-controls select.video-pick:hover:not(:disabled) { border-color: color-mix(in oklab, var(--primary) 70%, transparent); }
         .video-controls select.video-pick:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--signal-weak); border-color: var(--signal); }
         .video-controls select.video-pick:disabled { opacity: 0.6; cursor: default; }
         /* Description gets its own head - a label and a Copy button shaped
@@ -246,8 +273,8 @@
         .field-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.15rem; }
         .yt-box {
             width: 100%; flex: 1; min-height: 60px; resize: none; box-sizing: border-box;
-            background: var(--bg-2); border: 1px solid var(--border); color: var(--text);
-            border-radius: 9px; padding: 0.55rem 0.65rem;
+            background: var(--background); border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); color: var(--text);
+            border-radius: var(--radius-lg); padding: 0.55rem 0.65rem;
             font-family: var(--mono); font-size: var(--fs-2xs); line-height: 1.55;
         }
         /* The one control on this page that leaves it. It was a grey button
@@ -269,22 +296,19 @@
            order they are used: get the file, then go upload it. */
         .dl-btn {
             width: 32px; min-height: 32px !important; padding: 0 !important;
-            color: var(--signal); border-color: var(--signal-edge); background: transparent;
+            color: var(--muted-foreground); border-color: color-mix(in oklab, var(--border) 60%, transparent); background: transparent;
         }
-        .dl-btn:hover:not(:disabled) { background: var(--signal-weak); border-color: var(--signal); color: var(--signal) !important; }
+        .dl-btn:hover:not(:disabled) { color: var(--foreground) !important; border-color: color-mix(in oklab, var(--primary) 70%, transparent); }
         .dl-btn svg { width: 15px; height: 15px; }
 
-        /* Import / Download / Copy keep the signal colour as outlines: each is
-           the main action of its own block, but none is the point of the
-           screen. Send is, and Send alone is filled. */
+        /* Import / Download / Copy are drawn as Mission Control's plain
+           button: each is the main action of its own block, but none is the
+           point of the screen. Send is, and Send alone is filled. */
         .run-desk .btn.primary {
-            background: transparent;
-            border-color: var(--signal-edge);
-            color: var(--signal);
-            font-weight: 600;
+            background: var(--background); border-color: var(--border); color: var(--foreground);
+            font-weight: 600; box-shadow: none;
         }
-        .run-desk .btn.primary:hover { background: var(--signal-weak); border-color: var(--signal); }
-        .run-desk .btn.primary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+        .run-desk .btn.primary:hover:not(:disabled) { border-color: color-mix(in oklab, var(--primary) 70%, transparent); filter: none; }
 
         .camera-msg { font-size: var(--fs-2xs); color: var(--text-dim); min-height: 1.1em; }
         .camera-msg[data-tone="bad"] { color: var(--bad); }
@@ -372,6 +396,12 @@
                 </div>
                 <div class="live-foot">
                     <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
+                    <!-- Mission Control's operator console says the same beside
+                         its Send to Rover; the tape on the floor says where. -->
+                    <p class="start-mark" id="startMark" data-start-mark-reminder>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                        <span><strong>Rover on the start mark?</strong> Centre it on the cross, facing the front wall.</span>
+                    </p>
                     <div class="action-row">
                         <button class="btn run-primary" id="runBtn" type="button">Send to rover</button>
                         <button class="btn stop-action" id="stopBtn" type="button">Stop</button>

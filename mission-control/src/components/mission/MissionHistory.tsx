@@ -199,14 +199,16 @@ export function MissionHistory() {
 
       {missions.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/30 p-8 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
+          {/* Lands in order, icon then words then the way out, so an empty
+              page arrives instead of just being blank. */}
+          <div className="pop-in flex h-16 w-16 items-center justify-center rounded-2xl bg-card/60 clay">
             <Rocket className="h-8 w-8 text-primary" />
           </div>
-          <p className="mt-5 font-display text-xl font-bold text-foreground">No missions yet</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">Build your first mission and it will show up here.</p>
+          <p className="pop-in mt-5 font-display text-xl font-bold text-foreground [animation-delay:90ms]">No missions yet</p>
+          <p className="pop-in mt-1.5 text-sm text-muted-foreground [animation-delay:150ms]">Build your first mission and it will show up here.</p>
           <Link
             href="/mission"
-            className="clay clay-press mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-mars px-5 py-2.5 font-display text-sm font-bold text-primary-foreground"
+            className="pop-in clay clay-press mt-6 inline-flex items-center gap-2 rounded-2xl bg-gradient-mars px-5 py-2.5 font-display text-sm font-bold text-primary-foreground [animation-delay:220ms]"
           >
             <Plus className="h-4 w-4" strokeWidth={2.5} />
             Create Mission

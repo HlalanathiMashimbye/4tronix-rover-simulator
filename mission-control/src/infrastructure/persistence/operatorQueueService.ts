@@ -65,9 +65,13 @@ export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'cancel
 export const QUEUE_LIMIT = 50;
 
 /**
- * Smaller than the queue on purpose. This view exists to get back to a mission
- * finished minutes ago, not to browse a yard's history, which the learner feed
- * already does properly with pagination.
+ * One page of the settled list. Smaller than the queue on purpose: the usual
+ * reason to open Done is a mission finished minutes ago, so the first page is
+ * all most sessions read.
+ *
+ * Older pages are there for the rest - a recording attached days late, a
+ * mission a teacher asks about after the event - and the operator asks for
+ * them one page at a time, like the learner feed's "Show more missions".
  */
 export const DONE_LIMIT = 25;
 
@@ -98,31 +102,46 @@ export interface QueueMission {
 }
 
 /**
- * Subscribe to one yard's active missions.
+ * Subscribe to one yard's active missions, NEWEST FIRST.
  *
  * `onError` is not optional. A listener that fails silently renders an empty
  * queue, and an empty queue is indistinguishable from a working one with
  * nothing in it - which is exactly how a yard-id mismatch hid on the satellite.
  * The caller must be able to say "this is broken" rather than "this is quiet".
+ *
+ * WHY NEWEST FIRST. This read the oldest QUEUE_LIMIT, so once more than that
+ * were waiting, every NEW mission was cut off: on 3 Oct 2026 the 54 waiting
+ * at curiosity included untouched test missions from 11 August, and the four
+ * newest - real children's work, visible on the homepage - never reached the
+ * console. The operator chooses what to dispatch, so the order is theirs to
+ * read, not a promise; the missions most likely to matter are the recent
+ * ones, and when the cap bites it should be the stale end that drops off.
+ *
+ * `olderHidden` says when it does, so the console can say so rather than
+ * hide missions without a word. Same index as the settled list
+ * (status, yardId, submittedAt desc), so nothing new to deploy.
  */
 export function subscribeToYardQueue(
   yardId: string,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], olderHidden: boolean) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const db = getFirestoreClient();
 
-  // Matches the existing composite index (status, yardId, submittedAt), so this
-  // needs no new index. `in` fans out across the two active statuses.
   const q = query(
     collection(db, 'missions'),
     where('yardId', '==', yardId),
     where('status', 'in', ACTIVE_STATUSES),
-    orderBy('submittedAt', 'asc'),
-    limit(QUEUE_LIMIT),
+    // Newest first, and it has to stay that way: #259 flipped this to asc to
+    // put the next job at the top, and the cap went back to hiding new work.
+    // Display order is the console's sort (oldest first by default); this only
+    // decides which QUEUE_LIMIT missions make it onto the screen at all.
+    orderBy('submittedAt', 'desc'),
+    // One past the cap, to know whether anything older was left out.
+    limit(QUEUE_LIMIT + 1),
   );
 
-  return listen(q, onMissions, onError, 'queue');
+  return listen(q, onMissions, onError, 'queue', QUEUE_LIMIT);
 }
 
 /**
@@ -149,13 +168,29 @@ export function subscribeToYardQueue(
  * document when it attaches, and completed missions only ever accumulate, so
  * attaching this alongside the queue would add a growing read bill to every
  * console session for a view most of them never open.
+ *
+ * OLDER PAGES WIDEN THIS LISTENER; THEY ARE NOT FETCHED SEPARATELY. The learner
+ * feed pages with a cursor and one-off reads, and that looks like the thing to
+ * copy. It is not, here: attaching a recording is the operator's job on this
+ * list, and a page read once would keep showing an old mission as needing a
+ * video after they attached it, with the Needs video count still counting it.
+ * Widening costs a re-read of the pages already shown (four pages is about 250
+ * reads), which is noise next to the YouTube poll.
+ *
+ * `pages` counts pages of DONE_LIMIT, so the page size has one home. One
+ * document past them is read so the caller can be told whether anything older
+ * exists without a billed count. Soft-deleted missions are dropped after the
+ * limit, so "more" is judged on the documents Firestore returned, not on the
+ * missions that survived the filter.
  */
 export function subscribeToYardCompleted(
   yardId: string,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], hasMore: boolean) => void,
   onError: (error: Error) => void,
+  pages = 1,
 ): Unsubscribe {
   const db = getFirestoreClient();
+  const pageSize = pages * DONE_LIMIT;
 
   const q = query(
     collection(db, 'missions'),
@@ -164,10 +199,10 @@ export function subscribeToYardCompleted(
     // serves an `in` as several equality queries against it.
     where('status', 'in', SETTLED_STATUSES),
     orderBy('submittedAt', 'desc'),
-    limit(DONE_LIMIT),
+    limit(pageSize + 1),
   );
 
-  return listen(q, onMissions, onError, 'completed');
+  return listen(q, onMissions, onError, 'completed', pageSize);
 }
 
 /** One Firestore document as the console reads it. Shared by every listener
@@ -233,18 +268,22 @@ export function subscribeToMission(
 /** Shared by both list subscriptions: the same documents, read the same way. */
 function listen(
   q: Query,
-  onMissions: (missions: QueueMission[]) => void,
+  onMissions: (missions: QueueMission[], hasMore: boolean) => void,
   onError: (error: Error) => void,
   label: string,
+  /** Set when the query asked for one document past the page to detect more. */
+  pageSize?: number,
 ): Unsubscribe {
   return onSnapshot(
     q,
     (snapshot) => {
       const missions: QueueMission[] = [];
+      const hasMore = pageSize !== undefined && snapshot.docs.length > pageSize;
+      const page = hasMore ? snapshot.docs.slice(0, pageSize) : snapshot.docs;
 
       // Not named `doc`: that is now the imported Firestore helper, and
       // shadowing it here would break the next person who reaches for it.
-      for (const snap of snapshot.docs) {
+      for (const snap of page) {
         const data = snap.data();
 
         // Soft-deleted missions stay out of every view, operator included. An
@@ -255,7 +294,7 @@ function listen(
         missions.push(toQueueMission(snap.id, data));
       }
 
-      onMissions(missions);
+      onMissions(missions, hasMore);
     },
     (error) => {
       console.error(`[operator ${label}] listener failed:`, error);

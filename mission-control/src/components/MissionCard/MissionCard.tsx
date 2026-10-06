@@ -43,18 +43,29 @@ function formatDate(value: string | Date): string {
 const PEEK_LINES = 4;
 
 /**
- * The first few meaningful lines, always padded to PEEK_LINES.
+ * The first few lines that drive the rover, always padded to PEEK_LINES.
  *
  * The padding is what keeps every card the same height: a two-line mission and
  * a twenty-line one both render a four-line block, so the grid stays even
  * without a magic pixel height that would have to be retuned alongside the
  * font size.
  */
-function codePeek(code: string): string {
+export function codePeek(code: string): string {
+  // Blank lines, comments and servo settings are skipped. A mission built
+  // with blocks opens with the generator's notes and four setServo(n, 0)
+  // calls that straighten the wheels, so every block-built card showed the
+  // same four lines and no two looked different. The drive calls are what
+  // tells one mission from another.
   const lines = code
     .split('\n')
     .map((l) => l.trimEnd())
-    .filter((l) => l.trim().length > 0);
+    .filter((l) => {
+      const t = l.trim();
+      return t.length > 0 && !t.startsWith('#') && !/^rover\.setServo\(/.test(t);
+    })
+    // A turn opens with its own stop, straight after the drive's: without
+    // the servo lines between them that read as the same line twice.
+    .filter((l, i, kept) => i === 0 || l !== kept[i - 1]);
   const peek = lines.length > 0 ? lines.slice(0, PEEK_LINES) : ['# No code'];
   // A non-breaking space, not an empty string: a trailing "\n" at the end of a
   // <pre> renders no line box at all, so empty padding lines silently did
@@ -113,7 +124,11 @@ export function MissionCard({ mission }: MissionCardProps) {
       // runs on, tapping a card was lifting it, zooming its thumbnail, and
       // recoloring its title as a side effect of the tap - and it could
       // stay "hover-stuck" until something else was touched.
-      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-[transform,border-color,box-shadow] duration-200 [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-0.5 [@media(hover:hover)_and_(pointer:fine)]:hover:border-foreground/25 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[var(--shadow-card)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      //
+      // translate and scale, not transform: Tailwind 4's -translate-y-1 sets
+      // the translate property, so a transition on transform never ran and
+      // the lift snapped.
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-[translate,scale,border-color,box-shadow] duration-300 ease-[var(--ease-spring)] active:scale-[0.985] [@media(hover:hover)_and_(pointer:fine)]:hover:-translate-y-1 [@media(hover:hover)_and_(pointer:fine)]:hover:border-primary/40 [@media(hover:hover)_and_(pointer:fine)]:hover:shadow-[var(--shadow-glow-mars)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="relative aspect-video w-full overflow-hidden bg-secondary">
         {youtubeThumbnail ? (
@@ -123,7 +138,7 @@ export function MissionCard({ mission }: MissionCardProps) {
               src={youtubeThumbnail}
               alt=""
               onError={() => setThumbnailFailed(true)}
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105"
+              className="absolute inset-0 h-full w-full object-cover transition-[scale] duration-500 ease-[var(--ease-out)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105"
             />
             <div className="absolute inset-0 flex items-center justify-center bg-foreground/10 opacity-0 transition-opacity duration-200 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-card/90 shadow-sm">
@@ -141,7 +156,11 @@ export function MissionCard({ mission }: MissionCardProps) {
           // the mission page's own metadata row rather than inventing a second
           // vocabulary for the same fact.
           <>
-            <MissionSimCover trajectory={coverTrajectory} />
+            {/* Zooms on hover like a video thumbnail, so every cover answers
+                the pointer the same way. */}
+            <div className="absolute inset-0 transition-[scale] duration-500 ease-[var(--ease-out)] [@media(hover:hover)_and_(pointer:fine)]:group-hover:scale-105">
+              <MissionSimCover trajectory={coverTrajectory} />
+            </div>
             <span className="absolute bottom-2 left-3 z-10 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/70">
               {mission.blocklyState ? 'Simulated · Blocks' : 'Simulated · Python'}
             </span>

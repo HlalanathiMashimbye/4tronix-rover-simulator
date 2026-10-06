@@ -1,4 +1,4 @@
-import { LED_COUNT, type SimulationCommand } from './roverBlockly';
+import { LED_COUNT, type CommandSource, type SimulationCommand } from './roverBlockly';
 
 /**
  * Parse rover Python into 2D-simulator commands.
@@ -18,7 +18,21 @@ import { LED_COUNT, type SimulationCommand } from './roverBlockly';
  * accepted so missions saved before this change keep replaying.
  */
 export function parseRoverCode(code: string): SimulationCommand[] {
-  return parseLinear(expandLoops(code.split('\n')));
+  const numbered = code.split('\n').map((text, i) => ({ text, line: i + 1 }));
+  return parseLinear(expandLoops(numbered));
+}
+
+/**
+ * A source line that remembers where it was written.
+ *
+ * Loop expansion copies a body N times, so after it the position of a line in
+ * the array no longer says where it is in the editor. The editor highlights
+ * the line that is running (AB#450), and the second pass of a loop has to
+ * light the same line as the first.
+ */
+interface Line {
+  text: string;
+  line: number;
 }
 
 function indentOf(line: string): number {
@@ -27,27 +41,27 @@ function indentOf(line: string): number {
 }
 
 /** Expand `for _ in range(N):` blocks by repeating their body N times. */
-function expandLoops(lines: string[]): string[] {
-  const out: string[] = [];
+function expandLoops(lines: Line[]): Line[] {
+  const out: Line[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const m = line.match(/^\s*for\s+\w+\s+in\s+range\(\s*(\d+)\s*\)\s*:/);
+    const m = line.text.match(/^\s*for\s+\w+\s+in\s+range\(\s*(\d+)\s*\)\s*:/);
     if (!m) {
       out.push(line);
       continue;
     }
     const times = parseInt(m[1], 10);
-    const headerIndent = indentOf(line);
-    const body: string[] = [];
+    const headerIndent = indentOf(line.text);
+    const body: Line[] = [];
     let j = i + 1;
     while (j < lines.length) {
       const l = lines[j];
-      if (l.trim() === '') {
+      if (l.text.trim() === '') {
         body.push(l);
         j++;
         continue;
       }
-      if (indentOf(l) > headerIndent) {
+      if (indentOf(l.text) > headerIndent) {
         body.push(l);
         j++;
       } else {
@@ -61,9 +75,14 @@ function expandLoops(lines: string[]): string[] {
   return out;
 }
 
-type Motion = { cmd: 'forward' | 'reverse' | 'spinLeft' | 'spinRight'; speed: number };
+type Motion = {
+  cmd: 'forward' | 'reverse' | 'spinLeft' | 'spinRight';
+  speed: number;
+  /** Where the motion was started, so its sleep can light up with it. */
+  line: number;
+};
 
-function parseLinear(lines: string[]): SimulationCommand[] {
+function parseLinear(lines: Line[]): SimulationCommand[] {
   const commands: SimulationCommand[] = [];
   // Front-left wheel servo (9) tells us whether a forward move is steering.
   const servos: Record<number, number> = { 9: 0, 11: 0, 13: 0, 15: 0 };
@@ -71,40 +90,42 @@ function parseLinear(lines: string[]): SimulationCommand[] {
   /** Colours set but not yet shown. Cleared by each rover.show(). */
   let staged: (string | null)[] = Array(LED_COUNT).fill(null);
 
-  const emitSleep = (seconds: number) => {
+  const emitSleep = (seconds: number, sleepLine: number) => {
     if (!motion || motion.speed <= 0) return; // a bare wait keeps the rover still
-    commands.push(toCommand(motion, servos[9], seconds));
+    commands.push({ ...toCommand(motion, servos[9], seconds), source: { fromLine: motion.line, toLine: sleepLine } });
   };
 
   for (const raw of lines) {
-    const line = raw.trim();
+    const line = raw.text.trim();
+    // Where this line's command is, for the forms that fit on one line.
+    const here: CommandSource = { fromLine: raw.line, toLine: raw.line };
     if (!line || line.startsWith('#')) continue;
 
     let m: RegExpMatchArray | null;
 
     // --- High-level convenience form (older missions) ---------------------
     if ((m = line.match(/rover\.forward\(\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'forward', speed: parseInt(m[1]), duration: parseFloat(m[2]) });
+      commands.push({ command: 'forward', speed: parseInt(m[1]), duration: parseFloat(m[2]), source: here });
       continue;
     }
     if ((m = line.match(/rover\.reverse\(\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'reverse', speed: parseInt(m[1]), duration: parseFloat(m[2]) });
+      commands.push({ command: 'reverse', speed: parseInt(m[1]), duration: parseFloat(m[2]), source: here });
       continue;
     }
     if ((m = line.match(/rover\.spinLeft\(\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'spinLeft', speed: parseInt(m[1]), duration: parseFloat(m[2]) });
+      commands.push({ command: 'spinLeft', speed: parseInt(m[1]), duration: parseFloat(m[2]), source: here });
       continue;
     }
     if ((m = line.match(/rover\.spinRight\(\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'spinRight', speed: parseInt(m[1]), duration: parseFloat(m[2]) });
+      commands.push({ command: 'spinRight', speed: parseInt(m[1]), duration: parseFloat(m[2]), source: here });
       continue;
     }
     if ((m = line.match(/rover\.steerLeft\(\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'steerLeft', degrees: parseInt(m[1]), speed: parseInt(m[2]), duration: parseFloat(m[3]) });
+      commands.push({ command: 'steerLeft', degrees: parseInt(m[1]), speed: parseInt(m[2]), duration: parseFloat(m[3]), source: here });
       continue;
     }
     if ((m = line.match(/rover\.steerRight\(\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)/))) {
-      commands.push({ command: 'steerRight', degrees: parseInt(m[1]), speed: parseInt(m[2]), duration: parseFloat(m[3]) });
+      commands.push({ command: 'steerRight', degrees: parseInt(m[1]), speed: parseInt(m[2]), duration: parseFloat(m[3]), source: here });
       continue;
     }
 
@@ -127,7 +148,7 @@ function parseLinear(lines: string[]): SimulationCommand[] {
       continue;
     }
     if (/rover\.show\(\s*\)/.test(line)) {
-      commands.push({ command: 'leds', leds: staged });
+      commands.push({ command: 'leds', leds: staged, source: here });
       staged = Array(LED_COUNT).fill(null);
       continue;
     }
@@ -138,19 +159,19 @@ function parseLinear(lines: string[]): SimulationCommand[] {
       continue;
     }
     if ((m = line.match(/rover\.forward\(\s*(\d+(?:\.\d+)?)\s*\)/))) {
-      motion = { cmd: 'forward', speed: parseFloat(m[1]) };
+      motion = { cmd: 'forward', speed: parseFloat(m[1]), line: raw.line };
       continue;
     }
     if ((m = line.match(/rover\.reverse\(\s*(\d+(?:\.\d+)?)\s*\)/))) {
-      motion = { cmd: 'reverse', speed: parseFloat(m[1]) };
+      motion = { cmd: 'reverse', speed: parseFloat(m[1]), line: raw.line };
       continue;
     }
     if ((m = line.match(/rover\.spinLeft\(\s*(\d+(?:\.\d+)?)\s*\)/))) {
-      motion = { cmd: 'spinLeft', speed: parseFloat(m[1]) };
+      motion = { cmd: 'spinLeft', speed: parseFloat(m[1]), line: raw.line };
       continue;
     }
     if ((m = line.match(/rover\.spinRight\(\s*(\d+(?:\.\d+)?)\s*\)/))) {
-      motion = { cmd: 'spinRight', speed: parseFloat(m[1]) };
+      motion = { cmd: 'spinRight', speed: parseFloat(m[1]), line: raw.line };
       continue;
     }
     if (line.match(/rover\.stop\(\)/)) {
@@ -158,7 +179,7 @@ function parseLinear(lines: string[]): SimulationCommand[] {
       continue;
     }
     if ((m = line.match(/time\.sleep\(\s*([\d.]+)\s*\)/))) {
-      emitSleep(parseFloat(m[1]));
+      emitSleep(parseFloat(m[1]), raw.line);
       continue;
     }
     // Everything else (LEDs, mast, distance, photo, print) has no 2D effect.

@@ -3,6 +3,8 @@
 Everything you need to run, install, and fix the Mars Yard. Operational steps
 first — installation and debugging follow for when you need them.
 
+**Running on a MacBook instead of a satellite Pi?** See [MacBook Setup](MACBOOK_SETUP.md).
+
 The system is three devices:
 
 | Device | Hostname | What it does |
@@ -43,6 +45,11 @@ Any red: see [Quick Fixes](#2-quick-fixes).
 - Kids build programs in the **Blockly** tab or write Python in the
   **Python** tab, then press **Run**. The program joins the rover's queue and
   runs in order — one program at a time.
+- **Before every run, put the rover on the start mark**: centred on the taped
+  cross in the middle of the seam, facing the front wall. Every mission is built
+  in a simulator that starts there, so a rover anywhere else runs a different
+  mission. Both run pages remind you beside Send. Where the mark is and how
+  to tape it: [yard-measurements.md](docs/yard-measurements.md#the-start-mark).
 - The TV monitor shows the camera feed plus current / pending / completed
   programs, updating live.
 - **Stop** button = emergency stop. It halts the rover immediately, clears

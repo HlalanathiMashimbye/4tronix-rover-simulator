@@ -94,3 +94,64 @@ export function sortAccounts(accounts: OperatorAccount[]): OperatorAccount[] {
     return (a.email ?? a.uid).localeCompare(b.email ?? b.uid);
   });
 }
+
+/**
+ * Access granted to an email address nobody has signed in with yet.
+ *
+ * WHY THIS EXISTS. Operators sign in with Google, and a person's first Google
+ * sign-in is what creates their Firebase account. Roles are granted to an
+ * account, so without this an admin could not give anyone access until that
+ * person had already tried, failed, and come back: "sign in, get refused, wait
+ * for me, sign in again" as the onboarding for every facilitator.
+ *
+ * An invite is not access. Nothing enforces from it; it becomes the role claim
+ * the first time a matching, Google-verified address signs in, and is then
+ * deleted. It is kept apart from OperatorAccount on purpose, so a pending
+ * admin can never count towards the "last admin" rule above: an invite nobody
+ * has claimed cannot grant anyone else access.
+ */
+export interface OperatorInvite {
+  email: string;
+  role: OperatorRole;
+  invitedAt: string | null;
+  invitedBy: string | null;
+}
+
+/**
+ * The one spelling of an email this system stores and compares.
+ *
+ * Firebase lowercases the addresses it holds, and people do not: an admin who
+ * types Thandi@Example.org must still match the thandi@example.org Google
+ * reports, or the invite silently never applies.
+ */
+export function inviteKey(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/** The parts of a verified ID token that decide whether it may claim an invite. */
+export interface InviteClaimToken {
+  email?: unknown;
+  email_verified?: unknown;
+  firebase?: { sign_in_provider?: unknown };
+}
+
+/**
+ * The email this sign-in may claim an invite for, or null.
+ *
+ * Only a Google sign-in, and only when Google says it verified the address.
+ * An invite is addressed to an email, so whoever proves they own that email
+ * is who it was for. A password account proves nothing about the address: an
+ * account created as somebody else's email, before they ever arrived, would
+ * otherwise collect the access an admin meant for them.
+ */
+export function inviteClaimant(token: InviteClaimToken): string | null {
+  if (token.firebase?.sign_in_provider !== 'google.com') return null;
+  if (token.email_verified !== true) return null;
+  if (typeof token.email !== 'string' || !token.email.trim()) return null;
+  return inviteKey(token.email);
+}
+
+/** Newest first: the invite an admin just sent is the one they look for. */
+export function sortInvites(invites: OperatorInvite[]): OperatorInvite[] {
+  return [...invites].sort((a, b) => (b.invitedAt ?? '').localeCompare(a.invitedAt ?? ''));
+}

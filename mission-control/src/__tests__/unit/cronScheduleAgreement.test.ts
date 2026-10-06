@@ -11,6 +11,8 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+import { SCHEDULER_CADENCE_MINUTES } from '@/core/domain/services/youtubeLinkSchedule';
+
 const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
 
 function namedBlock(source: string, needle: string): string {
@@ -46,5 +48,11 @@ function intervalFloorMinutes(): number {
 describe('the YouTube auto-link cadence', () => {
   it('has Cloud Scheduler firing exactly as often as the app assumes it does', () => {
     expect(schedulerCadenceMinutes()).toBe(intervalFloorMinutes());
+  });
+
+  it("tells the operator the next check on the scheduler's real cadence", () => {
+    // The status line computes "next check" from this constant rather than
+    // asking the server, so it has to be the scheduler's actual cadence.
+    expect(SCHEDULER_CADENCE_MINUTES).toBe(schedulerCadenceMinutes());
   });
 });

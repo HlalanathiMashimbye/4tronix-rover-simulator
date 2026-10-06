@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings · Mars Yard</title>
+    <script src="/static/yard-theme-init.js"></script>
     <link rel="stylesheet" href="/static/yard-base.css">
     <style>
         /* Layout only. Cards, buttons, badges, inputs and type all come from
@@ -56,8 +57,8 @@
            header rather than a card of its own. */
         .sat-chip {
             margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem;
-            padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 999px;
-            background: var(--surface); min-width: 0;
+            padding: 0.25rem 0.6rem; border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); border-radius: 999px;
+            background: var(--card); box-shadow: var(--shadow-clay); min-width: 0;
         }
         .sat-chip .stat-ic { width: 22px; height: 22px; border: 0; background: none; }
         .sat-chip .stat-ic svg { width: 14px; height: 14px; }
@@ -167,58 +168,56 @@
         /* A picked setting looks picked. Three named buttons rather than a
            box you type 1280x960 into: nobody operating a yard should have to
            know what that means, only that it is sharper and costs more. */
-        .seg { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; width: fit-content; }
+        .seg { display: flex; gap: 0; border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); border-radius: var(--radius-lg); overflow: hidden; width: fit-content; }
         .seg button {
             appearance: none; border: 0; cursor: pointer;
-            background: var(--surface-2); color: var(--text-dim);
+            background: color-mix(in oklab, var(--card) 40%, transparent); color: var(--muted-foreground);
             font: inherit; font-size: var(--fs-sm); font-weight: 600;
             padding: 0.35rem 0.85rem; min-height: 34px;
             display: flex; flex-direction: column; align-items: center; gap: 0.1rem;
             transition: background 160ms var(--ease-out), color 160ms var(--ease-out);
         }
-        .seg button + button { border-left: 1px solid var(--border); }
-        .seg button:hover { background: var(--surface-3); color: var(--text); }
-        .seg button[aria-checked="true"] { background: var(--signal); color: var(--signal-ink); }
+        .seg button + button { border-left: 1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+        .seg button:hover { background: color-mix(in oklab, var(--card) 70%, transparent); color: var(--foreground); }
+        .seg button[aria-checked="true"] { background: var(--gradient-mars); color: var(--primary-foreground); }
         .seg button:focus-visible { outline: 2px solid var(--signal); outline-offset: -2px; }
         .seg .seg-dim { font-size: var(--fs-2xs); font-weight: 500; opacity: 0.75; font-family: var(--mono); white-space: nowrap; }
-        /* One action colour across the console. Mars orange stays on brand
-           chrome (the nav, the wordmark); the thing you press is teal, here and
-           on the run station, so the two pages do not disagree about it. */
-        .shell .btn.primary {
-            background: var(--signal); border-color: var(--signal);
-            color: var(--signal-ink); font-weight: 700;
-        }
-        .shell .btn.primary:hover { filter: brightness(1.07); }
-        .shell .btn.primary:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+        /* Primary buttons are the shared .btn.primary, Mission Control's
+           primary gradient. This page used to repaint them teal so it agreed
+           with the run station; both now agree with Mission Control instead. */
         .link-btn { color: var(--signal); }
 
         /* Status card: one compact row, not a 90px block */
-                .stat-ic {
-            flex-shrink: 0; width: 30px; height: 30px; border-radius: 9px;
+        /* Drawn like Mission Control's yard-check tiles: a neutral tile, and
+           the icon alone carries the status colour. */
+        .stat-ic {
+            flex-shrink: 0; width: 30px; height: 30px; border-radius: var(--radius-lg);
             display: flex; align-items: center; justify-content: center;
-            border: 1px solid var(--border); color: var(--text-faint);
+            border: 1px solid color-mix(in oklab, var(--border) 50%, transparent);
+            background: color-mix(in oklab, var(--background) 50%, transparent); color: var(--text-faint);
         }
         .stat-ic svg { width: 17px; height: 17px; }
-        .stat-ic.green { background: rgba(52,211,153,0.12);  color: var(--ok);   border-color: rgba(52,211,153,0.3); }
-        .stat-ic.amber { background: rgba(251,191,36,0.12);  color: var(--warn); border-color: rgba(251,191,36,0.3); }
-        .stat-ic.red   { background: rgba(248,113,113,0.12); color: var(--bad);  border-color: rgba(248,113,113,0.3); }
-        .stat-ic.grey  { background: var(--surface-3); color: var(--text-faint); border-color: var(--border); }
+        .stat-ic.green { color: var(--ok); }
+        .stat-ic.amber { color: var(--warn); }
+        .stat-ic.red { color: var(--bad); }
+        .stat-ic.grey  { color: var(--text-faint); }
         /* status-label keeps its name because setBadge() writes it */
         .status-label {
             display: inline-flex; align-items: center;
-            font-size: 0.6rem; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.06em; padding: 0.16rem 0.5rem; border-radius: 999px;
-            border: 1px solid var(--border); white-space: nowrap;
+            font-size: 11px; font-weight: 600;
+            padding: 0.16rem 0.55rem; border-radius: 999px;
+            border: 1px solid color-mix(in oklab, var(--border) 60%, transparent); background: var(--card);
+            white-space: nowrap;
         }
-        .status-label.green { color: var(--ok);   background: rgba(52,211,153,0.1);  border-color: rgba(52,211,153,0.35); }
-        .status-label.amber { color: var(--warn); background: rgba(251,191,36,0.1);  border-color: rgba(251,191,36,0.35); }
-        .status-label.red   { color: var(--bad);  background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.35); }
-        .status-label.grey  { color: var(--text-faint); background: var(--surface-3); border-color: var(--border); }
+        .status-label.green { color: var(--ok); }
+        .status-label.amber { color: var(--warn); }
+        .status-label.red { color: var(--bad); }
+        .status-label.grey  { color: var(--text-faint); }
 
         .camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.3rem; }
         .camera-controls .btn { min-height: 34px; padding: 0.3rem 0.65rem; font-size: var(--fs-xs); }
-        .camera-index-label { color: var(--text-faint); font-size: var(--fs-xs); }
-        .camera-index { width: 58px; min-height: 34px; padding: 0.25rem 0.45rem; }
+        .camera-source-label { color: var(--text-faint); font-size: var(--fs-xs); }
+        .camera-source { max-width: 14rem; min-height: 34px; padding: 0.25rem 0.45rem; }
         .camera-managed { color: var(--text-faint); font-size: 0.68rem; font-family: var(--mono); }
         .camera-msg { margin-top: 0.4rem; font-size: var(--fs-xs); color: var(--text-dim); min-height: 1.1em; }
         .camera-msg[data-tone="bad"] { color: var(--bad); }
@@ -351,8 +350,8 @@
         }
         .dl-badge.yes {
             color: var(--ok);
-            background: rgba(52,211,153,0.1);
-            border: 1px solid rgba(52,211,153,0.3);
+            background: color-mix(in oklab, var(--ok) 10%, transparent);
+            border: 1px solid color-mix(in oklab, var(--ok) 30%, transparent);
         }
         .dl-badge.no {
             color: var(--text-faint);
@@ -405,12 +404,12 @@
             padding: 0.45rem 0.7rem; border-radius: 10px; margin-top: 0.5rem;
         }
         .rec-result[data-tone="ok"] {
-            color: var(--ok); background: rgba(52,211,153,0.1);
-            border: 1px solid rgba(52,211,153,0.35);
+            color: var(--ok); background: color-mix(in oklab, var(--ok) 10%, transparent);
+            border: 1px solid color-mix(in oklab, var(--ok) 35%, transparent);
         }
         .rec-result[data-tone="bad"] {
-            color: var(--bad); background: rgba(248,113,113,0.1);
-            border: 1px solid rgba(248,113,113,0.35);
+            color: var(--bad); background: color-mix(in oklab, var(--bad) 10%, transparent);
+            border: 1px solid color-mix(in oklab, var(--bad) 35%, transparent);
         }
 
         /* Same reason as the run station: this is operated from a tablet, and
@@ -418,7 +417,7 @@
            all well under the 44px a finger needs. */
         @media (pointer: coarse) {
             .shell .btn { min-height: 44px; }
-            .camera-index { min-height: 44px; }
+            .camera-source { min-height: 44px; }
             .link-btn { min-height: 44px; padding: 0 0.5rem; }
             .info-tip { min-width: 44px; min-height: 44px; }
             .sync-input-row input { min-height: 44px; }
@@ -505,8 +504,12 @@
                     <div class="camera-controls">
                         <button class="btn" id="camera-start">Start</button>
                         <button class="btn" id="camera-stop">Stop</button>
-                        <label class="camera-index-label" for="camera-index">Device</label>
-                        <input class="camera-index" id="camera-index" type="number" min="0" max="15" step="1" value="0" aria-label="Camera device index">
+                        <!-- Only where the satellite can name its cameras (a Mac).
+                             There was a device-number field here; on the Pi
+                             it did nothing and elsewhere nobody knew what it
+                             meant. CAMERA_INDEX still sets it for a developer. -->
+                        <label class="camera-source-label" for="camera-source" hidden>Camera</label>
+                        <select class="camera-source" id="camera-source" hidden></select>
                         <span class="camera-managed" id="camera-managed"></span>
                     </div>
                     <!-- Only appears when the camera has something to say. -->
@@ -640,7 +643,6 @@
         // and a terminal, which at an event means finding a laptop.
         const camStart = document.getElementById('camera-start');
         const camStop = document.getElementById('camera-stop');
-        const camIndex = document.getElementById('camera-index');
         const camMsg = document.getElementById('camera-msg');
         const camManaged = document.getElementById('camera-managed');
 
@@ -695,7 +697,44 @@
             }
         }
 
-        camStart.onclick = () => cameraAction('start', { cameraIndex: Number(camIndex.value) });
+        // A Mac has several cameras - built-in, Continuity Camera, Desk View -
+        // so it gets a list of them by name (David's MacBook mode had this on
+        // /status). Everywhere else there is nothing to choose and nothing is
+        // shown: Start restarts whichever camera the satellite already uses.
+        const camSource = document.getElementById('camera-source');
+        const camSourceLabel = document.querySelector('label[for="camera-source"]');
+        // Last index the status reported, so a list that arrives after it
+        // still opens on the right name.
+        let camCurrentIndex = null;
+
+        camStart.onclick = () => cameraAction('start',
+            camSource.hidden ? {} : { cameraIndex: Number(camSource.value) });
+
+        function paintDevices(data) {
+            if (!data || !data.available || !data.devices || !data.devices.length) return;
+            // Built as elements, never as an HTML string: the names come from
+            // whatever is plugged in.
+            camSource.replaceChildren(...data.devices.map((d) => {
+                const opt = document.createElement('option');
+                opt.value = String(d.index);
+                opt.textContent = d.name;
+                return opt;
+            }));
+            if (camCurrentIndex !== null) camSource.value = String(camCurrentIndex);
+            camSource.hidden = false;
+            camSourceLabel.hidden = false;
+        }
+
+        camSource.onchange = () => {
+            cameraAction('start', { cameraIndex: Number(camSource.value) });
+        };
+
+        // Once, not on the status clock: cameras are rarely plugged in while
+        // the page is open, and a reload picks up the ones that are.
+        fetch('/operator/api/camera/devices')
+            .then((r) => r.json())
+            .then(paintDevices)
+            .catch(() => {});
         camStop.onclick = () => cameraAction('stop');
 
         // Painted from the shared status, not from a poll of its own.
@@ -707,7 +746,10 @@
         // fine while the run station refuses to record.
         function paintCamera(cam) {
             if (!cam) return;
-            if (typeof cam.cameraIndex === 'number') camIndex.value = cam.cameraIndex;
+            if (typeof cam.cameraIndex === 'number') {
+                camCurrentIndex = cam.cameraIndex;
+                if (!camSource.hidden) camSource.value = String(cam.cameraIndex);
+            }
             camStart.textContent = cam.listening ? 'Restart camera' : 'Start camera';
             camStop.hidden = !cam.listening;
             // Worth showing: on the Pi systemd owns the lifecycle and will

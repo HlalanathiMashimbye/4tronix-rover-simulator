@@ -17,15 +17,25 @@
   color: #fff;
   cursor: pointer;
   box-shadow: inset 0 -6px 0 rgba(0, 0, 0, 0.22);
-  transition: transform 0.08s ease, filter 0.12s ease;
+  /* Pressed, a block sinks into its own shading like a key; released, it
+     springs back (--ease-spring, globals.css). A 1px nudge read as nothing. */
+  transition:
+    transform 280ms var(--ease-spring),
+    box-shadow 120ms ease,
+    filter 120ms ease;
 }
 
-.block:hover {
-  filter: brightness(1.08);
+@media (hover: hover) and (pointer: fine) {
+  .block:hover {
+    filter: brightness(1.08);
+    transform: translateY(-2px);
+  }
 }
 
 .block:active {
-  transform: translateY(1px);
+  transform: translateY(3px) scale(0.98);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
+  transition-duration: 70ms;
 }
 
 /* Blockly-style next-connector tab on the bottom edge. */
@@ -44,4 +54,36 @@
 .active {
   outline: 2px solid rgba(255, 255, 255, 0.85);
   outline-offset: 1px;
+  /* The block that is driving the rover right now breathes until it stops:
+     a status, so the one loop here. */
+  animation: block-running 1.1s ease-in-out infinite;
+}
+
+@keyframes block-running {
+  50% { filter: brightness(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active {
+    animation: none;
+  }
+}
+
+/* Phone: the panel shares the screen with the docked simulator, so these are
+   ordinary phone buttons rather than 70px slabs. One line each, so a long
+   label cannot double a button's height. */
+@media (max-width: 767px) {
+  .block {
+    padding: 9px 12px;
+    font-size: 14px;
+    white-space: nowrap;
+    border-radius: 12px;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22);
+  }
+  .block::after {
+    bottom: -6px;
+    height: 6px;
+    width: 28px;
+    left: 16px;
+  }
 }

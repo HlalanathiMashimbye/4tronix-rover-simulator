@@ -10,8 +10,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
-import { getOrCreateSession, clearSession } from '@/infrastructure/browser/anonymous-auth';
-import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { getLearnerID, clearLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';
@@ -32,22 +31,6 @@ const LearnerContext = createContext<LearnerContextType | undefined>(undefined);
 
 /** Set by MissionWorkspace on every successful submit. */
 const LATEST_MISSION_KEY = 'rover-latest-mission-id';
-
-/**
- * Learner records are keyed by getLearnerID(), the SAME id missions carry as
- * `learnerId`. They used to be keyed by getOrCreateSession()'s sessionId, a
- * separate nanoid under a different localStorage key, so the server could never
- * find a mission's learner - which is both why emails greeted "Space Explorer"
- * and why the address now has somewhere reliable to live.
- *
- * Existing documents under the old sessionId key are orphaned by this change.
- * Nothing is lost that matters: they hold only an email and display name, and
- * the email is also in localStorage, so it is rewritten under the correct id
- * the next time the learner saves it.
- */
-function learnerDocId(): string {
-  return getLearnerID();
-}
 
 /**
  * The email prompt opens *after* a mission is submitted, so a first-time
@@ -143,7 +126,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     // finds no address and silently skips.
     try {
       const response = await fetch(
-        `/api/learners/${encodeURIComponent(learnerDocId())}/email`,
+        `/api/learners/${encodeURIComponent(getLearnerID())}/email`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -167,31 +150,18 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    * Initialize or retrieve learner session
    */
   async function initializeLearnerSession() {
-    try {
-      // Get or create browser session
-      const session = getOrCreateSession();
-      setSessionId(session.sessionId);
+    const learnerId = getLearnerID();
+    setSessionId(learnerId);
 
-      // Try to fetch existing learner from Firestore
+    try {
       const db = getFirestoreClient();
-      const learnerRef = doc(db, 'learners', learnerDocId());
+      const learnerRef = doc(db, 'learners', learnerId);
       const learnerSnap = await getDoc(learnerRef);
 
-      // Missions carry only a hash of the learner id, so the notification
-      // service can no longer fetch a learner by document id - it finds the
-      // record whose learnerRef matches the mission's. Stamped on both the
-      // create and the update path, so records written before this change
-      // become resolvable the next time their owner opens the app.
-      const learnerRefHash = await hashLearnerId(learnerDocId());
+      const learnerRefHash = await hashLearnerId(learnerId);
 
       if (learnerSnap.exists()) {
-        // Existing learner - update last active timestamp
         const existingLearner = learnerSnap.data() as Learner;
-        // The address is deliberately no longer readable from here (it would
-        // be readable by anyone holding this id). localStorage above is the
-        // client's source of truth for display; this document is keyed by the
-        // same device-local id, so it never knew anything the browser did not
-        // already have.
 
         await updateDoc(learnerRef, {
           lastActiveAt: new Date().toISOString(),
@@ -200,13 +170,11 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
 
         setLearner({ ...existingLearner, lastActiveAt: new Date().toISOString() });
       } else {
-        // New learner - create profile
-        const newLearner = createAnonymousLearner(session.sessionId);
+        const newLearner = createAnonymousLearner(learnerId);
 
         await setDoc(learnerRef, {
           ...newLearner,
           learnerRef: learnerRefHash,
-          // Use Firestore server timestamp for consistency
           createdAt: serverTimestamp(),
           lastActiveAt: serverTimestamp(),
         });
@@ -215,11 +183,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.warn('Firestore learner init unavailable, using local session fallback:', error);
-
-      const session = getOrCreateSession();
-      const fallbackLearner = createAnonymousLearner(session.sessionId);
-      setSessionId(session.sessionId);
-      setLearner(fallbackLearner);
+      setLearner(createAnonymousLearner(learnerId));
     } finally {
       setLoading(false);
     }
@@ -248,7 +212,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    * Reset session and create new learner identity
    */
   function resetSession() {
-    clearSession();
+    clearLearnerID();
     setLearner(null);
     setSessionId(null);
     setLoading(true);

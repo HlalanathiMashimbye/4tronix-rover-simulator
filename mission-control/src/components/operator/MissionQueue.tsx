@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
 import {
@@ -12,6 +12,9 @@ import {
 } from '@/infrastructure/persistence/operatorQueueService';
 
 import { MissionDetail } from '@/components/operator/MissionDetail';
+import { useRoverReportedCompletions } from '@/hooks/useRoverReportedCompletions';
+import { useYouTubeLinkStatus } from '@/hooks/useYouTubeLinkStatus';
+import { YouTubeLinkStatus } from '@/components/operator/YouTubeLinkStatus';
 import { OperatorTabBar } from '@/components/operator/OperatorTabBar';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
@@ -66,11 +69,18 @@ const YOUTUBE_RED = '#E60000';
  */
 const SETTLED_FILTERS = ['done', 'needs-video'];
 
-/** 08:41, in the operator's own clock. Falls back to nothing for a bad date. */
-function clockTime(iso: string): string {
+/** Submission time in the operator's local clock, including the date. */
+function submissionDateTime(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 /**
@@ -82,14 +92,16 @@ function clockTime(iso: string): string {
  * default state is the quiet one; the exceptions get the words.
  */
 function rowStatusLine(mission: QueueMission): string {
+  const stamp = mission.submittedAt ? submissionDateTime(mission.submittedAt) : '';
   if (mission.needsReview) return mission.reviewReason ?? 'Needs review';
   switch (mission.status) {
     case 'processing':
-      return 'Running now';
+      return stamp ? `Running now · ${stamp}` : 'Running now';
     case 'queued':
-      // When it arrived, which is what triage reads: a queue of nineteen
-      // saying "Waiting" nineteen times said nothing the position did not.
-      return mission.submittedAt ? `Sent ${clockTime(mission.submittedAt)}` : 'Waiting';
+      // When it arrived matters for triage, and the front of the queue is the
+      // next job to be handed to the rover. Both the status and the timestamp
+      // must be visible on the same row.
+      return stamp ? `Waiting · ${stamp}` : 'Waiting';
     case 'completed':
       return stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
     case 'cancelled':
@@ -130,6 +142,8 @@ function YardQueue({
   yards: Yard[];
 }) {
   const [missions, setMissions] = useState<QueueMission[] | null>(null);
+  /** More missions are waiting than the queue loads; the oldest are left out. */
+  const [olderWaitingHidden, setOlderWaitingHidden] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Which mission the detail pane is showing. Replaces the accordion: the
   // code used to push every other mission off the screen to be read.
@@ -155,11 +169,60 @@ function YardQueue({
   const [consoleUrl, setConsoleUrl] = useState<string>('');
   const [editingConsole, setEditingConsole] = useState(false);
   useEffect(() => setConsoleUrl(readConsoleUrl()), []);
-  const [done, setDone] = useState<QueueMission[] | null>(null);
+  // Coming back from the yard console. Send to Rover hands the console
+  // `/operator?mission=<id>` as the way back, so the mission the operator sent
+  // is open again rather than the queue with nothing selected. The parameter
+  // is dropped once read, so choosing another mission and refreshing does not
+  // reopen this one.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const returning = url.searchParams.get('mission');
+    if (!returning) return;
+    setSelectedId(returning);
+    url.searchParams.delete('mission');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  }, []);
+  /**
+   * The settled list, tagged with the yard and page count it was read for.
+   *
+   * Tagged rather than cleared, for the same reason as `runsFor`. Asking for
+   * an older page re-attaches the listener, and clearing the list while it did
+   * blanked every row the operator was reading and threw away their scroll
+   * position, for the half second before the wider page arrived.
+   */
+  const [doneFor, setDoneFor] = useState<{
+    yardId: string;
+    pages: number;
+    missions: QueueMission[];
+    hasMore: boolean;
+  } | null>(null);
+  /** How many pages of settled missions the operator has asked for here. */
+  const [donePagesFor, setDonePagesFor] = useState<{ yardId: string; pages: number } | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
-  const { query, activeFilter, sort } = useSearch();
+  const { query, activeFilter, sort, setSort } = useSearch();
+  const defaultQueueSort = useRef(false);
   useRegisterSort();
+
+  useEffect(() => {
+    if (!defaultQueueSort.current && !SETTLED_FILTERS.includes(activeFilter) && !query.trim()) {
+      defaultQueueSort.current = true;
+      setSort('oldest');
+    }
+  }, [activeFilter, query, setSort]);
+
+  const searching = query.trim().length > 0;
+  // Also while searching: the settled list is what makes a finished mission
+  // findable by name, and it cannot be searched if it was never fetched.
+  const listeningToSettled = SETTLED_FILTERS.includes(activeFilter) || searching;
+  const donePages = donePagesFor?.yardId === yardId ? donePagesFor.pages : 1;
+  // Only what was read for THIS yard, and only while the view is open. Out of
+  // the view it counts as unfetched, which is what keeps "Done" from showing a
+  // stale number next to a list nobody is listening to.
+  const settled = listeningToSettled && doneFor?.yardId === yardId ? doneFor : null;
+  const done = settled?.missions ?? null;
+  const hasOlderDone = settled?.hasMore ?? false;
+  const loadingOlderDone = settled !== null && settled.pages < donePages;
 
   // The same control the learner feed uses, for the same reason: an operator
   // at a busy event is looking for one mission among a queue, and asking them
@@ -260,6 +323,20 @@ function YardQueue({
     );
   }, [selectedId]);
 
+  /**
+   * Each waiting mission's place in arrival order, oldest visible = 1.
+   *
+   * The query delivers newest first and the operator can re-sort the list,
+   * so neither order is the row index. The number is what a child at the
+   * desk asks about ("how many are before mine?"), so it keeps meaning order
+   * of arrival whatever the list is sorted by.
+   */
+  const arrivalPosition = useMemo(() => {
+    const positions = new Map<string, number>();
+    (missions ?? []).forEach((mission, index, all) => positions.set(mission.id, all.length - index));
+    return positions;
+  }, [missions]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
 
@@ -299,41 +376,36 @@ function YardQueue({
   // Only while the operator is looking at it. Completed missions accumulate
   // forever, so a listener on them is a read bill that grows with the life of
   // the project, and most console sessions never open this view.
-  const searching = query.trim().length > 0;
-
   useEffect(() => {
-    // Also while searching: the settled list is what makes a finished mission
-    // findable by name, and it cannot be searched if it was never fetched.
-    if (!SETTLED_FILTERS.includes(activeFilter) && !searching) return;
+    if (!listeningToSettled) return;
 
-    const unsubscribe = subscribeToYardCompleted(
+    return subscribeToYardCompleted(
       yardId,
-      (next) => {
-        setDone(next);
+      (next, hasMore) => {
+        setDoneFor({ yardId, pages: donePages, missions: next, hasMore });
         setError(null);
       },
       () => {
-        setDone(null);
+        setDoneFor(null);
         setError(
           'Could not load finished missions. If this yard is new, the index for this view may not be deployed yet.',
         );
       },
+      donePages,
     );
+  }, [yardId, listeningToSettled, donePages]);
 
-    // Cleared on the way OUT rather than on the way in. Clearing it in the
-    // effect body would be a setState during an effect, which costs a second
-    // render pass on every filter change and is what react-hooks flags.
-    return () => {
-      unsubscribe();
-      setDone(null);
-    };
-  }, [yardId, activeFilter, searching]);
+  const showOlderDone = () => {
+    if (loadingOlderDone) return;
+    setDonePagesFor({ yardId, pages: donePages + 1 });
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeToYardQueue(
       yardId,
-      (next) => {
+      (next, olderHidden) => {
         setMissions(next);
+        setOlderWaitingHidden(olderHidden);
         setError(null);
       },
       () => {
@@ -347,6 +419,19 @@ function YardQueue({
 
     return unsubscribe;
   }, [yardId]);
+
+  const youtubeLink = useYouTubeLinkStatus();
+
+  // The rover says when a run finished; the open console records it.
+  useRoverReportedCompletions({
+    yardId,
+    missions,
+    onCompleted: (mission) => {
+      const message = `Marked ${mission.name || 'a mission'} complete: the rover reported it finished.`;
+      setFlash(message);
+      window.setTimeout(() => setFlash((f) => (f === message ? null : f)), 6000);
+    },
+  });
 
   if (error) {
     return (
@@ -441,7 +526,7 @@ function YardQueue({
           cannot reach, so the operator was expected to remember an address and
           type it into a second tab. The button is the door; the address is
           theirs and lives in their browser. */}
-      <div className="mb-2 hidden flex-wrap items-center gap-2 md:flex">
+      <div className="mb-5 hidden flex-wrap items-center gap-2 md:flex">
         {editingConsole ? (
           <>
             <input
@@ -493,17 +578,27 @@ function YardQueue({
         )}
 
         {/* Outside the branch above, so editing the console address does not
-            make the other door disappear. */}
-        <a
-          href={YOUTUBE_STUDIO_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ backgroundColor: YOUTUBE_RED }}
-          className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
-        >
-          <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
-          YouTube Studio
-        </a>
+            make the other door disappear. The upload checker's status hangs
+            directly under the button it is about, no wider than it: one glance
+            answers "will my upload be picked up" without a row of its own. */}
+        {/* The status hangs below the button out of the flow, so the button
+            lines up with Open operator console instead of being lifted by the
+            text under it; mb-5 on the toolbar leaves it room. */}
+        <div className="relative ml-auto shrink-0" data-testid="youtube-studio-door">
+          <a
+            href={YOUTUBE_STUDIO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ backgroundColor: YOUTUBE_RED }}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-opacity hover:opacity-90"
+          >
+            <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            YouTube Studio
+          </a>
+          <div className="absolute left-1/2 top-full mt-0.5 flex -translate-x-1/2 whitespace-nowrap">
+            <YouTubeLinkStatus status={youtubeLink} />
+          </div>
+        </div>
       </div>
 
       {/* The laptop's heading. On a phone the tab bar already names the view
@@ -582,7 +677,11 @@ function YardQueue({
                     running ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
                   }`}
                 >
-                  {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Running" /> : index + 1}
+                  {running ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-label="Running" />
+                  ) : (
+                    (arrivalPosition.get(mission.id) ?? index + 1)
+                  )}
                 </span>
 
                 {/* The mission name is the only handle, and the only one
@@ -620,6 +719,30 @@ function YardQueue({
           );
         })}
       </ol>
+
+      {/* Never hide missions without a word: the queue loads the newest
+          QUEUE_LIMIT, and anything older is not on this screen. */}
+      {!SETTLED_FILTERS.includes(activeFilter) && !searching && olderWaitingHidden && (
+        <p role="status" className="mt-3 px-3 pb-2 text-center text-xs text-muted-foreground">
+          Older waiting missions are not shown. Cancel ones that will not run to bring them into view.
+        </p>
+      )}
+
+      {/* Done only, as the learner feed shows it only on its unfiltered list.
+          Under Needs video or a search the older page may hold nothing that
+          matches, and a button that adds no rows reads as broken. */}
+      {activeFilter === 'done' && !searching && hasOlderDone && (
+        <div className="mt-4 flex justify-center pb-2">
+          <button
+            type="button"
+            onClick={showOlderDone}
+            disabled={loadingOlderDone}
+            className="clay clay-press min-h-11 rounded-xl border border-border bg-card px-6 py-3 text-sm font-semibold text-foreground transition disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {loadingOlderDone ? 'Loading…' : 'Show older missions'}
+          </button>
+        </div>
+      )}
     </div>
 
     <div className={`min-h-0 md:clay md:rounded-3xl md:border md:border-border/60 md:bg-card/60 md:p-5 ${

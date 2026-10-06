@@ -578,6 +578,32 @@ export interface SimulationCommand {
    * 3 rear-right.
    */
   leds?: (string | null)[];
+  /** Which part of the learner's program produced this command (AB#450). */
+  source?: CommandSource;
+}
+
+/**
+ * Where a command came from, so the editor can light it up while it runs.
+ *
+ * Blocks carry ids, not one id: a block inside a Repeat lights up together
+ * with the Repeat around it, so a learner can see both which step is running
+ * and that it is running because of the loop. Python carries a line range
+ * because the low-level form spreads one movement over several lines -
+ * rover.forward(60) starts it and time.sleep(1.5) is how long it lasts - and
+ * lighting only the sleep would show a child a wait while the rover drives.
+ *
+ * Lines are 1-based, matching what an editor shows in its gutter.
+ */
+export interface CommandSource {
+  blockIds?: string[];
+  /**
+   * Which pass of each enclosing Repeat this is, outermost first, so the
+   * editor can show "2 / 3" on the loop while it runs. Lines up with the
+   * Repeat ids at the front of blockIds.
+   */
+  passes?: { pass: number; of: number }[];
+  fromLine?: number;
+  toLine?: number;
 }
 
 /**
@@ -681,6 +707,9 @@ export const LED_COUNT = 4;
 export function workspaceToCommands(workspace: any): SimulationCommand[] {
   const commands: SimulationCommand[] = [];
 
+  // The Repeat blocks the current block sits inside, outermost first.
+  const loops: string[] = [];
+
   function processChain(block: any, out: SimulationCommand[]): void {
     while (block) {
       processOne(block, out);
@@ -689,6 +718,17 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
   }
 
   function processOne(block: any, out: SimulationCommand[]): void {
+    const before = out.length;
+    emit(block, out);
+    // Tag here, once, rather than in every case below. A Repeat's own pushes
+    // are its body's commands, already tagged with the right block, so only
+    // untagged commands are ours.
+    for (let i = before; i < out.length; i++) {
+      if (!out[i].source) out[i].source = { blockIds: [...loops, block.id] };
+    }
+  }
+
+  function emit(block: any, out: SimulationCommand[]): void {
     switch (block.type) {
       case 'rover_on_receive':
         processChain(block.getInputTargetBlock('DO'), out);
@@ -754,8 +794,25 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
       case 'rover_repeat': {
         const times = Number(block.getFieldValue('TIMES'));
         const loop: SimulationCommand[] = [];
+        loops.push(block.id);
         processChain(block.getInputTargetBlock('DO'), loop);
-        for (let i = 0; i < times; i++) out.push(...loop);
+        loops.pop();
+        // Copies, not the same objects pushed N times: each pass is its own
+        // stretch of playback, and sharing objects would let a later change
+        // to one pass silently change all of them.
+        //
+        // Each copy also records which pass it is. Prepended, because the
+        // body's own inner Repeats have already added theirs, and passes run
+        // outermost first like the Repeat ids in blockIds.
+        for (let i = 0; i < times; i++) {
+          const pass = { pass: i + 1, of: times };
+          out.push(
+            ...loop.map((c) => ({
+              ...c,
+              source: c.source && { ...c.source, passes: [pass, ...(c.source.passes ?? [])] },
+            })),
+          );
+        }
         break;
       }
       // mast / photo / distance still have no 2D-sim effect

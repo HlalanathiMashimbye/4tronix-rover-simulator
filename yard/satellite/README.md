@@ -17,9 +17,11 @@ for what the Firestore mirror used to do and why it went.
 | `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. Owns `recording_key()`, the one rule for turning a mission id into a recording name, and remembers which rover instructions each recording dispatched. |
 | `mission_watcher.py` | Polls the rover and releases the camera when a recording's own run finishes, not any run of that mission. Stops any recording older than ten minutes, for the rover that loses power mid-run. The only background thread. |
 | `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. A viewer that stops reading is skipped and then disconnected, rather than freezing the stream for everyone. |
+| `camera_devices.py` | The cameras a Mac has, by name, for the Settings dropdown. None anywhere else, so the Pi shows no choice. Lists without opening a device, so it never fights the live stream. |
+| `start-mac.sh` | Runs the satellite on a MacBook: starts the web server, then asks it to start the camera so Settings can switch it. See `yard/MACBOOK_SETUP.md`. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
 | `tunables.py` | Settings editable at `/settings` without a restart. |
-| `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. `static/camera-client.js` is the one camera-stream WebSocket client, shared by the monitor and the run station's live view. |
+| `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. `static/camera-client.js` is the one camera-stream WebSocket client, shared by the monitor and the run station's live view. `static/yard-theme.css` is Mission Control's palette, generated from its `globals.css` by `npm run build:yard-theme` in `mission-control/` (never edit it by hand; CI fails if it drifts). `static/yard-theme-init.js` puts the console pages in Mission Control's light or dark theme; the kiosk pages (code, monitor) leave it out and stay dark. |
 | `tests/` | pytest. `pytest tests` from this directory. |
 
 ## Pages

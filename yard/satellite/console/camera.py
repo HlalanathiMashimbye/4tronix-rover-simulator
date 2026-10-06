@@ -95,6 +95,22 @@ def _persist_camera_index(index):
         print(f'could not persist camera_index: {e}')
 
 
+@operator_bp.route('/api/camera/devices', methods=['GET'])
+def api_camera_devices():
+    """The cameras Settings can offer by name.
+
+    available is False on the Pi and anywhere names cannot be read, and the
+    page then offers no choice at all. Switching is not a route of its own: the
+    picker calls /api/camera/start with the chosen index, so there is one way
+    to change the camera and it already persists the choice.
+    """
+    from camera_devices import list_cameras
+    devices = list_cameras()
+    if devices is None:
+        return jsonify({'available': False, 'devices': []})
+    return jsonify({'available': True, 'devices': devices})
+
+
 @operator_bp.route('/api/camera', methods=['GET'])
 def api_camera_status():
     """The shared camera snapshot.

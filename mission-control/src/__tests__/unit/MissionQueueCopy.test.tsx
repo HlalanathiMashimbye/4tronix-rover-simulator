@@ -14,7 +14,7 @@
  * it: this is the path that still works when the venue's internet does not.
  */
 
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 
 const subscribeToYardQueue = jest.fn();
 
@@ -28,6 +28,9 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
   subscribeToMission: () => () => {},
 }));
 
+// The preview plays the mission in the simulator; these tests are about the
+// lists and the record, so it stays out of the way like the viewer below.
+jest.mock('@/components/operator/MissionPreview', () => ({ MissionPreview: () => null }));
 jest.mock('@/components/mission/BlocklyViewer', () => ({
   BlocklyViewer: () => <div data-testid="blockly" />,
 }));
@@ -64,6 +67,24 @@ async function openMission() {
 }
 
 describe('a queued mission', () => {
+  it('shows the waiting status with the submission date and time', async () => {
+    const submittedAt = '2026-10-05T14:32:00Z';
+    emitQueue([{ ...MISSION, submittedAt }]);
+
+    const expected = new Date(submittedAt).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    expect(await screen.findByText(`Waiting · ${expected}`)).toBeInTheDocument();
+  });
+
   it('opens from its row, which carries no buttons of its own', async () => {
     render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
 
@@ -104,7 +125,10 @@ describe('a queued mission', () => {
       await openMission();
       await screen.findByRole('button', { name: /send to rover/i });
 
-      expect(fetchSpy).not.toHaveBeenCalled();
+      // The console reads the upload checker's status on its own; that is not
+      // the yard, and not a send.
+      const calls = fetchSpy.mock.calls.map(([url]) => String(url));
+      expect(calls.filter((url) => url !== '/api/operator/youtube-link')).toEqual([]);
     } finally {
       global.fetch = originalFetch;
     }
@@ -282,5 +306,70 @@ describe('the operator console gives the mission pane its height', () => {
     const grid = container.querySelector('[class*="lg:grid-cols-"]')!;
     expect(grid.className).toContain('0.85fr');
     expect(grid.className).toContain('1.15fr');
+  });
+});
+
+describe('whether uploads are being checked', () => {
+  it('sits directly under the YouTube Studio button, at every width', async () => {
+    /**
+     * It was `hidden 2xl:inline`, which hid it on every laptop, and then a row
+     * of its own across the toolbar, which read as bolted on. It belongs to
+     * the button, so it hangs under it.
+     */
+    const { forgetSharedReading } = jest.requireActual('@/hooks/useYouTubeLinkStatus');
+    forgetSharedReading();
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, lastCheckedAt: new Date().toISOString(), intervalMinutes: 15 }),
+    }) as unknown as typeof fetch;
+
+    try {
+      render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+      const door = await screen.findByTestId('youtube-studio-door');
+      const status = await within(door).findByText(/Next check/);
+      const button = within(door).getByRole('link', { name: /youtube studio/i });
+
+      expect(button.compareDocumentPosition(status) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Out of the flow, so it cannot make the door taller than the Open
+      // operator console button beside it: when it was a flex column the
+      // YouTube button sat higher than its neighbour.
+      expect(status.closest('.absolute')).not.toBeNull();
+      expect(door.className.split(' ')).not.toContain('flex-col');
+      // Nothing between here and the door hides it at any breakpoint.
+      for (let el: HTMLElement | null = status; el && el !== door.parentElement; el = el.parentElement) {
+        expect(el.className.split(' ')).not.toContain('hidden');
+      }
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe('coming back from the yard console', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('opens the mission the operator sent', async () => {
+    window.history.replaceState(null, '', '/operator?mission=m1');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const row = await screen.findByRole('button', { name: /rock lover/i });
+    await waitFor(() => expect(row).toHaveAttribute('aria-current', 'true'));
+    // Dropped once read, so a refresh after choosing another mission does not
+    // reopen this one.
+    expect(window.location.search).toBe('');
+  });
+
+  it('opens nothing when it did not come back from the yard', async () => {
+    window.history.replaceState(null, '', '/operator');
+
+    render(<SearchProvider><MissionQueue role="operator" yardId="curiosity" yardName="Cape Town Science Centre, Observatory" yards={[]} /></SearchProvider>);
+
+    const row = await screen.findByRole('button', { name: /rock lover/i });
+    expect(row).not.toHaveAttribute('aria-current', 'true');
   });
 });

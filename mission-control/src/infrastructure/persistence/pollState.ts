@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { isDue, SCHEDULER_CADENCE_MINUTES } from '@/core/domain/services/youtubeLinkSchedule';
 
 /**
  * When the YouTube linker last actually ran.
@@ -27,24 +28,36 @@ export async function lastCheckedAt(): Promise<Date | null> {
   return typeof value === 'string' ? new Date(value) : null;
 }
 
-export async function recordChecked(at: Date = new Date()): Promise<void> {
+/**
+ * The interval rides along in the same document as the timestamp, in the same
+ * write. The operator's status line needs both to say when the next check is,
+ * and reading the interval there instead of from Secret Manager costs nothing
+ * extra on either side.
+ */
+export async function recordChecked(at: Date = new Date(), intervalMinutes?: number): Promise<void> {
   await getFirestoreInstance()
     .collection(DOC_PATH[0])
     .doc(DOC_PATH[1])
-    .set({ lastCheckedAt: at.toISOString() }, { merge: true });
+    .set(
+      { lastCheckedAt: at.toISOString(), ...(intervalMinutes ? { intervalMinutes } : {}) },
+      { merge: true },
+    );
 }
 
-/**
- * Slack allowed on the interval boundary, so that the time YouTube itself
- * takes to answer (recordChecked() stamps the clock only after that) does not
- * shave the elapsed time just under the threshold. Without it, an admin
- * interval equal to (or a multiple of) the scheduler's own cadence misses its
- * exact tick every time and silently checks at double the configured rate.
- */
-const TOLERANCE_MS = 60_000;
+/** The last check and the interval it ran under, in one read. */
+export async function readLinkerState(): Promise<{ lastCheckedAt: Date | null; intervalMinutes: number }> {
+  const snapshot = await getFirestoreInstance()
+    .collection(DOC_PATH[0])
+    .doc(DOC_PATH[1])
+    .get();
 
-/** Whether enough time has passed for another check to be due. */
-export function isDue(last: Date | null, intervalMinutes: number, now: Date = new Date()): boolean {
-  if (!last) return true;
-  return now.getTime() - last.getTime() >= intervalMinutes * 60_000 - TOLERANCE_MS;
+  const data = snapshot.data() ?? {};
+  return {
+    lastCheckedAt: typeof data.lastCheckedAt === 'string' ? new Date(data.lastCheckedAt) : null,
+    intervalMinutes: typeof data.intervalMinutes === 'number' ? data.intervalMinutes : SCHEDULER_CADENCE_MINUTES,
+  };
 }
+
+// The rule lives in the domain now, beside what the operator's status line
+// reads; re-exported so the linker keeps importing its throttle from here.
+export { isDue };

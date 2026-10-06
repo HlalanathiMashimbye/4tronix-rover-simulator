@@ -26,12 +26,14 @@ import {
   MISSION_MIN_DURATION_SECONDS,
 } from '@/core/domain/safety/limits';
 import { ROVER_MOVEMENT_COMMANDS } from '@/core/domain/safety/rover-command-allowlist';
+import type { Crash } from '@/core/domain/safety/crashCheck';
 
 export type PreFlightCheckId =
   | 'simulation-run'
   | 'rover-moves'
   | 'runs-long-enough'
-  | 'within-time-limit';
+  | 'within-time-limit'
+  | 'no-crash';
 
 /**
  * One rule and whether this mission meets it. No wording.
@@ -53,6 +55,8 @@ export interface PreFlightResult {
   ready: boolean;
   /** Seconds the mission will run for, as measured by the ceiling. */
   duration: number;
+  /** What the watched run hit, for the words that explain no-crash. */
+  crash?: Crash | null;
 }
 
 /**
@@ -119,6 +123,12 @@ export interface PreFlightContext {
    * the last run describe something the learner is no longer submitting.
    */
   hasRunSimulation: boolean;
+  /**
+   * What the watched run hit, from crashCheck: null for nothing (AB#466).
+   * Passed in for the same reason: it is a property of the run, not of the
+   * code, and only the workspace has the run.
+   */
+  crash?: Crash | null;
 }
 
 /**
@@ -132,13 +142,19 @@ export function runPreFlightChecks(code: string, context: PreFlightContext): Pre
   // Order matters, and it is a rule rather than a rendering detail: the
   // simulation check comes first because it is the one the learner satisfies by
   // pressing a button rather than by editing, and watching the run is usually
-  // how they discover the other three are wrong.
+  // how they discover the others are wrong.
+  //
+  // No crash comes last and BLOCKS sending (AB#466). The yard is the measured
+  // one, so a run that hits a rock or a wall in the simulator is headed for a
+  // real rock or wall, and the operator would be the one to rescue the rover.
+  // It cannot pass before a run has been watched: there is nothing to judge.
   const checks: PreFlightCheck[] = [
     { id: 'simulation-run', passed: context.hasRunSimulation },
     { id: 'rover-moves', passed: movesTheRover(code) },
     { id: 'runs-long-enough', passed: duration >= MISSION_MIN_DURATION_SECONDS },
     { id: 'within-time-limit', passed: duration <= MISSION_MAX_DURATION_SECONDS },
+    { id: 'no-crash', passed: context.hasRunSimulation && !context.crash },
   ];
 
-  return { checks, ready: checks.every((check) => check.passed), duration };
+  return { checks, ready: checks.every((check) => check.passed), duration, crash: context.crash };
 }

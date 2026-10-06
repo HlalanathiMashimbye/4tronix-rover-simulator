@@ -54,15 +54,12 @@ export interface LearnerDevice {
   deviceFingerprint?: string;        // Optional browser fingerprint hash
 }
 
-/**
- * Creates a new anonymous learner with default values
- */
-export function createAnonymousLearner(sessionId: string): Learner {
+export function createAnonymousLearner(learnerId: string): Learner {
   const now = new Date().toISOString();
 
   return {
-    id: sessionId, // Use sessionId as the learner ID for simplicity
-    sessionId,
+    id: learnerId,
+    sessionId: learnerId,
     avatarColor: generateRandomColor(),
     missionCount: 0,
     completedMissions: 0,
@@ -70,7 +67,7 @@ export function createAnonymousLearner(sessionId: string): Learner {
     lastActiveAt: now,
     devices: [
       {
-        sessionId,
+        sessionId: learnerId,
         firstSeenAt: now,
         lastSeenAt: now,
       },

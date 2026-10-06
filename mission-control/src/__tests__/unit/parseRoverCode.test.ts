@@ -1,10 +1,16 @@
 import { parseRoverCode } from '@/lib/parseRoverCode';
 
+/**
+ * The motion alone. Where each command came from is AB#450's concern and is
+ * tested on its own at the bottom; these are about what the rover does.
+ */
+const motions = (code: string) => parseRoverCode(code).map(({ source: _source, ...command }) => command);
+
 describe('parseRoverCode', () => {
   describe('real low-level rover API (blocks + real rover)', () => {
     it('reads forward(speed) + time.sleep + stop as one forward command', () => {
       const code = ['rover.forward(60)', 'time.sleep(1.5)', 'rover.stop()'].join('\n');
-      expect(parseRoverCode(code)).toEqual([{ command: 'forward', speed: 60, duration: 1.5 }]);
+      expect(motions(code)).toEqual([{ command: 'forward', speed: 60, duration: 1.5 }]);
     });
 
     it('reads reverse and spins', () => {
@@ -16,7 +22,7 @@ describe('parseRoverCode', () => {
         'time.sleep(0.5)',
         'rover.stop()',
       ].join('\n');
-      expect(parseRoverCode(code)).toEqual([
+      expect(motions(code)).toEqual([
         { command: 'reverse', speed: 80, duration: 1 },
         { command: 'spinLeft', speed: 60, duration: 0.5 },
       ]);
@@ -32,7 +38,7 @@ describe('parseRoverCode', () => {
         'time.sleep(1)',
         'rover.stop()',
       ].join('\n');
-      expect(parseRoverCode(code)).toEqual([
+      expect(motions(code)).toEqual([
         { command: 'steerLeft', degrees: 20, speed: 60, duration: 1 },
       ]);
     });
@@ -44,7 +50,7 @@ describe('parseRoverCode', () => {
         'time.sleep(2)',
         'rover.stop()',
       ].join('\n');
-      expect(parseRoverCode(code)).toEqual([
+      expect(motions(code)).toEqual([
         { command: 'steerRight', degrees: 30, speed: 60, duration: 2 },
       ]);
     });
@@ -60,7 +66,7 @@ describe('parseRoverCode', () => {
         'time.sleep(1)',
         'rover.stop()',
       ].join('\n');
-      const out = parseRoverCode(code);
+      const out = motions(code);
       expect(out[0].command).toBe('steerLeft');
       expect(out[1]).toEqual({ command: 'forward', speed: 60, duration: 1 });
     });
@@ -73,7 +79,7 @@ describe('parseRoverCode', () => {
         'time.sleep(1)',
         'rover.stop()',
       ].join('\n');
-      expect(parseRoverCode(code)).toEqual([{ command: 'forward', speed: 60, duration: 1 }]);
+      expect(motions(code)).toEqual([{ command: 'forward', speed: 60, duration: 1 }]);
     });
 
     it('lights the lamps, because a child who turns them on should see them', () => {
@@ -88,7 +94,7 @@ describe('parseRoverCode', () => {
         'rover.stop()',
       ].join('\n');
 
-      expect(parseRoverCode(code)).toEqual([
+      expect(motions(code)).toEqual([
         { command: 'leds', leds: ['255, 0, 0', '255, 0, 0', '255, 0, 0', '255, 0, 0'] },
         { command: 'forward', speed: 60, duration: 1 },
       ]);
@@ -100,7 +106,7 @@ describe('parseRoverCode', () => {
       // or it teaches a child something untrue about their rover.
       const code = ['rover.setColor(rover.fromRGB(0, 255, 0))'].join('\n');
 
-      expect(parseRoverCode(code)).toEqual([]);
+      expect(motions(code)).toEqual([]);
     });
 
     it('changes only the lamp setPixel names', () => {
@@ -111,7 +117,7 @@ describe('parseRoverCode', () => {
 
       // null means "leave that one alone", so the other three keep whatever
       // they already were rather than being switched off.
-      expect(parseRoverCode(code)).toEqual([
+      expect(motions(code)).toEqual([
         { command: 'leds', leds: [null, null, '0, 0, 255', null] },
       ]);
     });
@@ -133,13 +139,13 @@ describe('parseRoverCode', () => {
 
   describe('legacy high-level form still replays', () => {
     it('reads forward(speed, duration)', () => {
-      expect(parseRoverCode('rover.forward(80, 1.5)')).toEqual([
+      expect(motions('rover.forward(80, 1.5)')).toEqual([
         { command: 'forward', speed: 80, duration: 1.5 },
       ]);
     });
 
     it('reads steerLeft(degrees, speed, duration)', () => {
-      expect(parseRoverCode('rover.steerLeft(20, 60, 1)')).toEqual([
+      expect(motions('rover.steerLeft(20, 60, 1)')).toEqual([
         { command: 'steerLeft', degrees: 20, speed: 60, duration: 1 },
       ]);
     });
@@ -147,6 +153,46 @@ describe('parseRoverCode', () => {
 
   it('skips comments and blank lines', () => {
     const code = ['# drive forward', '', 'rover.forward(60)', 'time.sleep(1)'].join('\n');
-    expect(parseRoverCode(code)).toEqual([{ command: 'forward', speed: 60, duration: 1 }]);
+    expect(motions(code)).toEqual([{ command: 'forward', speed: 60, duration: 1 }]);
+  });
+});
+
+/**
+ * Where each command came from, so the editor can light it up (AB#450).
+ *
+ * Line numbers are 1-based, as in the editor's gutter. A loop body must report
+ * the lines it was WRITTEN on on every pass: loop expansion copies the body,
+ * and an earlier version of the parser only had the expanded array, whose
+ * positions say nothing about the editor.
+ */
+describe('which lines each command came from', () => {
+  it('spans a low-level move from the line that starts it to its sleep', () => {
+    const code = ['# drive', 'rover.forward(60)', 'time.sleep(1.5)', 'rover.stop()'].join('\n');
+    expect(parseRoverCode(code).map((c) => c.source)).toEqual([{ fromLine: 2, toLine: 3 }]);
+  });
+
+  it('points every pass of a loop at the lines inside the loop', () => {
+    const code = [
+      'rover.spinLeft(60)', // 1
+      'time.sleep(1)', // 2
+      'for _ in range(3):', // 3
+      '    rover.forward(60)', // 4
+      '    time.sleep(1)', // 5
+      'rover.stop()', // 6
+    ].join('\n');
+    expect(parseRoverCode(code).map((c) => c.source)).toEqual([
+      { fromLine: 1, toLine: 2 },
+      { fromLine: 4, toLine: 5 },
+      { fromLine: 4, toLine: 5 },
+      { fromLine: 4, toLine: 5 },
+    ]);
+  });
+
+  it('uses the one line for the older one-line form and for lights', () => {
+    const code = ['rover.forward(60, 1)', 'rover.setColor(rover.fromRGB(255, 0, 0))', 'rover.show()'].join('\n');
+    expect(parseRoverCode(code).map((c) => c.source)).toEqual([
+      { fromLine: 1, toLine: 1 },
+      { fromLine: 3, toLine: 3 },
+    ]);
   });
 });

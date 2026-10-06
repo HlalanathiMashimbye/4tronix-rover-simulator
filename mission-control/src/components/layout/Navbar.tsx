@@ -24,11 +24,13 @@ import {
   Trophy,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
+import { useReducedMotion } from 'motion/react';
+import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
-import { isOperatorSurface } from '@/lib/appSurfaces';
+import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 
@@ -102,6 +104,12 @@ export function Navbar() {
    * note there for why this file must not contain the string.
    */
   const onOperatorSurface = isOperatorSurface(pathname);
+  // The build page on a phone is a full-screen tool; see isBuildSurface.
+  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname) || isMissionViewSurface(pathname);
+  // Including this top bar: the build page brings its own slimmer one with a
+  // way back, and the 64px is a fifth of what the blocks get on a phone.
+
+  const reduceMotion = useReducedMotion();
 
   const isActive = (path: string): boolean => {
     if (path === '/') return pathname === '/';
@@ -116,9 +124,11 @@ export function Navbar() {
   const desktopLinkClass = (path: string): string => {
     // Deliberately smaller than the Create Mission button beside them: these
     // are wayfinding, that is the action, and at equal weight they competed.
+    // The active fill is ActivePillBackground, so it slides from the page
+    // you left to the one you opened instead of blinking across.
     const base =
-      'flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors';
-    const active = 'bg-gradient-mars text-primary-foreground clay';
+      'relative isolate flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors';
+    const active = 'text-primary-foreground';
     const inactive =
       'text-muted-foreground hover:text-foreground hover:bg-card/60';
 
@@ -138,7 +148,7 @@ export function Navbar() {
           (h-page) do not overflow by a pixel. */}
       <nav
         className={`sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)] ${
-          onOperatorSurface ? 'hidden md:block' : ''
+          hidePhoneChrome ? 'hidden md:block' : ''
         }`}
       >
         {/* Use a balanced three-column layout so the search sits in the true
@@ -178,16 +188,21 @@ export function Navbar() {
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href} title={label} className={desktopLinkClass(href)}>
-                  <Icon className="h-4 w-4" />
-                  <span className="sr-only">{label}</span>
-                  {/* Progress pill: only Challenges carries one, and only once
-                      a count has actually loaded - a "0/0" flash before the
-                      hook resolves would read as broken, not empty. */}
-                  {href === '/challenges' && !challengesLoading && totalCount > 0 && (
-                    <span className="rounded-full bg-background/50 px-1.5 py-0.5 text-[9px] font-bold tabular-nums">
-                      {completedCount}/{totalCount}
-                    </span>
+                  {isActive(href) && (
+                    <ActivePillBackground layoutId="nav-pill" className="rounded-full bg-gradient-mars clay" reduceMotion={reduceMotion} />
                   )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <Icon className="h-4 w-4" />
+                    <span className="sr-only">{label}</span>
+                    {/* Progress pill: only Challenges carries one, and only once
+                        a count has actually loaded - a "0/0" flash before the
+                        hook resolves would read as broken, not empty. */}
+                    {href === '/challenges' && !challengesLoading && totalCount > 0 && (
+                      <span className="rounded-full bg-background/50 px-1.5 py-0.5 text-[9px] font-bold tabular-nums">
+                        {completedCount}/{totalCount}
+                      </span>
+                    )}
+                  </span>
                 </Link>
               ))}
 
@@ -234,7 +249,7 @@ export function Navbar() {
           missing here. Create Mission is deliberately NOT in this row: it is
           the floating button below, because an action and a destination
           should not look alike. */}
-      {!onOperatorSurface && (
+      {!hidePhoneChrome && (
       <nav
         aria-label="Tabs"
         className="fixed bottom-0 left-0 right-0 z-50 h-[var(--app-bottom-chrome)] border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
@@ -248,7 +263,10 @@ export function Navbar() {
                 isActive(href) ? 'text-primary' : 'text-muted-foreground'
               }`}
             >
-              <Icon className="h-5 w-5" />
+              {isActive(href) && (
+                <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
+              )}
+              <Icon className={`h-5 w-5 ${isActive(href) ? 'pop-in' : ''}`} />
               {mobileLabel}
               {href === '/challenges' &&
                 !challengesLoading &&
@@ -266,7 +284,7 @@ export function Navbar() {
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
           rather than the row's flat tabs. */}
-      {!onOperatorSurface && (
+      {!hidePhoneChrome && (
         <Link
           href="/mission"
           aria-label="Create Mission"

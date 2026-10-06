@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Copy, Loader2, Rocket, WifiOff, X } from 'lucide-react';
+import { AlertTriangle, Bot, Camera, Check, Copy, Crosshair, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
 
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
-import { readConsoleUrl } from '@/lib/yardConsole';
+import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 import { missionClipboardText } from '@/lib/missionClipboard';
+
+/** How to put the rover on the start mark: the tape in the yard says where. */
+const START_MARK_HOW = 'Centre it on the cross, facing the front wall.';
 
 type CheckKey = 'camera' | 'rover' | 'recording';
 type CheckState = 'waiting' | 'ready' | 'failed';
@@ -77,13 +80,6 @@ function readChecks(status: YardStatus): CheckResult[] {
  */
 const LIVE_CHECK_INTERVAL_MS = 15_000;
 
-function statusUrl(consoleUrl: string): string {
-  const url = new URL(consoleUrl);
-  url.pathname = '/api/status';
-  url.search = '';
-  return url.toString();
-}
-
 /**
  * How long to wait for the satellite before calling the yard offline.
  *
@@ -102,37 +98,6 @@ const PERMISSION_PROMPT_TIMEOUT_MS = 120_000;
 
 /** Why the yard did not answer, which decides what the operator is told to do. */
 type Unreachable = 'offline' | 'permission-denied' | 'browser-cannot';
-
-type LocalNetworkPermission = PermissionStatus | 'unsupported';
-
-/**
- * This browser's local network access permission for the page.
- *
- * Chromium browsers (Chrome, Edge) ask before an https page may call a device
- * on the local network, such as the satellite, and only then let the request
- * through. Safari and Firefox have no such permission and simply block it.
- * Chrome has used both names, so each is tried; an unknown name throws.
- */
-async function localNetworkPermission(): Promise<LocalNetworkPermission> {
-  if (!navigator.permissions?.query) return 'unsupported';
-  for (const name of ['local-network', 'local-network-access']) {
-    try {
-      return await navigator.permissions.query({ name: name as PermissionName });
-    } catch {
-      // Not a permission this browser knows; try the next name.
-    }
-  }
-  return 'unsupported';
-}
-
-/**
- * Whether the browser itself stops this page from calling the satellite: an
- * https page may not fetch an http address unless a local network permission
- * lets it, and a browser without that permission never will.
- */
-function browserBlocksYard(consoleUrl: string): boolean {
-  return window.location.protocol === 'https:' && new URL(consoleUrl).protocol === 'http:';
-}
 
 /**
  * The satellite's status response, or why this browser could not get one.
@@ -161,7 +126,7 @@ async function reachYard(): Promise<Response | Unreachable> {
   }
 
   try {
-    return await fetch(statusUrl(consoleUrl), { cache: 'no-store', signal: controller.signal });
+    return await fetch(yardApiUrl('/api/status', consoleUrl), { cache: 'no-store', signal: controller.signal });
   } catch {
     if (permission !== 'unsupported' && permission.state === 'denied') return 'permission-denied';
     if (permission === 'unsupported' && browserBlocksYard(consoleUrl)) return 'browser-cannot';
@@ -190,6 +155,15 @@ const UNREACHABLE_MESSAGES: Record<Unreachable, { title: string; body: string }>
     title: 'This browser cannot reach the yard',
     body: 'Sending automatically needs a browser like Chrome or Edge, which can ask for local network access. Open Mission Control in one of them, or copy the mission and paste it into the run station.',
   },
+};
+
+/** Each yard check's icon, by its key. */
+const CHECK_ICON: Record<string, typeof Camera> = { camera: Camera, rover: Bot, recording: Video };
+/** Each check state's colours; anything not ready or failed is still unknown. */
+const CHECK_STATE_CLASS: Record<string, string> = {
+  ready: 'border-emerald-600/40 bg-emerald-500/10 text-emerald-700',
+  failed: 'border-destructive/40 bg-destructive/10 text-destructive',
+  unknown: 'border-border/60 bg-background/60 text-muted-foreground',
 };
 
 export function AutomaticDispatch({
@@ -356,13 +330,24 @@ export function AutomaticDispatch({
       setShowRocketFeedback(true);
       const target = new URL(readConsoleUrl());
       target.pathname = '/run/';
-      target.search = new URLSearchParams({
+      const params = new URLSearchParams({
         handoff: 'automatic',
         yardId,
         missionId: mission.id,
         missionName: mission.name || '',
         code: mission.code,
-      }).toString();
+        // Where the console's "Mission Control" link returns to: this mission,
+        // open, rather than Mission Control's home page, which is the learner
+        // feed. The console only follows it back to this origin.
+        returnTo: `${window.location.origin}/operator?mission=${encodeURIComponent(mission.id)}`,
+      });
+      // The theme on screen right now, so the console opens in it. The console
+      // is on another address and cannot read the operator's choice from here;
+      // without this it falls back to the laptop's setting, which is wrong for
+      // anyone who picked the other theme in Mission Control.
+      const theme = document.documentElement.getAttribute('data-theme');
+      if (theme === 'light' || theme === 'dark') params.set('theme', theme);
+      target.search = params.toString();
       window.setTimeout(() => navigate(target.toString()), 1500);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not check the satellite.');
@@ -377,30 +362,73 @@ export function AutomaticDispatch({
   const showNotReady = !checking && !unreachable && !success && notReady.length > 0 && (failures.length === 0 || dismissed);
 
   return (
-    <section className="rounded-2xl border border-primary/30 bg-primary/5 p-3" aria-labelledby="automatic-dispatch-title">
-      {/* Stacked on a phone. Side by side, the heading and its sentence got
-          about 170px and wrapped to four lines while the buttons kept their
-          own column, so the block was taller stacked side by side than it is
-          stacked. */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0">
-          <h3 id="automatic-dispatch-title" className="flex items-center gap-1.5 text-sm font-bold text-foreground">
-            <Rocket className="h-4 w-4 text-primary" />
-            Yard checks
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {live
-              ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
-              : 'Send to Rover unlocks when every check below is ready.'}
-          </p>
+    <section className="rounded-2xl border border-primary/30 bg-primary/5 p-2.5" aria-labelledby="automatic-dispatch-title">
+      {/* ONE ROW: what this is, the three checks, and the buttons. It was a
+          heading, a sentence, a row of three cards and the buttons, about
+          170px before any warning, and with the mission preview above it
+          Send to Rover ended up below the fold on a laptop. The sentence
+          lives on as a tooltip on Send and for screen readers. Wraps on a
+          phone, where the buttons take their own line. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <h3 id="automatic-dispatch-title" className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-foreground">
+          <Rocket className="h-4 w-4 text-primary" />
+          {/* Words only where there is room: in a phone's panel the icons
+              and Send to Rover need the row. */}
+          <span className="@max-md:sr-only">Yard checks</span>
+        </h3>
+        <p id="automatic-dispatch-help" className="sr-only">
+          {live
+            ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
+            : 'Send to Rover unlocks when every check below is ready.'}
+        </p>
+
+        {/* Icons, coloured by state: the three checks are read at a glance
+            many times a session, and their words took most of the row. The
+            label and status stay in the chip for screen readers and as the
+            tooltip, with the fix when a check has failed. */}
+        <div className="flex items-center gap-1" aria-live="polite">
+          {checks.map((check) => {
+            const Icon = CHECK_ICON[check.key] ?? Rocket;
+            return (
+              <div
+                key={check.key}
+                title={`${check.label}: ${check.status}${check.state === 'failed' ? `. ${check.fix}` : ''}`}
+                data-state={check.state}
+                className={`relative flex h-7 w-7 items-center justify-center rounded-full border ${CHECK_STATE_CLASS[check.state] ?? CHECK_STATE_CLASS.unknown}`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {check.state === 'ready' && <Check className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-600 p-0.5 text-white" aria-hidden="true" />}
+                {check.state === 'failed' && <X className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-destructive p-0.5 text-white" aria-hidden="true" />}
+                <span className="sr-only">{check.label}</span>
+                <span className="sr-only">{check.status}</span>
+              </div>
+            );
+          })}
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+
+        {/* The start mark (AB#465). A run starts from wherever the rover is
+            standing, and where it is standing is the one thing none of the
+            checks can see. A reminder, not a gate: it is the operator's hand
+            on the rover, and a box ticked before every run stops being read.
+            The how is the tooltip and for screen readers; the yard's run
+            station says the same beside its own Send. */}
+        <p
+          data-testid="start-mark-reminder"
+          title={START_MARK_HOW}
+          className="flex shrink-0 items-center gap-1 text-xs font-semibold text-foreground"
+        >
+          <Crosshair className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+          Rover on the start mark?
+          <span className="sr-only">{START_MARK_HOW}</span>
+        </p>
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {!live && !unreachable && (
             <button
               type="button"
               onClick={() => readYard(false)}
               disabled={checking}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {checking ? 'Checking yard...' : 'Check yard'}
@@ -410,11 +438,9 @@ export function AutomaticDispatch({
             type="button"
             onClick={() => readYard(true)}
             disabled={checking || !mission.code || !allReady}
+            aria-describedby="automatic-dispatch-help"
             title={allReady ? undefined : 'Unlocks when every yard check is ready'}
-            // Takes the width left on the row on a phone: it is the one thing
-            // an operator opens a queued mission to press, and a 96px target
-            // beside a 96px secondary is a coin toss under pressure.
-            className="inline-flex min-h-9 flex-1 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none"
+            className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {checking && live ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
             Send to Rover
@@ -432,18 +458,8 @@ export function AutomaticDispatch({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-1.5 sm:grid-cols-3" aria-live="polite">
-        {checks.map((check) => (
-          <div key={check.key} className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/50 px-2.5 py-2 text-xs">
-            {check.state === 'ready' ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : check.state === 'failed' ? <X className="h-3.5 w-3.5 text-destructive" /> : <span className="h-3.5 w-3.5 rounded-full border border-muted-foreground/40" />}
-            <span className="font-semibold text-foreground">{check.label}</span>
-            <span className="ml-auto text-muted-foreground">{check.status}</span>
-          </div>
-        ))}
-      </div>
-
       {showNotReady && (
-        <div className="mt-3 rounded-xl border border-border/60 bg-background/50 p-3 text-xs" data-testid="yard-not-ready">
+        <div className="mt-2 rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs" data-testid="yard-not-ready">
           <p className="font-semibold text-foreground">Not ready to send yet</p>
           {notReady.map((check) => (
             <p key={check.key} className="mt-1 text-muted-foreground">
@@ -454,47 +470,60 @@ export function AutomaticDispatch({
       )}
 
       {unreachable && (
-        <div role="alert" className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
-          <div className="flex items-start gap-2">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
-            <div className="min-w-0">
-              <h4 className="text-sm font-bold text-foreground">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
-              <p className="mt-1 text-xs text-muted-foreground">{UNREACHABLE_MESSAGES[unreachable].body}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  disabled={!mission.code}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied ? 'Copied' : 'Copy for the run station'}
-                </button>
-                {/* Trying again cannot change which browser this is. */}
-                {unreachable !== 'browser-cannot' && (
-                  <button
-                    type="button"
-                    onClick={() => readYard(false)}
-                    disabled={checking}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
-                  >
-                    Try again
-                  </button>
-                )}
-              </div>
-            </div>
+        // Compact, with its actions on the same line as the explanation:
+        // it is the usual state on a laptop away from the yard, and it was
+        // the tallest thing in the panel.
+        <div role="alert" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5">
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
+          {/* The title on the line, the how-to-fix as its tooltip and for
+              screen readers: an operator needs to see that it is blocked and
+              what to press, and reads the steps once. */}
+          <div className="min-w-0 flex-1" title={UNREACHABLE_MESSAGES[unreachable].body}>
+            {/* Wraps in a phone's panel rather than losing its end: "is
+                blocked" is the part that says what is wrong. */}
+            <h4 className="truncate text-xs font-bold text-foreground @max-md:whitespace-normal @max-md:leading-tight">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
+            <p className="sr-only">{UNREACHABLE_MESSAGES[unreachable].body}</p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            {/* Short on a phone, so the warning's title still fits beside
+                them; the accessible names stay whole. */}
+            <button
+              type="button"
+              onClick={copyCode}
+              disabled={!mission.code}
+              aria-label={copied ? 'Copied' : 'Copy for the run station'}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              <span className="@max-md:hidden">{copied ? 'Copied' : 'Copy for the run station'}</span>
+              <span className="hidden @max-md:inline">{copied ? 'Copied' : 'Copy'}</span>
+            </button>
+            {/* Trying again cannot change which browser this is. */}
+            {unreachable !== 'browser-cannot' && (
+              <button
+                type="button"
+                onClick={() => readYard(false)}
+                disabled={checking}
+                aria-label="Try again"
+                title="Try again"
+                className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs font-semibold text-foreground hover:border-primary/70"
+              >
+                <RotateCcw className="hidden h-3.5 w-3.5 @max-md:block" aria-hidden="true" />
+                <span className="@max-md:hidden">Try again</span>
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {success && (
-        <p role="status" className="mt-3 rounded-xl border border-emerald-600/30 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-700">
+        <p role="status" className="mt-2 rounded-xl border border-emerald-600/30 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-700">
           All checks passed. Starting mission...
         </p>
       )}
 
       {(failures.length > 0 || error) && !dismissed && (
-        <div role="alertdialog" aria-labelledby="dispatch-failure-title" className="mt-3 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
+        <div role="alertdialog" aria-labelledby="dispatch-failure-title" className="mt-2 rounded-xl border border-destructive/30 bg-destructive/5 p-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
             <div className="min-w-0">

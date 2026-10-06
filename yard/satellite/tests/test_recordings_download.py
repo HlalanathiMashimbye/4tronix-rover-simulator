@@ -491,7 +491,7 @@ class TestSendRecordsFirst:
 
 
 class TestReadinessIndicators:
-    """One instrument module, not two warning banners.
+    """Mission Control's check tiles, not two warning banners.
 
     They were wide boxes flooded with a red or green tint. At the size they
     needed, the fill was the loudest thing on a page whose subject is a
@@ -505,17 +505,26 @@ class TestReadinessIndicators:
         assert '.ready[data-state="ok"]   { border-left-color' not in page
         assert 'background: var(--ok-weak); }' not in page
 
-    def test_colour_lives_in_the_lamp_and_the_state_word(self, client):
+    def test_colour_lives_in_the_icon_and_the_state_word_is_quiet(self, client):
+        """Drawn as Mission Control draws its yard checks: a green tick or a
+        red cross carries the state, and the word beside it stays muted. The
+        operator reads those tiles in Mission Control just before arriving
+        here, so the two should look like one instrument."""
+        import re
         page = client.get('/run/').get_data(as_text=True)
 
-        assert '.ready[data-state="ok"]   .status-sub { color: var(--ok); }' in page
-        assert '.status-dot.ok' in page
+        assert re.search(r'\.status-dot\.ok\s*\{[^}]*background:\s*var\(--ok\)', page)
+        assert re.search(r'\.status-dot\.bad\s*\{[^}]*background:\s*var\(--bad\)', page)
+        assert re.search(r'\.status-sub\s*\{[^}]*color:\s*var\(--muted-foreground\)', page)
+        assert not re.search(r'\.status-sub\s*\{\s*color:\s*var\(--(ok|bad|warn)\)', page)
 
-    def test_the_two_tiles_are_one_module(self, client):
-        """A shared border with a hairline between, rather than two cards.
-        The module runs horizontally now - it shares the header row with the
-        page title, so it spends width, not height - which makes the hairline
-        a left border instead of a top one."""
+    def test_each_check_is_its_own_tile(self, client):
+        """Mission Control shows one bordered tile per check, side by side.
+        This used to be one joined strip with a hairline between the two,
+        which was the only place the pair differed from Mission Control's."""
+        import re
         page = client.get('/run/').get_data(as_text=True)
 
-        assert '.ready + .ready { border-left:' in page
+        tile = re.search(r'\n\s*\.ready\s*\{([^}]*)\}', page).group(1)
+        assert re.search(r'(^|;)\s*border:', tile) and 'border-radius' in tile
+        assert '.ready + .ready { border-left:' not in page

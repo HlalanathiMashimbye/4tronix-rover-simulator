@@ -1,4 +1,5 @@
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import type { MissionStatus } from '@/core/domain/entities/Mission';
 
 /**
  * Matching an uploaded video back to the mission it shows.
@@ -163,4 +164,61 @@ export function runToLink(runs: MissionRun[]): MissionRun | null {
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
   return candidates[0] ?? null;
+}
+
+/**
+ * What to do with a video that claims a mission.
+ *
+ * A VIDEO OF A RUN IS EVIDENCE THE RUN HAPPENED. The linker used to attach only
+ * to runs already marked complete, so a mission whose completion was never
+ * recorded - the operator forgot, or their console was closed when the rover
+ * reported - sat open with its video found and ignored. Now the video closes it.
+ *
+ * - `link` with `runId: null` means there is no run to attach to yet and the
+ *   write creates one, exactly as an operator's own completion does for a yard
+ *   that never logged a run.
+ * - `needs-mission` asks the caller to read the mission and plan again. Only
+ *   the no-run case needs it, so an ordinary poll costs no extra read.
+ *
+ * Cancelled and failed runs are left alone: a video does not overrule a person
+ * who decided that attempt did not count.
+ *
+ * `mission` is `undefined` when it has not been read and `null` when it was
+ * read and does not exist (or is deleted).
+ */
+export type VideoLinkPlan =
+  | { kind: 'link'; runId: string | null; yardId: string; completes: boolean }
+  | { kind: 'needs-mission' }
+  | { kind: 'skip'; reason: string };
+
+const OPEN: readonly MissionStatus[] = ['queued', 'processing'];
+
+export function planVideoLink(
+  claim: VideoClaim,
+  runs: MissionRun[],
+  mission: { status: MissionStatus; yardId: string } | null | undefined,
+): VideoLinkPlan {
+  const candidates = claim.yardId ? runs.filter((r) => r.yardId === claim.yardId) : runs;
+  const withoutVideo = candidates.filter((r) => !r.youtubeUrl);
+
+  const finished = runToLink(withoutVideo);
+  if (finished) {
+    return { kind: 'link', runId: finished.runId, yardId: finished.yardId, completes: false };
+  }
+
+  const open = withoutVideo
+    .filter((r) => OPEN.includes(r.status))
+    .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0];
+  if (open) {
+    if (mission === undefined) return { kind: 'needs-mission' };
+    if (mission === null) return { kind: 'skip', reason: 'mission not found' };
+    return { kind: 'link', runId: open.runId, yardId: open.yardId, completes: true };
+  }
+
+  if (candidates.length > 0) return { kind: 'skip', reason: 'nothing to link' };
+
+  if (mission === undefined) return { kind: 'needs-mission' };
+  if (mission === null) return { kind: 'skip', reason: 'mission not found' };
+  if (!OPEN.includes(mission.status)) return { kind: 'skip', reason: `mission is ${mission.status}` };
+  return { kind: 'link', runId: null, yardId: claim.yardId ?? mission.yardId, completes: true };
 }

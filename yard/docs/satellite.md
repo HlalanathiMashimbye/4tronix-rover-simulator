@@ -108,10 +108,39 @@ sudo systemctl restart satellite-web
 sudo systemctl restart satellite-camera
 ```
 
-Two commands, not one. The `mars` user's passwordless sudo is granted per unit
-(`systemctl restart satellite-web`, `systemctl restart satellite-camera`), and
-sudo matches the whole argument list, so restarting both in a single command
-matches no rule and silently asks for a password you cannot type over a script.
+**The restarts ask for the `mars` password.** This used to say the `mars`
+user had passwordless sudo for these two units. On the satellite as it is
+(checked 3 October 2026) it does not: `/etc/sudoers.d/` holds only the
+system's own files, and `sudo -n systemctl restart satellite-web` answers
+"a password is required", with or without `.service` on the end. So:
+
+- Run the restarts yourself, over an interactive `ssh` session. They cannot be
+  run from a script or by an agent, which cannot type the password.
+- sudo remembers the password for a few minutes, so the second restart
+  usually does not ask again.
+- Keep them as two commands anyway. If a per-unit rule is ever added (see
+  below), sudo matches the whole argument list, and `systemctl restart a b`
+  would match neither rule.
+
+**The Settings page cannot restart the camera either.** Its Restart camera
+button calls `systemctl restart satellite-camera`, which systemd refuses
+without a logged-in user ("Interactive authentication required"), then retries
+through `sudo -n`, which needs the password. The button reports that it cannot
+manage the unit; restart the camera over ssh instead.
+
+**To make restarts passwordless again** (a security setting on the Pi, so a
+deliberate decision, not a fix to apply in passing), add a sudoers file with
+`sudo visudo -f /etc/sudoers.d/satellite` containing exactly:
+
+```
+mars ALL=(root) NOPASSWD: /usr/bin/systemctl restart satellite-web, /usr/bin/systemctl restart satellite-camera
+```
+
+Confirm the path first with `command -v systemctl` on the Pi; on its Debian it
+is `/usr/bin/systemctl`, but sudo compares full paths. Spelled exactly as above:
+sudo matches the argument list word for word, so
+`satellite-camera.service` would need its own entry (`camera_control.py` tries
+both spellings for this reason). Then update this section.
 
 `git checkout -f` discards local edits to tracked files, which is the point.
 `satellite_config.json` and `recordings/` are gitignored, so the yard's own

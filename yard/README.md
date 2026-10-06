@@ -38,9 +38,11 @@ yard/
 | Doc | Description |
 |-----|-------------|
 | [Yard Manual](MANUAL.md) | **Start here**: operations, quick fixes, installation, debugging |
+| [MacBook Setup](MACBOOK_SETUP.md) | Running the satellite on a Mac (webcam instead of Pi camera) |
 | [Rover Server](docs/rover-server.md) | Setup and API for the queue server |
 | [Satellite](docs/satellite.md) | Web interface and camera server |
 | [Architecture](docs/architecture.md) | System design and data flow |
+| [Yard measurements](docs/yard-measurements.md) | The real yard's size, rocks, start spot and high ground, measured from photos |
 | [API Reference](docs/api.md) | REST endpoints and instruction format |
 | [Testing](docs/testing.md) | Running and writing tests |
 | [What the yard no longer does](docs/what-the-yard-no-longer-does.md) | The Firestore mirror that was removed, and the shape a way back should take |
