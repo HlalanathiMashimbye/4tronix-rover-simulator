@@ -12,7 +12,6 @@ import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
 import { DriveFooter } from '@/components/mission/DriveFooter';
 import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
-import { SplitPane } from '@/components/ui/SplitPane';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
@@ -20,13 +19,6 @@ import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
 import { carryBlocksToPython, showBlocksAsPython } from '@/infrastructure/browser/pythonDraft';
-
-// Bounds of the build/simulator split, as a percentage given to the build
-// side. Owned here rather than in EditorPanel so the divider clamps to the
-// same range as the values used to size the grid tracks.
-const SPLIT_MIN = 35;
-const SPLIT_MAX = 75;
-const SPLIT_DEFAULT = 60;
 
 /**
  * The code of the line the simulator is running, for the phone's one-line
@@ -389,23 +381,22 @@ export function MissionWorkspace() {
           runningText={runningLineText(currentCode, highlight)}
         />
       ) : (
-        <SplitPane
-          ariaLabel="Resize build and simulator panels"
-          defaultSplit={SPLIT_DEFAULT}
-          minSplit={SPLIT_MIN}
-          maxSplit={SPLIT_MAX}
-          left={editorPanel}
-          right={
-            <SimulationPanel
-              {...simulatorProps}
-              // Name and launch live under the simulator so the block canvas
-              // keeps the full height of its own column. Drive fills the same
-              // fixed slot with its reset, so the yard is one size in every
-              // mode.
-              footer={submitBar ?? <DriveFooter onResetPosition={handleResetSimulation} />}
-            />
-          }
-        />
+        // No divider. It traded width between the editor and the simulator,
+        // and the yard is stretched to fill whatever it is given, so every
+        // drag reshaped the rocks: from 0.6 to 1.6 times the real yard's
+        // width for its depth. The simulator's column is sized from the
+        // yard's real shape instead (.buildSim) and the editor has the rest.
+        <div className="workspaceSplitGrid">
+          {editorPanel}
+          <SimulationPanel
+            {...simulatorProps}
+            // Name and launch live under the simulator so the block canvas
+            // keeps the full height of its own column. Drive fills the same
+            // fixed slot with its reset, so the yard is one size in every
+            // mode.
+            footer={submitBar ?? <DriveFooter onResetPosition={handleResetSimulation} />}
+          />
+        </div>
       )}
 
       <MissionSentDialog

@@ -12,7 +12,6 @@ import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
-import { SplitPane } from '@/components/ui/SplitPane';
 import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
@@ -235,88 +234,81 @@ export default function MissionVideoClient({
 
             No height: the grid is a flexible track and takes what this flex
             column has left, the same as Create Mission. */}
-        <SplitPane
-          ariaLabel="Footage and code panels"
-          defaultSplit={60}
-          resizable={false}
-          left={
-            <div className="flex min-h-0 flex-col gap-2">
-              <RunStackCarousel
-                runs={runs}
-                selectedId={selectedRun.id}
-                onSelect={setSelectedRunId}
-                missionName={missionName}
-                trajectory={simTrajectory}
-                onSimSourceChange={setRunningSource}
-              />
-              {/* Under the player, where a learner looks after watching. One
-                  line, so the leftover height goes to the player instead. */}
-              <OperatorFeedback runs={missionRuns} />
-            </div>
-          }
-          /* Code (scrolls internally) + remix */
-          right={
-            <div className="flex min-h-0 flex-col gap-2">
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
-              <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
-                {hasBlocks ? (
-                  <div
-                    // p-px, not p-0.5: rounded-lg is 14.4 and the buttons are
-                    // rounded-md at 12.4, so the track between them has to be 2px
-                    // (1px border + 1px padding) for the corners to stay
-                    // concentric. At p-0.5 it was a pixel out.
-                    className="inline-flex rounded-lg border border-border bg-card p-px text-xs font-semibold"
-                  >
-                    <button
-                      onClick={() => setCodeView('blocks')}
-                      className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'bg-gradient-mars text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                    >
-                      Blocks
-                    </button>
-                    <button
-                      onClick={() => setCodeView('python')}
-                      className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'text-muted-foreground hover:text-foreground' : 'bg-gradient-mars text-primary-foreground'}`}
-                    >
-                      Python
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-red-400/70" />
-                    <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                    <span className="h-2 w-2 rounded-full bg-green-400/70" />
-                    <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      mission.py
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  {/* How long it runs, beside the code that decides it. Status
-                      and "built with" are already said by the badge and the
-                      Blocks/Python switch. */}
-                  <span className="font-mono text-[11px] text-muted-foreground" title="How long it runs">
-                    {duration}
-                  </span>
+        <div className="workspaceSplitGrid workspaceSplitGrid--fixed">
+          <div className="flex min-h-0 flex-col gap-2">
+            <RunStackCarousel
+              runs={runs}
+              selectedId={selectedRun.id}
+              onSelect={setSelectedRunId}
+              missionName={missionName}
+              trajectory={simTrajectory}
+              onSimSourceChange={setRunningSource}
+            />
+            {/* Under the player, where a learner looks after watching. One
+                line, so the leftover height goes to the player instead. */}
+            <OperatorFeedback runs={missionRuns} />
+          </div>
+          {/* Code (scrolls internally) + remix */}
+          <div className="flex min-h-0 flex-col gap-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
+              {hasBlocks ? (
+                <div
+                  // p-px, not p-0.5: rounded-lg is 14.4 and the buttons are
+                  // rounded-md at 12.4, so the track between them has to be 2px
+                  // (1px border + 1px padding) for the corners to stay
+                  // concentric. At p-0.5 it was a pixel out.
+                  className="inline-flex rounded-lg border border-border bg-card p-px text-xs font-semibold"
+                >
                   <button
-                    onClick={copyCode}
-                    className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={() => setCodeView('blocks')}
+                    className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'bg-gradient-mars text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   >
-                    {copied ? 'Copied' : 'Copy'}
+                    Blocks
+                  </button>
+                  <button
+                    onClick={() => setCodeView('python')}
+                    className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'text-muted-foreground hover:text-foreground' : 'bg-gradient-mars text-primary-foreground'}`}
+                  >
+                    Python
                   </button>
                 </div>
-              </div>
-              {showBlocks ? (
-                <div className="min-h-0 flex-1">
-                  <BlocklyViewer state={mission.blocklyState!} highlight={runningSource} />
-                </div>
               ) : (
-                <CodeLines code={mission.code} highlight={runningSource} />
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-red-400/70" />
+                  <span className="h-2 w-2 rounded-full bg-amber-400/70" />
+                  <span className="h-2 w-2 rounded-full bg-green-400/70" />
+                  <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    mission.py
+                  </span>
+                </div>
               )}
+              <div className="flex items-center gap-2">
+                {/* How long it runs, beside the code that decides it. Status
+                    and "built with" are already said by the badge and the
+                    Blocks/Python switch. */}
+                <span className="font-mono text-[11px] text-muted-foreground" title="How long it runs">
+                  {duration}
+                </span>
+                <button
+                  onClick={copyCode}
+                  className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             </div>
+            {showBlocks ? (
+              <div className="min-h-0 flex-1">
+                <BlocklyViewer state={mission.blocklyState!} highlight={runningSource} />
+              </div>
+            ) : (
+              <CodeLines code={mission.code} highlight={runningSource} />
+            )}
+          </div>
 
-            </div>
-          }
-        />
+          </div>
+        </div>
       </div>
     </main>
   );

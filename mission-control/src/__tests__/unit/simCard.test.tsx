@@ -12,11 +12,15 @@
  * Drive, Blocks and Python, before and after a run.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { DriveFooter } from '@/components/mission/DriveFooter';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
+import { SimulationPanel } from '@/components/mission/SimulationPanel';
+import { YARD } from '@/lib/rover-physics';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
 
 jest.mock('@/contexts/ThemeContext', () => ({ useTheme: () => ({ theme: 'dark' }) }));
@@ -96,4 +100,26 @@ it('invites rather than explains a failure before there is any code', () => {
   expect(screen.getByText(/press run to try/i)).toBeInTheDocument();
   // Each check still says what it is, in full, to a screen reader.
   expect(screen.getByRole('listitem', { name: /you have watched it in the simulator: not yet/i })).toBeInTheDocument();
+});
+
+/*
+ * Create Mission sizes the simulator's column from the yard's real shape, so
+ * the stretch that fills a phone's strip never reshapes the rocks on a laptop
+ * or a tablet. The shape has to be the measured yard's: a column with a ratio
+ * of its own drifts the moment the yard is re-measured. The arithmetic around
+ * it was measured in a browser, at 1024x768 to 1920x1080.
+ */
+describe("Create Mission's simulator keeps the yard's real shape", () => {
+  it('carries the measured yard for the column to be sized from', () => {
+    const { container } = render(<SimulationPanel trajectory={RUN} isPlaying editorMode="code" />);
+    const column = container.querySelector('.buildSim') as HTMLElement;
+    expect(Number(column.style.getPropertyValue('--yard-aspect'))).toBeCloseTo(YARD.widthCm / YARD.depthCm, 9);
+  });
+
+  it('sizes the column, and the yard beside the footer, from that shape', () => {
+    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const rule = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split('}')[0];
+    expect(rule('.buildSim')).toMatch(/width:[^;]*var\(--yard-aspect\)/);
+    expect(rule('.simBody > .simYard')).toMatch(/flex:[^;]*var\(--yard-aspect\)/);
+  });
 });
