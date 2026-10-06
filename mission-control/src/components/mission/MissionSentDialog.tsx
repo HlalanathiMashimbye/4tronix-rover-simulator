@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { Rocket } from 'lucide-react';
 
 /**
  * Confirmation shown after a mission reaches the queue.
@@ -64,11 +64,26 @@ export function MissionSentDialog({ open, onClose, email }: MissionSentDialogPro
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-buzz/15">
-          <CheckCircle2 className="h-7 w-7 text-buzz" />
+        {/* The rocket lifts off its pad, once, with a puff of exhaust and a
+            ring going out: the moment a mission leaves is the one to feel
+            (globals.css, "Moments"). It replays on every open, because the
+            dialog unmounts when it closes. */}
+        <div className="relative mx-auto h-14 w-14" aria-hidden="true">
+          <span className="launch-ring absolute inset-0 rounded-2xl border-2 border-buzz/60" />
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-buzz/15">
+            <Rocket className="launch-rocket h-7 w-7 -rotate-45 text-buzz" />
+          </div>
+          <div className="launch-trail absolute -bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+            <span className="h-2 w-2 rounded-full bg-primary/60" />
+            <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
+          </div>
         </div>
 
-        <h2 id="mission-sent-title" className="mt-3 font-display text-lg font-bold text-foreground">
+        <h2
+          id="mission-sent-title"
+          className="pop-in mt-4 font-display text-lg font-bold text-foreground [animation-delay:300ms]"
+        >
           Mission sent!
         </h2>
 

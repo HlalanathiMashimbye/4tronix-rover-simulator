@@ -23,6 +23,8 @@ export function BlocklyViewer({
   state,
   highlight = null,
   fit = false,
+  maxFitScale = 1,
+  zoomControls = !fit,
 }: {
   state: string;
   highlight?: CommandSource | null;
@@ -33,6 +35,15 @@ export function BlocklyViewer({
    * middle, with the On uplink block and the first steps cut off.
    */
   fit?: boolean;
+  /**
+   * The most a fitted program is scaled up. 1 is the editor's size, which is
+   * right for the operator's quick check; a learner's own mission page has
+   * room to show a short program bigger, where at the editor's size it sat
+   * small in a big white canvas.
+   */
+  maxFitScale?: number;
+  /** The zoom buttons, off by default when fitted (see zoom below). */
+  zoomControls?: boolean;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,7 +85,7 @@ export function BlocklyViewer({
       // panel the buttons sat on top of it). The wheel still zooms.
       zoom: phone
         ? { controls: false, wheel: false, pinch: true, startScale: 0.75, maxScale: 2, minScale: 0.3 }
-        : { controls: !fit, wheel: true, startScale: 0.9, maxScale: 2.5, minScale: 0.3 },
+        : { controls: zoomControls, wheel: true, startScale: 0.9, maxScale: 2.5, minScale: 0.3 },
     });
     workspaceRef.current = workspace;
 
@@ -92,9 +103,9 @@ export function BlocklyViewer({
       // was configured with and only moves the viewport.
       if (fit) {
         workspace.zoomToFit();
-        // Never larger than the editor would show it: a two-block program
-        // fitted to a big panel would be comically large.
-        if (workspace.getScale() > 1) workspace.setScale(1);
+        // Capped: a two-block program fitted to a big panel would be
+        // comically large.
+        if (workspace.getScale() > maxFitScale) workspace.setScale(maxFitScale);
         workspace.scrollCenter();
       } else {
         workspace.scrollCenter();
@@ -109,7 +120,7 @@ export function BlocklyViewer({
     };
     // phone is read once at inject, like the editor's options; a change of
     // layout re-injects.
-  }, [loaded, state, phone, fit]);
+  }, [loaded, state, phone, fit, maxFitScale, zoomControls]);
 
   if (loadError) {
     return (

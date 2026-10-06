@@ -12,16 +12,11 @@ export default function MissionPage() {
           left after this header, rather than the grid guessing at how tall the
           chrome above it is. */}
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-1.5">
-        {/* Not on a phone: two lines of title cost the canvas ~60px there,
-            and the editor tabs below already say what this page is. */}
-        <header className="hidden shrink-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 md:flex">
-          <h1 className="font-display text-xl font-bold text-foreground md:text-2xl">
-            Build your <span className="text-gradient-mars">Mission</span>
-          </h1>
-          <p className="text-xs text-muted-foreground md:text-sm">
-            Drive it, snap blocks together, or write Python, then send it to a real rover.
-          </p>
-        </header>
+        {/* A heading for screen readers only. On screen the editor tabs say
+            what this page is, and a title row cost the page its height: on a
+            phone ~60px of canvas, on a laptop ~40px of simulator, which is
+            ~40px of its width too, since its yard keeps its real shape. */}
+        <h1 className="sr-only">Build your mission</h1>
 
         <Suspense fallback={<div className="flex h-full items-center justify-center p-8 text-sm text-muted-foreground">Loading workspace...</div>}>
           <MissionWorkspace />

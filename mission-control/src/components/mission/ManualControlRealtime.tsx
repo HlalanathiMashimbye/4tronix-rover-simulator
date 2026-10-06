@@ -204,9 +204,9 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0 }: 
   return (
     // On a phone this shares the screen with the docked simulator (AB#455),
     // so the buttons compact. Reset position and the keyboard hint are not
-    // here at all: on a laptop they are in the simulator's footer
-    // (DriveFooter), beside the rover they act on, and on a phone the
-    // simulator's own Reset does the job and there is no keyboard.
+    // here at all: on a laptop they are in the footer card under this panel
+    // (DriveFooter), and on a phone the simulator's own Reset does the job
+    // and there is no keyboard.
     <div className="flex h-full w-full flex-col gap-2 p-3 md:gap-3 md:p-4">
       <div>
         <h3 className="font-display text-base font-bold text-foreground md:text-lg">Tap a block to drive</h3>

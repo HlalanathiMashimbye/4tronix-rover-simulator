@@ -300,7 +300,16 @@ export default function MissionVideoClient({
             </div>
             {showBlocks ? (
               <div className="min-h-0 flex-1">
-                <BlocklyViewer state={mission.blocklyState!} highlight={runningSource} />
+                <BlocklyViewer
+                  state={mission.blocklyState!}
+                  highlight={runningSource}
+                  // The whole program, as big as reads well: centred at the
+                  // editor's zoom, a short one sat small in a big white
+                  // canvas and a long one ran off the bottom.
+                  fit
+                  maxFitScale={1.25}
+                  zoomControls
+                />
               </div>
             ) : (
               <CodeLines code={mission.code} highlight={runningSource} />

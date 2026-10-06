@@ -7,9 +7,10 @@
  *
  * jsdom does no layout, so these hold the STRUCTURE that makes the size
  * constant: the play controls are inside the yard (laid over it) rather than
- * beside it in the column, and the footer slot is the same slot whichever bar
- * fills it. The sizes themselves were measured in a browser: one size in
- * Drive, Blocks and Python, before and after a run.
+ * beside it in the column, and the card is nothing but a header and the yard,
+ * with name, checks and Send in a card of their own. The sizes themselves were
+ * measured in a browser: one size in Drive, Blocks and Python, before and
+ * after a run.
  */
 
 import { readFileSync } from 'fs';
@@ -56,24 +57,11 @@ it('lays the play controls over the yard, where they cannot take its height', ()
   expect(frame).toContainElement(screen.getByLabelText('Reset'));
 });
 
-it('gives every footer the same fixed slot, outside the yard', () => {
-  const slotFor = (footer: React.ReactNode) => {
-    const { container, unmount } = render(
-      <RoverSimulator trajectory={RUN} isPlaying editorMode="code" footer={footer} />,
-    );
-    const slot = container.querySelector('[data-sim-footer]') as HTMLElement;
-    const inFrame = container.querySelector('[data-yard-frame]')!.contains(slot);
-    const className = slot.className;
-    unmount();
-    return { className, inFrame };
-  };
-
-  const drive = slotFor(<DriveFooter onResetPosition={() => {}} />);
-  const short = slotFor(<p>one line</p>);
-  expect(drive.inFrame).toBe(false);
-  // Its size is the simFooter rule's (globals.css), the same for every footer.
-  expect(drive.className).toContain('simFooter');
-  expect(short.className).toBe(drive.className);
+it('keeps its card to a header and the yard, so nothing else can take the yard\'s height', () => {
+  const { container } = render(<RoverSimulator trajectory={RUN} isPlaying editorMode="code" />);
+  const card = container.firstElementChild as HTMLElement;
+  expect(card.children).toHaveLength(2);
+  expect(card.lastElementChild).toHaveAttribute('data-yard-frame');
 });
 
 it("puts the rover back from Drive's footer", () => {
@@ -116,10 +104,23 @@ describe("Create Mission's simulator keeps the yard's real shape", () => {
     expect(Number(column.style.getPropertyValue('--yard-aspect'))).toBeCloseTo(YARD.widthCm / YARD.depthCm, 9);
   });
 
-  it('sizes the column, and the yard beside the footer, from that shape', () => {
-    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-    const rule = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split('}')[0];
-    expect(rule('.buildSim')).toMatch(/width:[^;]*var\(--yard-aspect\)/);
-    expect(rule('.simBody > .simYard')).toMatch(/flex:[^;]*var\(--yard-aspect\)/);
+  const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  /** The body of every rule for a selector, in source order. */
+  const rules = (selector: string) =>
+    css.split(`${selector} {`).slice(1).map((after) => after.split('}')[0]);
+
+  it('sizes the column from that shape, on a laptop and on a tablet', () => {
+    const widths = rules('.buildSim').filter((body) => /width:/.test(body));
+    expect(widths).toHaveLength(2);
+    for (const body of widths) expect(body).toMatch(/width:[^;]*var\(--yard-aspect\)/);
+  });
+
+  it('gives the simulator the full height beside the editor and its footer on a laptop', () => {
+    // The footer under the simulator took its height, and with the yard kept
+    // to its real shape, as much again in width.
+    const areas = rules('.workspaceSplitGrid:not(.workspaceSplitGrid--fixed)')
+      .map((body) => body.match(/grid-template-areas:([^;]*);/)?.[1].replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    expect(areas).toContain('"editor sim" "footer sim"');
   });
 });

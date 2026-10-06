@@ -3,17 +3,16 @@
 import { RotateCcw } from 'lucide-react';
 
 /**
- * Drive mode's half of the simulator's footer slot (AB#464).
+ * Drive mode's half of Create Mission's footer card (AB#464).
  *
- * The slot is one fixed height in every mode, so the yard above is the same
- * size whether a learner is driving or building. Drive has nothing to send,
- * so it uses the slot for the two things that belong to the yard: putting the
- * rover back on the start spot, and the keys that drive it. Both used to sit
- * at the bottom of the editor column, away from the rover they act on.
+ * The card is one fixed height in every mode, so nothing moves when a learner
+ * switches between driving and building. Drive has nothing to send, so it
+ * uses the card for putting the rover back on the start spot and the keys
+ * that drive it.
  */
 export function DriveFooter({ onResetPosition }: { onResetPosition: () => void }) {
   return (
-    <div className="@container flex h-full flex-col justify-between gap-1.5 border-t border-border/60 pt-1.5">
+    <div className="@container flex h-full flex-col justify-between gap-1.5">
       <p className="line-clamp-2 min-h-[2lh] text-[11px] leading-snug text-muted-foreground">
         Drive is for practising: nothing here goes to the real rover. To send a mission, build it in Blocks or Python.
       </p>

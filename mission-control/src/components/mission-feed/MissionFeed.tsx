@@ -247,8 +247,26 @@ export function MissionFeed() {
   return (
     <section className="mx-auto min-h-0 w-full max-w-page flex-1 overflow-y-auto scroll-panel pt-4 pb-5">
       {loading ? (
-        <div className="flex justify-center py-24">
-          <div className="h-12 w-12 animate-spin rounded-full border-4 border-border border-t-primary" />
+        // Cards in the shape the missions will take, shimmering, rather than a
+        // spinner in a blank page: the grid is there before the data, so
+        // nothing jumps when it lands.
+        <div
+          role="status"
+          aria-label="Loading missions"
+          className="grid gap-3 pt-1 grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))]"
+        >
+          {Array.from({ length: 6 }, (_, i) => (
+            <div key={i} aria-hidden="true" className="overflow-hidden rounded-2xl border border-border bg-card">
+              <div className="skeleton aspect-video w-full" />
+              <div className="flex flex-col gap-3 p-4">
+                <div>
+                  <div className="skeleton h-4 w-2/3 rounded-md" />
+                  <div className="skeleton mt-2 h-3 w-1/4 rounded-md" />
+                </div>
+                <div className="skeleton h-[97px] rounded-xl" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : error ? (
         <div className="mx-auto mt-10 max-w-2xl rounded-3xl border border-destructive/40 bg-destructive/10 p-8 text-center clay">
