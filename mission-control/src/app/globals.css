@@ -901,9 +901,9 @@
     align-items: stretch;
   }
 
-  /* A mission's page: video and code at 60/40 (see MissionVideoClient). */
+  /* A mission's page: video and code half each (see MissionVideoClient). */
   .workspaceSplitGrid--fixed {
-    grid-template-columns: minmax(0, 60fr) minmax(320px, 40fr);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
   }
 }
 
@@ -1096,10 +1096,13 @@
 /*
  * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
  *
- * Editing and running: the simulator and the editor have half each, so a
- * run plays with its program in view and the running block lit up in it
- * (6 Oct 2026: it was 30% for the simulator, and a run hid the editor).
- * Enlarged, the simulator has about 70%. Launching (when a run ends): the
+ * Editing and running: the simulator has a third and the editor two, so a
+ * run plays with its program in view and the running block lit up in it.
+ * Not half each: tried on an iPhone (6 Oct 2026), half left the block canvas
+ * too small to build a program on, and the expand button is there for a
+ * proper look at the yard. Enlarged, the simulator has about 62%; the
+ * mission's own page, which has nothing to edit, is half each (above).
+ * Launching (when a run ends): the
  * simulator takes everything the launch controls leave, the controls rise in
  * under it and the editor sinks away; Back to blocks plays it in reverse. The
  * yard stretches to fill the strip at every size (computeLayout), so the
@@ -1107,7 +1110,7 @@
  *
  * Sized with FLEX, not height, because every size here is a share of what
  * is left, which height cannot express and flex can interpolate: flex-grow
- * and flex-basis both animate, so the simulator glides between half, more
+ * and flex-basis both animate, so the simulator glides between a third, more
  * than half and the remainder. The launch controls use the grid 0fr-to-1fr
  * trick, the one way to animate to their natural height.
  */
@@ -1120,7 +1123,7 @@
   transition: flex var(--phone-move);
 }
 .phoneSimStrip[data-expanded="true"] {
-  flex-grow: 2.4;
+  flex-grow: 3.3;
 }
 /* Typing: one line, whatever the strip was. Declared after expanded so it
    wins over it. */
@@ -1158,7 +1161,7 @@
 }
 
 .phoneEditorSlot {
-  flex: 1 1 0;
+  flex: 2 1 0;
   min-height: 0;
   margin-top: 0.375rem;
   transition: flex var(--phone-move), opacity 220ms ease, transform var(--phone-move), margin var(--phone-move);
