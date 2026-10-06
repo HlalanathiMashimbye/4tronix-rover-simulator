@@ -1,9 +1,9 @@
 "use client";
 
 import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Rocket, Star, Zap, Lightbulb } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
@@ -31,6 +31,8 @@ export default function MissionVideoClient({
   yards: Yard[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoRemix = searchParams.get('autoRemix') === 'true';
   const [mission, setMission] = useState<Mission | null>(null);
   // Every yard's attempt, so the carousel can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
@@ -130,15 +132,24 @@ export default function MissionVideoClient({
 
   // Remix into the workspace: carry blocks for block-built missions,
   // otherwise the Python, and open the matching editor mode.
-  const remix = () => {
-    if (mission.blocklyState) {
-      localStorage.setItem('roverWorkspace', mission.blocklyState);
-      router.push('/mission?mode=blockly');
-    } else {
-      localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
-      router.push('/mission?mode=code');
+  const remix = useCallback(() => {
+    if (mission && mission.status === 'completed') {
+      if (mission.blocklyState) {
+        localStorage.setItem('roverWorkspace', mission.blocklyState);
+        router.push('/mission?mode=blockly');
+      } else {
+        localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
+        router.push('/mission?mode=code');
+      }
     }
-  };
+  }, [mission, router]);
+
+  // Auto-remix when landing from email or deep link with ?autoRemix=true
+  useEffect(() => {
+    if (autoRemix && mission && mission.status === 'completed') {
+      remix();
+    }
+  }, [autoRemix, mission, remix]);
 
   const copyCode = async () => {
     // The same payload the operator queue copies. This button used to write
@@ -206,17 +217,33 @@ export default function MissionVideoClient({
           {/* In the header, like Run in the editor: the one thing to do next
               on this page. It was a card under the code, a whole row of a
               phone screen. */}
-          <button
-            onClick={remix}
-            title="Tweak the code and run your own version"
-            className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
-          >
-            <Zap className="h-3.5 w-3.5" fill="currentColor" />
-            {/* Words down to the narrowest phones; below 360px the bolt alone,
-                named for screen readers by aria-label. */}
-            <span className="max-[359px]:sr-only">Remix</span>
-          </button>
+          {mission.status === 'completed' && (
+            <button
+              onClick={remix}
+              title="Tweak the code and run your own version"
+              className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
+            >
+              <Zap className="h-3.5 w-3.5" fill="currentColor" />
+              {/* Words down to the narrowest phones; below 360px the bolt alone,
+                  named for screen readers by aria-label. */}
+              <span className="max-[359px]:sr-only">Remix</span>
+            </button>
+          )}
         </div>
+
+        {mission.status === 'completed' && (
+          <div className="flex shrink-0 items-start gap-3 rounded-2xl border-2 border-amber-200/30 bg-gradient-to-br from-amber-50/50 to-orange-50/50 p-4 dark:border-amber-950/40 dark:from-amber-950/30 dark:to-orange-950/30">
+            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <h2 className="font-display font-semibold text-foreground">
+                How did it go?
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Remix it to go further or fix it.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Fixed at 60/40, video to code, and the number came from the
             simulator's geometry rather than taste.

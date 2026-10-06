@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
@@ -42,6 +43,7 @@ export function MissionWorkspace() {
   const { layout: yardLayout } = useYardLayout(yardId);
   const initialMode = (searchParams.get('mode') as EditorMode) || 'manual';
   const initialCode = searchParams.get('code') ?? '';
+  const remixFromId = searchParams.get('remixFrom') ?? '';
 
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -119,6 +121,32 @@ export function MissionWorkspace() {
 
     return () => window.clearTimeout(timer);
   }, []);
+
+  // Load mission from remixFrom parameter (for cross-device remix via email)
+  useEffect(() => {
+    if (remixFromId) {
+      const loadRemixMission = async () => {
+        try {
+          const repository = browserMissionRepository();
+          const mission = await repository.findById(remixFromId);
+          if (mission) {
+            if (mission.blocklyState) {
+              localStorage.setItem('roverWorkspace', mission.blocklyState);
+              setEditorMode('blockly');
+            } else {
+              localStorage.setItem('roverWorkspace', '');
+              localStorage.setItem('rover_monaco_code', mission.code);
+              setEditorMode('code');
+            }
+            setCurrentCode(mission.code);
+          }
+        } catch (err) {
+          console.error('Failed to load mission for remix:', err);
+        }
+      };
+      void loadRemixMission();
+    }
+  }, [remixFromId]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);

@@ -26,6 +26,7 @@ export interface MissionStatusEmailContent {
 interface StatusCopy {
   subjectPrefix: string;
   headline: (missionName: string) => string;
+  bodyExtra?: (missionUrl: string) => string;
 }
 
 const STATUS_COPY: Record<MissionStatus, StatusCopy> = {
@@ -43,6 +44,18 @@ const STATUS_COPY: Record<MissionStatus, StatusCopy> = {
     subjectPrefix: '🎉 Mission Complete!',
     headline: (missionName) =>
       `Your mission <strong>${missionName}</strong> has been successfully launched and completed on Mars! 🚀`,
+    bodyExtra: (missionUrl) => {
+      // Extract mission ID and generate remix editor link
+      const missionId = missionUrl.split('/').pop()?.split('?')[0];
+      const remixUrl = missionId ? `/mission?remixFrom=${missionId}&mode=auto` : missionUrl;
+      return `
+      <p style="margin: 16px 0; line-height: 1.5; font-size: 14px;">Did your mission do what you expected?</p>
+      <p style="margin: 0 0 16px; line-height: 1.5; font-size: 14px;">Watch your mission run and see what happened. If you want to improve it, remix the mission and try again.</p>
+      <a href="${remixUrl}" style="display: inline-block; background: #10b981; color: #ffffff; font-weight: 700; text-decoration: none; padding: 12px 20px; border-radius: 10px; font-size: 14px;">
+        Remix Mission ⚡
+      </a>
+    `;
+    },
   },
   failed: {
     subjectPrefix: '⚠️ Mission Failed',
@@ -64,12 +77,13 @@ export function buildMissionStatusEmail(
   const greetingName = learnerName?.trim() || 'Space Explorer';
 
   const subject = `${copy.subjectPrefix} - ${missionName}`;
+  const extraBody = copy.bodyExtra ? copy.bodyExtra(missionUrl) : '';
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; background: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; padding: 32px; color: #0f172a;">
       <p style="margin: 0 0 16px;">Hi ${greetingName},</p>
       <p style="margin: 0 0 16px; line-height: 1.5;">${copy.headline(missionName)}</p>
-      <p style="margin: 0 0 24px; line-height: 1.5;">Open your mission to see the details:</p>
+      ${extraBody ? `${extraBody}<p style="margin: 24px 0 0;">Or view your mission to see more details:</p>` : `<p style="margin: 0 0 24px; line-height: 1.5;">Open your mission to see the details:</p>`}
       <a href="${missionUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; font-weight: 700; text-decoration: none; padding: 12px 20px; border-radius: 10px;">
         View Your Mission 🚀
       </a>
