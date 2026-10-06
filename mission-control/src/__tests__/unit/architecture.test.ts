@@ -356,7 +356,7 @@ describe('the workspace split grid', () => {
   // Comments stripped: these assert the declarations, not the prose that
   // explains them - and the prose here necessarily quotes the old bad value.
   const grid = css
-    .slice(css.indexOf('.workspaceSplitGrid {'), css.indexOf('.workspaceSplitDivider {'))
+    .slice(css.indexOf('.workspaceSplitGrid {'), css.indexOf('/* Phones only.'))
     .replace(/\/\*[\s\S]*?\*\//g, '');
 
   it('exists to be read', () => {
