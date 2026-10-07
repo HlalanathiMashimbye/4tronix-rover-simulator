@@ -56,6 +56,7 @@ function setUp(found: Mission | null, runs: MissionRun[] = [], notifier?: Learne
 
   const repository: IMissionReader & IMissionBookkeeping = {
     findById: async () => found,
+    findByIdPrefix: async () => [],
     findRecent: async () => ({ missions: [], nextCursor: null }),
     findRuns: async () => runs,
     upsertRun: async () => {},
