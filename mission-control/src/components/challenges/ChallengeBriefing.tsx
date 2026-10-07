@@ -61,7 +61,7 @@ export function ChallengeBriefing({
         aria-labelledby="mission-goals-title"
         className="mx-auto mt-2 max-w-2xl rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-5 sm:p-7"
       >
-        {false && (
+        {briefingLevel && (
           <div className="mb-6 rounded-2xl border-2 border-kid-panel-edge px-4 py-3">
             <p className="mb-2 font-display text-sm font-bold uppercase tracking-wide text-kid-blue-text">
               Level {briefingLevel.id}: {briefingLevel.title}
