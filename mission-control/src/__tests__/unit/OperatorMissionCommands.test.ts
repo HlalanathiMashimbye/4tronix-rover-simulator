@@ -144,6 +144,32 @@ describe('acting on the run in front of the operator', () => {
     expect(written[0][1]).toBe('mine-1');
     expect(written[0][3]).toMatchObject({ youtubeUrl: 'https://youtu.be/abc12345678', status: null });
   });
+
+  it('completes the named run, not the latest, when runId is explicit', async () => {
+    const { commands, written } = setUp(mission({ status: 'processing' }), [
+      run('run-1', { status: 'processing', startedAt: '2026-09-14T09:00:00.000Z' }),
+      run('run-2', { status: 'processing', startedAt: '2026-09-14T09:40:00.000Z' }), // Latest
+    ]);
+
+    await commands.run('m1', { action: 'complete', yardId: HERE, runId: 'run-1' }, OPERATOR);
+
+    // Should have completed run-1, not run-2 (the latest)
+    expect(written[0][1]).toBe('run-1');
+    expect(written[0][3]).toMatchObject({ status: 'completed' });
+  });
+
+  it('cancels the named run, not the latest, when runId is explicit', async () => {
+    const { commands, written } = setUp(mission({ status: 'processing' }), [
+      run('run-1', { status: 'processing', startedAt: '2026-09-14T09:00:00.000Z' }),
+      run('run-2', { status: 'processing', startedAt: '2026-09-14T09:40:00.000Z' }), // Latest
+    ]);
+
+    await commands.run('m1', { action: 'cancel', yardId: HERE, runId: 'run-1' }, OPERATOR);
+
+    // Should have cancelled run-1, not run-2 (the latest)
+    expect(written[0][1]).toBe('run-1');
+    expect(written[0][3]).toMatchObject({ status: 'cancelled' });
+  });
 });
 
 describe('the yard the operator is standing at', () => {

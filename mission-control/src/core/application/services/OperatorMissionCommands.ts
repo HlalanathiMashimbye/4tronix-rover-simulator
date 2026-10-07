@@ -40,14 +40,15 @@ import { getYouTubeId } from '@/core/domain/services/youtubeLinking';
 import type { NotifyOutcome } from '@/core/application/services/MissionNotificationService';
 
 /**
- * Every action names the yard it is for. runId is optional on the video
- * actions on purpose: without one they act on the operator's latest run at
- * this yard, which is what every existing caller means; with one they act on a
- * named attempt, which is what managing several needs.
+ * Every action names the yard it is for. runId is optional on the video,
+ * complete, and cancel actions on purpose: without one they act on the
+ * operator's latest run at this yard, which is what every existing caller
+ * means; with one they act on a named attempt, which is what managing
+ * concurrent runs needs.
  */
 export type OperatorCommand =
-  | { action: 'complete'; yardId: string }
-  | { action: 'cancel'; yardId: string }
+  | { action: 'complete'; yardId: string; runId?: string }
+  | { action: 'cancel'; yardId: string; runId?: string }
   | { action: 'another-run'; yardId: string }
   | { action: 'attach-video'; yardId: string; url: string; runId?: string }
   | { action: 'remove-video'; yardId: string; runId?: string }
@@ -206,11 +207,18 @@ export class OperatorMissionCommands {
    * 'another-run' always takes a fresh id, which is the entire point of it:
    * reusing one would merge the second attempt over the first and destroy the
    * record the action exists to create. Every other action writes to the run
-   * it names, or the latest at this yard, or - for a yard that never flushed a
-   * run - a new one the write creates.
+   * it names (if provided), or the latest at this yard, or - for a yard that
+   * never flushed a run - a new one the write creates.
+   *
+   * For actions like 'complete' and 'cancel' that now optionally accept a
+   * runId: if one is provided, we use it explicitly. This allows operators to
+   * target a specific run when concurrent runs exist at the same yard.
+   * If not provided, we fall back to the "latest run" heuristic for backward
+   * compatibility.
    */
   private runIdFor(command: BookkeepingCommand, latest: MissionRun | null): string {
     if (command.action === 'another-run') return this.newRunId();
+    // For complete, cancel, and other bookkeeping actions: explicit runId takes precedence
     if ('runId' in command && command.runId) return command.runId;
     return latest?.runId ?? this.newRunId();
   }

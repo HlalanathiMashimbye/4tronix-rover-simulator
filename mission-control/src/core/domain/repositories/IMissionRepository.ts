@@ -101,6 +101,33 @@ export interface IMissionBookkeeping {
   ): Promise<void>;
 
   /**
+   * Check if this idempotency key has already been used to create a run,
+   * and if so, return the existing runId. Used to deduplicate concurrent
+   * or retried requests to start a mission.
+   *
+   * @param missionId - The mission being started
+   * @param idempotencyKey - Stable hash representing the start action
+   * @returns The existing runId if one was created for this key, or null
+   */
+  checkIdempotency(missionId: string, idempotencyKey: string): Promise<string | null>;
+
+  /**
+   * Record that this idempotency key was used to create a run. Called after
+   * a run is successfully created to prevent duplicate creation on retry.
+   *
+   * @param missionId - The mission being started
+   * @param idempotencyKey - Stable hash representing the start action
+   * @param runId - The runId created under this key
+   * @param expiresAt - When this entry should be cleaned up (ISO timestamp)
+   */
+  recordIdempotencyKey(
+    missionId: string,
+    idempotencyKey: string,
+    runId: string,
+    expiresAt: string,
+  ): Promise<void>;
+
+  /**
    * Hide a mission without destroying it. Soft, because a mission is a
    * child's work and the operator pressing delete is usually removing it from
    * a public feed, not asking for it to be unrecoverable.

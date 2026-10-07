@@ -50,8 +50,8 @@ import type {
 const yardId = z.string().min(1);
 
 const bodySchema = z.discriminatedUnion('action', [
-  z.object({ action: z.literal('complete'), yardId }),
-  z.object({ action: z.literal('cancel'), yardId }),
+  z.object({ action: z.literal('complete'), yardId, runId: z.string().trim().min(1).optional() }),
+  z.object({ action: z.literal('cancel'), yardId, runId: z.string().trim().min(1).optional() }),
   z.object({ action: z.literal('another-run'), yardId }),
   z.object({
     action: z.literal('attach-video'), yardId,
