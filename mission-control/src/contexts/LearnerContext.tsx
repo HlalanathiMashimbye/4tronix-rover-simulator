@@ -13,7 +13,7 @@ import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client
 import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
-import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';
+import { Learner, createAnonymousLearner, type LearnerAvatar } from '@/core/domain/entities/Learner';
 
 interface LearnerContextType {
   learner: Learner | null;
@@ -27,6 +27,7 @@ interface LearnerContextType {
   showEmailPrompt: boolean;
   generateRecoveryCode: () => Promise<string | null>;
   restoreFromCode: (code: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (displayName: string, avatar: LearnerAvatar) => Promise<boolean>;
 }
 
 const LearnerContext = createContext<LearnerContextType | undefined>(undefined);
@@ -191,24 +192,30 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  /*
-   * There is deliberately no updateDisplayName.
-   *
-   * One existed, and nothing ever called it: no screen offered a learner a way
-   * to name themselves, so all 170 learner records have no display name. That
-   * is not an oversight to correct. Learners are anonymous here by design -
-   * they are not Firebase Auth users, their id is hashed before it touches a
-   * mission, and their address lives where browsers cannot read it - and a
-   * dormant writer for a name is the thing someone wires up to a "name
-   * yourself" box without realising what it undoes.
-   *
-   * Removed alongside AB#377, which asked the operator queue to show who
-   * submitted each mission and was closed as won't-do for the same reason.
-   *
-   * MissionNotificationService still READS displayName when personalising the
-   * completion email. That is a message to the learner's own address, it
-   * handles the field being absent, and it is left alone.
-   */
+  async function updateProfile(
+    displayName: string,
+    avatar: LearnerAvatar,
+  ): Promise<boolean> {
+    const learnerId = getLearnerID();
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(learnerId)}/profile`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName, avatar }),
+        },
+      );
+      if (!response.ok) return false;
+
+      setLearner((prev) =>
+        prev ? { ...prev, displayName, avatar } : prev,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   async function generateRecoveryCode(): Promise<string | null> {
     const learnerId = getLearnerID();
@@ -275,6 +282,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         showEmailPrompt,
         generateRecoveryCode,
         restoreFromCode,
+        updateProfile,
       }}
     >
       {children}

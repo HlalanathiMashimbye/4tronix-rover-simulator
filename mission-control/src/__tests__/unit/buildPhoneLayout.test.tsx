@@ -37,6 +37,9 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
   useCompletionNotifications: () => ({ unread: [], hasUnread: false, markAllSeen: () => {}, dismiss: () => {} }),
 }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
 
 import { isBuildSurface } from '@/lib/appSurfaces';
 import { Navbar } from '@/components/layout/Navbar';

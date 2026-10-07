@@ -30,9 +30,11 @@ import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useLearner } from '@/contexts/LearnerContext';
 import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
+import { Avatar } from '@/components/learner/Avatar';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -65,6 +67,7 @@ export function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
+  const { learner } = useLearner();
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
   const { completedCount, totalCount, loading: challengesLoading } = useChallengeProgress();
 
@@ -216,6 +219,16 @@ export function Navbar() {
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create Mission
             </Link>
+
+            {learner && (
+              <Link
+                href="/profile"
+                className="hidden shrink-0 rounded-full ring-2 ring-transparent transition-all hover:ring-primary/40 md:block"
+                title={learner.displayName ?? 'Set up your profile'}
+              >
+                <Avatar avatar={learner.avatar} size={32} />
+              </Link>
+            )}
 
             <button
               onClick={toggleTheme}

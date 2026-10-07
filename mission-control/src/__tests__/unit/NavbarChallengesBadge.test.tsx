@@ -31,6 +31,9 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
 jest.mock('@/components/layout/NavbarSearch', () => ({ NavbarSearch: () => null }));
 jest.mock('@/components/layout/NotificationModal', () => ({ NotificationModal: () => null }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
 
 const useChallengeProgress = jest.fn();
 jest.mock('@/hooks/useChallengeProgress', () => ({
