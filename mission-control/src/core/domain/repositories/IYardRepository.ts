@@ -1,4 +1,4 @@
-import type { Yard } from '@/core/domain/entities/Yard';
+import type { Yard, YardLayout } from '@/core/domain/entities/Yard';
 
 /**
  * The yards this platform knows about.
@@ -17,6 +17,12 @@ export interface IYardRepository {
 
   /** Retire or restore. The only kind of removal there is. */
   setActive(yardId: string, active: boolean): Promise<void>;
+
+  /**
+   * Replace a yard's layout whole (AB#468). Not through save: save merges,
+   * and a merged layout would keep a zone the admin had just removed.
+   */
+  setLayout(yardId: string, layout: YardLayout): Promise<void>;
 
   /**
    * Move a yard to a new id, recording the old one so it still resolves.

@@ -5,6 +5,8 @@ import { AlertTriangle } from 'lucide-react';
 import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import { defineRoverBlocks, migrateSpinBlocks, type CommandSource } from '@/lib/roverBlockly';
 import { RunningBlockOverlay, useRunningBlockMarks } from '@/components/mission/runningBlockMarks';
+import { BlockCanvasControls, fitBlocks } from '@/components/mission/blockCanvasControls';
+import { PHONE_START_SCALE } from '@/components/mission/blocklyInjectOptions';
 import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 
 /**
@@ -18,6 +20,7 @@ import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
  * editor does (runningBlockMarks.tsx), so watching a mission's simulation
  * shows which block drives which move. On a phone the zoom buttons go and two
  * fingers zoom instead, as in the editor: they sat on top of the program.
+ * Show all the blocks takes their place, as it does in the editor.
  */
 export function BlocklyViewer({
   state,
@@ -29,17 +32,17 @@ export function BlocklyViewer({
   state: string;
   highlight?: CommandSource | null;
   /**
-   * Scale the whole program into view instead of centring it at the set
-   * zoom. For the operator console, where the panel is short and the job is
-   * to check the program end to end: centred, a tall program showed its
-   * middle, with the On uplink block and the first steps cut off.
+   * Scale the whole program into view, with room round it (fitBlocks),
+   * instead of centring it at the set zoom. Centred, a tall program showed
+   * its middle, with the On uplink block and the first steps cut off.
    */
   fit?: boolean;
   /**
    * The most a fitted program is scaled up. 1 is the editor's size, which is
    * right for the operator's quick check; a learner's own mission page has
    * room to show a short program bigger, where at the editor's size it sat
-   * small in a big white canvas.
+   * small in a big white canvas. Not on a phone, whose canvas is small: there
+   * a program is never fitted bigger than the phone editor shows it.
    */
   maxFitScale?: number;
   /** The zoom buttons, off by default when fitted (see zoom below). */
@@ -51,6 +54,7 @@ export function BlocklyViewer({
   const [ready, setReady] = useState(false);
   const phone = useIsPhoneLayout();
   const marks = useRunningBlockMarks({ workspaceRef, hostRef: divRef, highlight, ready });
+  const fitCap = phone ? Math.min(maxFitScale, PHONE_START_SCALE) : maxFitScale;
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [retryToken, setRetryToken] = useState(0);
@@ -84,7 +88,7 @@ export function BlocklyViewer({
       // program is already sized to the panel, and in the operator's narrow
       // panel the buttons sat on top of it). The wheel still zooms.
       zoom: phone
-        ? { controls: false, wheel: false, pinch: true, startScale: 0.75, maxScale: 2, minScale: 0.3 }
+        ? { controls: false, wheel: false, pinch: true, startScale: PHONE_START_SCALE, maxScale: 2, minScale: 0.3 }
         : { controls: zoomControls, wheel: true, startScale: 0.9, maxScale: 2.5, minScale: 0.3 },
     });
     workspaceRef.current = workspace;
@@ -99,17 +103,10 @@ export function BlocklyViewer({
       Blockly.svgResize(workspace);
       // Blocks carry the coordinates they were authored at, so a mission built
       // off to one side opened showing empty canvas and the learner had to
-      // hunt for it. scrollCenter (not zoomToFit) keeps the scale the viewer
-      // was configured with and only moves the viewport.
-      if (fit) {
-        workspace.zoomToFit();
-        // Capped: a two-block program fitted to a big panel would be
-        // comically large.
-        if (workspace.getScale() > maxFitScale) workspace.setScale(maxFitScale);
-        workspace.scrollCenter();
-      } else {
-        workspace.scrollCenter();
-      }
+      // hunt for it. scrollCenter alone keeps the configured scale and only
+      // moves the viewport.
+      if (fit) fitBlocks(workspace, fitCap);
+      else workspace.scrollCenter();
       setReady(true);
     });
 
@@ -120,7 +117,7 @@ export function BlocklyViewer({
     };
     // phone is read once at inject, like the editor's options; a change of
     // layout re-injects.
-  }, [loaded, state, phone, fit, maxFitScale, zoomControls]);
+  }, [loaded, state, phone, fit, fitCap, zoomControls]);
 
   if (loadError) {
     return (
@@ -152,6 +149,11 @@ export function BlocklyViewer({
     <div className="relative h-full w-full">
       <div ref={divRef} className={`h-full w-full${phone ? ' roverBlocklyPhone' : ''}`} />
       <RunningBlockOverlay marks={marks} />
+      {phone && ready && (
+        <BlockCanvasControls
+          onShowAll={() => workspaceRef.current && fitBlocks(workspaceRef.current, fitCap)}
+        />
+      )}
     </div>
   );
 }

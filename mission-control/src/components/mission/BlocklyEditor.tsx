@@ -14,6 +14,7 @@ import {
 } from '@/lib/roverBlockly';
 import { blocklyInjectOptions } from '@/components/mission/blocklyInjectOptions';
 import { RunningBlockOverlay, useRunningBlockMarks } from '@/components/mission/runningBlockMarks';
+import { BlockCanvasControls, fitBlocks, useBlockBin } from '@/components/mission/blockCanvasControls';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
@@ -51,6 +52,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   // Holds the Blockly workspace instance (untyped CDN global).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const workspaceRef = useRef<any>(null);
+  const binRef = useRef<HTMLDivElement>(null);
   const flyoutObserverRef = useRef<MutationObserver | null>(null);
   const mergedNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -139,15 +141,17 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         startWithHat();
       }
 
-      // Centre whatever we just put on the canvas. Saved workspaces keep the
-      // coordinates they were dragged to, and a remix carries the coordinates
-      // of whoever built it, so opening the editor could land on empty canvas
-      // with the program off-screen. Deliberately scrollCenter and not
-      // zoomToFit: the learner's zoom level is theirs, and rescaling on open
-      // is the behaviour the recenter button was removed for (see below).
-      // After a frame, so it measures the container at its final size.
+      // Open on the whole program, centred, with room round it (fitBlocks).
+      // Saved workspaces keep the coordinates they were dragged to, and a
+      // remix carries the coordinates of whoever built it, so opening the
+      // editor could land on empty canvas with the program off-screen; and at
+      // a fixed zoom a long program ran out of a phone's canvas. Never bigger
+      // than the zoom the editor starts at. The learner's own zoom is theirs
+      // from here on: pinch or the zoom buttons. After a frame, so it
+      // measures the container at its final size.
       requestAnimationFrame(() => {
-        if (workspaceRef.current) workspaceRef.current.scrollCenter();
+        const opened = workspaceRef.current;
+        if (opened) fitBlocks(opened, opened.options.zoomOptions.startScale);
       });
 
       // Blockly hides a flyout but leaves its scrollbar behind. Closing a
@@ -240,7 +244,8 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     // viewport: back in the editor, the program sat in the top-left corner.
     // So below a usable size this stops resizing altogether, and when the
     // canvas comes back it recentres once it has finished growing, measured
-    // as no resize for a moment rather than a guess at the animation's length.
+    // as no resize for a moment rather than a guess at the animation's length,
+    // and frames the program again as it did on opening.
     let collapsed = false;
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     const handleResize = () => {
@@ -257,7 +262,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           const workspace = workspaceRef.current;
           if (!workspace) return;
           window.Blockly.svgResize(workspace);
-          workspace.scrollCenter();
+          fitBlocks(workspace, workspace.options.zoomOptions.startScale);
         }, 120);
       }
       if (rafId !== null) return;
@@ -311,14 +316,17 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     return () => onRegisterRun?.(null);
   });
 
-  // There is deliberately no custom recenter button. Blockly's own zoom-reset
-  // control (the target icon above the +/- buttons, enabled by zoom.controls
-  // below) already does the job: measured, it returns the scale to 1.0 AND
-  // re-centers the blocks in the viewport. A second button that called
-  // zoomToFit() used to sit at the bottom of the canvas, which meant two
-  // recenter controls with different behaviour - zoomToFit re-scales to fit
-  // the content, so it could leave the blocks tiny or oversized rather than
-  // back at a normal size.
+  // On a laptop there is no recenter button of ours: Blockly's own zoom-reset
+  // control (the target icon above the +/- buttons) returns the scale to 1.0
+  // and re-centres the blocks, and a second control beside it that behaved
+  // differently was removed. A phone has no zoom buttons (two fingers zoom),
+  // so it gets Show all the blocks instead, which frames the program the way
+  // the editor opened it, and a bin (blockCanvasControls.tsx).
+  const bin = useBlockBin({ workspaceRef, binRef, ready: isInitialized && phone });
+  const showAll = () => {
+    const workspace = workspaceRef.current;
+    if (workspace) fitBlocks(workspace, workspace.options.zoomOptions.startScale);
+  };
 
   // Listen for workspace changes and push the generated Python (and the
   // serialized Blockly state) up to the parent.
@@ -447,6 +455,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           style={{ width: '100%' }}
         />
         <RunningBlockOverlay marks={marks} />
+        {phone && isInitialized && <BlockCanvasControls onShowAll={showAll} binRef={binRef} bin={bin} />}
       </div>
     </div>
   );

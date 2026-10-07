@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, OctagonX } from 'lucide-react';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import { previewMission, type FindingLevel } from '@/core/domain/safety/missionPreview';
 import type { CommandSource } from '@/lib/roverBlockly';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
@@ -23,12 +24,17 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  */
 export function MissionPreview({
   mission,
+  yardId,
   onSourceChange,
 }: {
   mission: QueueMission;
+  /** The yard the operator signed in at, whose queue this is (AB#468). */
+  yardId: string;
   onSourceChange: (source: CommandSource | null) => void;
 }) {
-  const trajectory = useMissionTrajectory(mission);
+  // In this yard's layout, rocks and slopes, the one the rover will run in.
+  const { layout } = useYardLayout(yardId);
+  const trajectory = useMissionTrajectory(mission, layout);
   const findings = useMemo(() => previewMission(mission.code, trajectory), [mission.code, trajectory]);
   const worst = findings[0]?.level ?? 'ok';
 
@@ -52,6 +58,7 @@ export function MissionPreview({
           editorMode="code"
           bare
           onSourceChange={onSourceChange}
+          yardId={yardId}
         />
         <span
           aria-hidden="true"

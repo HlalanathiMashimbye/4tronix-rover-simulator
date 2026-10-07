@@ -4,10 +4,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { recordMissionCreated } from '@/infrastructure/browser/platformMilestones';
+import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
 import { findCrash } from '@/core/domain/safety/crashCheck';
+import { findSlope } from '@/core/domain/safety/slopeCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { MissionSubmitBar } from '@/components/mission/MissionSubmitBar';
@@ -16,6 +18,7 @@ import { MissionSentDialog } from '@/components/mission/MissionSentDialog';
 import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
@@ -37,8 +40,14 @@ function runningLineText(code: string, source: CommandSource | null): string | n
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
+  // The yard this site's missions go to, and its layout (AB#468): what the
+  // simulator drives in here, so a run is judged against the rocks and slopes
+  // of the yard it will run in.
+  const yardId = resolveYardId();
+  const { layout: yardLayout } = useYardLayout(yardId);
   const initialMode = (searchParams.get('mode') as EditorMode) || 'manual';
   const initialCode = searchParams.get('code') ?? '';
+  const remixFromId = searchParams.get('remixFrom') ?? '';
 
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -88,6 +97,12 @@ export function MissionWorkspace() {
   const [missionSentOpen, setMissionSentOpen] = useState(false);
   /** The phone layout's launch view. Owned here so a successful send can close it. */
   const [launchOpen, setLaunchOpen] = useState(false);
+  /** A run is playing out in the simulator now: the phone's Run reads Stop. */
+  const [simRunning, setSimRunning] = useState(false);
+  /** Bumped by Stop, to pause the simulator where the rover is. */
+  const [pauseVersion, setPauseVersion] = useState(0);
+  /** How many runs have been watched to the end: the phone opens its launch view on each. */
+  const [runsEnded, setRunsEnded] = useState(0);
   // null on the server and during hydration: see usePhoneLayout for why
   // neither layout renders until this is known.
   const phoneLayout = usePhoneLayout();
@@ -122,6 +137,32 @@ export function MissionWorkspace() {
     id: string;
     title: string;
   } | null>(null);
+  // Load mission from remixFrom parameter (for cross-device remix via email)
+  useEffect(() => {
+    if (remixFromId) {
+      const loadRemixMission = async () => {
+        try {
+          const repository = browserMissionRepository();
+          const mission = await repository.findById(remixFromId);
+          if (mission) {
+            if (mission.blocklyState) {
+              localStorage.setItem('roverWorkspace', mission.blocklyState);
+              setEditorMode('blockly');
+            } else {
+              localStorage.setItem('roverWorkspace', '');
+              localStorage.setItem('rover_monaco_code', mission.code);
+              setEditorMode('code');
+            }
+            setCurrentCode(mission.code);
+          }
+        } catch (err) {
+          console.error('Failed to load mission for remix:', err);
+        }
+      };
+      void loadRemixMission();
+    }
+  }, [remixFromId]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
   /**
@@ -172,7 +213,7 @@ export function MissionWorkspace() {
   // trajectory in the simulator.
   const runSimulation = (commands: SimulationCommand[]) => {
     setError(null);
-    const simulated = simulateCommands(commands);
+    const simulated = simulateCommands(commands, yardLayout);
     setTrajectory(simulated);
     setIsPlaying(true);
     setSimulatedCode(currentCode);
@@ -285,7 +326,7 @@ export function MissionWorkspace() {
 
       const validation = validateMission({
         code: currentCode,
-        yardId: resolveYardId(),
+        yardId,
         learnerId,
         sessionId,
         // Stamp the email when the learner has provided one so this mission
@@ -363,6 +404,11 @@ export function MissionWorkspace() {
     () => (hasRunSimulation ? findCrash(trajectory) : undefined),
     [hasRunSimulation, trajectory],
   );
+  // And what ground it climbs (AB#468), on the same terms.
+  const slope = useMemo(
+    () => (hasRunSimulation ? findSlope(trajectory) : undefined),
+    [hasRunSimulation, trajectory],
+  );
 
   const editorPanel = (
     <EditorPanel
@@ -371,6 +417,7 @@ export function MissionWorkspace() {
       error={error}
       onManualTrajectory={handleManualTrajectory}
       manualResetVersion={manualResetVersion}
+      yard={yardLayout}
       onGenerateCommands={runSimulation}
       onCodeChange={setCurrentCode}
       onBlocklyCode={setBlocklyCode}
@@ -394,10 +441,12 @@ export function MissionWorkspace() {
         currentCode={currentCode}
         hasRunSimulation={hasRunSimulation}
         crash={crash}
+        slope={slope}
       />
     );
 
   const simulatorProps = {
+    yardId,
     trajectory,
     isPlaying,
     onReset: handleResetSimulation,
@@ -406,7 +455,12 @@ export function MissionWorkspace() {
     onSourceChange: setRunningSource,
     // Records the code that was RUN, not whatever is in the editor now: an
     // edit made while the rover was still moving has not been watched.
-    onFinished: () => setWatchedCode(simulatedCode),
+    onFinished: () => {
+      setWatchedCode(simulatedCode);
+      setRunsEnded((ended) => ended + 1);
+    },
+    onRunningChange: setSimRunning,
+    pauseVersion,
   };
 
   return (
@@ -432,6 +486,9 @@ export function MissionWorkspace() {
           simulator={<RoverSimulator {...simulatorProps} bare />}
           submitBar={submitBar}
           onRun={() => runEditorRef.current?.()}
+          running={simRunning}
+          onStop={() => setPauseVersion((version) => version + 1)}
+          runEnded={runsEnded}
           editorKind={editorMode === 'code' ? 'code' : 'blocks'}
           launchOpen={launchOpen}
           onLaunchOpenChange={setLaunchOpen}

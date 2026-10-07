@@ -37,10 +37,17 @@ The reason they are shared rather than reimplemented: the yard's offline
 editor and the browser simulator must agree about what a program does. When
 they disagreed, a child saw one thing on screen and the rover did another.
 
-The yard itself lives in `rover-physics.ts` as `YARD`: its measured size,
-rocks and start spot. The physics stops the rover at its walls and the
-renderer draws it, so both read the one definition. It used to be two pairs
-of numbers, one in each file, with a comment asking them to match.
+The yard's shape is defined in `rover-physics.ts` (`Yard`): size, start spot,
+rocks and rising ground (zones, AB#468). `YARD` is the measured Cape Town
+yard. The physics stops the rover at its walls and rocks and records the zone
+it is on, and the renderer draws the same layout, so both read one
+definition. It used to be two pairs of numbers, one in each file, with a
+comment asking them to match.
+
+Each yard's own layout is configuration now: stored on the yard, edited on
+the settings page, and read by every simulator through `useYardLayout`.
+`YARD` is what a yard uses until an admin saves one (`layoutOf`), and what
+`yardMeasurements.test.ts` holds to yard/docs/yard-measurements.md.
 
 ## 2. Small UI helpers
 

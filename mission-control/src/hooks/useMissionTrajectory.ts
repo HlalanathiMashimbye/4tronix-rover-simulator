@@ -5,6 +5,7 @@ import { loadBlockly } from '@/infrastructure/browser/loadBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { defineRoverBlocks, migrateSpinBlocks, workspaceToCommands } from '@/lib/roverBlockly';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import { YARD, type Yard } from '@/lib/rover-physics';
 
 /**
  * A stored mission, simulated, knowing which part of the program each moment
@@ -28,9 +29,11 @@ interface SimulatableMission {
   blocklyState?: string | null;
 }
 
-export function useMissionTrajectory(mission: SimulatableMission | null): TrajectoryPoint[] {
-  const fromPython = useMemo(() => (mission ? simulateCommands(parseRoverCode(mission.code)) : []), [mission]);
-  const [fromBlocks, setFromBlocks] = useState<{ state: string; trajectory: TrajectoryPoint[] } | null>(null);
+export function useMissionTrajectory(mission: SimulatableMission | null, yard: Yard = YARD): TrajectoryPoint[] {
+  // In the yard it ran in (AB#468), whose layout the caller has from
+  // useYardLayout, and the same one it draws the run in.
+  const fromPython = useMemo(() => (mission ? simulateCommands(parseRoverCode(mission.code), yard) : []), [mission, yard]);
+  const [fromBlocks, setFromBlocks] = useState<{ state: string; yard: Yard; trajectory: TrajectoryPoint[] } | null>(null);
   const state = mission?.blocklyState ?? null;
 
   useEffect(() => {
@@ -45,7 +48,7 @@ export function useMissionTrajectory(mission: SimulatableMission | null): Trajec
         try {
           Blockly.serialization.workspaces.load(JSON.parse(migrateSpinBlocks(state)), workspace);
           const commands = workspaceToCommands(workspace);
-          if (!cancelled && commands.length > 0) setFromBlocks({ state, trajectory: simulateCommands(commands) });
+          if (!cancelled && commands.length > 0) setFromBlocks({ state, yard, trajectory: simulateCommands(commands, yard) });
         } catch {
           // A workspace that will not load still has its Python; keep that.
         } finally {
@@ -58,9 +61,9 @@ export function useMissionTrajectory(mission: SimulatableMission | null): Trajec
     return () => {
       cancelled = true;
     };
-  }, [state]);
+  }, [state, yard]);
 
-  // Keyed on the state it was built from, so another mission's blocks can
-  // never be served for this one.
-  return fromBlocks && fromBlocks.state === state ? fromBlocks.trajectory : fromPython;
+  // Keyed on the state and the yard it was built from, so another mission's
+  // blocks, or the yard before its layout arrived, can never be served.
+  return fromBlocks && fromBlocks.state === state && fromBlocks.yard === yard ? fromBlocks.trajectory : fromPython;
 }

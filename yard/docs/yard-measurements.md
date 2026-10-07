@@ -114,6 +114,34 @@ The stereo also hints at raised back and west edges and a dip on the east
 side. Those did not survive the same settings check, so they are not recorded
 here as facts.
 
+### Slope zones (AB#468)
+
+What the simulator draws as rising ground: yellow, then orange, then red at
+the top. **Drawn by eye** from the rings of cracked texture round each peak in
+the floor photo, not measured, because the heights are not known (above).
+
+Only round the peaks. The whole mound rises gently and the start is on it, so
+a zone over the whole mound would flag every mission before it had moved. The
+start is 35 cm from the nearer peak, outside the yellow ring. The zones are
+judged at the rover's centre.
+
+A zone changes nothing in the physics: the simulated rover drives over it as
+if flat. It is a warning that from there the real run may not match: it may
+drift, slip, tip or stall. Never a block, red included (the team's call on
+6 Oct 2026).
+
+| Zone | Level | x, y | Radius |
+|---|---|---|---|
+| North peak | red | 94, 94 | 8 |
+| North peak | orange | 94, 94 | 17 |
+| North peak | yellow | 94, 94 | 26 |
+| South peak | red | 84, 137 | 8 |
+| South peak | orange | 84, 137 | 17 |
+| South peak | yellow | 84, 137 | 26 |
+
+These are the built-in zones. A yard's layout can be changed on the settings
+page, and once saved that copy is what the simulator uses for that yard.
+
 ## The simulator's floor
 
 The simulator draws the yard on a photo of its floor (AB#464), which the

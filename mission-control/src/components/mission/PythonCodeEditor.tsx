@@ -8,7 +8,7 @@ import { indentUnit, bracketMatching } from '@codemirror/language';
 import { closeBrackets, completionKeymap } from '@codemirror/autocomplete';
 import { setDiagnostics } from '@codemirror/lint';
 import { python } from '@codemirror/lang-python';
-import { AlertTriangle, Lightbulb, Play, X } from 'lucide-react';
+import { AlertTriangle, Info, Lightbulb, Play, X } from 'lucide-react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { type CommandSource, type SimulationCommand } from '@/lib/roverBlockly';
 import { parseRoverCode } from '@/lib/parseRoverCode';
@@ -26,8 +26,9 @@ interface PythonCodeEditorProps {
   /** Hands this editor's Run up, for a Run button outside it. */
   onRegisterRun?: (run: (() => void) | null) => void;
   /**
-   * The phone variant: no Run row (the top bar has Run), and the snippet chips
-   * tucked behind a help button instead of taking a row of their own.
+   * The phone variant: no Run row (the top bar has Run), and the commands in
+   * a tray that slides into the editor's header bar. Everywhere else they
+   * open as a card over the editor from the i button beside Run.
    */
   phone?: boolean;
 }
@@ -80,10 +81,19 @@ const SNIPPETS: { label: string; colour: string; code: string }[] = [
   { label: 'Lights', colour: '#673AB7', code: 'rover.setColor(rover.fromRGB(255, 0, 0))\nrover.show()\n' },
 ];
 
+/** The first line a snippet runs, shown under its name in the command card. */
+function firstCodeLine(code: string): string {
+  return code.split('\n').find((line) => line.trim() && !line.trim().startsWith('#'))?.trim() ?? '';
+}
+
 export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
   /** The phone's snippet tray, behind the help button. */
   const [helpOpen, setHelpOpen] = useState(false);
+  /** The command card everywhere else, behind the i button. */
+  const [commandsOpen, setCommandsOpen] = useState(false);
+  const commandsButtonRef = useRef<HTMLButtonElement>(null);
+  const commandsCardRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
   const [error, setError] = useState<string | null>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -238,46 +248,115 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     return () => onRegisterRun?.(null);
   });
 
-  const snippetChips = SNIPPETS.map((item) => (
-    <button
-      key={item.label}
-      onClick={() => insertSnippet(item.code)}
-      title={`Insert ${item.label} code`}
-      className="clay-press inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border/60 bg-card/50 px-2.5 py-1 text-xs font-semibold text-foreground transition-colors hover:border-primary"
-    >
-      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.colour }} />
-      {item.label}
-    </button>
-  ));
+  // The card closes on a click anywhere else, and on Escape, which hands
+  // focus back to the button that opened it.
+  useEffect(() => {
+    if (!commandsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (commandsCardRef.current?.contains(target) || commandsButtonRef.current?.contains(target)) return;
+      setCommandsOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setCommandsOpen(false);
+      commandsButtonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [commandsOpen]);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
       {/* Not when the layout runs from its own button: on a phone both the
           hint and Run would leave only an empty row behind. */}
       {!phone && (
-      <div className="flex items-center justify-between gap-2">
+      <div className="relative flex items-center justify-between gap-2">
         {/* Hidden at phone width, as the Blocks tab's hint is: it wraps to
             two lines there, and the tab name already says it. */}
         <p className="hidden min-w-0 text-xs text-muted-foreground sm:block">
           Write Python using rover commands.
         </p>
-        <button
-          onClick={handleRun}
-          className="clay clay-press ml-auto flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
-        >
-          <Play className="h-3.5 w-3.5" fill="currentColor" />
-          Run code
-        </button>
-      </div>
-      )}
-
-      {/* Insert-on-click command palette (doubles as the cheat sheet). Tap a
-          chip to drop the real rover code at the cursor. A row of its own
-          from md up; on a phone it lives behind the help button below. */}
-      {!phone && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-          {snippetChips}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* THE COMMANDS, behind an i beside Run. They were a row of ten
+              chips above the editor, two rows on a narrow laptop, which took
+              the editor's height and spilled across the panel (6 Oct 2026).
+              In the mission orange while closed, as the phone's lightbulb is:
+              the commands are the first thing a new learner needs, and a
+              grey icon is not found. */}
+          <button
+            ref={commandsButtonRef}
+            onClick={() => setCommandsOpen((open) => !open)}
+            aria-label="Rover commands"
+            aria-expanded={commandsOpen}
+            aria-haspopup="dialog"
+            title="Rover commands"
+            // Run's height, square.
+            className={`clay-press flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
+              commandsOpen
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-primary/15 text-primary ring-1 ring-inset ring-primary/50 hover:bg-primary/25'
+            }`}
+          >
+            <Info className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleRun}
+            className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
+          >
+            <Play className="h-3.5 w-3.5" fill="currentColor" />
+            Run code
+          </button>
         </div>
+
+        {/* The card, over the editor rather than pushing it down. It grows
+            out of the i (transform-origin top right), so it reads as that
+            button's, and goes the moment a command is picked: the command
+            lands at the cursor and the editor has the focus to carry on
+            typing. A fixed grid, two commands to a row, so it is the same
+            tidy shape whatever the panel's width. */}
+        <AnimatePresence>
+          {commandsOpen && (
+            <motion.div
+              ref={commandsCardRef}
+              role="dialog"
+              aria-label="Rover commands"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: -6 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.12 } }}
+              transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 520, damping: 32 }}
+              style={{ transformOrigin: 'top right' }}
+              className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,100%)] rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-xl"
+            >
+              <p className="text-xs font-bold">Rover commands</p>
+              <p className="mb-2.5 mt-0.5 text-[11px] text-muted-foreground">Pick one to add it where your cursor is.</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SNIPPETS.map((item) => (
+                  <button
+                    key={item.label}
+                    onClick={() => {
+                      insertSnippet(item.code);
+                      setCommandsOpen(false);
+                    }}
+                    title={`Insert ${item.label} code`}
+                    className="clay-press flex min-w-0 flex-col items-start gap-0.5 rounded-lg border border-border/60 bg-card/60 px-2.5 py-1.5 text-left transition-colors hover:border-primary"
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-semibold">
+                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: item.colour }} />
+                      {item.label}
+                    </span>
+                    <code className="w-full truncate font-mono text-[10px] text-muted-foreground">{firstCodeLine(item.code)}</code>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
       )}
 
       {error && (

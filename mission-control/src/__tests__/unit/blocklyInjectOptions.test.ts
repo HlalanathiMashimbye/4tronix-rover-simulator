@@ -19,9 +19,13 @@ describe('on a phone', () => {
     expect(phone.toolboxPosition).toBe('end');
   });
 
-  it('zooms with two fingers, with no buttons or trashcan over the blocks', () => {
+  it('zooms with two fingers, with no buttons over the blocks', () => {
     expect(phone.zoom.controls).toBe(false);
     expect(phone.zoom.pinch).toBe(true);
+  });
+
+  it("leaves out Blockly's trashcan, drawn too big for a phone, for a bin of our own", () => {
+    // The bin itself is blockCanvasFit.test.ts and blockCanvasControls.test.tsx.
     expect(phone.trashcan).toBe(false);
   });
 

@@ -82,6 +82,15 @@ export function useRunningBlockMarks({
       lit.push({ block, className });
     });
 
+    // FOLLOW IT. A program zoomed in, or longer than the canvas, ran its
+    // later steps off screen, and on a phone the canvas is half the screen.
+    // Only the block's own shape, not the stack under it, and Blockly leaves
+    // the canvas alone when that is already in view or a finger is on it.
+    const step = lit.find((l) => l.className === 'rover-running-step')?.block;
+    if (step?.getBoundingRectangleWithoutChildren) {
+      workspace.scrollBoundsIntoView?.(step.getBoundingRectangleWithoutChildren(), 24);
+    }
+
     // THE SPOTLIGHT. Everything not running dims, so the running block is
     // the one bright thing on the canvas. A green outline on its own was easy
     // to miss on a busy program ("the green thingy is boring").

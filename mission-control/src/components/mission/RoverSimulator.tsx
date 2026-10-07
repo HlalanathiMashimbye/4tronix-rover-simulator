@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import {
   computeLayout,
   drawSimFrame,
@@ -12,6 +13,7 @@ import {
   LIGHT_SIM_PALETTE,
 } from '@/lib/roverSimRender';
 import { crashFrame, type TrajectoryPoint } from '@/lib/simulateCommands';
+import type { ZoneLevel } from '@/lib/rover-physics';
 import type { CommandSource } from '@/lib/roverBlockly';
 
 interface RoverSimulatorProps {
@@ -50,6 +52,25 @@ interface RoverSimulatorProps {
    * learner could otherwise press Run and Send in the same second.
    */
   onFinished?: () => void;
+  /**
+   * Whether a run is playing out right now: started, not paused, not yet at
+   * its last frame. For a Stop button outside the simulator (the phone's top
+   * bar), which has to know when there is something to stop.
+   */
+  onRunningChange?: (running: boolean) => void;
+  /**
+   * Bumped to pause the run where it is, from outside: Stop. Like
+   * resetVersion, but the rover stays where it got to, with its trail, so
+   * the learner can see what it had done.
+   */
+  pauseVersion?: number;
+  /**
+   * The yard the run is in (AB#468): its layout is what is drawn, and its
+   * photo the floor. The trajectory must have been simulated in the same yard,
+   * which useYardLayout guarantees by giving every caller the same layout.
+   * Defaults to the yard this site submits to.
+   */
+  yardId?: string;
 }
 
 export function RoverSimulator({
@@ -62,6 +83,9 @@ export function RoverSimulator({
   frameless = false,
   onSourceChange,
   onFinished,
+  onRunningChange,
+  pauseVersion = 0,
+  yardId,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -77,10 +101,12 @@ export function RoverSimulator({
   // not restart the playback loop, whose effect depends on syncHud.
   const onSourceChangeRef = useRef(onSourceChange);
   const onFinishedRef = useRef(onFinished);
+  const onRunningChangeRef = useRef(onRunningChange);
   const lastSourceRef = useRef<CommandSource | null>(null);
   useEffect(() => {
     onSourceChangeRef.current = onSourceChange;
     onFinishedRef.current = onFinished;
+    onRunningChangeRef.current = onRunningChange;
   });
   const reportSource = useCallback((source: CommandSource | null) => {
     if (source === lastSourceRef.current) return;
@@ -101,7 +127,15 @@ export function RoverSimulator({
   const { theme } = useTheme();
   const isManual = editorMode === 'manual';
   const [isPaused, setIsPaused] = useState(false);
-  const [hud, setHud] = useState({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null as 'rock' | 'wall' | null });
+  const [hud, setHud] = useState({
+    x: 0,
+    y: 0,
+    heading: 0,
+    frame: 0,
+    total: 0,
+    crashed: null as 'rock' | 'wall' | null,
+    zone: null as ZoneLevel | null,
+  });
 
   // Keep the latest trajectory available to the rAF loop (which reads it live)
   // without re-subscribing every frame. Runs before the draw effects below.
@@ -119,8 +153,12 @@ export function RoverSimulator({
   // drawScene. The effect that starts a fresh run depends on drawScene, so a
   // photo landing mid-run would otherwise rewind the run to its first frame.
   // The effect below repaints once when it arrives instead.
-  const floor = useYardFloor();
+  const { layout: yardLayout, yardId: floorYardId } = useYardLayout(yardId);
+  const floor = useYardFloor(floorYardId);
   const floorRef = useRef(floor);
+  // The layout, the same way and for the same reason: it arrives from the
+  // server just after the page does, and must not rewind a run that started.
+  const yardRef = useRef(yardLayout);
 
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
@@ -132,13 +170,14 @@ export function RoverSimulator({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, computeLayout(w, h), traj, playhead, simPalette, floorRef.current);
+    drawSimFrame(ctx, computeLayout(w, h, yardRef.current), traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
 
   useEffect(() => {
     floorRef.current = floor;
+    yardRef.current = yardLayout;
     drawScene();
-  }, [floor, drawScene]);
+  }, [floor, yardLayout, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 
@@ -198,7 +237,7 @@ export function RoverSimulator({
   const syncHud = useCallback(() => {
     const traj = trajRef.current;
     if (traj.length === 0) {
-      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null });
+      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null, zone: null });
       reportSource(null);
       return;
     }
@@ -217,6 +256,9 @@ export function RoverSimulator({
       frame: Math.round(playhead) + 1,
       total: traj.length,
       crashed,
+      // The ground it is on right now (AB#468), so the simulator says so while
+      // it is there and not once it has driven off.
+      zone: traj[Math.round(playhead)]?.zone ?? null,
     });
   }, [isManual, reportSource]);
 
@@ -307,6 +349,13 @@ export function RoverSimulator({
     syncHud();
   }, [resetVersion, drawScene, syncHud]);
 
+  // Stop, from outside: pause where the rover is.
+  useEffect(() => {
+    if (pauseVersion === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- react to the shared pause signal from the workspace's Stop
+    setIsPaused(true);
+  }, [pauseVersion]);
+
   const handleScrub = (value: number) => {
     setIsPaused(true);
     playheadRef.current = value;
@@ -337,6 +386,9 @@ export function RoverSimulator({
   const hasTrajectory = trajectory.length > 0;
   // A run is playing out right now: the header's dot pings while it does.
   const running = !isManual && isPlaying && !isPaused && hasTrajectory && hud.frame < hud.total;
+  useEffect(() => {
+    onRunningChangeRef.current?.(running);
+  }, [running]);
 
   const controls = hasTrajectory && (
     // ONE ROW, like a video player, laid over the bottom of the yard rather
@@ -406,6 +458,19 @@ export function RoverSimulator({
           </p>
         </div>
       )}
+      {!hud.crashed && hud.zone && (
+        // Rising ground (AB#468): said while the rover is on it, in the
+        // simulator itself, since this is where the learner watches the run.
+        // A warning, still: the run goes on and can still be sent.
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-2" role="status">
+          <p
+            className="truncate rounded-full bg-amber-500/90 px-3 py-1 text-xs font-semibold text-black"
+            data-zone={hud.zone}
+          >
+            {SLOPE_WORDS[hud.zone]}
+          </p>
+        </div>
+      )}
       {controls}
     </div>
   );
@@ -471,3 +536,10 @@ function ResetIcon() {
     </svg>
   );
 }
+
+/** What a slope may do to the real rover, as the simulator says it (AB#468). */
+const SLOPE_WORDS: Record<ZoneLevel, string> = {
+  yellow: 'Gentle slope: the real rover may drift here.',
+  orange: 'Steep slope: the real rover may slip here.',
+  red: "A mound's top: the real rover may tip or stall here.",
+};

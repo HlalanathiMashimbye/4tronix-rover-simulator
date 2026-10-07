@@ -39,6 +39,10 @@ jest.mock('@/components/mission/BlocklyViewer', () => ({
   BlocklyViewer: () => <div data-testid="blockly" />,
 }));
 
+jest.mock('@/components/mission/RoverSimulator', () => ({
+  RoverSimulator: () => null,
+}));
+
 let pathname = '/operator';
 jest.mock('next/navigation', () => ({
   usePathname: () => pathname,

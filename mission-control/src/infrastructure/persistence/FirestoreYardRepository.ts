@@ -2,8 +2,9 @@ import 'server-only';
 
 import type { Firestore as AdminFirestore } from 'firebase-admin/firestore';
 
-import type { Yard } from '@/core/domain/entities/Yard';
+import type { Yard, YardLayout } from '@/core/domain/entities/Yard';
 import type { IYardRepository } from '@/core/domain/repositories/IYardRepository';
+import { checkYardLayout } from '@/infrastructure/validation/yardLayout';
 
 const YARDS_COLLECTION = 'yards';
 
@@ -34,6 +35,12 @@ export class FirestoreYardRepository implements IYardRepository {
 
   async setActive(yardId: string, active: boolean): Promise<void> {
     await this.db.collection(YARDS_COLLECTION).doc(yardId).update({ active });
+  }
+
+  async setLayout(yardId: string, layout: YardLayout): Promise<void> {
+    // update, not a merged set: the field is replaced whole, so a rock or zone
+    // the admin removed is gone rather than merged back in.
+    await this.db.collection(YARDS_COLLECTION).doc(yardId).update({ layout: { ...layout, zones: layout.zones ?? [] } });
   }
 
   async rename(fromId: string, toId: string): Promise<void> {
@@ -77,10 +84,25 @@ export class FirestoreYardRepository implements IYardRepository {
       active: data.active !== false,
       createdAt: typeof data.createdAt === 'string' ? data.createdAt : undefined,
       addedBy: typeof data.addedBy === 'string' ? data.addedBy : undefined,
+      layout: layoutFrom(data.layout),
     };
   }
 
   private withoutUndefined(fields: Record<string, unknown>): Record<string, unknown> {
     return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
   }
+}
+
+/**
+ * A stored layout, or nothing if it does not hold up. Read through the same
+ * rules the API wrote it with: a document edited by hand in the console into
+ * something the simulator cannot draw falls back to the measured yard
+ * (layoutOf) instead of breaking every simulator for that yard.
+ */
+function layoutFrom(value: unknown): YardLayout | undefined {
+  if (value === undefined || value === null) return undefined;
+  const checked = checkYardLayout(value);
+  if ('layout' in checked) return checked.layout;
+  console.warn('[yards] Ignoring a stored layout that does not check out:', checked.error);
+  return undefined;
 }

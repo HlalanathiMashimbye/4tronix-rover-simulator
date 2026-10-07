@@ -1,3 +1,7 @@
+import { YARD, type Yard as YardLayout } from '@/lib/rover-physics';
+
+export type { YardLayout };
+
 /**
  * A yard: a physical place with a rover in it.
  *
@@ -37,6 +41,26 @@ export interface Yard {
   createdAt?: string;
   /** Who added it, for a list that is now editable by a person. */
   addedBy?: string;
+  /**
+   * What the simulator draws and drives in for this yard (AB#468): its size,
+   * start, rocks and rising ground. Set per yard on the settings page, so a
+   * new venue is a form rather than a code change. Absent until an admin
+   * saves one; layoutOf says what is used meanwhile.
+   */
+  layout?: YardLayout;
+}
+
+/**
+ * The layout the simulator uses for a yard: its own once an admin has saved
+ * one, and the measured Cape Town yard until then (YARD, rover-physics.ts).
+ *
+ * The measured yard as the fallback rather than an empty one, because it is
+ * the only venue there is and the one every mission so far ran in: a yard
+ * with no layout yet is that yard, not a featureless box that would show a
+ * learner a run through rocks as a clean one.
+ */
+export function layoutOf(yard: Yard | undefined): YardLayout {
+  return yard?.layout ?? YARD;
 }
 
 /** The venue and suburb: "Cape Town Science Centre, Observatory". */
