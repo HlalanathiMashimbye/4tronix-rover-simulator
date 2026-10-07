@@ -126,13 +126,14 @@ describe('MissionNotificationService', () => {
   });
 
   it('deep links the email to the mission that changed, not just the history list', async () => {
-    // David asked for /missions/<id> so a learner opens the run the email is
-    // about. The history link stays as the secondary way back in.
+    // David asked for a mission link so a learner opens the run the email is
+    // about, and later for it to read as the name (missionSlug). The history
+    // link stays as the secondary way back in.
     const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
-    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/mission-42`);
+    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/orbital-nomad-missio`);
   });
 
   it('does not double up the slash when the app URL has a trailing one', async () => {
@@ -144,7 +145,7 @@ describe('MissionNotificationService', () => {
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
-    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/mission-42`);
+    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/orbital-nomad-missio`);
     expect(composerCalls[0].missionUrl).not.toContain('//missions');
   });
 

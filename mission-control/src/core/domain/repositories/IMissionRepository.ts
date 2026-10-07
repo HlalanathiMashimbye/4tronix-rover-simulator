@@ -30,6 +30,14 @@ export interface IMissionReader {
   findById(id: string): Promise<Mission | null>;
 
   /**
+   * Missions whose ID starts with `prefix`, at most `max`, deleted ones left
+   * out. What a /missions/<name>-<prefix> link resolves through; see
+   * services/missionSlug. Reads one document per match, so one for a link
+   * whose prefix is unique, the same as findById.
+   */
+  findByIdPrefix(prefix: string, max: number): Promise<Mission[]>;
+
+  /**
    * A page of recent missions, newest first. Reads `limit + 1` documents - no
    * queue-position aggregations, which the feed never shows.
    *

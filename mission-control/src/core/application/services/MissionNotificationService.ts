@@ -15,6 +15,7 @@
 import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
+import { missionSlug } from '@/core/domain/services/missionSlug';
 import {
   ILearnerContactReader,
   LearnerContact,
@@ -73,7 +74,7 @@ export class MissionNotificationService {
       const { subject, html } = this.emailComposer.statusUpdate(status, {
         missionName: mission.name || mission.id,
         learnerName: learner.displayName,
-        missionUrl: this.missionUrl(mission.id),
+        missionUrl: this.missionUrl(missionSlug(mission)),
         historyUrl: `${this.baseUrl()}/history`,
       });
 
