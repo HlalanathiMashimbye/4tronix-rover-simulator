@@ -11,6 +11,11 @@ import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { SimulationCommand } from '@/lib/roverBlockly';
+
+const PythonCodeEditor = dynamic(() => loadPythonEditor().then((m) => m.PythonCodeEditor), {
+  ssr: false,
+  loading: () => <div className="h-full animate-pulse rounded-xl border border-border bg-[#1e1e1e]" />,
+});
 import {
   deriveTrajectoryOutcomes,
   type TrajectoryOutcome,

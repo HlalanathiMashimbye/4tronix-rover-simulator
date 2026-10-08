@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { useYardFloor } from '@/hooks/useYardFloor';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import {
   computeFillLayout,
   drawSimFrame,
@@ -36,13 +37,16 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
  */
 interface MissionSimCoverProps {
   trajectory: TrajectoryPoint[];
+  /** The yard the mission was sent to (AB#468): its layout and its floor. */
+  yardId?: string;
 }
 
-export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
+export function MissionSimCover({ trajectory, yardId }: MissionSimCoverProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { theme } = useTheme();
   const palette = theme === 'light' ? LIGHT_SIM_PALETTE : DARK_SIM_PALETTE;
-  const floor = useYardFloor();
+  const { layout: yardLayout, yardId: floorYardId } = useYardLayout(yardId);
+  const floor = useYardFloor(floorYardId);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -67,8 +71,15 @@ export function MissionSimCover({ trajectory }: MissionSimCoverProps) {
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // The final frame: trail complete, rover parked where the mission ended.
-    drawSimFrame(ctx, computeFillLayout(w, h, trajectory), trajectory, trajectory.length - 1, palette, floor);
-  }, [trajectory, palette, floor]);
+    drawSimFrame(
+      ctx,
+      computeFillLayout(w, h, trajectory, undefined, yardLayout),
+      trajectory,
+      trajectory.length - 1,
+      palette,
+      floor,
+    );
+  }, [trajectory, palette, floor, yardLayout]);
 
   useEffect(() => {
     draw();

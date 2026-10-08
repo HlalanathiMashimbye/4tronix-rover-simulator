@@ -48,6 +48,17 @@ export function ChromeHeight() {
     const observer = new ResizeObserver(publish);
     if (area.parentElement) observer.observe(area.parentElement);
     observer.observe(document.documentElement);
+    // And the chrome itself. On a phone the navbar hides on the build page and
+    // a mission's own page, and arriving there by a tap (no reload) changes
+    // the size of nothing watched above: the page area moved up 64px, but its
+    // parent and the document stayed the same size. So --app-chrome kept the
+    // navbar, every full-height page came out 64px short, and the editors
+    // stopped with a band of nothing under them until the page was reloaded.
+    // An element that goes display:none reports a zero size, so watching
+    // everything above the page area catches it.
+    for (let el = area.previousElementSibling; el; el = el.previousElementSibling) {
+      observer.observe(el);
+    }
 
     return () => observer.disconnect();
   }, []);

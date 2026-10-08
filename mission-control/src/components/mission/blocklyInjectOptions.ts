@@ -46,11 +46,19 @@ const DESKTOP = {
  * - Categories go to a strip along the BOTTOM, where the thumb already is,
  *   and the flyout opens upward over the canvas instead of eating its width.
  * - No zoom buttons: two fingers zoom, as on every map and photo a child has
- *   used, and the buttons were the thing blocks hid under.
- * - No trashcan: dragging a block back onto the category strip deletes it,
- *   which Blockly does by default, so the can only cost canvas.
+ *   used, and the buttons were the thing blocks hid under. Show all the
+ *   blocks is a button of our own (blockCanvasControls.tsx).
+ * - No Blockly trashcan, but a bin. Blockly's is drawn at one fixed size and
+ *   was a fifth of the canvas's width on an iPhone, so the bin is our own,
+ *   smaller one (blockCanvasControls.tsx). There has to be one: dragging a
+ *   block back onto the category strip deletes it too, but nobody guesses
+ *   that, and the missing bin was the first thing noticed (6 Oct 2026).
  * - Smaller to start, so a typical program fits the width without zooming.
+ *   startScale is also the most a program is enlarged to fit (fitBlocks).
  */
+/** The phone editor's zoom, which the read-only viewer shares so a program reads the same size in both. */
+export const PHONE_START_SCALE = 0.75;
+
 const PHONE = {
   horizontalLayout: true,
   toolboxPosition: 'end',
@@ -58,7 +66,7 @@ const PHONE = {
     controls: false,
     wheel: false,
     pinch: true,
-    startScale: 0.75,
+    startScale: PHONE_START_SCALE,
     maxScale: 2,
     minScale: 0.35,
     scaleSpeed: 1.15,

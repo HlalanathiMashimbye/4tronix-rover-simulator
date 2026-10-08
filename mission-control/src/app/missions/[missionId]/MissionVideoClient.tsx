@@ -1,14 +1,15 @@
 "use client";
 
 import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, Rocket, Star, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Rocket, Star, Zap, Lightbulb } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
+import { useYardLayout } from '@/hooks/useYardLayout';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -30,6 +31,8 @@ export default function MissionVideoClient({
   yards: Yard[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoRemix = searchParams.get('autoRemix') === 'true';
   const [mission, setMission] = useState<Mission | null>(null);
   // Every yard's attempt, so the carousel can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
@@ -47,7 +50,9 @@ export default function MissionVideoClient({
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
   // From the blocks where there are blocks, so it knows which block is which.
-  const simTrajectory = useMissionTrajectory(mission);
+  // Simulated in the yard it was sent to (AB#468), the one drawn below.
+  const { layout: yardLayout } = useYardLayout(mission?.yardId);
+  const simTrajectory = useMissionTrajectory(mission, yardLayout);
   /** What the simulation is running, lit up in the code like the editor (AB#450). */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
 
@@ -87,6 +92,27 @@ export default function MissionVideoClient({
     void fetchMission();
   }, [missionId]);
 
+  // Remix into the workspace: carry blocks for block-built missions,
+  // otherwise the Python, and open the matching editor mode.
+  const remix = useCallback(() => {
+    if (mission && mission.status === 'completed') {
+      if (mission.blocklyState) {
+        localStorage.setItem('roverWorkspace', mission.blocklyState);
+        router.push('/mission?mode=blockly');
+      } else {
+        localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
+        router.push('/mission?mode=code');
+      }
+    }
+  }, [mission, router]);
+
+  // Auto-remix when landing from email or deep link with ?autoRemix=true
+  useEffect(() => {
+    if (autoRemix && mission && mission.status === 'completed') {
+      remix();
+    }
+  }, [autoRemix, mission, remix]);
+
   if (loading) {
     return (
       <main className="flex h-page items-center justify-center">
@@ -125,18 +151,6 @@ export default function MissionVideoClient({
   const hasBlocks = !!mission.blocklyState;
   const showBlocks = hasBlocks && codeView === 'blocks';
 
-  // Remix into the workspace: carry blocks for block-built missions,
-  // otherwise the Python, and open the matching editor mode.
-  const remix = () => {
-    if (mission.blocklyState) {
-      localStorage.setItem('roverWorkspace', mission.blocklyState);
-      router.push('/mission?mode=blockly');
-    } else {
-      localStorage.setItem(PYTHON_DRAFT_KEY, mission.code);
-      router.push('/mission?mode=code');
-    }
-  };
-
   const copyCode = async () => {
     // The same payload the operator queue copies. This button used to write
     // bare mission.code, which pasted into the run station as an anonymous
@@ -154,20 +168,28 @@ export default function MissionVideoClient({
     // Pinned to the viewport at every size, like Create Mission (AB#455). On a
     // phone this used to stack the panels and scroll, with the tab bar and the
     // floating button on top of the blocks. Now the player docks at the top
-    // and the code takes the rest (.workspaceSplitGrid--fixed in globals.css).
+    // and the code is below it, half each (.workspaceSplitGrid--fixed in
+    // globals.css).
     // It once clipped the code entirely under overflow-hidden; the fix then
     // was to let it scroll, the fix now is a layout that fits.
     <main data-surface="mission" className="h-page overflow-hidden px-3 py-2">
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
+          {/* The name is the one thing here that is allowed to shrink, so it
+              was the one thing that did: on an iPhone the badge, star and
+              Remix took the row and left the title nothing. It keeps room for
+              about ten letters now, and the badge and star tighten on a phone
+              to make that room. */}
+          <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-2.5">
             <Link href="/" className="shrink-0 text-muted-foreground transition-colors hover:text-primary" aria-label="Back to the feed">
               <ArrowLeft className="h-5 w-5" />
             </Link>
-            <h1 className="truncate font-display text-lg font-bold text-foreground md:text-xl">{missionName}</h1>
+            <h1 className="min-w-[6.5rem] truncate font-display text-base font-bold text-foreground md:min-w-0 md:text-xl">
+              {missionName}
+            </h1>
             <span
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:uppercase md:tracking-[0.12em] ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
             >
               {discoveryStatus}
             </span>
@@ -175,7 +197,7 @@ export default function MissionVideoClient({
               onClick={() => toggleFavorite(mission.id, missionName)}
               aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={starred}
-              className="shrink-0 rounded-full p-1.5 text-muted-foreground transition-colors hover:text-amber-400"
+              className="-mx-1 shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:text-amber-400 md:mx-0 md:p-1.5"
             >
               <Star
                 className={`h-5 w-5 transition-colors ${starred ? 'fill-amber-400 text-amber-400' : ''}`}
@@ -196,41 +218,49 @@ export default function MissionVideoClient({
           {/* In the header, like Run in the editor: the one thing to do next
               on this page. It was a card under the code, a whole row of a
               phone screen. */}
-          <button
-            onClick={remix}
-            title="Tweak the code and run your own version"
-            className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
-          >
-            <Zap className="h-3.5 w-3.5" fill="currentColor" />
-            Remix
-          </button>
+          {mission.status === 'completed' && (
+            <button
+              onClick={remix}
+              title="Tweak the code and run your own version"
+              className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
+            >
+              <Zap className="h-3.5 w-3.5" fill="currentColor" />
+              {/* Words down to the narrowest phones; below 360px the bolt alone,
+                  named for screen readers by aria-label. */}
+              <span className="max-[359px]:sr-only">Remix</span>
+            </button>
+          )}
         </div>
+
+        {mission.status === 'completed' && (
+          <div className="flex shrink-0 items-start gap-3 rounded-2xl border-2 border-amber-200/30 bg-gradient-to-br from-amber-50/50 to-orange-50/50 p-4 dark:border-amber-950/40 dark:from-amber-950/30 dark:to-orange-950/30">
+            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <h2 className="font-display font-semibold text-foreground">
+                How did it go?
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Remix it to go further or fix it.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Fixed at 60/40, video to code, and the number came from the
             simulator's geometry rather than taste.
+        {/* Half each, video to code, beside each other on a laptop and one
+            above the other on a phone (6 Oct 2026, the user's call: the
+            player took 60% and squeezed the program).
 
-            The yard is letterboxed by computeLayout inside whatever canvas it
-            gets, so a WIDER panel makes it worse, not better. Measured for the
-            old 4:3 yard, at a 1400px viewport:
+            It was 60/40, for the simulator's sake: the old 4:3 yard was
+            letterboxed inside its canvas, and a narrower panel left less grey
+            down its sides. Since AB#464 the yard is the measured one and is
+            stretched to fill the canvas (computeLayout), so no split leaves
+            bars beside it. A 16:9 video in a half that is taller than 16:9
+            sits centred on black, which is what every player does.
 
-              70/30  canvas 799x497 (1.61)  yard floats, 87px dead each side
-              65/35  canvas 716x469 (1.53)  64px each side
-              60/40  canvas 664x490 (1.35)  24px each side
-
-            The two media want opposite shapes and no split serves both: 16:9
-            video wants width, the 4:3 yard wants less of it. 60/40 is chosen
-            because the failures are not equivalent. A letterboxed video is
-            what every player does and nobody remarks on it; a yard floating in
-            grey with a hand's width of nothing down each side reads as a
-            rendering fault, which is exactly how it was reported.
-
-            Since AB#464 the yard is the measured one, 233 x 249 cm, near
-            square, and it is stretched to fill the canvas (computeLayout), so
-            no split leaves bars beside it. The split stays for the video's
-            sake.
-
-            The 320px floor on the right track keeps the code readable, so this
-            does not squeeze the editor to buy the change.
+            The 320px floor on the right track keeps the code readable on a
+            narrow laptop.
 
             No height: the grid is a flexible track and takes what this flex
             column has left, the same as Create Mission. */}
@@ -243,6 +273,7 @@ export default function MissionVideoClient({
               missionName={missionName}
               trajectory={simTrajectory}
               onSimSourceChange={setRunningSource}
+              yardId={mission.yardId}
             />
             {/* Under the player, where a learner looks after watching. One
                 line, so the leftover height goes to the player instead. */}

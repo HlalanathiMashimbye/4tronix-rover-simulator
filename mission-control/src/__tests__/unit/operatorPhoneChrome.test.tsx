@@ -39,6 +39,10 @@ jest.mock('@/components/mission/BlocklyViewer', () => ({
   BlocklyViewer: () => <div data-testid="blockly" />,
 }));
 
+jest.mock('@/components/mission/RoverSimulator', () => ({
+  RoverSimulator: () => null,
+}));
+
 let pathname = '/operator';
 jest.mock('next/navigation', () => ({
   usePathname: () => pathname,
@@ -59,6 +63,9 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
 
 jest.mock('@/components/learner/EmailPrompt', () => ({
   EmailPrompt: () => null,
+}));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
 }));
 
 // The Challenges tab reads progress through the browser container, which

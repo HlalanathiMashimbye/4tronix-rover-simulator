@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminLeaderboardRepository } from '@/infrastructure/container.server';
 import { generateNickname } from '@/core/domain/services/nicknameGenerator';
+import { isGeneratedDisplayName } from '@/core/domain/services/displayNameGenerator';
 
 export async function GET(
   request: NextRequest,
@@ -81,13 +82,23 @@ export async function POST(
       );
     }
 
-    const { action } = body as { action?: string };
+    const { action, displayName: clientDisplayName } = body as {
+      action?: string;
+      displayName?: string;
+    };
 
     const repository = adminLeaderboardRepository();
 
     switch (action) {
       case 'opt-in': {
-        const entry = await repository.optIn(learnerRefHash, generateNickname());
+        // Use the learner's chosen display name if provided and valid;
+        // fall back to the old nickname generator for learners who opted in
+        // before the avatar feature existed.
+        const name =
+          clientDisplayName && isGeneratedDisplayName(clientDisplayName)
+            ? clientDisplayName
+            : generateNickname();
+        const entry = await repository.optIn(learnerRefHash, name);
         return NextResponse.json({
           success: true,
           message: 'Opted in to leaderboard',

@@ -9,6 +9,7 @@
 
 import { parseRoverCode } from '@/lib/parseRoverCode';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import { YARD, type Yard } from '@/lib/rover-physics';
 
 /**
  * What the simulator would show for this mission, or null if there is nothing
@@ -19,12 +20,13 @@ import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
  * moves. The card falls back to its generic art, which is the honest picture of
  * "there is nothing to show here".
  */
-export function missionCoverTrajectory(code: string | undefined): TrajectoryPoint[] | null {
+export function missionCoverTrajectory(code: string | undefined, yard: Yard = YARD): TrajectoryPoint[] | null {
   if (!code?.trim()) return null;
 
   let trajectory: TrajectoryPoint[];
   try {
-    trajectory = simulateCommands(parseRoverCode(code));
+    // In the mission's own yard (AB#468), the one its cover is drawn on.
+    trajectory = simulateCommands(parseRoverCode(code), yard);
   } catch {
     // This runs against whatever is on the mission document, including code
     // written before the parser understood it. A cover is decoration; it must

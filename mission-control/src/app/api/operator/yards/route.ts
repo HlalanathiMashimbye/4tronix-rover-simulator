@@ -14,6 +14,7 @@ import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructur
 import { adminYardRepository } from '@/infrastructure/container.server';
 import { yardIdComplaint } from '@/core/domain/entities/Yard';
 import { clearYardCache } from '@/infrastructure/config/yardDirectory';
+import { yardLayoutSchema } from '@/infrastructure/validation/yardLayout';
 
 const addSchema = z.object({
   id: z.string().trim().min(1),
@@ -53,6 +54,11 @@ const patchSchema = z.object({
   name: z.string().trim().min(1, 'The venue needs a name.').optional(),
   area: z.string().trim().min(1, 'The suburb cannot be blank.').optional(),
   city: z.string().trim().min(1, 'The city cannot be blank. It is what a learner reads.').optional(),
+  /**
+   * What the simulator draws and drives in for this yard (AB#468): size,
+   * start, rocks and rising ground. Replaced whole, never merged.
+   */
+  layout: yardLayoutSchema.optional(),
 });
 
 function authFailure(error: unknown) {
@@ -154,7 +160,7 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
-  const { id, newId, active, ...details } = parsed.data;
+  const { id, newId, active, layout, ...details } = parsed.data;
 
   const repository = adminYardRepository();
   const yards = await repository.findAll();
@@ -194,6 +200,10 @@ export async function PATCH(request: NextRequest) {
     // Retiring, never deleting: the yard goes on resolving for every mission
     // ever run there, it just leaves the sign-in list.
     await repository.setActive(targetId, active);
+  }
+
+  if (layout !== undefined) {
+    await repository.setLayout(targetId, layout);
   }
 
   clearYardCache();

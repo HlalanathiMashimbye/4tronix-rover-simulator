@@ -7,7 +7,7 @@
  * photographed, and steers its four wheels to their servo angles.
  */
 
-import { YARD, roverToYard, type Yard, type YardRock } from './rover-physics';
+import { YARD, ZONE_LEVELS, roverToYard, type Yard, type YardRock, type ZoneLevel } from './rover-physics';
 import { crashFrame } from './simulateCommands';
 
 export interface SimPoint {
@@ -268,12 +268,28 @@ export function interpolate(traj: SimPoint[], p: number): SimPoint {
  */
 let terrainCache: { key: string; canvas: HTMLCanvasElement } | null = null;
 
+/**
+ * What the yard looks like, as a string, for the cache key: its size, rocks
+ * and zones. A yard's layout is configured per yard now (AB#468) and an admin
+ * edits it with the simulator drawn beside the form, so the ground has to
+ * repaint when the layout changes, not only when the canvas does.
+ */
+const yardKeys = new WeakMap<Yard, string>();
+function yardKey(yard: Yard): string {
+  let key = yardKeys.get(yard);
+  if (key === undefined) {
+    key = JSON.stringify([yard.widthCm, yard.depthCm, yard.rocks, yard.zones ?? []]);
+    yardKeys.set(yard, key);
+  }
+  return key;
+}
+
 function drawTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette, floor: CanvasImageSource | null) {
   // The floor photo arrives after the first frames, so having it is part of
   // the key: the yard repaints once when it lands, and not again. So is where
   // the yard sits, because the crop is placed for each run, and follows the
   // rover through one that does not fit.
-  const key = `${L.w}x${L.h}@${L.sx.toFixed(4)},${L.sy.toFixed(4)}+${L.ox.toFixed(1)},${L.oy.toFixed(1)}:${P.groundInner}:${floor ? 'photo' : 'plain'}`;
+  const key = `${L.w}x${L.h}@${L.sx.toFixed(4)},${L.sy.toFixed(4)}+${L.ox.toFixed(1)},${L.oy.toFixed(1)}:${P.groundInner}:${floor ? 'photo' : 'plain'}:${yardKey(L.yard)}`;
 
   if (terrainCache?.key !== key) {
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
@@ -342,6 +358,8 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
   }
   ctx.stroke();
 
+  drawZones(ctx, L);
+
   // Each rock ringed at its measured size: the photo shows the rock, the ring
   // says the simulator knows it is there.
   ctx.save();
@@ -360,6 +378,7 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
     ctx.stroke();
   }
   ctx.restore();
+  drawRockMarkers(ctx, L);
 
   // The walls.
   ctx.strokeStyle = 'rgba(20,8,2,0.6)';
@@ -375,6 +394,69 @@ function paintTerrain(ctx: CanvasRenderingContext2D, L: SimLayout, P: SimPalette
   ctx.fillText('N', x0 + yw / 2, y0 > 14 ? y0 - 7 : Math.max(y0, 0) + 9);
 
   drawStartMark(ctx, L);
+}
+
+/**
+ * Rising ground (AB#468), drawn like the contours of a map: yellow, orange,
+ * red, each a tint with its edge traced. Gentlest first, so the steeper rings
+ * sit on top and their tints deepen where they overlap.
+ *
+ * On the ground, under the trail and the rover: a zone is where the rover
+ * drives, not something in its way, and nothing in the physics stops it.
+ */
+export const ZONE_COLOURS: Record<ZoneLevel, { fill: string; edge: string }> = {
+  yellow: { fill: 'rgba(250,204,21,0.16)', edge: 'rgba(250,204,21,0.9)' },
+  orange: { fill: 'rgba(249,115,22,0.20)', edge: 'rgba(249,115,22,0.95)' },
+  red: { fill: 'rgba(239,68,68,0.30)', edge: 'rgba(239,68,68,1)' },
+};
+
+function drawZones(ctx: CanvasRenderingContext2D, L: SimLayout) {
+  const zones = [...(L.yard.zones ?? [])].sort(
+    (a, b) => ZONE_LEVELS.indexOf(a.level) - ZONE_LEVELS.indexOf(b.level),
+  );
+  if (zones.length === 0) return;
+  ctx.save();
+  for (const zone of zones) {
+    const [zx, zy] = yardToScreen(L, zone.x, zone.y);
+    ctx.beginPath();
+    ctx.ellipse(zx, zy, zone.rx * L.sx, zone.ry * L.sy, 0, 0, Math.PI * 2);
+    ctx.fillStyle = ZONE_COLOURS[zone.level].fill;
+    ctx.fill();
+    ctx.strokeStyle = ZONE_COLOURS[zone.level].edge;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * Each rock's name on a tag beside its ring, the rock's marker as a point of
+ * interest (AB#468): the name the operator's preview and the learner's crash
+ * line use ("Hits rock R4") is then on the map they are looking at.
+ */
+function drawRockMarkers(ctx: CanvasRenderingContext2D, L: SimLayout) {
+  if (L.yard.rocks.length === 0) return;
+  ctx.save();
+  ctx.font = '700 9px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const rock of L.yard.rocks) {
+    const r = rockRadius(rock) + 2;
+    const [cx, cy] = yardToScreen(L, rock.x, rock.y);
+    // Up and to the right of the ring, on its 45 degree point.
+    const tx = cx + r * L.sx * 0.72 + 7;
+    const ty = cy - r * L.sy * 0.72 - 5;
+    const width = ctx.measureText(rock.name).width + 8;
+    ctx.fillStyle = 'rgba(20,8,2,0.72)';
+    ctx.beginPath();
+    // roundRect is Safari 16 on; an older one gets a square tag.
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(tx - width / 2, ty - 6.5, width, 13, 6.5);
+    else ctx.rect(tx - width / 2, ty - 6.5, width, 13);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,240,220,0.95)';
+    ctx.fillText(rock.name, tx, ty + 0.5);
+  }
+  ctx.restore();
 }
 
 /**

@@ -43,6 +43,9 @@ jest.mock('@/components/challenges/ChallengeCenterPanel', () => ({
 jest.mock('@/components/challenges/ChallengeInstructionsPanel', () => ({
   ChallengeInstructionsPanel: () => <div data-testid="instructions-panel" />,
 }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
 
 import { ChallengesHub } from '@/components/challenges/ChallengesHub';
 import { ChallengeBriefingGate } from '@/components/challenges/ChallengeBriefing';

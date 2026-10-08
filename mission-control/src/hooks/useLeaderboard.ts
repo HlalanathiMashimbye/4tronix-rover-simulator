@@ -10,6 +10,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { useLearner } from '@/contexts/LearnerContext';
 
 export interface LeaderboardStatus {
   optedIn: boolean;
@@ -20,6 +21,7 @@ export interface LeaderboardStatus {
 }
 
 export function useLeaderboard() {
+  const { learner } = useLearner();
   const [status, setStatus] = useState<LeaderboardStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +67,10 @@ export function useLeaderboard() {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'opt-in' }),
+          body: JSON.stringify({
+          action: 'opt-in',
+          displayName: learner?.displayName,
+        }),
         }
       );
 

@@ -24,6 +24,8 @@ import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
 import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
 import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
+import { IRecoveryCodeRepository } from '@/core/domain/repositories/IRecoveryCodeRepository';
+import { FirestoreRecoveryCodeRepository } from '@/infrastructure/persistence/FirestoreRecoveryCodeRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
@@ -71,4 +73,9 @@ export function operatorMissionCommands(): OperatorMissionCommands {
 /** Privileged. Leaderboard writes only through Admin SDK. */
 export function adminLeaderboardRepository(): ILeaderboardRepository {
   return new FirestoreLeaderboardRepository(getFirestoreInstance());
+}
+
+/** Privileged. Recovery codes are never browser-accessible. */
+export function adminRecoveryCodeRepository(): IRecoveryCodeRepository {
+  return new FirestoreRecoveryCodeRepository(getFirestoreInstance());
 }
