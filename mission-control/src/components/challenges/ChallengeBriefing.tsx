@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, GraduationCap, Rocket } from 'lucide-react';
+import { Check, GraduationCap, Rocket, Trophy } from 'lucide-react';
 import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
 import { CHALLENGE_LEVELS } from '@/infrastructure/config/challenges';
 import { ChallengeWorkspace } from './ChallengeWorkspace';
-import { LevelOutcomes } from './LevelOutcomes';
+import { LevelOutcomesFold } from './LevelOutcomes';
 import { describeCheck } from './describeCheck';
 import { pillClass } from './pill';
 
@@ -18,6 +18,11 @@ interface BriefingProps {
    * skip them - the learner has already been briefed.
    */
   briefingLevel?: ChallengeLevel;
+  /**
+   * This is its level's test (AB#446): the briefing gives the goal alone - no
+   * step list, since a test has none to give.
+   */
+  isTest?: boolean;
 }
 
 /**
@@ -29,11 +34,16 @@ interface BriefingProps {
  * no reason to know a briefing came before it. Keeping the two apart also
  * keeps the workspace's own tests rendering the workspace directly.
  */
-export function ChallengeBriefingGate({ challenge, briefingLevel }: BriefingProps) {
+export function ChallengeBriefingGate({ challenge, briefingLevel, isTest = false }: BriefingProps) {
   const [started, setStarted] = useState(false);
   if (started) return <ChallengeWorkspace challenge={challenge} />;
   return (
-    <ChallengeBriefing challenge={challenge} briefingLevel={briefingLevel} onStart={() => setStarted(true)} />
+    <ChallengeBriefing
+      challenge={challenge}
+      briefingLevel={briefingLevel}
+      isTest={isTest}
+      onStart={() => setStarted(true)}
+    />
   );
 }
 
@@ -53,6 +63,7 @@ const EDITOR_LABEL: Record<Challenge['workspaceKind'], string> = {
 export function ChallengeBriefing({
   challenge,
   briefingLevel,
+  isTest = false,
   onStart,
 }: BriefingProps & { onStart: () => void }) {
   return (
@@ -61,39 +72,49 @@ export function ChallengeBriefing({
         aria-labelledby="mission-goals-title"
         className="mx-auto mt-2 max-w-2xl rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-5 sm:p-7"
       >
-        {briefingLevel && (
-          <div className="mb-6 rounded-2xl border-2 border-kid-panel-edge px-4 py-3">
-            <p className="mb-2 font-display text-sm font-bold uppercase tracking-wide text-kid-blue-text">
-              Level {briefingLevel.id}: {briefingLevel.title}
-            </p>
-            <LevelOutcomes level={briefingLevel} linkChallenges />
-          </div>
-        )}
-
         <h2 id="mission-goals-title" className="font-display text-2xl font-bold text-foreground">
-          Mission Goals
+          {isTest ? 'Your Goal' : 'Mission Goals'}
         </h2>
 
-        <ol className="mt-4 space-y-3">
-          {challenge.steps.map((step) => (
-            <li key={step.id} className="flex items-center gap-3">
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-b-4 border-kid-green-edge bg-kid-green text-kid-ink"
-              >
-                <Check className="h-6 w-6" strokeWidth={3} />
-              </span>
-              <span className="font-display text-lg font-semibold text-foreground">{step.title}</span>
-            </li>
-          ))}
-        </ol>
+        {isTest ? (
+          <>
+            <p className="mt-4 flex items-center gap-3 font-display text-lg font-semibold text-foreground">
+              <Trophy className="h-10 w-10 shrink-0 rounded-full border-b-4 border-kid-orange-edge bg-kid-orange p-2 text-kid-ink" aria-hidden="true" />
+              {challenge.steps[0]?.instructions}
+            </p>
+            <p className="mt-3 text-sm text-kid-muted-text">
+              No hints in a test. Try as many times as you like - your work is kept.
+            </p>
+          </>
+        ) : (
+          <ol className="mt-4 space-y-3">
+            {challenge.steps.map((step) => (
+              <li key={step.id} className="flex items-center gap-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-b-4 border-kid-green-edge bg-kid-green text-kid-ink"
+                >
+                  <Check className="h-6 w-6" strokeWidth={3} />
+                </span>
+                <span className="font-display text-lg font-semibold text-foreground">{step.title}</span>
+              </li>
+            ))}
+          </ol>
+        )}
 
         <div className="mt-6 flex justify-center">
           <button type="button" onClick={onStart} autoFocus className={pillClass('green', 'lg')}>
             <Rocket className="h-6 w-6" aria-hidden="true" />
-            Start Mission
+            {isTest ? 'Start Test' : 'Start Mission'}
           </button>
         </div>
+
+        {/* The level's outcomes (AB#444), on its first challenge only, folded
+            like the hub's: Mission Goals and Start are what this card is for. */}
+        {briefingLevel && (
+          // Not the test: it opens only after the level's tutorials (AB#446).
+          <LevelOutcomesFold level={briefingLevel} canLink={(id) => id !== briefingLevel.testId} />
+        )}
 
         <TeacherInfo challenge={challenge} />
       </section>

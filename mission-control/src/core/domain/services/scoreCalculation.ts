@@ -16,9 +16,17 @@ const CHALLENGE_POINTS: Record<string, number> = {
   'platform-orientation': 50,
   'explore-the-platform': 75,
   'first-mission': 100,
+  'drive-to-target': 125,
   'basic-movement': 150,
   'loop-structures': 200,
   'draw-a-square': 250,
+  'mission-spotter': 150,
+  'two-lines': 250,
+  'draw-a-rectangle': 350,
+  'sample-site': 300,
+  'sample-run-test': 400,
+  'spot-the-hazard': 400,
+  'hazard-test': 500,
 };
 
 const DEFAULT_CHALLENGE_POINTS = 50;

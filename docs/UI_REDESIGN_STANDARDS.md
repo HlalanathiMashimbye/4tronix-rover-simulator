@@ -38,6 +38,11 @@ changing what is being taught.
 | The Mission Goals briefing before each challenge, with Start Mission | `components/challenges/ChallengeBriefing.tsx` |
 | A collapsed "Teacher & Standards Info" panel on that briefing | `components/challenges/ChallengeBriefing.tsx` |
 | Step progress as dots, plus a checklist of the step's checks shown on the panel (previously hidden behind an icon) | `components/challenges/ChallengeInstructionsPanel.tsx` |
+| Each level's learning outcomes (AB#444) folded behind one "What you'll learn" line, under the map and on the level's first briefing, so the nodes and Start Mission are the first things a child sees | `components/challenges/LevelOutcomes.tsx` (`LevelOutcomesFold`) |
+| The target overlay (AB#447): the finished shape drawn on the simulator with a one-line description, hidden once the learner starts building, back for 5 seconds on "Show target" | `components/challenges/ChallengeCenterPanel.tsx`, `lib/roverSimRender.ts`, `core/domain/services/challengeTarget.ts` |
+| A test ends every level (AB#446): a trophy node on the map, locked until the level's tutorials are done, and a briefing that gives the goal alone ("Your Goal", no step list, no hints) | `components/challenges/ChallengesHub.tsx`, `components/challenges/ChallengeBriefing.tsx` |
+| Two NASA-style levels after Level 3 (AB#445): Jezero Sample Run and Hazard Avoidance, each a tutorial then a test | `infrastructure/config/challenges.ts` |
+| A PRIMM first mission, "Drive to the Target" (AB#453): ready-made blocks, a Predict question answered by tapping one of four pills, then one number to change until the rover stops on a bullseye | `infrastructure/config/challenges.ts`, `components/challenges/ChallengeInstructionsPanel.tsx` |
 
 ### What was not built, and is not claimed
 
@@ -106,15 +111,13 @@ what they need:
 Implementing actual 24751 matching, for example a learner profile that
 switches text size or turns off animation, is listed as future work.
 
-> **On curriculum codes.** The panel currently says that standards are not
-> mapped. The challenges once carried CAPS and CSTA codes, which were removed
-> because nobody on the team could vouch for the mapping
-> (`infrastructure/config/challenges.ts`, and a test in
-> `challengeContent.test.ts`). Tucking an unverified claim into a teacher
-> panel does not verify it: a teacher is the reader most likely to check.
-> Separate work (AB#444) adds learning outcomes with CSTA's own wording
-> behind a "For teachers" disclosure. When it is merged, this panel is where
-> those codes belong.
+> **On curriculum codes.** The challenges once carried bare CAPS and CSTA
+> codes, removed because nobody on the team could vouch for the mapping.
+> AB#444 brought them back the checkable way: each level states its learning
+> outcomes, each outcome cites CSTA's own wording and grade band behind a
+> "For teachers" disclosure, and the briefing's teacher panel lists the CSTA
+> codes of the outcomes that challenge practises. A test fails the build if a
+> cited code is missing from the catalogue.
 
 ### C. WCAG 2.2, Level AA
 
@@ -168,6 +171,10 @@ drops any pair under 4.5:1 fails the build.
 | Progress | Thin 8px bar, "3/6 complete" | Star count and a 16px bar, exposed as an ARIA progressbar | Concrete reward; readable by assistive technology | UDL engagement |
 | Before a challenge | Dropped straight into the workspace | Mission Goals briefing: one goal per step, each with a check icon, and one "Start Mission" button | Learner knows the shape of the task before starting | UDL representation |
 | Teacher metadata | Previously CAPS/CSTA pills on the learner's panel (later removed) | Collapsed "Teacher & Standards Info" panel on the briefing | Out of the child's way; one tap for the teacher | AccessForAll principle |
+| Learning outcomes on the map | Three "You will be able to..." paragraphs open on every level card | One collapsed "What you'll learn" line, on the map and on the briefing | The map stays a map and the briefing stays Mission Goals and Start; the outcomes are one tap away for a parent or teacher | Cognitive load; UDL representation |
+| Knowing the goal | Instructions in words only | The target shape drawn on the simulator, one line of text, hidden while building and back on request | The learner can see what "done" looks like and compare their run with it, without being shown how | UDL representation; PRIMM |
+| End of a level | The level simply ran out of challenges | A test with one goal and no help, behind a trophy; the next level opens when it passes | Applying an idea to something new, with the scaffolding taken away | UDL action & expression; PRIMM "Make" |
+| First code a learner meets | An empty canvas | Ready-made blocks to read and predict before running (PRIMM); any guess is accepted | Reading before writing; a wrong guess is information, never a failure | PRIMM (Sentance et al.) |
 | Step progress | "STEP 2 OF 4" caption | Dot row (done green, current blue), text kept for screen readers | Chunked, visual, countable | UDL representation |
 | Step checks | Hidden in a popover behind an icon with no accessible name | Shown on the panel as a checklist that ticks green live | Immediate feedback; fixes an unlabelled button | UDL engagement; WCAG 4.1.2 |
 | Hints | Shared a popover with the checks | Own labelled "Hint" pill, shown only when the step has hints | Help is asked for, not imposed | UDL action & expression |
@@ -184,7 +191,15 @@ drops any pair under 4.5:1 fails the build.
 - **No mascot or character guide** has been built.
 - **No ISO/IEC 24751 preference matching:** no per-learner text size,
   contrast or motion profile.
-- **Curriculum mapping** awaits the AB#444 work described in section 2B.
+- **The Python editor still shares Create Mission's draft.** The Blockly canvas
+  in a challenge now saves under its own key, but the Level 3 Python editor
+  has no storage-key option yet, so typing in the challenge still overwrites
+  the Python draft on Create Mission.
+- **The first mission's target is a marker, not a rock.** AB#453 asks for a
+  rock straight ahead of a bottom-left start; the agreed start (AB#465) is
+  mid-seam facing the front wall with no rock ahead, so the target is a
+  bullseye 45 cm ahead instead. Moving the start is a yard decision, not a
+  UI one.
 
 ## References
 
@@ -192,4 +207,5 @@ drops any pair under 4.5:1 fails the build.
 - ISO/IEC 24751-1:2008. *Information technology – Individualized adaptability and accessibility in e-learning, education and training – Part 1: Framework and reference model.*
 - W3C (2023). *Web Content Accessibility Guidelines (WCAG) 2.2.* <https://www.w3.org/TR/WCAG22/>
 - W3C. *Understanding SC 2.5.8 Target Size (Minimum)* and *Understanding SC 2.5.5 Target Size (Enhanced).*
+- Sentance, S., Waite, J. & Kallia, M. (2019). "Teaching computer programming with PRIMM: a sociocultural perspective." *Computer Science Education*, 29(2-3), 136–176.
 - Resnick, M. et al. (2009). "Scratch: Programming for All." *Communications of the ACM*, 52(11), 60–67.

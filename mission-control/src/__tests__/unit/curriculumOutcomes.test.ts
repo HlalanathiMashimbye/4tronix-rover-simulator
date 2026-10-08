@@ -36,6 +36,7 @@ function fixture(): { levels: ChallengeLevel[]; challenges: Record<ChallengeId, 
         title: 'Level 1',
         description: '',
         challengeIds: ['basic-movement', 'loop-structures'],
+        testId: 'loop-structures',
         outcomes: [
           { id: 'a', text: 'You will be able to drive.', alignment: { csta: ['1B-AP-10'] } },
           { id: 'b', text: 'You will be able to loop.', alignment: { nasaJpl: 'Grid survey' } },
@@ -135,7 +136,8 @@ describe('findCurriculumProblems', () => {
 describe('isFirstChallengeOfLevel', () => {
   it("is true only for the level's first challenge", () => {
     const level = CHALLENGE_LEVELS.find((l) => l.id === 2)!;
-    expect(isFirstChallengeOfLevel(level, 'basic-movement')).toBe(true);
+    expect(isFirstChallengeOfLevel(level, 'drive-to-target')).toBe(true);
+    expect(isFirstChallengeOfLevel(level, 'basic-movement')).toBe(false);
     expect(isFirstChallengeOfLevel(level, 'loop-structures')).toBe(false);
   });
 });

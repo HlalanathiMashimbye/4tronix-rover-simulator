@@ -405,6 +405,55 @@ function drawStartMark(ctx, L) {
     }
     ctx.restore();
 }
+function drawTarget(ctx, L, target) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (target.showPath && target.path.length > 1) {
+        // A dark edge under bright dashes, like the start mark, so it reads on
+        // both the pale and the dark parts of the floor photo. Dashed and yellow
+        // so it cannot be mistaken for the rover's own dotted trail.
+        for (const [colour, width, dash] of [
+            ['rgba(20,8,2,0.55)', 7, []],
+            ['rgba(255,214,10,0.95)', 4, [10, 8]],
+        ]) {
+            ctx.strokeStyle = colour;
+            ctx.lineWidth = width;
+            ctx.setLineDash(dash);
+            ctx.beginPath();
+            target.path.forEach(({ x, y }, i) => {
+                const [sx, sy] = worldToScreen(L, x, y);
+                if (i === 0)
+                    ctx.moveTo(sx, sy);
+                else
+                    ctx.lineTo(sx, sy);
+            });
+            ctx.stroke();
+        }
+        ctx.setLineDash([]);
+    }
+    if (target.goal) {
+        // A bullseye whose outer ring is the real tolerance, so "inside the ring"
+        // on screen is exactly what the check accepts. Never drawn smaller than a
+        // finger can point at, though: the ring is a few cm across on a phone.
+        const [cx, cy] = worldToScreen(L, target.goal.x, target.goal.y);
+        const rx = Math.max(10, target.goal.radiusCm * L.sx);
+        const ry = Math.max(10, target.goal.radiusCm * L.sy);
+        const rings = [
+            ['rgba(20,8,2,0.55)', 1.15],
+            ['rgba(239,68,68,0.95)', 1],
+            ['rgba(255,255,255,0.95)', 0.66],
+            ['rgba(239,68,68,0.95)', 0.33],
+        ];
+        for (const [colour, k] of rings) {
+            ctx.fillStyle = colour;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy, rx * k, ry * k, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    ctx.restore();
+}
 function drawTrail(ctx, L, traj, endIdx, P) {
     if (endIdx <= 0)
         return;
@@ -744,12 +793,16 @@ export function drawSimFrame(ctx, L, traj, playhead,
 // original night-time yard rather than rendering colourless.
 P = DARK_SIM_PALETTE, 
 /** The yard's floor photo, once loaded (useYardFloor). Plain ground until then. */
-floor = null) {
+floor = null, 
+/** A challenge's target, under everything the rover does. */
+target = null) {
     // Skip degenerate layouts (container not laid out yet) to avoid drawing with
     // a zero/negative scale.
     if (L.w <= 0 || L.h <= 0 || L.s <= 0)
         return;
     drawTerrain(ctx, L, P, floor);
+    if (target)
+        drawTarget(ctx, L, target);
     if (traj.length === 0) {
         drawRover(ctx, L, { x: 0, y: 0, heading: 0, servos: {} }, 0);
         return;

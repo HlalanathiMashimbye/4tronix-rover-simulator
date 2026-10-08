@@ -15,7 +15,7 @@
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { ChallengeId, ChallengeLevelId } from '@/core/domain/entities/Challenge';
-import { CHALLENGES } from '@/infrastructure/config/challenges';
+import { CHALLENGE_LEVELS, CHALLENGES } from '@/infrastructure/config/challenges';
 
 jest.mock('next/link', () => ({
   __esModule: true,
@@ -37,6 +37,14 @@ jest.mock('@/hooks/useChallengeProgress', () => ({
     loading: false,
     isLevelUnlocked: (id: ChallengeLevelId) => unlockedLevels.includes(id),
     isChallengeComplete: (id: ChallengeId) => completed.includes(id),
+    // The real rule's shape, over this mock's own level and completion
+    // switches: a test also waits for its level's tutorials (AB#446).
+    isChallengeUnlocked: (id: string) => {
+      const { CHALLENGE_LEVELS: levels } = jest.requireActual('@/infrastructure/config/challenges');
+      const level = levels.find((l: { challengeIds: string[] }) => l.challengeIds.includes(id));
+      if (!level || !unlockedLevels.includes(level.id)) return false;
+      return id !== level.testId || level.challengeIds.filter((c: string) => c !== level.testId).every((c: ChallengeId) => completed.includes(c));
+    },
     completedCount: completed.length,
     totalCount: Object.keys(CHALLENGES).length,
   }),
@@ -72,12 +80,30 @@ describe('the mission map', () => {
 
   it('glows exactly one node, the first unfinished one in track order', () => {
     unlockedLevels = [1, 2];
-    completed = ['platform-orientation', 'explore-the-platform', 'first-mission'];
+    completed = [...CHALLENGE_LEVELS[0].challengeIds];
     render(<ChallengesHub />);
 
     const upNext = screen.getAllByRole('link', { name: /Up next/ });
     expect(upNext).toHaveLength(1);
-    expect(upNext[0]).toHaveAttribute('href', '/challenges/basic-movement');
+    expect(upNext[0]).toHaveAttribute('href', '/challenges/drive-to-target');
+  });
+
+  it("keeps a level's test locked until the level's tutorials are done, then puts it next (AB#446)", () => {
+    const level1 = CHALLENGE_LEVELS[0];
+    const tutorials = level1.challengeIds.filter((id) => id !== level1.testId);
+    const testTitle = CHALLENGES[level1.testId].title;
+
+    completed = tutorials.slice(0, -1);
+    const { unmount } = render(<ChallengesHub />);
+    expect(screen.queryByRole('link', { name: new RegExp(testTitle) })).not.toBeInTheDocument();
+    unmount();
+
+    completed = tutorials;
+    render(<ChallengesHub />);
+    expect(screen.getByRole('link', { name: new RegExp(`${testTitle}.*Up next`) })).toHaveAttribute(
+      'href',
+      `/challenges/${level1.testId}`,
+    );
   });
 
   it('does not make a locked node a link', () => {
@@ -85,7 +111,19 @@ describe('the mission map', () => {
 
     const level2 = screen.getByRole('region', { name: /Level 2/ });
     expect(within(level2).queryAllByRole('link')).toHaveLength(0);
-    expect(within(level2).getAllByText('Locked')).toHaveLength(2);
+    expect(within(level2).getAllByText('Locked')).toHaveLength(CHALLENGE_LEVELS[1].challengeIds.length);
+  });
+
+  it("keeps each level's outcomes folded away, so the map is what a child sees", () => {
+    render(<ChallengesHub />);
+
+    const level1 = screen.getByRole('region', { name: /Level 1/ });
+    const outcome = within(level1).getByText(CHALLENGE_LEVELS[0].outcomes[0].text);
+    expect(outcome).not.toBeVisible();
+
+    const summary = within(level1).getByText("What you'll learn");
+    expect(summary.closest('summary')).not.toBeNull();
+    expect(summary).toBeVisible();
   });
 
   it('counts stars from completions', () => {
@@ -117,6 +155,16 @@ describe('the challenge briefing', () => {
 
     expect(screen.getByTestId('workspace')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start Mission' })).not.toBeInTheDocument();
+  });
+
+  it("folds a level's outcomes on its first briefing, leaving Mission Goals and Start in view", () => {
+    const level2 = CHALLENGE_LEVELS[1];
+    render(<ChallengeBriefingGate challenge={CHALLENGES[level2.challengeIds[0]]} briefingLevel={level2} />);
+
+    expect(screen.getByText(level2.outcomes[0].text)).not.toBeVisible();
+    expect(screen.getByText("What you'll learn")).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Mission Goals' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start Mission' })).toBeVisible();
   });
 
   it('keeps teacher info folded away until asked for', () => {
@@ -167,5 +215,18 @@ describe('the pill button', () => {
       expect(pillClass(tone)).toContain('text-kid-ink');
       expect(pillClass(tone)).not.toMatch(/text-white/);
     }
+  });
+});
+
+describe('a level test briefing (AB#446)', () => {
+  it('gives the goal only: no step list, and says there are no hints', () => {
+    const test = CHALLENGES[CHALLENGE_LEVELS[1].testId];
+    render(<ChallengeBriefingGate challenge={test} isTest />);
+
+    expect(screen.getByRole('heading', { name: 'Your Goal' })).toBeInTheDocument();
+    expect(screen.getByText(test.steps[0].instructions)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Mission Goals' })).not.toBeInTheDocument();
+    expect(screen.getByText(/No hints in a test/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Start Test' })).toBeInTheDocument();
   });
 });

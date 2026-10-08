@@ -8,15 +8,25 @@
  * for a learner's progress through it).
  */
 
-export type ChallengeLevelId = 1 | 2 | 3;
+import type { SimulationCommand } from '@/lib/roverBlockly';
+
+export type ChallengeLevelId = 1 | 2 | 3 | 4 | 5;
 
 export type ChallengeId =
   | 'platform-orientation'
   | 'explore-the-platform'
   | 'first-mission'
+  | 'mission-spotter'
+  | 'drive-to-target'
   | 'basic-movement'
   | 'loop-structures'
-  | 'draw-a-square';
+  | 'two-lines'
+  | 'draw-a-square'
+  | 'draw-a-rectangle'
+  | 'sample-site'
+  | 'sample-run-test'
+  | 'spot-the-hazard'
+  | 'hazard-test';
 
 /**
  * What one checklist item verifies, as plain data rather than a function.
@@ -65,6 +75,35 @@ export type ChallengeCheckSpec =
        */
       kind: 'code-contains';
       pattern: string;
+    }
+  | {
+      /**
+       * The learner has picked an answer to the step's prediction. Any answer
+       * passes: in PRIMM the guess is never marked wrong (AB#453) - it is
+       * there so the run that follows has something to be compared with.
+       */
+      kind: 'prediction-made';
+    }
+  | {
+      /**
+       * The last simulated run ended on the challenge's target - within its
+       * arriveWithinCm of where the target's reference program stops.
+       */
+      kind: 'reaches-target';
+    }
+  | {
+      /**
+       * The last run drew the target's shape: every point of the run within
+       * the target's matchWithinCm of its path, and every point of its path
+       * within that of the run. Both ways, so a run that stops halfway along
+       * the shape fails as surely as one that wanders off it. How a test
+       * that asks for a shape is graded (AB#446).
+       */
+      kind: 'matches-target';
+    }
+  | {
+      /** The last run hit no rock and no wall (AB#466's crash model). */
+      kind: 'avoids-hazards';
     };
 
 export interface ChallengeStep {
@@ -73,6 +112,37 @@ export interface ChallengeStep {
   instructions: string;
   hints?: string[];
   checks: ChallengeCheckSpec[];
+  /**
+   * The Predict in PRIMM: a question about the code already on the canvas,
+   * answered by picking one option before anything has been run.
+   */
+  prediction?: {
+    question: string;
+    options: string[];
+  };
+}
+
+/**
+ * What a finished challenge should look like, shown on the simulator (AB#447)
+ * so a learner knows what they are aiming for.
+ *
+ * Held as a REFERENCE PROGRAM rather than a drawn shape: the simulator runs it
+ * through the same physics as the learner's own code, so the target's corners
+ * and distances are exactly what a correct program produces rather than an
+ * idealised drawing a correct program could never match. Only the path is
+ * ever drawn - never these commands, nor the blocks or code that make them.
+ */
+export interface ChallengeTarget {
+  /** One line, about the result and never the steps, e.g. "four sides, 90 degree corners". */
+  description: string;
+  commands: SimulationCommand[];
+  /**
+   * Set when the target is a place to reach: the end of the path is drawn as
+   * a marker, and a 'reaches-target' check passes within this many cm of it.
+   */
+  arriveWithinCm?: number;
+  /** Set when the target is a shape to draw: how far, in cm, a run may stray from it. */
+  matchWithinCm?: number;
 }
 
 /**
@@ -94,6 +164,16 @@ export interface Challenge {
   steps: ChallengeStep[];
   /** Ids of the LearningOutcomes, on this challenge's own level, that it practises. */
   outcomeIds: string[];
+  target?: ChallengeTarget;
+  /**
+   * Ready-made code on the Blockly canvas when the challenge first opens, as
+   * Blockly's own serialization JSON - for a PRIMM challenge, which starts by
+   * reading code rather than writing it. Omitted, the canvas starts with the
+   * uplink block alone.
+   */
+  starterBlocks?: object;
+  /** The same for a Python challenge: code already in the editor when it first opens. */
+  starterCode?: string;
 }
 
 /** One CSTA K-12 Computer Science Standard, worded as CSTA publishes it. */
@@ -131,4 +211,10 @@ export interface ChallengeLevel {
   description: string;
   challengeIds: ChallengeId[];
   outcomes: LearningOutcome[];
+  /**
+   * The level's test (AB#446): its last challenge, which gives a goal and no
+   * help. It opens once the level's other challenges are done, and the next
+   * level opens once it is passed.
+   */
+  testId: ChallengeId;
 }

@@ -14,13 +14,14 @@ export default async function ChallengeWorkspacePage({
 
   const level = CHALLENGE_LEVELS.find((l) => l.id === challenge.levelId);
   const briefingLevel = level && isFirstChallengeOfLevel(level, challenge.id) ? level : undefined;
+  const isTest = level?.testId === challenge.id;
 
   return (
     <main className="relative px-3 py-2 md:h-[calc(100vh-64px)] md:overflow-hidden">
       <div className="mx-auto flex h-full max-w-page flex-col space-y-2">
         <header className="shrink-0">
           <p className="font-display text-sm font-bold uppercase tracking-wide text-kid-blue-text">
-            Level {challenge.levelId} mission
+            Level {challenge.levelId} {isTest ? 'test' : 'mission'}
           </p>
           <h1 className="font-display text-2xl font-bold text-foreground md:text-3xl">
             {challenge.title}
@@ -28,7 +29,7 @@ export default async function ChallengeWorkspacePage({
           <p className="text-sm text-kid-muted-text md:text-base">{challenge.summary}</p>
         </header>
 
-        <ChallengeBriefingGate challenge={challenge} briefingLevel={briefingLevel} />
+        <ChallengeBriefingGate challenge={challenge} briefingLevel={briefingLevel} isTest={isTest} />
       </div>
     </main>
   );

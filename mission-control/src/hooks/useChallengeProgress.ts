@@ -19,6 +19,7 @@ import { ChallengeId, ChallengeLevelId } from '@/core/domain/entities/Challenge'
 import {
   ChallengeProgress,
   isChallengeComplete,
+  isChallengeUnlocked,
   isLevelUnlocked,
   totalChallengeCount,
 } from '@/core/domain/entities/ChallengeProgress';
@@ -59,6 +60,12 @@ export function useChallengeProgress() {
     [progress],
   );
 
+  /** Its level is open and, for a level's test, the level's tutorials are done (AB#446). */
+  const isChallengeUnlockedFn = useCallback(
+    (challengeId: ChallengeId) => isChallengeUnlocked(challengeId, CHALLENGE_LEVELS, progress),
+    [progress],
+  );
+
   /** Returns the level id that just unlocked, if this completion caused one to. */
   const completeChallenge = useCallback(async (challengeId: ChallengeId): Promise<ChallengeLevelId | null> => {
     const learnerId = getLearnerID();
@@ -89,6 +96,7 @@ export function useChallengeProgress() {
     loading,
     isLevelUnlocked: isLevelUnlockedFn,
     isChallengeComplete: isChallengeCompleteFn,
+    isChallengeUnlocked: isChallengeUnlockedFn,
     completeChallenge,
     completedCount: progress.completions.length,
     totalCount: totalChallengeCount(CHALLENGE_LEVELS),

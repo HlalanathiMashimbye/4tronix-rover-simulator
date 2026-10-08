@@ -2,12 +2,12 @@
 
 import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
-import { Lock, Play, Star } from 'lucide-react';
+import { Lock, Play, Star, Trophy } from 'lucide-react';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 import { CHALLENGE_LEVELS, CHALLENGES } from '@/infrastructure/config/challenges';
 import type { ChallengeId, ChallengeLevel, ChallengeLevelId } from '@/core/domain/entities/Challenge';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
-import { LevelOutcomes } from './LevelOutcomes';
+import { LevelOutcomesFold } from './LevelOutcomes';
 
 /**
  * Progressive Challenges hub, drawn as a mission map: one zone per level, its
@@ -43,10 +43,12 @@ const ZONE_TONE: Record<ChallengeLevelId, { badge: string; heading: string; edge
   1: { badge: 'bg-kid-orange border-kid-orange-edge', heading: 'text-kid-orange-text', edge: 'border-kid-orange-edge/50' },
   2: { badge: 'bg-kid-blue border-kid-blue-edge', heading: 'text-kid-blue-text', edge: 'border-kid-blue-edge/50' },
   3: { badge: 'bg-kid-green border-kid-green-edge', heading: 'text-kid-green-text', edge: 'border-kid-green-edge/50' },
+  4: { badge: 'bg-kid-orange border-kid-orange-edge', heading: 'text-kid-orange-text', edge: 'border-kid-orange-edge/50' },
+  5: { badge: 'bg-kid-blue border-kid-blue-edge', heading: 'text-kid-blue-text', edge: 'border-kid-blue-edge/50' },
 };
 
 export function ChallengesHub() {
-  const { loading, isLevelUnlocked, isChallengeComplete, completedCount, totalCount } =
+  const { loading, isLevelUnlocked, isChallengeComplete, isChallengeUnlocked, completedCount, totalCount } =
     useChallengeProgress();
   const reduceMotion = useReducedMotion();
 
@@ -61,13 +63,15 @@ export function ChallengesHub() {
   const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   // The first unlocked, unfinished challenge in track order is the one that
-  // glows. Everything else unlocked and unfinished is merely "Ready".
-  const nextId: ChallengeId | undefined = CHALLENGE_LEVELS.filter((level) => isLevelUnlocked(level.id))
-    .flatMap((level) => level.challengeIds)
-    .find((id) => !isChallengeComplete(id));
+  // glows. Everything else unlocked and unfinished is merely "Ready". A
+  // level's test stays locked inside an open level until its tutorials are
+  // done (AB#446), so it is skipped here until then.
+  const nextId: ChallengeId | undefined = CHALLENGE_LEVELS.flatMap((level) => level.challengeIds).find(
+    (id) => isChallengeUnlocked(id) && !isChallengeComplete(id),
+  );
 
-  const stateOf = (id: ChallengeId, unlocked: boolean): NodeState =>
-    isChallengeComplete(id) ? 'done' : !unlocked ? 'locked' : id === nextId ? 'next' : 'open';
+  const stateOf = (id: ChallengeId): NodeState =>
+    isChallengeComplete(id) ? 'done' : !isChallengeUnlocked(id) ? 'locked' : id === nextId ? 'next' : 'open';
 
   return (
     <div className="space-y-5">
@@ -98,7 +102,12 @@ export function ChallengesHub() {
 
       {CHALLENGE_LEVELS.map((level, index) => (
         <StaggeredEntrance key={level.id} index={index} reduceMotion={reduceMotion}>
-          <LevelZone level={level} unlocked={isLevelUnlocked(level.id)} stateOf={stateOf} />
+          <LevelZone
+            level={level}
+            unlocked={isLevelUnlocked(level.id)}
+            stateOf={stateOf}
+            canOpen={isChallengeUnlocked}
+          />
         </StaggeredEntrance>
       ))}
     </div>
@@ -109,10 +118,12 @@ function LevelZone({
   level,
   unlocked,
   stateOf,
+  canOpen,
 }: {
   level: ChallengeLevel;
   unlocked: boolean;
-  stateOf: (id: ChallengeId, unlocked: boolean) => NodeState;
+  stateOf: (id: ChallengeId) => NodeState;
+  canOpen: (id: ChallengeId) => boolean;
 }) {
   const tone = ZONE_TONE[level.id];
 
@@ -145,10 +156,6 @@ function LevelZone({
         </div>
       </header>
 
-      <div className="mt-4 rounded-2xl border-2 border-kid-panel-edge px-4 py-3">
-        <LevelOutcomes level={level} linkChallenges={unlocked} />
-      </div>
-
       <ol className="mt-5 flex flex-col items-center sm:flex-row sm:flex-wrap sm:items-start sm:justify-center">
         {level.challengeIds.map((id, i) => (
           <li key={id} className="flex flex-col items-center sm:flex-row sm:items-start">
@@ -159,10 +166,12 @@ function LevelZone({
                 className="my-1 h-6 w-0 border-l-4 border-dotted border-kid-panel-edge sm:mx-1 sm:my-0 sm:mt-10 sm:h-0 sm:w-10 sm:border-l-0 sm:border-t-4"
               />
             )}
-            <MissionNode id={id} state={stateOf(id, unlocked)} />
+            <MissionNode id={id} state={stateOf(id)} isTest={id === level.testId} />
           </li>
         ))}
       </ol>
+
+      <LevelOutcomesFold level={level} canLink={canOpen} />
     </section>
   );
 }
@@ -174,7 +183,7 @@ const NODE_FACE: Record<NodeState, string> = {
   locked: 'bg-kid-panel-edge border-kid-panel-edge text-kid-muted-text',
 };
 
-function MissionNode({ id, state }: { id: ChallengeId; state: NodeState }) {
+function MissionNode({ id, state, isTest }: { id: ChallengeId; state: NodeState; isTest: boolean }) {
   const challenge = CHALLENGES[id];
 
   const face = (
@@ -183,8 +192,9 @@ function MissionNode({ id, state }: { id: ChallengeId; state: NodeState }) {
       aria-hidden="true"
     >
       {state === 'done' && <Star className="h-9 w-9 fill-current" />}
-      {state === 'next' && <Play className="ml-1 h-9 w-9 fill-current" />}
-      {state === 'open' && <Play className="ml-1 h-8 w-8" />}
+      {/* A level's test wears a trophy rather than the play arrow (AB#446). */}
+      {state === 'next' && (isTest ? <Trophy className="h-9 w-9" /> : <Play className="ml-1 h-9 w-9 fill-current" />)}
+      {state === 'open' && (isTest ? <Trophy className="h-8 w-8" /> : <Play className="ml-1 h-8 w-8" />)}
       {state === 'locked' && <Lock className="h-7 w-7" />}
     </span>
   );

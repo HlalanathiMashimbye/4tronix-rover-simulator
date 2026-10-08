@@ -31,6 +31,14 @@ interface PythonCodeEditorProps {
    * open as a card over the editor from the i button beside Run.
    */
   phone?: boolean;
+  /**
+   * Where this editor saves its draft. Defaults to Create Mission's. A
+   * challenge passes its own, so its code is kept between tries (AB#446)
+   * without overwriting - or being overwritten by - the Create Mission draft.
+   */
+  storageKey?: string;
+  /** Code to start from when nothing is saved under storageKey yet (a PRIMM challenge's ready-made code). */
+  starterCode?: string;
 }
 
 
@@ -86,7 +94,7 @@ function firstCodeLine(code: string): string {
   return code.split('\n').find((line) => line.trim() && !line.trim().startsWith('#'))?.trim() ?? '';
 }
 
-export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false }: PythonCodeEditorProps) {
+export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode = '', highlight = null, onRegisterRun, phone = false, storageKey = PYTHON_DRAFT_KEY, starterCode }: PythonCodeEditorProps) {
   const [code, setCode] = useState('');
   /** The phone's snippet tray, behind the help button. */
   const [helpOpen, setHelpOpen] = useState(false);
@@ -107,7 +115,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
 
   useEffect(() => {
     if (!hostRef.current) return;
-    const saved = localStorage.getItem(PYTHON_DRAFT_KEY);
+    const saved = localStorage.getItem(storageKey) ?? starterCode ?? null;
 
     // SHOW THE BLOCKS' PYTHON WHEN THERE IS NOTHING TO LOSE.
     //
@@ -145,7 +153,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             if (!update.docChanged) return;
             const next = update.state.doc.toString();
             setCode(next);
-            localStorage.setItem(PYTHON_DRAFT_KEY, next);
+            localStorage.setItem(storageKey, next);
             setError(null);
             onCodeChangeRef.current?.(next);
           }),
