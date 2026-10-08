@@ -9,6 +9,8 @@ import {
   type ConsoleMode,
 } from '@/core/domain/services/consoleMode';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { Crash } from '@/core/domain/safety/crashCheck';
+import { FeedbackBank } from './FeedbackBank';
 
 /**
  * The five desk actions for one mission (AB#379).
@@ -37,8 +39,11 @@ export function MissionActions({
   isAdmin,
   mode = 'manual',
   onResult,
+  crash = null,
 }: {
   mission: QueueMission;
+  /** What the preview's simulation of this mission hits, if anything (AB#466), for the feedback bank. */
+  crash?: Crash | null;
   yardId: string;
   isAdmin: boolean;
   /**
@@ -234,9 +239,12 @@ export function MissionActions({
             {/* This queue reads mission documents and feedback lives on the
                 run, so we cannot say whether one already exists without a
                 second read per row. Sending again replaces it either way. */}
-            They read this on their mission page. &quot;Good job!&quot;, or what to
-            change next time. Sending again replaces an earlier note.
+            They read this on their mission page. Pick a ready-written note below,
+            then edit it or write your own. Sending again replaces an earlier note.
           </p>
+          {/* Keyed on the mission: the next mission opens on its own
+              suggestion, not the group picked for the last one. */}
+          <FeedbackBank key={mission.id} status={mission.status} crash={crash} onPick={setFeedback} />
           <div className="mt-2 flex flex-wrap gap-2">
             <input
               id={`feedback-${mission.id}`}
