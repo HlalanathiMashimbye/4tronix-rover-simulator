@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId } from 'react';
 import type { Crash } from '@/core/domain/safety/crashCheck';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
 import {
@@ -15,16 +15,24 @@ import {
 const OUTCOMES = Object.keys(FEEDBACK_MESSAGES) as FeedbackOutcome[];
 
 /**
- * The reviewed message bank (AB#471), one click from the note box.
+ * The reviewed message bank (AB#471), as one dropdown above the note box.
  *
- * Picking a message fills the box rather than sending it: the operator can
+ * A dropdown rather than a list of buttons: seventeen sentences laid out in
+ * the panel pushed the note box and the runs below the fold, for a choice an
+ * operator makes once per run. A native select, grouped by outcome, is one
+ * row, works with a keyboard and a screen reader as it is, and on a phone
+ * opens the system picker.
+ *
+ * Choosing a note fills the box rather than sending it: the operator can
  * still edit it, add the learner's name, or ignore the bank and write their
- * own, and Send stays the one way a note leaves the console.
+ * own, and Send stays the one way a note leaves the console. The select goes
+ * back to its prompt after each choice, so it never shows a note the operator
+ * has since edited away, and choosing the same note again puts it back.
  *
- * Opens on the group the run most likely belongs in (suggestFeedbackOutcome),
- * and says why when that is a crash, since the suggestion comes from the
- * preview's simulation and not from watching the real rover - the operator
- * has seen the real run and may know better.
+ * The group the run most likely belongs in (suggestFeedbackOutcome) is listed
+ * first and marked, and when that is a crash the line underneath says why -
+ * the suggestion comes from the preview's simulation, not from watching the
+ * real rover, and the operator has seen the real run.
  */
 export function FeedbackBank({
   status,
@@ -35,53 +43,47 @@ export function FeedbackBank({
   crash: Crash | null;
   onPick: (message: string) => void;
 }) {
+  const id = useId();
   const suggested = suggestFeedbackOutcome(status, crash);
-  const [outcome, setOutcome] = useState<FeedbackOutcome>(suggested);
+  const order = [suggested, ...OUTCOMES.filter((outcome) => outcome !== suggested)];
 
   return (
     <div className="mt-2">
-      <div role="group" aria-label="Ready-written notes" className="flex flex-wrap gap-1">
-        {OUTCOMES.map((key) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={outcome === key}
-            onClick={() => setOutcome(key)}
-            className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-              outcome === key
-                ? 'border-primary/60 bg-primary/15 text-foreground'
-                : 'border-border/60 text-muted-foreground hover:text-foreground'
-            }`}
+      <label htmlFor={id} className="text-[11px] font-semibold text-muted-foreground">
+        Ready-written notes
+      </label>
+      <select
+        id={id}
+        value=""
+        onChange={(event) => {
+          if (event.target.value) onPick(event.target.value);
+        }}
+        className="mt-1 w-full rounded-lg border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <option value="">Choose a note to start from...</option>
+        {order.map((outcome) => (
+          <optgroup
+            key={outcome}
+            label={`${FEEDBACK_OUTCOME_LABELS[outcome]}${outcome === suggested ? ' (suggested)' : ''}`}
           >
-            {FEEDBACK_OUTCOME_LABELS[key]}
-            {key === suggested && <span className="font-normal text-muted-foreground"> (suggested)</span>}
-          </button>
+            {FEEDBACK_MESSAGES[outcome].map((template) => {
+              const message = fillFeedbackMessage(template, crash);
+              return (
+                <option key={template} value={message}>
+                  {message}
+                </option>
+              );
+            })}
+          </optgroup>
         ))}
-      </div>
+      </select>
 
-      {crash && outcome === 'crash' && (
-        <p className="mt-1.5 text-[11px] text-muted-foreground">
+      {crash && (
+        <p className="mt-1 text-[11px] text-muted-foreground">
           The preview hits {crashThing(crash)}
           {crash.rock ? ` (${crash.rock})` : ''} at {crash.atSeconds}s.
         </p>
       )}
-
-      <ul className="mt-1.5 space-y-1">
-        {FEEDBACK_MESSAGES[outcome].map((template) => {
-          const message = fillFeedbackMessage(template, crash);
-          return (
-            <li key={template}>
-              <button
-                type="button"
-                onClick={() => onPick(message)}
-                className="w-full rounded-lg border border-border/60 bg-background/60 px-2.5 py-1.5 text-left text-xs text-foreground transition-colors hover:border-primary/60"
-              >
-                {message}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

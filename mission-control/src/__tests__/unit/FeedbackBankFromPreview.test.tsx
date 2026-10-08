@@ -8,7 +8,7 @@
  * and hands the bank what that run hits.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 
 jest.mock('@/components/operator/MissionPreview', () => ({ MissionPreview: () => null }));
 jest.mock('@/components/operator/MissionRuns', () => ({ MissionRuns: () => null }));
@@ -37,13 +37,15 @@ it('suggests the crash group, naming the wall, for a mission that drives into it
   // 20 seconds at full speed is 3m: far past the front wall from the start mark.
   mount('rover.forward(100)\ntime.sleep(20)\nrover.stop()');
 
-  expect(screen.getByRole('button', { name: /Hit something/ })).toHaveAttribute('aria-pressed', 'true');
+  const picker = screen.getByRole('combobox', { name: 'Ready-written notes' });
+  expect(within(picker).getAllByRole('group')[0]).toHaveAttribute('label', 'Hit something (suggested)');
   expect(screen.getByText(/The preview hits the wall/)).toBeInTheDocument();
 });
 
 it('suggests the success group for a short mission that hits nothing', () => {
   mount('rover.forward(60)\ntime.sleep(1)\nrover.stop()');
 
-  expect(screen.getByRole('button', { name: /Went well/ })).toHaveAttribute('aria-pressed', 'true');
+  const picker = screen.getByRole('combobox', { name: 'Ready-written notes' });
+  expect(within(picker).getAllByRole('group')[0]).toHaveAttribute('label', 'Went well (suggested)');
   expect(screen.queryByText(/The preview hits/)).not.toBeInTheDocument();
 });

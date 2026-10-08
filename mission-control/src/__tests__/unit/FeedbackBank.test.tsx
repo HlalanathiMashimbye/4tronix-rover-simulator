@@ -10,7 +10,7 @@
 
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MissionActions } from '@/components/operator/MissionActions';
-import { FEEDBACK_MESSAGES, fillFeedbackMessage } from '@/core/domain/services/feedbackMessages';
+import { FEEDBACK_MESSAGES, allFeedbackMessages, fillFeedbackMessage } from '@/core/domain/services/feedbackMessages';
 import type { Crash } from '@/core/domain/safety/crashCheck';
 
 const settled = { id: 'm1', name: 'Rock Lover', code: 'rover.forward(60)', status: 'completed' as const };
@@ -30,26 +30,43 @@ function mount(crash: Crash | null = null, status: 'completed' | 'cancelled' = '
   return screen.getByRole('textbox', { name: /leave a note/i }) as HTMLInputElement;
 }
 
-const group = () => within(screen.getByRole('group', { name: 'Ready-written notes' }));
+const picker = () => screen.getByRole('combobox', { name: 'Ready-written notes' }) as HTMLSelectElement;
+const choose = (message: string) => fireEvent.change(picker(), { target: { value: message } });
+const groups = () => within(picker()).getAllByRole('group');
 
 beforeEach(() => {
   global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
 });
 
 describe('the feedback bank', () => {
-  it('puts a message in the note box in one click, without sending it', () => {
+  it('is one dropdown, grouped by outcome, holding every reviewed note', () => {
+    mount();
+    expect(groups().map((g) => g.getAttribute('label'))).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^Went well/), expect.stringMatching(/^Hit something/), expect.stringMatching(/^Had to stop it/)]),
+    );
+    // The prompt plus every message in the bank.
+    expect(within(picker()).getAllByRole('option')).toHaveLength(1 + allFeedbackMessages().length);
+  });
+
+  it('puts the chosen note in the box, without sending it', () => {
     const input = mount();
     const message = FEEDBACK_MESSAGES.success[0];
 
-    fireEvent.click(screen.getByRole('button', { name: message }));
+    choose(message);
 
     expect(input.value).toBe(message);
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('lets the operator change the message before sending what they changed', async () => {
+  it('goes back to its prompt after a choice, so it never shows a note since edited away', () => {
+    mount();
+    choose(FEEDBACK_MESSAGES.success[0]);
+    expect(picker().value).toBe('');
+  });
+
+  it('lets the operator change the note before sending what they changed', async () => {
     const input = mount();
-    fireEvent.click(screen.getByRole('button', { name: FEEDBACK_MESSAGES.success[1] }));
+    choose(FEEDBACK_MESSAGES.success[1]);
     fireEvent.change(input, { target: { value: 'Well done, Sam! Try a turn next time.' } });
 
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -59,10 +76,10 @@ describe('the feedback bank', () => {
     expect(body).toMatchObject({ action: 'feedback', text: 'Well done, Sam! Try a turn next time.' });
   });
 
-  it('opens on the crash group when the preview hits something, and says what and when', () => {
+  it('lists the crash group first when the preview hits something, and says what and when', () => {
     mount(wall);
 
-    expect(group().getByRole('button', { name: /Hit something/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(groups()[0]).toHaveAttribute('label', 'Hit something (suggested)');
     expect(screen.getByText(/The preview hits the wall at 5.3s/)).toBeInTheDocument();
   });
 
@@ -70,26 +87,25 @@ describe('the feedback bank', () => {
     const input = mount(wall);
     const filled = fillFeedbackMessage(FEEDBACK_MESSAGES.crash[0], wall);
 
-    fireEvent.click(screen.getByRole('button', { name: filled }));
+    choose(filled);
 
     expect(input.value).toBe(filled);
     expect(input.value).toContain('the wall');
-    expect(input.value).not.toContain('{');
+    expect(picker().textContent).not.toContain('{');
   });
 
-  it('opens on the stopped group for a run that did not finish', () => {
+  it('lists the stopped group first for a run that did not finish', () => {
     // Cancelled: the note panel opens once a mission is settled, which a
     // failed one is not.
     mount(null, 'cancelled');
-    expect(group().getByRole('button', { name: /Had to stop it/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: FEEDBACK_MESSAGES.stopped[0] })).toBeInTheDocument();
+    expect(groups()[0]).toHaveAttribute('label', 'Had to stop it (suggested)');
   });
 
-  it('lets the operator open any group, whatever was suggested', () => {
-    mount(wall);
-    fireEvent.click(group().getByRole('button', { name: /Went well/ }));
+  it('lists the success group first for a clean run, and still offers every group', () => {
+    const input = mount();
+    expect(groups()[0]).toHaveAttribute('label', 'Went well (suggested)');
 
-    expect(screen.getByRole('button', { name: FEEDBACK_MESSAGES.success[0] })).toBeInTheDocument();
-    expect(screen.queryByText(/The preview hits/)).not.toBeInTheDocument();
+    choose(FEEDBACK_MESSAGES.stopped[0]);
+    expect(input.value).toBe(FEEDBACK_MESSAGES.stopped[0]);
   });
 });
