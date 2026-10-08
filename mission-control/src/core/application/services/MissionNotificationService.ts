@@ -16,6 +16,7 @@ import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import { missionSlug } from '@/core/domain/services/missionSlug';
+import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import {
   ILearnerContactReader,
   LearnerContact,
@@ -31,7 +32,11 @@ const LOG_TAG = '[mission-email]';
  */
 export type NotifyOutcome =
   | { sent: true }
-  | { sent: false; reason: 'no-learner-email' | 'send-failed'; error?: string };
+  | {
+      sent: false;
+      reason: 'no-learner-email' | 'send-failed' | 'excluded' | 'address-mismatch';
+      error?: string;
+    };
 
 export class MissionNotificationService {
   constructor(
@@ -45,10 +50,22 @@ export class MissionNotificationService {
      * per-mission and history links are derived here rather than passed in, so
      * every route that sends mail cannot drift on how they are built.
      */
-    private readonly appUrl: string
+    private readonly appUrl: string,
+    /**
+     * Missions that must never send mail, whatever their status (AB#470): the
+     * reviewed list in infrastructure/config/notificationExclusions.ts.
+     */
+    private readonly excludedMissionIds: ReadonlySet<string> = new Set(),
   ) {}
 
   async notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome> {
+    // Before anyone's address is even read: an excluded mission has nobody it
+    // should reach.
+    if (this.excludedMissionIds.has(mission.id)) {
+      console.warn(`${LOG_TAG} skipped mission=${mission.id} status=${status} reason=excluded`);
+      return { sent: false, reason: 'excluded' };
+    }
+
     let learner: LearnerContact;
 
     try {
@@ -68,6 +85,30 @@ export class MissionNotificationService {
         `${LOG_TAG} skipped mission=${mission.id} status=${status} reason=no-learner-email learner=${mission.learnerRef}`
       );
       return { sent: false, reason: 'no-learner-email' };
+    }
+
+    /**
+     * THE LEARNER HOLDS THE KEY, THE MISSION HOLDS THE HASH (AB#470).
+     *
+     * A mission carries learnerEmailHash only when its learner gave an address
+     * as they sent it - that is them asking to hear about it. The address
+     * itself is on the learner's private record. So the address we are about
+     * to write to must hash to what the mission carries: if it does not, the
+     * mail would reach someone the mission was never meant for (a test mission
+     * sent with one address on another learner's record was exactly this), and
+     * it is not sent.
+     *
+     * A mission with NO hash is left as it was - sent to the learner's address
+     * - by decision: AB#470 requires that no other mission's notifications
+     * change, and those missions predate a learner giving an address. See
+     * docs/architecture/design-decisions.md, "Who a notification reaches".
+     */
+    if (mission.learnerEmailHash && (await hashLearnerEmail(learner.email)) !== mission.learnerEmailHash) {
+      // The address is not logged here: it is not the one this mission asked for.
+      console.warn(
+        `${LOG_TAG} skipped mission=${mission.id} status=${status} reason=address-mismatch learner=${mission.learnerRef}`
+      );
+      return { sent: false, reason: 'address-mismatch' };
     }
 
     try {

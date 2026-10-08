@@ -198,6 +198,65 @@ browsers are denied entirely and only the Admin SDK reaches.
 bulk read. They cannot stop a forged write, because learner ids are still public
 on older documents. Closing that needs ids to stop being published at all.
 
+### Who a notification reaches (AB#470)
+
+**The flow: the learner holds the key, the mission holds the hash.**
+
+1. A learner who wants emails gives their address. It is stored in plaintext in
+   one place only: their private record, `learners/{id}/private/contact`, which
+   browsers cannot read. That address is the key.
+2. Every mission they send while they have an address carries
+   `learnerEmailHash`, the SHA-256 of that address. A mission sent before they
+   gave one can have it stamped on afterwards (section 5's one browser write).
+   A hash on a mission means "the owner of this address asked to hear about
+   this mission".
+3. When the mission's status changes, `MissionNotificationService` finds the
+   learner by `learnerRef`, reads their address, hashes it, and **sends only if
+   it matches the mission's hash**. A mismatch means the mail would reach
+   someone the mission was never meant for, so nothing is sent and the skip is
+   logged, without the address.
+
+**Why step 3 is new.** Mail used to go to whatever address the mission's learner
+record held, and the hash on the mission was never consulted. A test mission
+sent on 26 September carried one address's hash on another learner's record,
+and its status changes emailed the wrong person.
+
+**Decision: a mission with no hash still notifies its learner, unchanged.**
+Requiring a hash would be the stricter reading of "only learners who asked",
+but AB#470 also requires that no other mission's notifications change, and
+missions sent before their learner gave an address have no hash. The one
+behaviour change for real missions: a learner who changed their address no
+longer gets mail about missions sent under the old one, because those missions
+were asked for by the old address.
+
+**A side effect worth having.** Section 5's browser write lets anyone stamp a
+hash onto a mission that has none. Before, a forged hash changed nothing about
+mail. Now it can only stop mail, never redirect it: mail still goes only to the
+learner's own address, and now only when that address matches.
+
+**Decision: test data that carries an email hash is ignored by id.** It is
+listed in `infrastructure/config/notificationExclusions.ts`, which every
+notification checks before reading anyone's address:
+
+- *Delete* was rejected: it loses the mission from the feed and history, and
+  cannot be undone.
+- *Null the hash* was rejected: a mission with no hash still notifies, by the
+  decision above, so it would not stop the mail.
+- *A date cutoff* was rejected: it would silence every real mission before that
+  date too.
+
+Listing the id stops one mission, touches no data, and is undone by deleting a
+line. Each entry records why and when it was agreed, and a test holds them to
+that.
+
+**Open: which mission.** 27 missions were submitted on 26 September; 6 carry a
+hash, from two learners: `dMxaVCCnpGmfaS_902t43` and `cIgRU5eNGqX8CZLUPYrqR`
+(one learner), and `Ktlh4oLSZ2-11nxzsN6zG`, `B0q3sdAz7BhJZipS0AMmL`,
+`qoDwbhjejm6oz64ZlHVJI`, `Y5znqho-0RUiqSdn2f3dq` (another, which also sent
+missions without a hash). The mismatch rule stops any of these whose hash is
+not its learner's address. Whichever the team confirms as the test mission goes
+on the exclusion list, so it stops whatever its hash.
+
 ---
 
 ## 5. Firestore rules as least privilege, not as the security model
