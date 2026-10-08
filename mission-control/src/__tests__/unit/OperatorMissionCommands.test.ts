@@ -69,6 +69,8 @@ function setUp(found: Mission | null, runs: MissionRun[] = [], notifier?: Learne
     softDeleteMission: async (...args) => {
       deletedMissions.push(args);
     },
+    checkIdempotency: async () => null,
+    recordIdempotencyKey: async () => {},
   };
 
   const learnerEmail: LearnerNotifier = notifier ?? {

@@ -304,8 +304,7 @@ describe('Concurrency and Idempotency Integration', () => {
         OPERATOR_A,
       );
 
-      expect(result.ok).toBe(true);
-      expect(result.status).toBe('completed');
+      expect(result).toMatchObject({ ok: true, status: 'completed' });
 
       // Verify only run-1 was updated
       expect(bookkeepingWrites.length).toBe(1);
