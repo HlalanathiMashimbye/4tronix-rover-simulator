@@ -20,6 +20,9 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
   useCompletionNotifications: () => ({ unread: [], hasUnread: false, markAllSeen: () => {}, dismiss: () => {} }),
 }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
 
 // A headless Blockly that yields one tagged command, so the hook's
 // "from the blocks" branch can be seen.

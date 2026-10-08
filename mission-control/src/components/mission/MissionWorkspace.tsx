@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { recordMissionCreated } from '@/infrastructure/browser/platformMilestones';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
@@ -21,7 +22,10 @@ import { useYardLayout } from '@/hooks/useYardLayout';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
-import { carryBlocksToPython, showBlocksAsPython } from '@/infrastructure/browser/pythonDraft';
+import { consumeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
+import { ROVER_WORKSPACE_STORAGE_KEY } from '@/components/mission/BlocklyEditor';
+import { Sparkles } from 'lucide-react';
+import { PYTHON_DRAFT_KEY, carryBlocksToPython, showBlocksAsPython } from '@/infrastructure/browser/pythonDraft';
 
 /**
  * The code of the line the simulator is running, for the phone's one-line
@@ -128,6 +132,11 @@ export function MissionWorkspace() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  /** Set when this session arrived via "Finish & Export" from a challenge. */
+  const [importedFromChallenge, setImportedFromChallenge] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   // Load mission from remixFrom parameter (for cross-device remix via email)
   useEffect(() => {
     if (remixFromId) {
@@ -166,6 +175,39 @@ export function MissionWorkspace() {
    * something (AB#413).
    */
   const [blocklyCode, setBlocklyCode] = useState('');
+
+  /**
+   * Consume a Progressive Challenges handoff, if one is waiting.
+   *
+   * Neither editor accepts an "initial state" prop - each loads whatever is
+   * under its own localStorage key the moment it mounts, and that is the
+   * only way to seed either of them. So this writes the handoff's code under
+   * the RIGHT key for its editorMode BEFORE switching editorMode itself,
+   * which is what causes that editor to mount in the first place - by
+   * construction, the seed lands before there is anything to race.
+   */
+  useEffect(() => {
+    const handoff = consumeChallengeHandoff();
+    if (!handoff) return;
+
+    try {
+      if (handoff.editorMode === 'blockly' && handoff.blocklyState) {
+        localStorage.setItem(ROVER_WORKSPACE_STORAGE_KEY, handoff.blocklyState);
+      } else {
+        localStorage.setItem(PYTHON_DRAFT_KEY, handoff.code);
+      }
+    } catch {
+      // localStorage unavailable - the editor falls back to its own default,
+      // but the code/name still make it into the submission below.
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from a sessionStorage handoff; not readable during SSR render, same pattern as the missionName effect above
+    setCurrentCode(handoff.code);
+    setBlocklyCode(handoff.code);
+    if (handoff.blocklyState) setBlocklyState(handoff.blocklyState);
+    setEditorMode(handoff.editorMode);
+    setImportedFromChallenge({ id: handoff.challengeId, title: handoff.challengeTitle });
+  }, []);
 
   // Run the commands through the client-side physics model and play the
   // trajectory in the simulator.
@@ -291,6 +333,9 @@ export function MissionWorkspace() {
         // shows up in their cross-device history.
         ...(learnerEmail ? { learnerEmail } : {}),
         ...(editorMode === 'blockly' && blocklyState ? { blocklyState } : {}),
+        ...(importedFromChallenge
+          ? { origin: 'challenge' as const, challengeId: importedFromChallenge.id }
+          : {}),
         name: missionName,
       });
 
@@ -311,6 +356,11 @@ export function MissionWorkspace() {
       }
 
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
+      // Recorded here rather than inferred from the line above: 'the learner
+      // has sent a mission' is a fact the Level 1 challenge asks about, and it
+      // must stay true after the latest-mission id is overwritten by the next
+      // one. See infrastructure/browser/platformMilestones.ts.
+      recordMissionCreated();
 
       setSubmitSuccess(true);
       setLaunchOpen(false);
@@ -415,6 +465,13 @@ export function MissionWorkspace() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      {importedFromChallenge && (
+        <div className="flex shrink-0 items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-semibold text-primary">
+          <Sparkles className="h-4 w-4 shrink-0" />
+          Imported from Challenge: {importedFromChallenge.title}
+        </div>
+      )}
+
       {phoneLayout === null ? (
         // What the server sends. Neutral at every size, so a phone never
         // paints the desktop layout before the phone one replaces it.

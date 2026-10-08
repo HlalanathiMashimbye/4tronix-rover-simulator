@@ -7,6 +7,7 @@ import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 import { useYardLayout } from '@/hooks/useYardLayout';
 import { previewMission, type FindingLevel } from '@/core/domain/safety/missionPreview';
 import type { CommandSource } from '@/lib/roverBlockly';
+import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 
 /**
@@ -26,15 +27,22 @@ export function MissionPreview({
   mission,
   yardId,
   onSourceChange,
+  trajectory: given,
 }: {
   mission: QueueMission;
   /** The yard the operator signed in at, whose queue this is (AB#468). */
   yardId: string;
   onSourceChange: (source: CommandSource | null) => void;
+  /**
+   * The run already simulated by the caller (MissionDetail shares one with
+   * the feedback bank). Simulated here when not given.
+   */
+  trajectory?: TrajectoryPoint[];
 }) {
   // In this yard's layout, rocks and slopes, the one the rover will run in.
   const { layout } = useYardLayout(yardId);
-  const trajectory = useMissionTrajectory(mission, layout);
+  const own = useMissionTrajectory(given ? null : mission, layout);
+  const trajectory = given ?? own;
   const findings = useMemo(() => previewMission(mission.code, trajectory), [mission.code, trajectory]);
   const worst = findings[0]?.level ?? 'ok';
 

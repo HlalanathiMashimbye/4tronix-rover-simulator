@@ -5,7 +5,7 @@ import { ArrowDown, ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
 import { MissionActions } from '@/components/operator/MissionActions';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { CodeLines } from '@/components/mission/CodeLines';
 import { MissionPreview } from '@/components/operator/MissionPreview';
@@ -14,6 +14,9 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import { yardLabelOf, findYardIn, type Yard } from '@/core/domain/entities/Yard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { findCrash } from '@/core/domain/safety/crashCheck';
+import { useYardLayout } from '@/hooks/useYardLayout';
+import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 
 /**
  * One mission, beside the queue rather than instead of it.
@@ -50,6 +53,14 @@ export function MissionDetail({
   // pointing at the record below can step aside.
   const [scrolledDown, setScrolledDown] = useState(false);
   const recordRef = useRef<HTMLDivElement>(null);
+
+  // Simulated once, here, for the two things below that need it: the preview
+  // draws it, and the feedback bank reads what it hit (AB#471). Each running
+  // its own simulation meant a block mission built its hidden Blockly
+  // workspace twice for one mission.
+  const { layout } = useYardLayout(yardId);
+  const trajectory = useMissionTrajectory(mission, layout);
+  const crash = useMemo(() => findCrash(trajectory), [trajectory]);
 
   if (!mission) {
     return (
@@ -108,7 +119,13 @@ export function MissionDetail({
       <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1 @2xl:gap-3">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
-        <MissionPreview key={mission.id} mission={mission} yardId={yardId} onSourceChange={setRunningSource} />
+        <MissionPreview
+          key={mission.id}
+          mission={mission}
+          yardId={yardId}
+          trajectory={trajectory}
+          onSourceChange={setRunningSource}
+        />
 
         <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
           {/* Not on a phone: the blocks are plainly the learner's, and the
@@ -156,6 +173,7 @@ export function MissionDetail({
       <div ref={recordRef} className="flex scroll-mt-2 flex-col gap-3 pb-2 pt-4">
       <MissionActions
         mission={mission}
+        crash={crash}
         yardId={yardId}
         isAdmin={isAdmin}
         mode={mode}

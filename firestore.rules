@@ -169,14 +169,14 @@ service cloud.firestore {
       allow delete: if false;
 
       allow create: if request.resource.data.keys().hasOnly([
-                      'id', 'sessionId', 'avatarColor', 'displayName',
+                      'id', 'sessionId', 'avatar', 'avatarColor', 'displayName',
                       'learnerRef', 'missionCount', 'completedMissions',
                       'createdAt', 'lastActiveAt', 'devices',
                       'learnerId', 'missionsCompleted', 'progress'
                     ]);
 
       allow update: if touchedKeys().hasOnly([
-                      'displayName', 'avatarColor', 'learnerRef',
+                      'displayName', 'avatar', 'avatarColor', 'learnerRef',
                       'lastActiveAt', 'missionCount', 'completedMissions',
                       'missionsCompleted', 'progress', 'devices'
                     ]);

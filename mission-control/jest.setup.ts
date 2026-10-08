@@ -33,3 +33,13 @@ if (typeof globalThis.fetch !== 'function') {
     throw new Error('Unexpected fetch call in test; mock global.fetch in this suite.');
   }) as unknown as typeof fetch;
 }
+
+if (typeof globalThis.setImmediate !== 'function') {
+  globalThis.setImmediate = ((callback: (...args: unknown[]) => void, ...args: unknown[]) =>
+    setTimeout(callback, 0, ...args)) as unknown as typeof setImmediate;
+}
+
+if (typeof globalThis.clearImmediate !== 'function') {
+  globalThis.clearImmediate = ((immediateId: unknown) =>
+    clearTimeout(immediateId as ReturnType<typeof setTimeout>)) as unknown as typeof clearImmediate;
+}
