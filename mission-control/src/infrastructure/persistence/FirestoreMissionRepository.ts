@@ -41,6 +41,7 @@ import {
 
 const MISSIONS_COLLECTION = 'missions';
 const RUNS_SUBCOLLECTION = 'runs';
+const IDEMPOTENCY_COLLECTION = 'idempotency_keys';
 
 type FirestoreLike = AdminFirestore | ClientFirestore;
 
@@ -395,6 +396,53 @@ export class FirestoreMissionRepository implements IMissionRepository {
     }
 
     await batch.commit();
+  }
+
+  async checkIdempotency(missionId: string, idempotencyKey: string): Promise<string | null> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Idempotency check requires the Admin SDK.');
+    }
+
+    const doc = await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .collection(IDEMPOTENCY_COLLECTION)
+      .doc(idempotencyKey)
+      .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data() as { runId?: string; expiresAt?: string } | undefined;
+    if (!data) {
+      return null;
+    }
+
+    const expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
+    if (expiresAt && expiresAt < new Date()) {
+      return null;
+    }
+
+    return data.runId ?? null;
+  }
+
+  async recordIdempotencyKey(
+    missionId: string,
+    idempotencyKey: string,
+    runId: string,
+    expiresAt: string,
+  ): Promise<void> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Recording idempotency key requires the Admin SDK.');
+    }
+
+    await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .collection(IDEMPOTENCY_COLLECTION)
+      .doc(idempotencyKey)
+      .set({ runId, expiresAt });
   }
 
   /**
