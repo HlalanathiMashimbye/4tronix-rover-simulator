@@ -37,6 +37,9 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
   useCompletionNotifications: () => ({ unread: [], hasUnread: false, markAllSeen: () => {}, dismiss: () => {} }),
 }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
 // feat/challenges: the Navbar reads challenge progress, which would reach
 // Firestore. Nothing here is about challenges, so it loads as empty.
 jest.mock('@/hooks/useChallengeProgress', () => ({
