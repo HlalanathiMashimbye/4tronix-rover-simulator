@@ -24,6 +24,7 @@ import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
+import { EXCLUDED_MISSION_IDS } from '@/infrastructure/config/notificationExclusions';
 import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
@@ -58,6 +59,7 @@ export function notificationService(): MissionNotificationService {
     missionEmailComposer,
     new FirestoreLearnerContactReader(getFirestoreInstance()),
     resolveAppUrl(),
+    EXCLUDED_MISSION_IDS,
   );
 }
 
