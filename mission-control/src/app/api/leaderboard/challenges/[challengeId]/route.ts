@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { adminLeaderboardRepository } from '@/infrastructure/container.server';
+import { challengeKind } from '@/infrastructure/config/challenges';
 import { LeaderboardService } from '@/core/application/services/LeaderboardService';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 
@@ -49,7 +50,7 @@ export async function POST(
 
     // Create service and record challenge completion
     const repository = adminLeaderboardRepository();
-    const service = new LeaderboardService(repository);
+    const service = new LeaderboardService(repository, challengeKind);
 
     const stats = await service.recordChallengeCompletion(learnerRefHash, challengeId);
 

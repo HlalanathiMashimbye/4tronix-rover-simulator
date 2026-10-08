@@ -21,6 +21,7 @@ import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admi
 import { adminLeaderboardRepository } from '@/infrastructure/container.server';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { calculateScore } from '@/core/domain/services/scoreCalculation';
+import { challengeKind } from '@/infrastructure/config/challenges';
 import { generateNickname } from '@/core/domain/services/nicknameGenerator';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 
@@ -94,7 +95,7 @@ export async function POST(_request: NextRequest) {
         const learnerRefHash = await hashLearnerId(learnerId);
 
         // Calculate score from completed challenges
-        const score = calculateScore(completedChallengeIds);
+        const score = calculateScore(completedChallengeIds, challengeKind);
 
         // Check if leaderboard entry already exists
         const existingEntry = await leaderboardRepo.findByLearnerRef(learnerRefHash);

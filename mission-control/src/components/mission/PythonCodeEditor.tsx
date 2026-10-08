@@ -246,7 +246,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
       setError(null);
       onGenerateCommands(commands);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to parse code');
+      setError(err instanceof Error ? err.message : "This code couldn't be read. Check it for a typo.");
     }
   };
 

@@ -160,7 +160,6 @@ export interface Challenge {
   title: string;
   summary: string;
   workspaceKind: ChallengeWorkspaceKind;
-  scorePoints: number;
   steps: ChallengeStep[];
   /** Ids of the LearningOutcomes, on this challenge's own level, that it practises. */
   outcomeIds: string[];

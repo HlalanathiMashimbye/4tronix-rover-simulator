@@ -17,6 +17,7 @@ import { readMilestones } from '@/infrastructure/browser/platformMilestones';
 import { playLevelUnlockSound } from '@/infrastructure/browser/levelUnlockSound';
 import { readStoredSound, serverSoundSnapshot, subscribeToSound } from '@/hooks/soundPreference';
 import { ChallengeInstructionsPanel } from './ChallengeInstructionsPanel';
+import { explainOpenCheck } from './describeCheck';
 import { ChallengeCenterPanel } from './ChallengeCenterPanel';
 
 interface ChallengeWorkspaceProps {
@@ -76,7 +77,11 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const [finishResult, setFinishResult] = useState<FinishResult | null>(null);
   /** The learner's answer to a PRIMM Predict step - kept so later steps can show it back. */
   const [prediction, setPrediction] = useState<string | null>(null);
-  const [lastRun, setLastRun] = useState<{ path: TargetPoint[]; crashed: boolean } | null>(null);
+  const [lastRun, setLastRun] = useState<{
+    path: TargetPoint[];
+    crashed: boolean;
+    crashInto: 'rock' | 'wall' | null;
+  } | null>(null);
   const geometry = useMemo(() => (challenge.target ? targetGeometry(challenge.target) : null), [challenge.target]);
 
   const step = challenge.steps[stepIndex];
@@ -94,6 +99,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
       runEnd: lastRun?.path[lastRun.path.length - 1],
       runPath: lastRun?.path,
       runCrashed: lastRun?.crashed,
+      runCrashInto: lastRun?.crashInto,
       target: geometry,
       targetGoal: geometry?.goal ?? null,
     }),
@@ -101,6 +107,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   );
 
   const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
+  const explanations = step ? step.checks.map((check, i) => explainOpenCheck(check, evalContext, results[i])) : [];
   const allStepChecksPass = results.every(Boolean);
   const isFinalStep = stepIndex === challenge.steps.length - 1;
   const isCodeChallenge = challenge.workspaceKind !== 'embedded-platform';
@@ -159,6 +166,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         allStepChecksPass={allStepChecksPass}
         checks={step.checks}
         results={results}
+        explanations={explanations}
         finishLabel={FINISH_LABEL[challenge.workspaceKind]}
         onBack={() => setStepIndex((i) => Math.max(0, i - 1))}
         onNext={() => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1))}

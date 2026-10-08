@@ -131,7 +131,8 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
         onFeedState?.({ hasMore: page.nextCursor !== null });
       } catch (err) {
         console.error('[MissionFeed] Failed to load missions:', err);
-        let errorMessage = 'Failed to load missions. ';
+        // Not "Failed": no learner-facing screen says it (AB#448).
+        let errorMessage = "Couldn't load the missions. ";
 
         if (err instanceof Error) {
           errorMessage += err.message;

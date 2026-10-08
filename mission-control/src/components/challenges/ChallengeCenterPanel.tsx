@@ -11,7 +11,8 @@ import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
 import { pillClass } from './pill';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { useYardLayout } from '@/hooks/useYardLayout';
-import { crashFrame, simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
+import { findCrash } from '@/core/domain/safety/crashCheck';
 import type { SimulationCommand } from '@/lib/roverBlockly';
 import {
   deriveTrajectoryOutcomes,
@@ -38,7 +39,7 @@ interface ChallengeCenterPanelProps {
    * Each simulated run: the path it drove and whether it hit a rock or a
    * wall, for the target and hazard checks.
    */
-  onRun?: (run: { path: TargetPoint[]; crashed: boolean }) => void;
+  onRun?: (run: { path: TargetPoint[]; crashed: boolean; crashInto: 'rock' | 'wall' | null }) => void;
   /** The challenge's target, from challengeTarget's targetGeometry, or null. */
   target?: TargetGeometry | null;
   /** Keep the target's path off the simulator for now (a Predict step is unanswered). */
@@ -133,7 +134,8 @@ export function ChallengeCenterPanel({
     setTrajectory(run);
     setIsPlaying(true);
     onTrajectoryOutcomes(deriveTrajectoryOutcomes(commands));
-    onRun?.({ path: run.map(({ x, y }) => ({ x, y })), crashed: crashFrame(run) >= 0 });
+    const crash = findCrash(run);
+    onRun?.({ path: run.map(({ x, y }) => ({ x, y })), crashed: crash !== null, crashInto: crash?.into ?? null });
   };
 
   const handleReset = () => {

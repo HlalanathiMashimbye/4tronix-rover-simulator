@@ -1,94 +1,109 @@
 /**
- * Score calculation tests
+ * Leaderboard scoring (AB#449): points for what a learner showed they can do.
+ *
+ * Run against the real content's challengeKind, so a challenge added later is
+ * priced by its kind here without anyone writing it a test - and a level whose
+ * test stops being its test changes what it is worth, visibly.
  */
 
 import {
+  CHALLENGE_KIND_POINTS,
   calculateScore,
   getChallengePoints,
 } from '@/core/domain/services/scoreCalculation';
+import { CHALLENGE_LEVELS, CHALLENGES, challengeKind } from '@/infrastructure/config/challenges';
+import { LeaderboardService } from '@/core/application/services/LeaderboardService';
+import type { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
+import type { LeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
 
-describe('scoreCalculation', () => {
-  describe('getChallengePoints', () => {
-    it('returns correct points for known challenges', () => {
-      expect(getChallengePoints('platform-orientation')).toBe(50);
-      expect(getChallengePoints('first-mission')).toBe(100);
-      expect(getChallengePoints('basic-movement')).toBe(150);
-      expect(getChallengePoints('loop-structures')).toBe(200);
-      expect(getChallengePoints('draw-a-square')).toBe(250);
-    });
+const tests = CHALLENGE_LEVELS.map((level) => level.testId);
+const tutorials = CHALLENGE_LEVELS.flatMap((level) => level.challengeIds.filter((id) => id !== level.testId));
 
-    it('returns default points for unknown challenges', () => {
-      expect(getChallengePoints('unknown-challenge')).toBe(50);
-    });
+describe('the scoring rule (AB#449)', () => {
+  it('starts tutorials at 50 and level tests at 250', () => {
+    expect(CHALLENGE_KIND_POINTS).toEqual({ tutorial: 50, test: 250 });
   });
 
-  describe('calculateScore', () => {
-    it('returns 0 for no completed challenges', () => {
-      expect(calculateScore([])).toBe(0);
-    });
-
-    it('calculates score from single challenge', () => {
-      expect(calculateScore(['platform-orientation'])).toBe(50);
-      expect(calculateScore(['first-mission'])).toBe(100);
-      expect(calculateScore(['basic-movement'])).toBe(150);
-      expect(calculateScore(['loop-structures'])).toBe(200);
-      expect(calculateScore(['draw-a-square'])).toBe(250);
-    });
-
-    it('sums points from multiple challenges', () => {
-      const challenges = ['platform-orientation', 'basic-movement'];
-      const expected = 50 + 150;
-      expect(calculateScore(challenges)).toBe(expected);
-    });
-
-    it('handles all defined challenges combined', () => {
-      const allChallenges = [
-        'platform-orientation',
-        'explore-the-platform',
-        'first-mission',
-        'basic-movement',
-        'loop-structures',
-        'draw-a-square',
-      ];
-      const expected = 50 + 75 + 100 + 150 + 200 + 250;
-      expect(calculateScore(allChallenges)).toBe(expected);
-    });
-
-    it('handles unknown challenges in mix', () => {
-      const challenges = ['platform-orientation', 'unknown', 'basic-movement'];
-      const expected = 50 + 50 + 150; // unknown defaults to 50
-      expect(calculateScore(challenges)).toBe(expected);
-    });
+  it("pays a level's test the most, and every tutorial the same small amount", () => {
+    for (const id of tests) expect(getChallengePoints(id, challengeKind)).toBe(250);
+    for (const id of tutorials) expect(getChallengePoints(id, challengeKind)).toBe(50);
   });
 
-  describe('Score idempotency', () => {
-    it('same input always produces same output', () => {
-      const challengeIds = ['platform-orientation', 'basic-movement'];
-      const score1 = calculateScore(challengeIds);
-      const score2 = calculateScore(challengeIds);
-      expect(score1).toEqual(score2);
-    });
+  it('prices every challenge in the track, and nothing else', () => {
+    for (const id of Object.keys(CHALLENGES)) expect(getChallengePoints(id, challengeKind)).toBeGreaterThan(0);
+    // The completion route accepts any id it is sent: a made-up one earns nothing.
+    expect(getChallengePoints('not-a-challenge', challengeKind)).toBe(0);
+  });
 
-    it('prevents duplicate point awards from retried requests', () => {
-      const completedOnce = calculateScore(['platform-orientation']);
-      const completedTwice = calculateScore([
-        'platform-orientation',
-        'platform-orientation',
-      ]);
+  it('does not pay twice for the same challenge', () => {
+    const once = calculateScore([tests[0]], challengeKind);
+    expect(calculateScore([tests[0], tests[0], tests[0]], challengeKind)).toBe(once);
+  });
 
-      // Note: if same challenge appears twice, both are counted
-      // Real idempotency is enforced at the service level (no duplicates in array)
-      expect(completedOnce).toBe(50);
-      expect(completedTwice).toBe(100);
-    });
+  it('adds up a level as its tutorials plus its test', () => {
+    const level = CHALLENGE_LEVELS[0];
+    const expected = (level.challengeIds.length - 1) * 50 + 250;
+    expect(calculateScore([...level.challengeIds], challengeKind)).toBe(expected);
+  });
+});
 
-    it('verified list prevents duplicates at service layer', () => {
-      // Service must deduplicate before calling calculateScore
-      const deduplicatedIds = Array.from(
-        new Set(['platform-orientation', 'basic-movement', 'platform-orientation'])
-      );
+/** An in-memory leaderboard, enough for the service's scoring path. */
+function memoryRepository(): ILeaderboardRepository & { entry: () => LeaderboardEntry | null } {
+  let entry: LeaderboardEntry | null = null;
+  const now = '2026-10-08T00:00:00Z';
+  return {
+    entry: () => entry,
+    getOrCreate: async (id, nickname) =>
+      (entry ??= {
+        id,
+        leaderboardId: 'global',
+        displayName: nickname,
+        score: 0,
+        completedChallenges: 0,
+        completedChallengeIds: [],
+        optedIn: false,
+        createdAt: now,
+        updatedAt: now,
+      } as LeaderboardEntry),
+    findByLearnerRef: async () => entry,
+    updateScore: async (_id, completedChallenges, score, completedChallengeIds) => {
+      entry = { ...entry!, completedChallenges, score, completedChallengeIds: completedChallengeIds ?? [] };
+      return entry;
+    },
+    optIn: async () => entry!,
+    optOut: async () => {},
+    getPublicLeaderboard: async () => ({ entries: [], nextCursor: null }) as never,
+    getRank: async () => null,
+    updateDisplayName: async () => entry!,
+  };
+}
 
-      expect(calculateScore(deduplicatedIds)).toBe(50 + 150);
-    });
+describe('recording completions on the leaderboard', () => {
+  it('scores a test at 250 and a tutorial at 50', async () => {
+    const repo = memoryRepository();
+    const service = new LeaderboardService(repo, challengeKind);
+
+    await service.recordChallengeCompletion('learner', tutorials[0]);
+    await service.recordChallengeCompletion('learner', tests[0]);
+
+    expect(repo.entry()!.score).toBe(300);
+  });
+
+  it('gives nothing for completing the same challenge again', async () => {
+    const repo = memoryRepository();
+    const service = new LeaderboardService(repo, challengeKind);
+
+    await service.recordChallengeCompletion('learner', tests[0]);
+    const again = await service.recordChallengeCompletion('learner', tests[0]);
+
+    expect(again.score).toBe(250);
+    expect(repo.entry()!.completedChallengeIds).toEqual([tests[0]]);
+  });
+
+  it('gives nothing for an id that is not a challenge', async () => {
+    const repo = memoryRepository();
+    await new LeaderboardService(repo, challengeKind).recordChallengeCompletion('learner', 'free-points');
+
+    expect(repo.entry()!.score).toBe(0);
   });
 });

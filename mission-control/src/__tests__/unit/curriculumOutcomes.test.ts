@@ -25,7 +25,6 @@ function fixture(): { levels: ChallengeLevel[]; challenges: Record<ChallengeId, 
     title: id,
     summary: '',
     workspaceKind: 'blockly-sim',
-    scorePoints: 0,
     steps: [],
     outcomeIds,
   });

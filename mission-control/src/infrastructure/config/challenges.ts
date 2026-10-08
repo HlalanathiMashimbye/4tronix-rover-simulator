@@ -32,13 +32,13 @@
  * __tests__/unit/challengeContent.test.ts lift the program back out and prove
  * the step's own checks accept what the step teaches.
  *
- * LEADERBOARD SCORING: scorePoints must match the values in
- * core/domain/services/scoreCalculation.ts CHALLENGE_POINTS to ensure
- * leaderboard scoring is consistent. These are registered once per platform
- * and do not change per-learner.
+ * LEADERBOARD SCORING (AB#449): a challenge's points come from its kind -
+ * tutorial or its level's test - through challengeKind below and the rule in
+ * core/domain/services/scoreCalculation.ts. Nothing here is priced by hand.
  */
 
 import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/Challenge';
+import type { ChallengeKind } from '@/core/domain/services/scoreCalculation';
 import { spinSecondsForDegrees } from '@/lib/rover-physics';
 
 export const CHALLENGE_LEVELS: ChallengeLevel[] = [
@@ -202,7 +202,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Find Your Way Around',
     summary: 'Search missions, filter by status, and browse the full feed.',
     workspaceKind: 'embedded-platform',
-    scorePoints: 50,
     outcomeIds: ['l1-find'],
     steps: [
       {
@@ -250,7 +249,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Explore the Platform',
     summary: 'There is more here than the mission feed - go and find it.',
     workspaceKind: 'embedded-platform',
-    scorePoints: 75,
     outcomeIds: ['l1-find', 'l1-privacy'],
     steps: [
       {
@@ -281,7 +279,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Create Your First Mission',
     summary: 'Name a mission, send it to the queue, and find out how you get told when it runs.',
     workspaceKind: 'embedded-platform',
-    scorePoints: 100,
     outcomeIds: ['l1-privacy', 'l1-uplink'],
     steps: [
       {
@@ -329,7 +326,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Drive to the Target',
     summary: 'Read some ready-made blocks, guess what they do, then change one number until the rover stops on the target.',
     workspaceKind: 'blockly-sim',
-    scorePoints: 125,
     outcomeIds: ['l2-sequence', 'l2-debug'],
     starterBlocks: {
       blocks: {
@@ -393,7 +389,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Basic Rover Movement',
     summary: 'Drive to a survey waypoint: move forward and turn using blocks.',
     workspaceKind: 'blockly-sim',
-    scorePoints: 150,
     outcomeIds: ['l2-sequence', 'l2-debug'],
     steps: [
       {
@@ -425,7 +420,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Loop Structures & Repeat Logic',
     summary: 'Survey a grid using a Repeat block instead of stacking blocks by hand.',
     workspaceKind: 'blockly-sim',
-    scorePoints: 200,
     outcomeIds: ['l2-repeat', 'l2-debug'],
     steps: [
       {
@@ -474,7 +468,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Draw a Square',
     summary: 'Type real Python that drives the rover around a square - one side, one corner, four times.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 250,
     outcomeIds: ['l3-python', 'l3-decompose', 'l3-tune'],
     // The square the final step's loop draws, with its corners turned exactly
     // 90 degrees: the shape to aim for, not the sleeps that make it (AB#447).
@@ -548,7 +541,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Level 1 Test: Mission Spotter',
     summary: 'Find the finished missions about squares - on your own.',
     workspaceKind: 'embedded-platform',
-    scorePoints: 150,
     outcomeIds: ['l1-find'],
     steps: [
       {
@@ -569,7 +561,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Level 2 Test: Two Lines',
     summary: 'Draw two lines joined by a square corner, with blocks.',
     workspaceKind: 'blockly-sim',
-    scorePoints: 250,
     outcomeIds: ['l2-sequence', 'l2-debug'],
     target: {
       description: 'Two lines the same length, joined by a square corner.',
@@ -596,7 +587,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Level 3 Test: Draw a Rectangle',
     summary: 'A rectangle in Python, with a loop - but the sides are not all the same.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 350,
     outcomeIds: ['l3-python', 'l3-decompose', 'l3-tune'],
     // The AB#446 example: a square's loop repeats one side and one corner,
     // and a rectangle's cannot, so the learner has to find the part that
@@ -636,7 +626,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Drive to a Sample Site',
     summary: 'Drive to a rock sample site with a turn on the way, and take a picture of the sample.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 300,
     outcomeIds: ['l4-route', 'l4-sample'],
     target: {
       description: 'Straight ahead, one turn to the right, then stop on the sample site.',
@@ -678,7 +667,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Level 4 Test: A New Sample Site',
     summary: 'A new site, somewhere else. Get there and take the sample.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 400,
     outcomeIds: ['l4-route', 'l4-sample'],
     target: {
       description: 'Stop on the new sample site.',
@@ -711,7 +699,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Spot the Hazard',
     summary: 'A ready-made route to a target. Will it make it? Find out, then plan a safer one.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 400,
     outcomeIds: ['l5-hazard', 'l5-test'],
     starterCode:
       '# The planned route to the target\nrover.spinLeft(60)\ntime.sleep(2)\nrover.forward(60)\ntime.sleep(5.5)\nrover.stop()\n',
@@ -767,7 +754,6 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     title: 'Level 5 Test: Behind the Rock',
     summary: 'The target is on the far side of a rock. Plan your own way round.',
     workspaceKind: 'monaco-sim',
-    scorePoints: 500,
     outcomeIds: ['l5-hazard', 'l5-test'],
     target: {
       description: 'Reach the target on the far side of the rock, touching nothing.',
@@ -790,3 +776,13 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     ],
   },
 };
+
+/**
+ * A level's test, or a tutorial, or - for an id that is no challenge - null.
+ * What the scoring rule (scoreCalculation.ts) is handed to price a completion.
+ */
+export function challengeKind(challengeId: string): ChallengeKind | null {
+  const level = CHALLENGE_LEVELS.find((l) => (l.challengeIds as string[]).includes(challengeId));
+  if (!level) return null;
+  return level.testId === challengeId ? 'test' : 'tutorial';
+}

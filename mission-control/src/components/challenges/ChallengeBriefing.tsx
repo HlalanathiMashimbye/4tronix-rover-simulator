@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { Check, GraduationCap, Rocket, Trophy } from 'lucide-react';
 import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
-import { CHALLENGE_LEVELS } from '@/infrastructure/config/challenges';
+import { CHALLENGE_LEVELS, challengeKind } from '@/infrastructure/config/challenges';
+import { getChallengePoints } from '@/core/domain/services/scoreCalculation';
 import { ChallengeWorkspace } from './ChallengeWorkspace';
 import { LevelOutcomesFold } from './LevelOutcomes';
 import { describeCheck } from './describeCheck';
@@ -162,7 +163,7 @@ function TeacherInfo({ challenge }: { challenge: Challenge }) {
           <dt className="font-bold text-kid-muted-text">Works in</dt>
           <dd>{EDITOR_LABEL[challenge.workspaceKind]}</dd>
           <dt className="font-bold text-kid-muted-text">Points</dt>
-          <dd>{challenge.scorePoints}</dd>
+          <dd>{getChallengePoints(challenge.id, challengeKind)}</dd>
           <dt className="font-bold text-kid-muted-text">Standards</dt>
           <dd>
             {standards.length > 0

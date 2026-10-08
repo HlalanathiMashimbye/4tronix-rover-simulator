@@ -37,6 +37,9 @@ function runningLineText(code: string, source: CommandSource | null): string | n
   return code.split('\n')[source.fromLine - 1]?.trim() || null;
 }
 
+/** What a learner reads when sending did not go through. Never "failed" (AB#448). */
+const SEND_PROBLEM = "Your mission couldn't be sent. Please try again.";
+
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
@@ -340,7 +343,7 @@ export function MissionWorkspace() {
       });
 
       if (!validation.success) {
-        setError(validation.errors?.join(' | ') || 'Validation failed');
+        setError(validation.errors?.join(' | ') || "This mission isn't ready to send yet.");
         return;
       }
 
@@ -352,7 +355,8 @@ export function MissionWorkspace() {
       const result = await response.json();
 
       if (!response.ok || !result.success || !result.mission) {
-        throw new Error(result.error || 'Failed to submit mission');
+        // Shown to the learner by the catch below, so no "failed" here either (AB#448).
+        throw new Error(result.error || SEND_PROBLEM);
       }
 
       localStorage.setItem('rover-latest-mission-id', result.mission.id);
@@ -377,7 +381,7 @@ export function MissionWorkspace() {
       }
       setTimeout(() => setSubmitSuccess(false), 5000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit mission');
+      setError(err instanceof Error ? err.message : SEND_PROBLEM);
       console.error('Submit error:', err);
     } finally {
       setSubmitting(false);

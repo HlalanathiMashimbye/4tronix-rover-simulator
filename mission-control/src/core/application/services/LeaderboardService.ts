@@ -8,7 +8,7 @@
 
 import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
 import { LeaderboardEntry } from '@/core/domain/entities/LeaderboardEntry';
-import { calculateScore } from '@/core/domain/services/scoreCalculation';
+import { calculateScore, type ChallengeKindOf } from '@/core/domain/services/scoreCalculation';
 import { generateNickname } from '@/core/domain/services/nicknameGenerator';
 
 export interface LeaderboardStats {
@@ -21,7 +21,9 @@ export interface LeaderboardStats {
 
 export class LeaderboardService {
   constructor(
-    private readonly leaderboardRepository: ILeaderboardRepository
+    private readonly leaderboardRepository: ILeaderboardRepository,
+    /** Tutorial or test, for the scoring rule (AB#449): the content's challengeKind. */
+    private readonly challengeKindOf: ChallengeKindOf,
   ) {}
 
   /**
@@ -61,7 +63,7 @@ export class LeaderboardService {
 
     // Add challenge to completed list
     const updatedChallengeIds = [...entry.completedChallengeIds, challengeId];
-    const newScore = calculateScore(updatedChallengeIds);
+    const newScore = calculateScore(updatedChallengeIds, this.challengeKindOf);
 
     const updated = await this.leaderboardRepository.updateScore(
       learnerRefHash,

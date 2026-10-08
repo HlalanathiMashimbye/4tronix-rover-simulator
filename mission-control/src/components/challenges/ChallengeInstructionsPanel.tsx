@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
 import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
 import { describeCheck } from './describeCheck';
 import { pillClass } from './pill';
@@ -23,6 +23,8 @@ interface ChallengeInstructionsPanelProps {
   finishing?: boolean;
   /** The learner's answer to a Predict step, once given, or null. */
   prediction?: string | null;
+  /** Per check, what is still missing after the last run, or null (explainOpenCheck, AB#448). */
+  explanations?: (string | null)[];
   onPredict?: (option: string) => void;
 }
 
@@ -59,6 +61,7 @@ export function ChallengeInstructionsPanel({
   onFinish,
   finishing,
   prediction = null,
+  explanations = [],
   onPredict,
 }: ChallengeInstructionsPanelProps) {
   const [hintOpen, setHintOpen] = useState(false);
@@ -144,6 +147,22 @@ export function ChallengeInstructionsPanel({
               );
             })}
           </ul>
+
+          {/* What the last run still left open, worded as what is missing and
+              never as a verdict (AB#448). Polite live region: it changes as the
+              learner runs, and a screen reader should hear the new state. */}
+          {explanations.some(Boolean) && (
+            <ul aria-live="polite" aria-label="Still to do" className="mt-2 space-y-1">
+              {explanations.map((text, index) =>
+                text ? (
+                  <li key={index} className="flex items-start gap-2 text-sm font-semibold text-kid-orange-text">
+                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    {text}
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2 md:shrink-0 md:justify-end">

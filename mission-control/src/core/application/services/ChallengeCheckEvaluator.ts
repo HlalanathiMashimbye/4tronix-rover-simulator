@@ -60,6 +60,8 @@ export interface ChallengeEvalContext {
   target?: TargetGeometry | null;
   /** Whether the last simulated run hit a rock or a wall. */
   runCrashed?: boolean;
+  /** What it hit, when it did - for feedback that says so (AB#448). */
+  runCrashInto?: 'rock' | 'wall' | null;
 }
 
 export function evaluateCheck(spec: ChallengeCheckSpec, context: ChallengeEvalContext): boolean {

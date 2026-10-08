@@ -65,6 +65,44 @@ export function followsPath(run: TargetPoint[], path: TargetPoint[], withinCm: n
   return furthestFrom(run, path) <= withinCm && furthestFrom(path, run) <= withinCm;
 }
 
+/**
+ * How a run that does not follow the path misses it, for feedback that names
+ * what is wrong without saying how to fix it (AB#448): 'incomplete' when the
+ * whole run lies on the shape but leaves part of it undrawn, 'off-shape' when
+ * part of the run strays from it. null when it follows the path.
+ */
+export function pathMismatch(
+  run: TargetPoint[],
+  path: TargetPoint[],
+  withinCm: number,
+): 'incomplete' | 'off-shape' | null {
+  if (followsPath(run, path, withinCm)) return null;
+  return run.length >= 2 && furthestFrom(run, path) <= withinCm ? 'incomplete' : 'off-shape';
+}
+
+/**
+ * Where a run that missed the goal stopped, relative to the target's route
+ * (AB#448): 'short' on the route before the goal, 'past' beyond the goal
+ * along the route's last leg, 'elsewhere' off the route altogether. Measured
+ * against the route rather than as a distance from the start, which would
+ * tell a rover that turned the wrong way it had "gone past".
+ */
+export function missedGoal(end: TargetPoint, path: TargetPoint[], radiusCm: number): 'short' | 'past' | 'elsewhere' {
+  if (path.length >= 2 && furthestFrom([end], path) <= radiusCm) return 'short';
+  // The last leg, from the last point that is not the goal itself.
+  const goal = path[path.length - 1];
+  const from = [...path].reverse().find((p) => Math.hypot(p.x - goal.x, p.y - goal.y) > 1);
+  if (goal && from) {
+    const dx = goal.x - from.x;
+    const dy = goal.y - from.y;
+    const length = Math.hypot(dx, dy);
+    const along = ((end.x - goal.x) * dx + (end.y - goal.y) * dy) / length;
+    const across = Math.abs((end.x - goal.x) * dy - (end.y - goal.y) * dx) / length;
+    if (along > 0 && across <= radiusCm) return 'past';
+  }
+  return 'elsewhere';
+}
+
 /** Whether a run that ended at `end` stopped on the goal. */
 export function endsOnGoal(end: TargetPoint, goal: TargetGeometry['goal']): boolean {
   if (!goal) return false;
