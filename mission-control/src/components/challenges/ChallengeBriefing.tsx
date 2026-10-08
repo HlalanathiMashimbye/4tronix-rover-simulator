@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { readActiveChallenge } from '@/infrastructure/browser/activeChallenge';
 import { Check, GraduationCap, Rocket, Trophy } from 'lucide-react';
 import type { Challenge, ChallengeLevel } from '@/core/domain/entities/Challenge';
 import { CHALLENGE_LEVELS, challengeKind } from '@/infrastructure/config/challenges';
@@ -37,6 +38,13 @@ interface BriefingProps {
  */
 export function ChallengeBriefingGate({ challenge, briefingLevel, isTest = false }: BriefingProps) {
   const [started, setStarted] = useState(false);
+  // A learner coming back to a challenge they are part-way through goes
+  // straight to their step: they have read this briefing already. After
+  // mount, because sessionStorage does not exist in the server render.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reads sessionStorage, which only the browser has
+    if (readActiveChallenge()?.challengeId === challenge.id) setStarted(true);
+  }, [challenge.id]);
   if (started) return <ChallengeWorkspace challenge={challenge} />;
   return (
     <ChallengeBriefing

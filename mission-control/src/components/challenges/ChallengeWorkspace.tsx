@@ -13,6 +13,11 @@ import {
 } from '@/core/application/services/ChallengeCheckEvaluator';
 import { targetGeometry, type TargetPoint } from '@/core/domain/services/challengeTarget';
 import { writeChallengeHandoff } from '@/infrastructure/browser/challengeHandoff';
+import {
+  clearActiveChallenge,
+  readActiveChallenge,
+  recordActiveChallenge,
+} from '@/infrastructure/browser/activeChallenge';
 import { readMilestones } from '@/infrastructure/browser/platformMilestones';
 import { playLevelUnlockSound } from '@/infrastructure/browser/levelUnlockSound';
 import { readStoredSound, serverSoundSnapshot, subscribeToSound } from '@/hooks/soundPreference';
@@ -53,7 +58,15 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const { completeChallenge } = useChallengeProgress();
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
 
-  const [stepIndex, setStepIndex] = useState(0);
+  // Back on the step the learner left from, when a challenge sent them to
+  // another page and they came back (activeChallenge.ts).
+  const [stepIndex, setStepIndex] = useState(() => {
+    const active = readActiveChallenge();
+    return active?.challengeId === challenge.id && active.stepIndex < challenge.steps.length ? active.stepIndex : 0;
+  });
+  useEffect(() => {
+    recordActiveChallenge({ challengeId: challenge.id, stepIndex });
+  }, [challenge.id, stepIndex]);
   const [loadMoreCalled, setLoadMoreCalled] = useState(false);
   // Undefined until MissionFeed reports it - see ChallengeCheckEvaluator's
   // feedHasMore doc: undefined must NOT be treated as "nothing more to
@@ -116,6 +129,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     setFinishing(true);
     try {
       const justUnlockedLevelId = await completeChallenge(challenge.id);
+      clearActiveChallenge();
       // Only a new level gets the launch, so it stays an event rather than
       // noise on every challenge; and the learner's mute covers it, since a
       // room of thirty finishing at once is the case that mute exists for.

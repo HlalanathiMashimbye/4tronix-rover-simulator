@@ -87,6 +87,9 @@ function renderPanel(extra: { holdTarget?: boolean; onRun?: jest.Mock } = {}) {
 
 beforeEach(() => {
   simTarget = undefined;
+  // The workspace remembers the step a learner is on (activeChallenge.ts);
+  // each test here starts a challenge from the beginning.
+  sessionStorage.clear();
 });
 
 describe('the target overlay (AB#447)', () => {
