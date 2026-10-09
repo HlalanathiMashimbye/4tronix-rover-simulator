@@ -31,6 +31,7 @@ interface AvatarPickerProps {
   initialAvatar?: LearnerAvatar;
   initialName?: string;
   onConfirm: (avatar: LearnerAvatar, displayName: string) => void;
+  onRestore?: () => void;
 }
 
 export function AvatarPicker({
@@ -38,6 +39,7 @@ export function AvatarPicker({
   initialAvatar,
   initialName,
   onConfirm,
+  onRestore,
 }: AvatarPickerProps) {
   const [page, setPage] = useState(0);
   const [displayName, setDisplayName] = useState(
@@ -153,14 +155,25 @@ export function AvatarPicker({
         </div>
       </div>
 
-      {/* Confirm */}
-      <button
-        type="button"
-        onClick={handleConfirm}
-        className="clay clay-press w-full rounded-xl bg-gradient-mars px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
-      >
-        Let&apos;s go!
-      </button>
+      {/* Footer */}
+      <div className="flex items-center justify-between">
+        {onRestore ? (
+          <button
+            type="button"
+            onClick={onRestore}
+            className="text-xs text-muted-foreground transition-colors hover:text-primary"
+          >
+            I have a recovery code
+          </button>
+        ) : <span />}
+        <button
+          type="button"
+          onClick={handleConfirm}
+          className="clay clay-press rounded-xl bg-gradient-mars px-5 py-2.5 text-sm font-bold text-primary-foreground"
+        >
+          Let&apos;s go!
+        </button>
+      </div>
     </div>
   );
 }

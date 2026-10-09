@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, Download, KeyRound, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Download, KeyRound, Check } from 'lucide-react';
 import { useLearner } from '@/contexts/LearnerContext';
 
 const EXIT_MS = 200;
@@ -10,9 +10,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSkip?: () => void;
+  onBack?: () => void;
 }
 
-export function RecoveryCodeCard({ open, onClose, onSkip }: Props) {
+export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   const { generateRecoveryCode } = useLearner();
   const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -128,58 +129,65 @@ export function RecoveryCodeCard({ open, onClose, onSkip }: Props) {
         )}
 
         {code && !loading && (
-          <>
-            <div className="mt-4 flex items-center justify-center rounded-xl border border-border bg-background/70 px-5 py-4">
-              <span className="font-mono text-2xl font-bold tracking-[0.15em] text-foreground">
-                {code}
-              </span>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                type="button"
-                onClick={handleCopy}
-                className="clay clay-press flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
-              >
-                {copied ? (
-                  <><Check className="h-4 w-4 text-emerald-500" aria-hidden="true" /> Copied</>
-                ) : (
-                  <><Copy className="h-4 w-4" aria-hidden="true" /> Copy</>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleDownload}
-                className="clay clay-press flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
-              >
-                <Download className="h-4 w-4" aria-hidden="true" /> Download
-              </button>
-            </div>
-          </>
+          <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-background/70 px-4 py-3">
+            <span className="min-w-0 flex-1 font-mono text-2xl font-bold tracking-[0.15em] text-foreground">
+              {code}
+            </span>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={copied ? 'Copied' : 'Copy code'}
+            >
+              {copied
+                ? <Check className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+                : <Copy className="h-4 w-4" aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Download code"
+            >
+              <Download className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         )}
 
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-primary"
+              >
+                <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+                Back
+              </button>
+            )}
+            {onSkip && (
+              <button
+                type="button"
+                onClick={onSkip}
+                className="text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Skip
+              </button>
+            )}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="clay clay-press flex-1 rounded-xl bg-gradient-mars px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
+            className="clay clay-press rounded-xl bg-gradient-mars px-5 py-2.5 text-sm font-bold text-primary-foreground"
           >
             Done
           </button>
-          {onSkip && (
-            <button
-              type="button"
-              onClick={onSkip}
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              I&apos;ll skip this
-            </button>
-          )}
         </div>
 
         {onSkip && (
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            If you skip, clearing your browser will lose your missions and progress.
+          <p className="mt-3 text-right text-xs text-muted-foreground">
+            Skipping means clearing your browser loses your progress.
           </p>
         )}
       </div>

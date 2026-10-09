@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Compass, Rocket } from 'lucide-react';
 import { hasSeenWelcome, recordWelcomeSeen } from '@/infrastructure/browser/platformMilestones';
 import { RecoveryCodeCard } from '@/components/learner/RecoveryCodeCard';
 import { RestoreFromCode } from '@/components/learner/RestoreFromCode';
@@ -26,11 +28,14 @@ export const TOUR_CHALLENGE_HREF = '/challenges/platform-orientation';
 const EXIT_MS = 200;
 
 export function WelcomeCard() {
+  const router = useRouter();
   const { learner, sessionId, updateProfile } = useLearner();
   const [open, setOpen] = useState(false);
   const [visible, setVisible] = useState(false);
   const [showRestore, setShowRestore] = useState(false);
   const [showRecoveryOffer, setShowRecoveryOffer] = useState(false);
+  const [showTourOffer, setShowTourOffer] = useState(false);
+  const [tourVisible, setTourVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,6 +77,35 @@ export function WelcomeCard() {
     },
     [updateProfile, close],
   );
+
+  const handleRestore = useCallback(() => {
+    recordWelcomeSeen();
+    setOpen(false);
+    setVisible(false);
+    setShowRestore(true);
+  }, []);
+
+  const handleBackFromRecovery = useCallback(() => {
+    setShowRecoveryOffer(false);
+    setOpen(true);
+    requestAnimationFrame(() => setVisible(true));
+  }, []);
+
+  const openTourOffer = useCallback(() => {
+    setShowRecoveryOffer(false);
+    setShowTourOffer(true);
+    requestAnimationFrame(() => setTourVisible(true));
+  }, []);
+
+  const closeTourOffer = useCallback(() => {
+    setTourVisible(false);
+    exitTimer.current = setTimeout(() => setShowTourOffer(false), EXIT_MS);
+  }, []);
+
+  const handleShowMeAround = useCallback(() => {
+    closeTourOffer();
+    router.push(TOUR_CHALLENGE_HREF);
+  }, [closeTourOffer, router]);
 
   return (
     <>
@@ -117,6 +151,7 @@ export function WelcomeCard() {
                   initialAvatar={learner?.avatar}
                   initialName={learner?.displayName}
                   onConfirm={handleConfirm}
+                  onRestore={handleRestore}
                 />
               )}
               {saving && (
@@ -125,14 +160,6 @@ export function WelcomeCard() {
                 </div>
               )}
             </div>
-
-            <button
-              type="button"
-              onClick={() => { recordWelcomeSeen(); setOpen(false); setVisible(false); setShowRestore(true); }}
-              className="mt-3 w-full text-center text-xs text-muted-foreground transition-colors hover:text-primary"
-            >
-              I have a recovery code
-            </button>
           </div>
         </div>
       )}
@@ -144,9 +171,60 @@ export function WelcomeCard() {
 
       <RecoveryCodeCard
         open={showRecoveryOffer}
-        onClose={() => setShowRecoveryOffer(false)}
-        onSkip={() => setShowRecoveryOffer(false)}
+        onClose={openTourOffer}
+        onSkip={openTourOffer}
+        onBack={handleBackFromRecovery}
       />
+
+      {showTourOffer && (
+        <div
+          className={`fixed inset-0 z-[100] grid place-items-center px-4 py-8 ${tourVisible ? '' : 'pointer-events-none'}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="tour-title"
+        >
+          <div
+            className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${tourVisible ? 'opacity-100' : 'opacity-0'}`}
+            onClick={closeTourOffer}
+          />
+
+          <div
+            className={`relative z-[101] w-full max-w-sm rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+              tourVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+            }`}
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
+              <Compass className="h-7 w-7 text-primary" aria-hidden="true" />
+            </div>
+
+            <h2 id="tour-title" className="mt-3 font-display text-xl font-bold text-foreground">
+              Ready to explore?
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              A quick tour will show you where everything is and end with your
+              first mission to the rover.
+            </p>
+
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleShowMeAround}
+                className="clay clay-press flex items-center justify-center gap-2 rounded-xl bg-gradient-mars px-4 py-2.5 text-sm font-bold text-primary-foreground"
+              >
+                <Rocket className="h-4 w-4" aria-hidden="true" />
+                Show me around
+              </button>
+              <button
+                type="button"
+                onClick={closeTourOffer}
+                className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              >
+                I&apos;ll explore on my own
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
