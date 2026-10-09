@@ -33,32 +33,17 @@ interface BlocklyEditorProps {
   phone?: boolean;
   /** Hands this editor's Run up, for a Run button outside it. */
   onRegisterRun?: (run: (() => void) | null) => void;
-  /**
-   * Where this canvas saves itself. Defaults to Create Mission's key. A
-   * challenge passes its own, so working through one no longer overwrites the
-   * mission the learner was building on Create Mission - which sharing the
-   * one key used to do. Read once at inject, like phone.
-   */
-  storageKey?: string;
-  /**
-   * Blockly serialization JSON to start from when nothing is saved under
-   * storageKey yet: a PRIMM challenge's ready-made code (AB#453). Read once
-   * at inject.
-   */
-  starterWorkspace?: object;
 }
 
 // Hub-local storage of the serialized workspace. Separate origin from the yard,
 // so the key name need not match - but the JSON format does (Blockly.serialization).
 //
-// Exported so a Progressive Challenges handoff can seed this same key before
-// this component mounts (see infrastructure/browser/challengeHandoff.ts +
-// MissionWorkspace's consumeChallengeHandoff effect) - there is no incoming
-// "initial state" prop here, this key IS the editor's only source of truth
-// for what to load.
-export const ROVER_WORKSPACE_STORAGE_KEY = 'roverWorkspace';
+// There is no incoming "initial state" prop here: this key IS the editor's only
+// source of truth for what to load, so anything wanting to seed the editor has
+// to write this key before the component mounts.
+const STORAGE_KEY = 'roverWorkspace';
 
-export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null, phone = false, onRegisterRun, storageKey = ROVER_WORKSPACE_STORAGE_KEY, starterWorkspace }: BlocklyEditorProps) {
+export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyStateChange, onShowAsPython, highlight = null, phone = false, onRegisterRun }: BlocklyEditorProps) {
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
@@ -132,13 +117,13 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         block.moveBy(40, 40);
       };
 
-      const saved = localStorage.getItem(storageKey) ?? (starterWorkspace ? JSON.stringify(starterWorkspace) : null);
+      const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         try {
           Blockly.serialization.workspaces.load(JSON.parse(migrateSpinBlocks(saved)), workspace);
           if (mergeUplinkHats(workspace)) {
             localStorage.setItem(
-              storageKey,
+              STORAGE_KEY,
               JSON.stringify(Blockly.serialization.workspaces.save(workspace))
             );
             setMergedNotice(true);
@@ -218,7 +203,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         if (event?.isUiEvent) return;
         try {
           localStorage.setItem(
-            storageKey,
+            STORAGE_KEY,
             JSON.stringify(Blockly.serialization.workspaces.save(workspace))
           );
 
