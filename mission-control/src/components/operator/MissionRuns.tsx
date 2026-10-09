@@ -181,7 +181,7 @@ export function MissionRuns({
                       title={automated && !run.youtubeUrl ? automatedReason('attach-video') : undefined}
                       className={run.youtubeUrl
                         ? 'rounded px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground'
-                        : 'inline-flex items-center gap-1.5 rounded-lg bg-[#E60000] px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-[#cc0000]'}
+                        : 'inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-[#E60000] px-3.5 text-xs font-bold text-white shadow-sm hover:bg-[#cc0000]'}
                     >
                       {!run.youtubeUrl && <Video className="h-3.5 w-3.5" />}
                       {run.youtubeUrl ? 'Replace' : 'Add video'}
@@ -209,7 +209,7 @@ export function MissionRuns({
                           ? send('delete-run', run.runId, { runId: run.runId }, 'Run deleted.')
                           : setConfirmingDelete(run.runId)
                       }
-                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                      className={`inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-lg px-2 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
                         confirmingDelete === run.runId
                           ? 'bg-destructive/10 text-destructive'
                           : 'text-muted-foreground hover:text-destructive'

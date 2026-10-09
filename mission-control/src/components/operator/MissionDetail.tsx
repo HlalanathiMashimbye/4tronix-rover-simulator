@@ -109,7 +109,7 @@ export function MissionDetail({
           wrapped and overflowed in a column), so the decision and Send to
           Rover sit side by side. A container query, because this pane's
           width is not the window's; stacked when it is narrow. */}
-      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_auto] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @2xl:grid-rows-1 @2xl:gap-3">
+      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(240px,1fr)_auto] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] @2xl:grid-rows-1 @2xl:gap-3">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
         <MissionPreview key={mission.id} mission={mission} yardId={yardId} trajectory={trajectory} />

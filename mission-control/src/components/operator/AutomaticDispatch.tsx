@@ -372,7 +372,7 @@ export function AutomaticDispatch({
   return (
     <section
       className={panel
-        ? 'flex h-full min-h-0 flex-col overflow-y-auto rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/10 to-primary/[0.03] p-3 shadow-sm'
+        ? 'flex h-full flex-col rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/10 to-primary/[0.03] p-3 shadow-sm'
         : 'rounded-2xl border border-primary/30 bg-primary/5 p-2.5'}
       aria-labelledby="automatic-dispatch-title"
     >
@@ -396,7 +396,7 @@ export function AutomaticDispatch({
               : 'Send to Rover unlocks when every check below is ready.'}
           </p>
 
-          <ul className="flex flex-1 flex-col gap-2" aria-live="polite">
+          <ul className="grid grid-cols-3 gap-1.5 @2xl:flex @2xl:flex-1 @2xl:flex-col @2xl:gap-2" aria-live="polite">
             {checks.map((check) => {
               const Icon = CHECK_ICON[check.key] ?? Rocket;
               return (
@@ -404,13 +404,13 @@ export function AutomaticDispatch({
                   key={check.key}
                   title={check.state === 'failed' ? check.fix : undefined}
                   data-state={check.state}
-                  className={`flex min-h-12 flex-1 items-center gap-3 rounded-xl border px-3.5 py-2.5 ${CHECK_STATE_CLASS[check.state] ?? CHECK_STATE_CLASS.unknown}`}
+                  className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center @2xl:flex-1 @2xl:flex-row @2xl:gap-3 @2xl:px-3.5 @2xl:py-2.5 @2xl:text-left ${CHECK_STATE_CLASS[check.state] ?? CHECK_STATE_CLASS.unknown}`}
                 >
                   <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  <span className="flex-1 text-sm font-semibold text-foreground">{check.label}</span>
-                  <span className="truncate text-xs">{check.status}</span>
-                  {check.state === 'ready' && <Check className="h-5 w-5 shrink-0 rounded-full bg-emerald-600 p-0.5 text-white" aria-hidden="true" />}
-                  {check.state === 'failed' && <X className="h-5 w-5 shrink-0 rounded-full bg-destructive p-0.5 text-white" aria-hidden="true" />}
+                  <span className="text-xs font-semibold text-foreground @2xl:flex-1 @2xl:text-sm">{check.label}</span>
+                  <span className="max-w-full truncate text-[11px] @2xl:text-xs">{check.status}</span>
+                  {check.state === 'ready' && <Check className="hidden h-5 w-5 shrink-0 @2xl:block rounded-full bg-emerald-600 p-0.5 text-white" aria-hidden="true" />}
+                  {check.state === 'failed' && <X className="hidden h-5 w-5 shrink-0 @2xl:block rounded-full bg-destructive p-0.5 text-white" aria-hidden="true" />}
                 </li>
               );
             })}
