@@ -469,7 +469,7 @@ function drawRockMarkers(ctx: CanvasRenderingContext2D, L: SimLayout) {
  * A CROSS, NOT AN ARROW. It was an arrow pointing the way the rover faces,
  * and an arrow reads as "drive this way" when a mission can just as well start
  * by reversing. Which way the rover faces is said in words instead, "facing
- * the front wall", which in the room is unmistakable.
+ * along the seam, away from the door", which in the room is unmistakable.
  *
  * Each arm runs 14 cm from the centre, past the rover's body on every side
  * (it is 20 x 18.5 cm), so with the rover parked on it all four tips show:
@@ -592,7 +592,7 @@ function drawRover(ctx: CanvasRenderingContext2D, L: SimLayout, st: SimPoint, t 
   const halfH = bh / 2;
 
   // Drawn with its nose up and turned to its compass bearing: the map is north
-  // up, so a rover that starts facing south starts pointing down the screen.
+  // up, so a rover that starts facing east starts pointing right across it.
   const bearing = drawnBearing(L, st.heading);
   ctx.save();
   ctx.translate(cx, cy);

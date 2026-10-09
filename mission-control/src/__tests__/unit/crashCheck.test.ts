@@ -3,7 +3,7 @@
  *
  * The yard is the measured one, rocks and all, so a run that hits a rock or a
  * wall in the simulator is headed for a real one. These drive into R4, the
- * big rock south-east of the start, and past it, and check that the physics
+ * big rock straight ahead of the start, and past it, and check that the physics
  * stops the rover, that the one crash rule finds it, that the pre-flight check
  * blocks Send on it, and that the simulator marks the spot and nothing more.
  */
@@ -17,20 +17,29 @@ import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const drive = (...commands: SimulationCommand[]): TrajectoryPoint[] => simulateCommands(commands);
 
-// R4 is 24.5 cm east and 12 cm south of the start; the rover faces south, so
-// it is ahead and to the left. Turned left about 64 degrees, it is dead ahead.
-const towardsR4 = () =>
+// R4 is 116 cm east and 12 cm south of the start, and the rover faces east,
+// so driving straight on clips its northern edge. Turned 5 degrees left it
+// just scrapes past; at 4 it still hits.
+const towardsR4 = () => drive({ command: 'forward', speed: 60, duration: 14 });
+const pastR4 = (degrees = 5) =>
   drive(
-    { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(64, 60) },
-    { command: 'forward', speed: 60, duration: 4 },
+    { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(degrees, 60) },
+    { command: 'forward', speed: 60, duration: 16 },
   );
-const straightSouth = () => drive({ command: 'forward', speed: 60, duration: 5 });
+// Turned right it faces the front wall, with nothing in the way.
+const intoTheFrontWall = () =>
+  drive(
+    { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+    { command: 'forward', speed: 60, duration: 20 },
+  );
 
 const VALID = 'rover.forward(60)\ntime.sleep(3)\nrover.stop()\n';
 
 describe('rocks in the physics', () => {
-  it('lets the rover drive straight past R4, which it clears by a few centimetres', () => {
-    expect(straightSouth().some((point) => point.hitRock)).toBe(false);
+  it('lets the rover drive past R4 when it is turned just enough to clear it', () => {
+    expect(pastR4().some((point) => point.hitRock)).toBe(false);
+    // A degree less and it clips the rock: the clearance is that fine.
+    expect(pastR4(4).some((point) => point.hitRock === 'R4')).toBe(true);
   });
 
   it('stops the rover at R4 and keeps it there while it is driven at it', () => {
@@ -50,7 +59,7 @@ describe('rocks in the physics', () => {
 
 describe('the one crash rule', () => {
   it('finds no crash in a run that hits nothing', () => {
-    expect(findCrash(straightSouth())).toBeNull();
+    expect(findCrash(pastR4())).toBeNull();
   });
 
   it('names the rock, the frame and the time of a rock crash', () => {
@@ -62,7 +71,7 @@ describe('the one crash rule', () => {
   });
 
   it('calls running into the edge of the yard a wall crash', () => {
-    const crash = findCrash(drive({ command: 'forward', speed: 60, duration: 20 }))!;
+    const crash = findCrash(intoTheFrontWall())!;
     expect(crash.into).toBe('wall');
     expect(crash.rock).toBeUndefined();
   });
@@ -100,14 +109,14 @@ describe('the crash on screen', () => {
     // On the rock's edge...
     const [x, y] = impact.contact;
     expect(Math.hypot(x - R4.x, y - R4.y)).toBeCloseTo(Math.max(R4.widthCm, R4.depthCm) / 2, 6);
-    // ...facing the start, where the rover came from (north-west of R4).
+    // ...facing the start, where the rover came from (west and a little north of R4).
     expect(x).toBeLessThan(R4.x);
     expect(y).toBeLessThan(R4.y);
     expect(Math.hypot(...impact.away)).toBeCloseTo(1, 9);
   });
 
   it('puts a wall crash on the wall it ran into', () => {
-    const impact = crashImpact(L, drive({ command: 'forward', speed: 60, duration: 20 }))!;
+    const impact = crashImpact(L, intoTheFrontWall())!;
     expect(impact.wall).toBe('south');
     expect(impact.contact[1]).toBe(YARD.depthCm);
     // Bounces back north, into the yard.
@@ -115,7 +124,7 @@ describe('the crash on screen', () => {
   });
 
   it('has nothing to show for a run that hits nothing', () => {
-    expect(crashImpact(L, straightSouth())).toBeNull();
+    expect(crashImpact(L, pastR4())).toBeNull();
   });
 
   /** Every call and assignment a frame makes on the canvas, in order. */

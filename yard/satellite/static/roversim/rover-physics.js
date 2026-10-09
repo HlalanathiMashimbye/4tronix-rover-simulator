@@ -47,8 +47,12 @@ export const ZONE_LEVELS = ['yellow', 'orange', 'red'];
 export const YARD = {
     widthCm: 233,
     depthCm: 249,
-    // The middle of the seam between the two floor boards, facing the front wall.
-    start: { x: 116.5, y: 121, facingDegrees: 180 },
+    // On the seam, just inside the door, facing east along it (8 October 2026).
+    // It was the middle of the seam, on the southern mound's slope, which put
+    // every run on tilted ground and had the operator walking into the yard.
+    // Here it is flat and one reach through the door, and driving straight on
+    // meets the mound and R4, so a mission's first job is to steer round them.
+    start: { x: 25, y: 121, facingDegrees: 90 },
     rocks: [
         { name: 'R1', x: 62, y: 16, widthCm: 30, depthCm: 5 },
         { name: 'R2', x: 138, y: 25, widthCm: 13, depthCm: 17 },
@@ -56,8 +60,8 @@ export const YARD = {
         { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
     ],
     // Rings round the two mound peaks, by eye from the floor photo. Only the
-    // peaks: the whole mound rises gently and the start is on it, and a run
-    // flagged before it has moved would teach a learner to ignore the flag.
+    // peaks: the whole mound rises gently, and a run flagged for every gentle
+    // rise would teach a learner to ignore the flag.
     zones: [
         { level: 'yellow', x: 94, y: 94, rx: 26, ry: 26 },
         { level: 'yellow', x: 84, y: 137, rx: 26, ry: 26 },
@@ -137,8 +141,7 @@ export function zoneAt(x, y, yard = YARD) {
  * The zone the rover is on, at a pose in its own frame.
  *
  * Its centre, not its footprint as with rocks: a rock is hit by whichever
- * corner reaches it, but a slope matters once the rover is on it, and the
- * footprint would flag the start, which sits 35 cm from the nearer peak.
+ * corner reaches it, but a slope matters once the rover is on it.
  */
 export function zoneUnderRover(x, y, yard = YARD) {
     const [cx, cy] = roverToYard(x, y, yard);
