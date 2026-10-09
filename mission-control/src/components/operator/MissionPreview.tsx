@@ -57,8 +57,12 @@ export function MissionPreview({
 
       {/* Whatever height the panel leaves, not a fixed 4:3: a fixed shape
           pushed Send to Rover below the fold on a laptop. The simulator
-          stretches the whole yard to fill it (computeLayout). */}
-      <div className="relative min-h-[120px] w-full flex-1">
+          stretches the whole yard to fill it (computeLayout), so in a wide
+          pane it is held near the real yard's shape (233 x 249 cm) and the
+          findings sit beside it: given the full width it drew a squashed
+          strip of sand. */}
+      <div className="flex min-h-0 flex-1 flex-col @2xl:flex-row">
+      <div className="relative min-h-[120px] w-full flex-1 @2xl:aspect-[233/249] @2xl:h-full @2xl:w-auto @2xl:max-w-[65%] @2xl:flex-none">
         <RoverSimulator
           trajectory={trajectory}
           isPlaying
@@ -75,7 +79,7 @@ export function MissionPreview({
         </span>
       </div>
 
-      <ul className="shrink-0 space-y-1 px-3 py-2.5 text-xs @max-md:hidden">
+      <ul className="shrink-0 space-y-1 px-3 py-2.5 text-xs @max-md:hidden @2xl:flex-1 @2xl:space-y-2 @2xl:py-3 @2xl:text-sm">
         {findings.map((finding) => {
           const Icon = ICON[finding.level];
           return (
@@ -88,6 +92,7 @@ export function MissionPreview({
           );
         })}
       </ul>
+      </div>
       {/* The same findings in a couple of words each, on one line, for a
           narrow panel. The full sentence is each one's tooltip. */}
       <ul aria-hidden="true" className="hidden shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 text-[11px] @max-md:flex">

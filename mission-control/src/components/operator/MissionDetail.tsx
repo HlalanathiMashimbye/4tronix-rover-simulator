@@ -70,7 +70,7 @@ export function MissionDetail({
 
   return (
     // THE FIRST SCREEN IS THE DECISION. The header, the preview at a size
-    // worth looking at, and the yard checks with Send to Rover beside it; the record of the mission
+    // worth looking at, and the yard checks with Send to Rover at its foot; the record of the mission
     // (Mark complete, the runs, the video) is below the fold, with a cue that
     // says so. Squeezing everything into one screen without scrolling made
     // the simulator too cramped to judge a mission by.
@@ -102,19 +102,25 @@ export function MissionDetail({
         <p className="hidden shrink-0 font-mono text-[11px] text-muted-foreground sm:block">{mission.id}</p>
       </header>
 
-      {/* WHAT IT WILL DO, BESIDE WHETHER THE YARD CAN DO IT. The operator
-          decides on execution, not on the learner's code: the code used to
-          sit here and nobody at the yard reads it to run a mission. The yard
-          checks and Send to Rover take its place, so the decision and the
-          button are side by side when the pane is wide (a container query,
-          because this pane's width is not the window's), stacked when not. */}
-      <div className="grid shrink-0 gap-2 @2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] @2xl:items-start @2xl:gap-3">
+      {/* WHAT IT WILL DO, AND NOTHING ELSE. The operator decides on
+          execution, not on the learner's code: the code used to share this
+          row and nobody at the yard reads it to run a mission. The preview
+          takes the whole pane. Yard checks stay a full-width row beneath it:
+          squeezed into a column beside the preview they wrapped and
+          overflowed sideways. */}
+      <div className="grid min-h-[340px] flex-1 grid-rows-1 @2xl:min-h-[300px]">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
         <MissionPreview key={mission.id} mission={mission} yardId={yardId} trajectory={trajectory} />
-
-        {mode === 'auto' && <AutomaticDispatch mission={mission} yardId={yardId} />}
       </div>
+
+      {/* Then sending: it is what an operator opens a queued mission to do,
+          and the record actions below it are what they do afterwards. */}
+      {mode === 'auto' && (
+        <div className="shrink-0">
+          <AutomaticDispatch mission={mission} yardId={yardId} />
+        </div>
+      )}
 
       {/* The way to everything below the fold, so it is never a secret that
           there is more. Fades once the operator has scrolled. Not worded
