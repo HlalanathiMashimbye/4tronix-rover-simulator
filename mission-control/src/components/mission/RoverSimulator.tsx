@@ -11,7 +11,6 @@ import {
   SIM_FPS,
   DARK_SIM_PALETTE,
   LIGHT_SIM_PALETTE,
-  type SimTarget,
 } from '@/lib/roverSimRender';
 import { crashFrame, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { ZoneLevel } from '@/lib/rover-physics';
@@ -72,8 +71,6 @@ interface RoverSimulatorProps {
    * Defaults to the yard this site submits to.
    */
   yardId?: string;
-  /** A challenge's target, drawn under the run (AB#447). */
-  target?: SimTarget | null;
 }
 
 export function RoverSimulator({
@@ -89,7 +86,6 @@ export function RoverSimulator({
   onRunningChange,
   pauseVersion = 0,
   yardId,
-  target = null,
 }: RoverSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -164,10 +160,6 @@ export function RoverSimulator({
   // server just after the page does, and must not rewind a run that started.
   const yardRef = useRef(yardLayout);
 
-  // Through a ref for the same reason: showing or hiding the target mid-run
-  // must repaint, not rewind the run to its first frame.
-  const targetRef = useRef(target);
-
   const drawScene = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -178,7 +170,7 @@ export function RoverSimulator({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const traj = trajRef.current;
     const playhead = isManual ? Math.max(0, traj.length - 1) : playheadRef.current;
-    drawSimFrame(ctx, computeLayout(w, h, yardRef.current), traj, playhead, simPalette, floorRef.current, targetRef.current);
+    drawSimFrame(ctx, computeLayout(w, h, yardRef.current), traj, playhead, simPalette, floorRef.current);
   }, [isManual, simPalette]);
 
   useEffect(() => {
@@ -186,11 +178,6 @@ export function RoverSimulator({
     yardRef.current = yardLayout;
     drawScene();
   }, [floor, yardLayout, drawScene]);
-
-  useEffect(() => {
-    targetRef.current = target;
-    drawScene();
-  }, [target, drawScene]);
 
   // --- Sizing (crisp on HiDPI) --------------------------------------------
 

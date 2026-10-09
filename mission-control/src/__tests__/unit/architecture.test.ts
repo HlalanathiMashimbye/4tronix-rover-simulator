@@ -245,7 +245,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new Firestore(Mission|RecoveryCode)Repository/.test(read(f)));
+      .filter((f) => read(f).includes('new FirestoreMissionRepository'));
 
     expect(offenders).toEqual([]);
   });

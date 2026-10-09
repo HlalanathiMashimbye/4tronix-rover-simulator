@@ -21,10 +21,11 @@ describe('Learner Entity', () => {
       expect(learner.devices[0].sessionId).toBe(sessionId);
     });
 
-    it('starts with no avatar (set during welcome)', () => {
+    it('assigns a random avatar color', () => {
       const learner = createAnonymousLearner('test-123');
 
-      expect(learner.avatar).toBeUndefined();
+      expect(learner.avatarColor).toBeDefined();
+      expect(learner.avatarColor).toMatch(/^#[0-9A-F]{6}$/i);
     });
 
     it('sets timestamps correctly', () => {
