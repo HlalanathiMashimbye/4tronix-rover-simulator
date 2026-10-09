@@ -1,15 +1,12 @@
 'use client';
 
-import { ArrowDown, ArrowLeft, Code2, MapPin, Video } from 'lucide-react';
+import { ArrowDown, ArrowLeft, MapPin, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
 import { useMemo, useRef, useState } from 'react';
-import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
-import { CodeLines } from '@/components/mission/CodeLines';
 import { MissionPreview } from '@/components/operator/MissionPreview';
-import type { CommandSource } from '@/lib/roverBlockly';
 import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import { yardLabelOf, findYardIn, type Yard } from '@/core/domain/entities/Yard';
@@ -47,8 +44,6 @@ export function MissionDetail({
   /** Only rendered on small screens, where the two panes take turns. */
   onBack?: () => void;
 }) {
-  // What the preview's simulation is running, lit up in the code beside it.
-  const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
   // Whether the operator has scrolled past the first screen, so the cue
   // pointing at the record below can step aside.
   const [scrolledDown, setScrolledDown] = useState(false);
@@ -66,20 +61,19 @@ export function MissionDetail({
     return (
       <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/60 p-6">
         <p className="max-w-xs text-center text-sm text-muted-foreground">
-          Pick a mission on the left to see its code, its runs and what a learner has been
-          told about it.
+          Pick a mission on the left to see what it will do, its runs and what a learner has
+          been told about it.
         </p>
       </div>
     );
   }
 
   return (
-    // THE FIRST SCREEN IS THE DECISION. The header, the preview and the code
-    // at a size worth looking at, and the yard checks with Send to Rover at
-    // its foot, fill exactly the panel's height; the record of the mission
+    // THE FIRST SCREEN IS THE DECISION. The header, the preview at a size
+    // worth looking at, and the yard checks with Send to Rover beside it; the record of the mission
     // (Mark complete, the runs, the video) is below the fold, with a cue that
     // says so. Squeezing everything into one screen without scrolling made
-    // the simulator and the blocks too cramped to judge a mission by.
+    // the simulator too cramped to judge a mission by.
     <div
       className="@container h-full min-h-0 overflow-y-auto"
       onScroll={(event) => setScrolledDown(event.currentTarget.scrollTop > 40)}
@@ -108,49 +102,19 @@ export function MissionDetail({
         <p className="hidden shrink-0 font-mono text-[11px] text-muted-foreground sm:block">{mission.id}</p>
       </header>
 
-      {/* WHAT IT WILL DO, BESIDE WHAT WAS WRITTEN. The decision comes before
-          the sending: an operator could only read the code and imagine the
-          rover, or leave the console to watch it run elsewhere. Side by side
-          when the pane is wide enough (a container query, because this pane's
-          width is not the window's), stacked when it is not. The code lights
-          up as the preview plays, as it does in the editor. */}
-      {/* Stacked in a narrow panel, the code gets a little more than the
-          preview: the preview's yard is wide and short, the program tall. */}
-      <div className="grid min-h-[340px] flex-1 grid-rows-[minmax(0,1fr)_minmax(0,1.15fr)] gap-2 @2xl:min-h-[300px] @2xl:grid-cols-2 @2xl:grid-rows-1 @2xl:gap-3">
+      {/* WHAT IT WILL DO, BESIDE WHETHER THE YARD CAN DO IT. The operator
+          decides on execution, not on the learner's code: the code used to
+          sit here and nobody at the yard reads it to run a mission. The yard
+          checks and Send to Rover take its place, so the decision and the
+          button are side by side when the pane is wide (a container query,
+          because this pane's width is not the window's), stacked when not. */}
+      <div className="grid shrink-0 gap-2 @2xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] @2xl:items-start @2xl:gap-3">
         {/* Keyed on the mission: a new mission is a new run from the start,
             never the last mission's playhead. */}
-        <MissionPreview
-          key={mission.id}
-          mission={mission}
-          yardId={yardId}
-          trajectory={trajectory}
-          onSourceChange={setRunningSource}
-        />
+        <MissionPreview key={mission.id} mission={mission} yardId={yardId} trajectory={trajectory} />
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/50 bg-background/40">
-          {/* Not on a phone: the blocks are plainly the learner's, and the
-              row is worth more as canvas there. */}
-          <h3 className="flex shrink-0 items-center gap-1.5 border-b border-border/50 px-3 py-2 text-xs font-bold uppercase tracking-wider text-muted-foreground @max-md:hidden">
-            <Code2 className="h-3.5 w-3.5" />
-            What the learner wrote
-          </h3>
-          {mission.blocklyState ? (
-            <div className="min-h-0 flex-1">
-              <BlocklyViewer key={mission.id} state={mission.blocklyState} highlight={runningSource} fit />
-            </div>
-          ) : (
-            <CodeLines code={mission.code ?? ''} highlight={runningSource} />
-          )}
-        </section>
+        {mode === 'auto' && <AutomaticDispatch mission={mission} yardId={yardId} />}
       </div>
-
-      {/* Then sending: it is what an operator opens a queued mission to do,
-          and the record actions below it are what they do afterwards. */}
-      {mode === 'auto' && (
-        <div className="shrink-0">
-          <AutomaticDispatch mission={mission} yardId={yardId} />
-        </div>
-      )}
 
       {/* The way to everything below the fold, so it is never a secret that
           there is more. Fades once the operator has scrolled. Not worded
