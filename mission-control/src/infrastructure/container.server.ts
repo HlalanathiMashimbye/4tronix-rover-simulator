@@ -20,6 +20,7 @@ import 'server-only';
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { MissionService } from '@/core/application/services/MissionService';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { FirestoreMissionNameRegistry } from '@/infrastructure/persistence/FirestoreMissionNameRegistry';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
@@ -39,7 +40,7 @@ export function adminMissionRepository(): IMissionRepository {
 
 /** The application service, wired to the privileged repository. */
 export function missionService(): MissionService {
-  return new MissionService(adminMissionRepository());
+  return new MissionService(adminMissionRepository(), new FirestoreMissionNameRegistry(getFirestoreInstance()));
 }
 
 /** Privileged. Yards are world-readable but only ever written through here. */

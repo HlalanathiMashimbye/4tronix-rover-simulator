@@ -24,11 +24,6 @@ export interface CreateMissionDto {
   sessionId: string;
   /** Optional, and only stored hashed: lets a learner find their history. */
   learnerEmail?: string;
-  /**
-   * One of the generated names. Never free text: mission names land on a
-   * world-readable document (AB#402).
-   */
-  name: string;
   /** The Python the rover will run. */
   code: string;
   /** Serialised Blockly workspace, when the mission was built from blocks. */

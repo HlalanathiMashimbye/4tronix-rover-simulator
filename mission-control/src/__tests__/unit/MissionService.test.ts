@@ -14,6 +14,15 @@ import {
 } from '@/core/domain/repositories/IMissionRepository';
 import { Mission } from '@/core/domain/entities/Mission';
 import { CreateMissionDto } from '@/core/application/dto/mission';
+import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
+
+/** Hands out "Name 1", "Name 2"...: the registry's contract, without Firestore. */
+class CountingNameRegistry implements IMissionNameRegistry {
+  private taken = 0;
+  async takeNext(): Promise<string> {
+    return `Name ${++this.taken}`;
+  }
+}
 
 class MockMissionRepository implements IMissionReader, IMissionWriter {
   private missions: Map<string, Mission> = new Map();
@@ -116,7 +125,6 @@ const makeDto = (
 ): CreateMissionDto => ({
   learnerId: 'learner-123',
   sessionId: 'session-123',
-  name: 'Test Mission',
   ...overrides,
 });
 
@@ -126,7 +134,26 @@ describe('MissionService', () => {
 
   beforeEach(() => {
     repository = new MockMissionRepository();
-    service = new MissionService(repository);
+    service = new MissionService(repository, new CountingNameRegistry());
+  });
+
+  describe('naming', () => {
+    it('names every mission from the registry, never the same name twice', async () => {
+      const first = await service.submitMission(makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }));
+      const second = await service.submitMission(makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }));
+
+      expect(first.mission?.name).toBe('Name 1');
+      expect(second.mission?.name).toBe('Name 2');
+    });
+
+    it('ignores a name sent with the mission', async () => {
+      // A stale tab still sends one; a script could send anything. Neither
+      // decides what a public document is called.
+      const dto = { ...makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }), name: 'meet me at the gate' };
+      const result = await service.submitMission(dto);
+
+      expect(result.mission?.name).toBe('Name 1');
+    });
   });
 
   describe('submitMission', () => {

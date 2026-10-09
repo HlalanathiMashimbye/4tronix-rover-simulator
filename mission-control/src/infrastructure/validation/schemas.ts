@@ -20,7 +20,6 @@ import type { CreateMissionDto } from '@/core/application/dto/mission';
 import { AllowlistService } from '@/core/application/services/AllowlistService';
 import { calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
-import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
 
 /**
  * Schema for creating a new mission (anonymous submission)
@@ -54,22 +53,10 @@ export const createMissionSchema = z.object({
     .max(254, 'Email too long')
     .optional(),
 
-  /**
-   * The name must be one the generator could have produced (AB#402).
-   *
-   * This is the boundary, not the input control. The browser has shown a
-   * read-only name with a re-roll button for a while, but the API accepted any
-   * string up to 100 characters, so anyone posting directly could put whatever
-   * they liked on a world-readable document. 47 of the first 400 missions
-   * carry names the generator could never have made.
-   *
-   * A closed vocabulary rather than a filter of bad words: a blocklist is an
-   * endless argument with the person trying to get past it, while a list of
-   * permitted pairings has nothing to argue with.
-   */
-  name: z
-    .string()
-    .refine(isGeneratedMissionName, 'Mission names are generated, not typed'),
+  // No name: the server gives every mission one when it is sent
+  // (IMissionNameRegistry). A name in the body is dropped like any other key
+  // the schema does not list, so a stale tab still sends, and nothing a child
+  // types can reach the name on a public document (AB#402).
 
   code: z
     .string()

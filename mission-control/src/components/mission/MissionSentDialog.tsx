@@ -27,9 +27,14 @@ interface MissionSentDialogProps {
   onClose: () => void;
   /** Set when the learner has an email saved: changes what we promise them. */
   email: string | null;
+  /**
+   * What the server called the mission. The learner first learns it here: it
+   * is how they find the mission again, so it is said, not left to the feed.
+   */
+  name: string | null;
 }
 
-export function MissionSentDialog({ open, onClose, email }: MissionSentDialogProps) {
+export function MissionSentDialog({ open, onClose, email, name }: MissionSentDialogProps) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
 
@@ -86,6 +91,12 @@ export function MissionSentDialog({ open, onClose, email }: MissionSentDialogPro
         >
           Mission sent!
         </h2>
+
+        {name && (
+          <p className="mt-1 text-sm text-muted-foreground">
+            It is called <span className="font-bold text-foreground" data-mission-name>{name}</span>.
+          </p>
+        )}
 
         {email ? (
           <p className="mt-2 text-sm text-muted-foreground">

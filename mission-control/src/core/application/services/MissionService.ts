@@ -14,6 +14,7 @@
 
 import { Mission } from '@/core/domain/entities/Mission';
 import { IMissionReader, IMissionWriter } from '@/core/domain/repositories/IMissionRepository';
+import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { CreateMissionDto } from '@/core/application/dto/mission';
@@ -26,7 +27,10 @@ export interface SubmitMissionResult {
 
 export class MissionService {
   /** Reads and writes missions; never touches runs, so it is not given them. */
-  constructor(private readonly missionRepository: IMissionReader & IMissionWriter) {}
+  constructor(
+    private readonly missionRepository: IMissionReader & IMissionWriter,
+    private readonly missionNames: IMissionNameRegistry,
+  ) {}
 
   /**
    * Submit a new mission (anonymous - no authentication required)
@@ -49,12 +53,18 @@ export class MissionService {
       // world-readable document. Only the hash is.
       const learnerRef = await hashLearnerId(dto.learnerId);
 
+      // The server names every mission, from a counter, so no two share a
+      // name (IMissionNameRegistry). The browser does not get a say: it
+      // cannot know which names are taken, and a name it chose would be one
+      // more thing a child could put on a public document (AB#402).
+      const name = await this.missionNames.takeNext();
+
       const mission = await this.missionRepository.create({
         yardId: dto.yardId,
         learnerRef,
         sessionId: dto.sessionId,
         learnerEmailHash,
-        name: dto.name,
+        name,
         code: dto.code,
         blocklyState: dto.blocklyState,
         origin: dto.origin,

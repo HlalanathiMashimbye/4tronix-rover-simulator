@@ -51,8 +51,6 @@ rover.stop()`;
 function submitBar(ready: boolean) {
   return render(
     <MissionSubmitBar
-      missionName="Curious Rock Seeker"
-      onMissionNameChange={() => {}}
       onSubmit={() => {}}
       submitting={false}
       submitSuccess={false}

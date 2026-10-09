@@ -17,6 +17,15 @@ type MissionRecord = Record<string, unknown>;
 const mockMissions = new Map<string, MissionRecord>();
 
 const mockFirestore = {
+  // The name counter (FirestoreMissionNameRegistry): empty, so it starts at
+  // the first number. Its own behaviour is tested in uniqueMissionNames.test.ts.
+  runTransaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      get: async () => ({ exists: false, data: () => undefined }),
+      set: () => undefined,
+      create: () => undefined,
+    }),
+  ),
   collection: jest.fn(() => ({
     doc: jest.fn((id?: string) => ({
       set: jest.fn(async (data: MissionRecord) => {
@@ -95,6 +104,9 @@ describe('POST /api/missions Integration Tests', () => {
       expect(data.mission.sessionId).toBe('test-session-123');
       expect(data.mission.code).toBe('rover.forward(100)\nrover.wait(2)');
       expect(data.mission.status).toBe('queued');
+      // Named by the server, whatever the request said (IMissionNameRegistry).
+      expect(data.mission.name).not.toBe('Red Explorer');
+      expect(data.mission.name.split(' ')).toHaveLength(3);
       // Deliberately NOT queuePosition/estimatedWait. Computing them cost a
       // COUNT aggregation on every submission and nothing has ever rendered
       // them. If a "you are 3rd in line" feature is wanted, getQueuedMissions
