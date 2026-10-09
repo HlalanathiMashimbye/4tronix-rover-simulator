@@ -170,10 +170,18 @@ export function AutomaticDispatch({
   mission,
   yardId,
   navigate = (url) => window.location.assign(url),
+  panel = false,
 }: {
   mission: QueueMission;
   yardId: string;
   navigate?: (url: string) => void;
+  /**
+   * A column beside the mission preview rather than a row beneath it. The
+   * row's icons and inline buttons wrapped and overflowed in a column, so the
+   * panel lists each check on its own line with its words, and Send to Rover
+   * is the full-width button at its foot.
+   */
+  panel?: boolean;
 }) {
   const [checking, setChecking] = useState(false);
   const [checks, setChecks] = useState<CheckResult[]>(initialChecks);
@@ -362,13 +370,100 @@ export function AutomaticDispatch({
   const showNotReady = !checking && !unreachable && !success && notReady.length > 0 && (failures.length === 0 || dismissed);
 
   return (
-    <section className="rounded-2xl border border-primary/30 bg-primary/5 p-2.5" aria-labelledby="automatic-dispatch-title">
+    <section
+      className={panel
+        ? 'flex h-full flex-col rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/10 to-primary/[0.03] p-3 shadow-sm'
+        : 'rounded-2xl border border-primary/30 bg-primary/5 p-2.5'}
+      aria-labelledby="automatic-dispatch-title"
+    >
       {/* ONE ROW: what this is, the three checks, and the buttons. It was a
           heading, a sentence, a row of three cards and the buttons, about
           170px before any warning, and with the mission preview above it
           Send to Rover ended up below the fold on a laptop. The sentence
           lives on as a tooltip on Send and for screen readers. Wraps on a
           phone, where the buttons take their own line. */}
+      {panel ? (
+        <div className="flex flex-1 flex-col gap-2.5">
+          <h3 id="automatic-dispatch-title" className="flex items-center gap-2 font-display text-sm font-bold text-foreground">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15">
+              <Rocket className="h-3.5 w-3.5 text-primary" />
+            </span>
+            Yard checks
+          </h3>
+          <p id="automatic-dispatch-help" className="sr-only">
+            {live
+              ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
+              : 'Send to Rover unlocks when every check below is ready.'}
+          </p>
+
+          <ul className="grid grid-cols-3 gap-1.5 @2xl:flex @2xl:flex-1 @2xl:flex-col @2xl:gap-2" aria-live="polite">
+            {checks.map((check) => {
+              const Icon = CHECK_ICON[check.key] ?? Rocket;
+              return (
+                <li
+                  key={check.key}
+                  title={check.state === 'failed' ? check.fix : undefined}
+                  data-state={check.state}
+                  className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl border px-2 py-2 text-center @2xl:flex-1 @2xl:flex-row @2xl:gap-3 @2xl:px-3.5 @2xl:py-2.5 @2xl:text-left ${CHECK_STATE_CLASS[check.state] ?? CHECK_STATE_CLASS.unknown}`}
+                >
+                  <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-semibold text-foreground @2xl:flex-1 @2xl:text-sm">{check.label}</span>
+                  <span className="max-w-full truncate text-[11px] @2xl:text-xs">{check.status}</span>
+                  {check.state === 'ready' && <Check className="hidden h-5 w-5 shrink-0 @2xl:block rounded-full bg-emerald-600 p-0.5 text-white" aria-hidden="true" />}
+                  {check.state === 'failed' && <X className="hidden h-5 w-5 shrink-0 @2xl:block rounded-full bg-destructive p-0.5 text-white" aria-hidden="true" />}
+                </li>
+              );
+            })}
+          </ul>
+
+          <p
+            data-testid="start-mark-reminder"
+            title={START_MARK_HOW}
+            className="flex min-h-12 items-center gap-2 rounded-xl border border-dashed border-emerald-600/40 px-3.5 py-2.5 text-sm font-semibold text-foreground"
+          >
+            <Crosshair className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+            Rover on the start mark?
+            <span className="sr-only">{START_MARK_HOW}</span>
+          </p>
+
+          <div className="flex flex-col gap-2 pt-1">
+            {!live && !unreachable && (
+              <button
+                type="button"
+                onClick={() => readYard(false)}
+                disabled={checking}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground hover:border-primary/70 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {checking ? 'Checking yard...' : 'Check yard'}
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => readYard(true)}
+                disabled={checking || !mission.code || !allReady}
+                aria-describedby="automatic-dispatch-help"
+                title={allReady ? undefined : 'Unlocks when every yard check is ready'}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-md transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {checking && live ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
+                Send to Rover
+              </button>
+              <button
+                type="button"
+                onClick={copyCode}
+                disabled={!mission.code}
+                aria-label={copied ? 'Copied' : 'Copy mission code'}
+                title={copied ? 'Copied!' : 'Copy mission code for manual workflow'}
+                className="inline-flex shrink-0 items-center justify-center rounded-xl border border-border/60 p-2.5 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h3 id="automatic-dispatch-title" className="flex shrink-0 items-center gap-1.5 text-sm font-bold text-foreground">
           <Rocket className="h-4 w-4 text-primary" />
@@ -457,6 +552,7 @@ export function AutomaticDispatch({
           </button>
         </div>
       </div>
+      )}
 
       {showNotReady && (
         <div className="mt-2 rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-xs" data-testid="yard-not-ready">
@@ -473,7 +569,10 @@ export function AutomaticDispatch({
         // Compact, with its actions on the same line as the explanation:
         // it is the usual state on a laptop away from the yard, and it was
         // the tallest thing in the panel.
-        <div role="alert" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-1.5">
+        <div
+          role="alert"
+          className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border border-amber-500/40 bg-amber-500/10 ${panel ? 'px-3 py-2' : 'px-3 py-1.5'}`}
+        >
           <WifiOff className="h-4 w-4 shrink-0 text-amber-600" aria-hidden="true" />
           {/* The title on the line, the how-to-fix as its tooltip and for
               screen readers: an operator needs to see that it is blocked and
@@ -484,7 +583,7 @@ export function AutomaticDispatch({
             <h4 className="truncate text-xs font-bold text-foreground @max-md:whitespace-normal @max-md:leading-tight">{UNREACHABLE_MESSAGES[unreachable].title}</h4>
             <p className="sr-only">{UNREACHABLE_MESSAGES[unreachable].body}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className={panel ? 'flex w-full gap-2 [&>button]:flex-1 [&>button]:justify-center' : 'flex shrink-0 gap-2'}>
             {/* Short on a phone, so the warning's title still fits beside
                 them; the accessible names stay whole. */}
             <button

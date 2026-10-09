@@ -3,18 +3,14 @@
  */
 
 /**
- * The operator's mission panel shows what a mission will do, beside what was
- * written, BEFORE the controls that send it. The decision comes first.
+ * The operator's mission panel shows what a mission will do, and the yard
+ * checks that send it. Not the learner's code: operators judge execution.
  */
 
-import { render, screen, act, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 
-let reportSource: (source: unknown) => void = () => {};
 jest.mock('@/components/operator/MissionPreview', () => ({
-  MissionPreview: ({ onSourceChange }: { onSourceChange: (s: unknown) => void }) => {
-    reportSource = onSourceChange;
-    return <section aria-label="What it will do" />;
-  },
+  MissionPreview: () => <section aria-label="What it will do" />,
 }));
 jest.mock('@/components/operator/AutomaticDispatch', () => ({ AutomaticDispatch: () => <div data-testid="dispatch" /> }));
 jest.mock('@/components/operator/MissionActions', () => ({ MissionActions: () => <div data-testid="actions" /> }));
@@ -55,18 +51,16 @@ it('shows what it will do before the controls that send it', () => {
   expect(preview.compareDocumentPosition(dispatch) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-it('lights the code as the preview runs it', () => {
-  const { container } = renderDetail();
-  act(() => reportSource({ fromLine: 1, toLine: 2 }));
-  expect(Array.from(container.querySelectorAll('.rover-running-line'), (el) => el.textContent)).toEqual([
-    'rover.forward(60)',
-    'time.sleep(2)',
-  ]);
+it("does not show the learner's code, only what it will do", () => {
+  renderDetail();
+  expect(screen.queryByText(/what the learner wrote/i)).toBeNull();
+  expect(screen.queryByText('rover.forward(60)')).toBeNull();
+  expect(screen.getByTestId('dispatch')).toBeInTheDocument();
 });
 
 it('says there is more below the decision, takes the operator there, and steps aside', () => {
   // The record (Mark complete, runs, video) is below the fold so the
-  // simulator and blocks can be big enough to judge by. That must not be a
+  // simulator can be big enough to judge by. That must not be a
   // secret.
   const scrollIntoView = jest.fn();
   Element.prototype.scrollIntoView = scrollIntoView;
