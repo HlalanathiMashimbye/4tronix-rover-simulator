@@ -13,12 +13,13 @@ import { simulateCommands } from '@/lib/simulateCommands';
 const preview = (code: string) => previewMission(code, simulateCommands(parseRoverCode(code)));
 const find = (code: string, id: string) => preview(code).find((f) => f.id === id)!;
 
-const SHORT_DRIVE = 'rover.forward(60)\ntime.sleep(3)\nrover.stop()\n';
+// Two seconds from the start: 18 cm along the seam, short of the mound.
+const SHORT_DRIVE = 'rover.forward(60)\ntime.sleep(2)\nrover.stop()\n';
 
 it('says a short, clean drive looks fine', () => {
   expect(preview(SHORT_DRIVE).every((f) => f.level === 'ok')).toBe(true);
   expect(find(SHORT_DRIVE, 'crash').level).toBe('ok');
-  expect(find(SHORT_DRIVE, 'duration').message).toBe('Runs 3s');
+  expect(find(SHORT_DRIVE, 'duration').message).toBe('Runs 2s');
 });
 
 // Backwards from the start is the door wall, 25 cm behind it.
@@ -82,7 +83,7 @@ describe("the phone's one-line summary", () => {
   });
 
   it('keeps the fact that matters in the short form', () => {
-    expect(find(SHORT_DRIVE, 'duration').short).toBe('3s');
+    expect(find(SHORT_DRIVE, 'duration').short).toBe('2s');
     const edge = find(INTO_THE_WALL, 'crash');
     expect(edge.short).toBe(`Edge at ${edge.atSeconds}s`);
     const rock = find(INTO_A_ROCK, 'crash');

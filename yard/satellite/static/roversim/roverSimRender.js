@@ -9,7 +9,7 @@
  * as a simulator rather than a photo, like a map. The rover is drawn, not
  * photographed, and steers its four wheels to their servo angles.
  */
-import { YARD, ZONE_LEVELS, roverToYard } from './rover-physics.js';
+import { REACH_SCALE, YARD, ZONE_LEVELS, rockRadiusCm, roverToYard, } from './rover-physics.js';
 import { crashFrame } from './simulateCommands.js';
 /** Mars at night: the original look, unchanged. */
 export const DARK_SIM_PALETTE = {
@@ -267,20 +267,20 @@ function paintTerrain(ctx, L, P, floor) {
     }
     ctx.stroke();
     drawZones(ctx, L);
-    // Each rock ringed at its measured size: the photo shows the rock, the ring
-    // says the simulator knows it is there.
+    // Each rock ringed green where it counts as reached (REACH_SCALE): a
+    // target, drawn the way the slopes are, a tint with its edge traced, so the
+    // map has one kind of mark and the colour says what it means. Werner asked
+    // why the rocks had dotted rings and the slopes did not.
     ctx.save();
-    ctx.setLineDash([4, 3]);
     for (const rock of yard.rocks) {
         const [rx, ry] = yardToScreen(L, rock.x, rock.y);
         // An oval on a stretched yard, as the stretched photo draws the rock.
-        const r = Math.max(rock.widthCm, rock.depthCm) / 2 + 2;
+        const r = rockRadiusCm(rock) * REACH_SCALE;
         ctx.beginPath();
         ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(20,8,2,0.5)';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,240,220,0.9)';
+        ctx.fillStyle = TARGET_COLOURS.fill;
+        ctx.fill();
+        ctx.strokeStyle = TARGET_COLOURS.edge;
         ctx.lineWidth = 1.5;
         ctx.stroke();
     }
@@ -312,6 +312,12 @@ export const ZONE_COLOURS = {
     orange: { fill: 'rgba(249,115,22,0.20)', edge: 'rgba(249,115,22,0.95)' },
     red: { fill: 'rgba(239,68,68,0.30)', edge: 'rgba(239,68,68,1)' },
 };
+/** A rock's reached ring (green: somewhere to go), and the same ring once the rover has got there. */
+export const TARGET_COLOURS = {
+    fill: 'rgba(34,197,94,0.16)',
+    edge: 'rgba(34,197,94,0.95)',
+    reachedFill: 'rgba(34,197,94,0.45)',
+};
 function drawZones(ctx, L) {
     const zones = [...(L.yard.zones ?? [])].sort((a, b) => ZONE_LEVELS.indexOf(a.level) - ZONE_LEVELS.indexOf(b.level));
     if (zones.length === 0)
@@ -342,7 +348,7 @@ function drawRockMarkers(ctx, L) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const rock of L.yard.rocks) {
-        const r = rockRadius(rock) + 2;
+        const r = rockRadiusCm(rock) * REACH_SCALE;
         const [cx, cy] = yardToScreen(L, rock.x, rock.y);
         // Up and to the right of the ring, on its 45 degree point.
         const tx = cx + r * L.sx * 0.72 + 7;
@@ -755,6 +761,7 @@ floor = null) {
         return;
     }
     drawTrail(ctx, L, traj, Math.floor(playhead), P);
+    drawReachedRocks(ctx, L, traj, playhead);
     // Under the rover, so the rover sits against what it hit.
     const impact = crashImpact(L, traj);
     if (impact && playhead >= impact.frame)
@@ -784,7 +791,7 @@ export function crashImpact(L, traj) {
     const rock = point.hitRock ? L.yard.rocks.find((r) => r.name === point.hitRock) ?? null : null;
     if (rock) {
         // On the rock's edge, on the line to the rover: the side it was hit from.
-        const radius = rockRadius(rock);
+        const radius = rockRadiusCm(rock);
         const dx = cx - rock.x;
         const dy = cy - rock.y;
         const d = Math.hypot(dx, dy) || 1;
@@ -809,8 +816,36 @@ export function crashImpact(L, traj) {
     const nearest = walls[gaps.indexOf(Math.min(...gaps))];
     return { frame, ...nearest, rock: null };
 }
-function rockRadius(rock) {
-    return Math.max(rock.widthCm, rock.depthCm) / 2;
+/**
+ * Every rock the run has reached by the playhead, its ring filled in.
+ *
+ * From the frame it got there to the end of the run, as the crash mark is: a
+ * run that reaches R2 and drives on to R4 has still been to R2, and the map is
+ * where a learner looks back to see what their mission did.
+ */
+function drawReachedRocks(ctx, L, traj, playhead) {
+    const reached = new Set();
+    const upTo = Math.min(traj.length - 1, Math.floor(playhead));
+    for (let i = 0; i <= upTo; i++)
+        if (traj[i].reached)
+            reached.add(traj[i].reached);
+    if (reached.size === 0)
+        return;
+    ctx.save();
+    for (const rock of L.yard.rocks) {
+        if (!reached.has(rock.name))
+            continue;
+        const [rx, ry] = yardToScreen(L, rock.x, rock.y);
+        const r = rockRadiusCm(rock) * REACH_SCALE;
+        ctx.beginPath();
+        ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
+        ctx.fillStyle = TARGET_COLOURS.reachedFill;
+        ctx.fill();
+        ctx.strokeStyle = TARGET_COLOURS.edge;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+    }
+    ctx.restore();
 }
 /**
  * Where a run crashed: the rock it hit ringed in red, or the stretch of wall
@@ -830,7 +865,7 @@ function drawCrashMark(ctx, L, impact) {
     ctx.strokeStyle = 'rgba(239,68,68,0.95)';
     if (impact.rock) {
         const [rx, ry] = yardToScreen(L, impact.rock.x, impact.rock.y);
-        const r = rockRadius(impact.rock) + 2;
+        const r = rockRadiusCm(impact.rock) + 2;
         ctx.lineWidth = Math.max(2, 0.6 * s);
         ctx.beginPath();
         ctx.ellipse(rx, ry, r * L.sx, r * L.sy, 0, 0, Math.PI * 2);
