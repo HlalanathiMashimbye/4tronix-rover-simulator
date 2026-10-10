@@ -88,7 +88,10 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
   // drawn by eye, the run may still go fine, and the learner was told.
   const slope = findSlope(trajectory);
   const ground = { yellow: 'a gentle slope', orange: 'a steep slope', red: "a mound's top" } as const;
-  const groundShort = { yellow: 'Gentle slope', orange: 'Steep slope', red: 'Mound top' } as const;
+  // At most ten letters: a time takes up to six more, and a phone's line holds
+  // sixteen. "Gentle slope 2.9s" was seventeen once the yellow covered the
+  // whole mound and nearly every run crossed it.
+  const groundShort = { yellow: 'Slope', orange: 'Steep', red: 'Mound top' } as const;
   findings.push(
     !slope
       ? { id: 'slope', level: 'ok', message: 'Stays on flat ground', short: 'Flat' }

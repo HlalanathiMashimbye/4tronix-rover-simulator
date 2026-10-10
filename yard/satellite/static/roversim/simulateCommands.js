@@ -1,7 +1,7 @@
 // GENERATED FILE - DO NOT EDIT.
 // Built from mission-control/src/lib by scripts/build-roversim.mjs.
 // Edit the TypeScript source and re-run `npm run build:roversim`.
-import { RoverPhysics, YARD, zoneUnderRover } from './rover-physics.js';
+import { RoverPhysics, YARD, rockReached, zoneUnderRover } from './rover-physics.js';
 /**
  * The first frame the physics stopped the rover, at a wall or a rock, or -1.
  *
@@ -99,6 +99,7 @@ function toPoint(physics, yard, leds, source) {
         hitWall: s.hitWall,
         hitRock: s.hitRock,
         zone: zoneUnderRover(s.x, s.y, yard),
+        reached: rockReached(s.x, s.y, s.heading, yard)?.name ?? null,
         leds: [...leds],
         ...(source ? { source } : {}),
     };

@@ -105,12 +105,13 @@ export const YARD: Yard = {
     { name: 'R3', x: 206, y: 50, widthCm: 20, depthCm: 24 },
     { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
   ],
-  // Rings round the two mound peaks, by eye from the floor photo. Only the
-  // peaks: the whole mound rises gently, and a run flagged for every gentle
-  // rise would teach a learner to ignore the flag.
+  // By eye from the floor photo. Yellow is the whole mound, to the edge of its
+  // cracked texture (David, 8 October 2026: anywhere not flat is
+  // unpredictable); orange and red ring each peak. Yellow was only round the
+  // peaks while the start was on the mound, since a flag that is up before
+  // the rover moves teaches a learner to ignore it. The start is off it now.
   zones: [
-    { level: 'yellow', x: 94, y: 94, rx: 26, ry: 26 },
-    { level: 'yellow', x: 84, y: 137, rx: 26, ry: 26 },
+    { level: 'yellow', x: 99, y: 122, rx: 48, ry: 58 },
     { level: 'orange', x: 94, y: 94, rx: 17, ry: 17 },
     { level: 'orange', x: 84, y: 137, rx: 17, ry: 17 },
     { level: 'red', x: 94, y: 94, rx: 8, ry: 8 },
@@ -145,29 +146,53 @@ const ROVER_HALF_LENGTH_CM = 10;
 const ROVER_HALF_WIDTH_CM = 9.25;
 
 /**
- * The rock, if any, that the rover's footprint overlaps at this pose.
- *
- * Each rock is a circle as wide as its largest measured side: rocks are
- * irregular and were measured as boxes from above, and a circle round the box
- * errs towards calling a near miss a crash, which is the side to err on when
- * the alternative is the operator rescuing a stuck rover.
+ * A rock as the physics sees it: a circle as wide as its largest measured
+ * side. Rocks are irregular and were measured as boxes from above, and a
+ * circle round the box errs towards calling a near miss a crash, which is the
+ * side to err on when the alternative is the operator rescuing a stuck rover.
  */
-export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+export function rockRadiusCm(rock: YardRock): number {
+  return Math.max(rock.widthCm, rock.depthCm) / 2;
+}
+
+/**
+ * How much wider than a rock its "reached" ring is.
+ *
+ * Rocks are where a mission goes, not only what it has to miss (David and
+ * Werner, 8 October 2026: "it's like a target, not an obstacle to avoid").
+ * Before this a rover could only get to a rock by touching it, and touching
+ * it is a crash, so the one way to arrive was the one way Send refused. A
+ * ring "like 20% bigger" than the rock gives the rover somewhere to stop that
+ * counts as there: bump the ring, you have reached the rock; hit the rock
+ * itself and it is still a crash, as it is in the yard.
+ */
+export const REACH_SCALE = 1.2;
+
+/** How far the rover's footprint is from a rock's centre, at a pose in its own frame. */
+function footprintToRockCm(x: number, y: number, heading: number, rock: YardRock, yard: Yard): number {
   const [cx, cy] = roverToYard(x, y, yard);
   const bearing = ((yard.start.facingDegrees + heading) * Math.PI) / 180;
-  for (const rock of yard.rocks) {
-    const east = rock.x - cx;
-    const north = cy - rock.y;
-    // The rock's centre in the rover's own axes: ahead of it, and to its right.
-    const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
-    const right = east * Math.cos(bearing) - north * Math.sin(bearing);
-    // The nearest point of the footprint to it.
-    const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
-    const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
-    const radius = Math.max(rock.widthCm, rock.depthCm) / 2;
-    if (Math.hypot(ahead - nearAhead, right - nearRight) < radius) return rock;
-  }
-  return null;
+  const east = rock.x - cx;
+  const north = cy - rock.y;
+  // The rock's centre in the rover's own axes: ahead of it, and to its right.
+  const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
+  const right = east * Math.cos(bearing) - north * Math.sin(bearing);
+  // The nearest point of the footprint to it.
+  const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
+  const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
+  return Math.hypot(ahead - nearAhead, right - nearRight);
+}
+
+/** The rock, if any, that the rover's footprint overlaps at this pose. */
+export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  return yard.rocks.find((rock) => footprintToRockCm(x, y, heading, rock, yard) < rockRadiusCm(rock)) ?? null;
+}
+
+/** The rock, if any, whose reached ring the rover's footprint is inside at this pose. */
+export function rockReached(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  return (
+    yard.rocks.find((rock) => footprintToRockCm(x, y, heading, rock, yard) < rockRadiusCm(rock) * REACH_SCALE) ?? null
+  );
 }
 
 /**

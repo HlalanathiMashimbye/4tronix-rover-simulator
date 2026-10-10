@@ -42,7 +42,11 @@ describe('the zones in the yard', () => {
     expect(zoneAt(NORTH_PEAK.x, NORTH_PEAK.y)).toBe('red');
     expect(zoneAt(NORTH_PEAK.x + 12, NORTH_PEAK.y)).toBe('orange');
     expect(zoneAt(NORTH_PEAK.x + 22, NORTH_PEAK.y)).toBe('yellow');
-    expect(zoneAt(NORTH_PEAK.x + 30, NORTH_PEAK.y)).toBeNull();
+    // Yellow is the whole mound, not a ring round each peak...
+    expect(zoneAt(NORTH_PEAK.x + 30, NORTH_PEAK.y)).toBe('yellow');
+    // ...and the floor beyond its edge, the start included, is flat.
+    expect(zoneAt(NORTH_PEAK.x + 60, NORTH_PEAK.y)).toBeNull();
+    expect(zoneAt(YARD.start.x, YARD.start.y)).toBeNull();
   });
 
   it('reads an ellipse as wide as rx and as deep as ry', () => {

@@ -135,6 +135,7 @@ export function RoverSimulator({
     total: 0,
     crashed: null as 'rock' | 'wall' | null,
     zone: null as ZoneLevel | null,
+    reached: null as string | null,
   });
 
   // Keep the latest trajectory available to the rAF loop (which reads it live)
@@ -237,7 +238,7 @@ export function RoverSimulator({
   const syncHud = useCallback(() => {
     const traj = trajRef.current;
     if (traj.length === 0) {
-      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null, zone: null });
+      setHud({ x: 0, y: 0, heading: 0, frame: 0, total: 0, crashed: null, zone: null, reached: null });
       reportSource(null);
       return;
     }
@@ -259,6 +260,9 @@ export function RoverSimulator({
       // The ground it is on right now (AB#468), so the simulator says so while
       // it is there and not once it has driven off.
       zone: traj[Math.round(playhead)]?.zone ?? null,
+      // The rock it is at right now: said while it is there, like the slope.
+      // The ring on the map stays filled in afterwards.
+      reached: traj[Math.round(playhead)]?.reached ?? null,
     });
   }, [isManual, reportSource]);
 
@@ -458,7 +462,19 @@ export function RoverSimulator({
           </p>
         </div>
       )}
-      {!hud.crashed && hud.zone && (
+      {!hud.crashed && hud.reached && (
+        // Getting to a rock is the point of most missions (REACH_SCALE), so
+        // it outranks a slope warning; a crash still outranks it.
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-2" role="status">
+          <p
+            className="truncate rounded-full bg-green-600/90 px-3 py-1 text-xs font-semibold text-white"
+            data-reached={hud.reached}
+          >
+            Your rover reached {hud.reached}.
+          </p>
+        </div>
+      )}
+      {!hud.crashed && !hud.reached && hud.zone && (
         // Rising ground (AB#468): said while the rover is on it, in the
         // simulator itself, since this is where the learner watches the run.
         // A warning, still: the run goes on and can still be sent.

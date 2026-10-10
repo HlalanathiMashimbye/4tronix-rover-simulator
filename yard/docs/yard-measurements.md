@@ -136,24 +136,26 @@ What the simulator draws as rising ground: yellow, then orange, then red at
 the top. **Drawn by eye** from the rings of cracked texture round each peak in
 the floor photo, not measured, because the heights are not known (above).
 
-Only round the peaks. The whole mound rises gently, so a zone over the whole
-of it would flag nearly every mission, and a flag that is always up teaches a
-learner to ignore it. The start is 61 cm from the nearer peak, well outside
-the yellow ring. The zones are judged at the rover's centre.
+Yellow is the whole mound, out to the edge of its cracked texture: anywhere
+that is not flat floor, the real rover may not do what the simulator drew
+(David, 8 October 2026). Orange and red ring each peak. Until the start moved
+to the door, yellow was only round the peaks, because the start was on the
+mound and a flag that is up before the rover has moved teaches a learner to
+ignore it. The start is now 26 cm west of the yellow's edge. The zones are
+judged at the rover's centre.
 
 A zone changes nothing in the physics: the simulated rover drives over it as
 if flat. It is a warning that from there the real run may not match: it may
 drift, slip, tip or stall. Never a block, red included (the team's call on
 6 Oct 2026).
 
-| Zone | Level | x, y | Radius |
+| Zone | Level | x, y | Radius, cm (across x down for an oval) |
 |---|---|---|---|
+| The whole mound | yellow | 99, 122 | 48 x 58 |
 | North peak | red | 94, 94 | 8 |
 | North peak | orange | 94, 94 | 17 |
-| North peak | yellow | 94, 94 | 26 |
 | South peak | red | 84, 137 | 8 |
 | South peak | orange | 84, 137 | 17 |
-| South peak | yellow | 84, 137 | 26 |
 
 These are the built-in zones. A yard's layout can be changed on the settings
 page, and once saved that copy is what the simulator uses for that yard.
