@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Dices } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
-import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
+import { rollMissionName } from '@/core/domain/services/missionNameGenerator';
 
 interface MissionNameInputProps {
   value: string;
@@ -36,7 +36,7 @@ export function MissionNameInput({ value, onChange }: MissionNameInputProps) {
   // for show: Send pressed mid-roll must send the name it lands on, not the
   // one it is rolling away from.
   const handleGenerateRandom = () => {
-    onChange(generateRandomMissionName());
+    onChange(rollMissionName());
     stopReel();
     if (reduceMotion) {
       setPassing(null);
@@ -44,7 +44,7 @@ export function MissionNameInput({ value, onChange }: MissionNameInputProps) {
     }
     setRolls((n) => n + 1);
     timers.current = [
-      ...REEL_MS.map((ms) => setTimeout(() => setPassing(generateRandomMissionName()), ms)),
+      ...REEL_MS.map((ms) => setTimeout(() => setPassing(rollMissionName()), ms)),
       setTimeout(() => setPassing(null), LAND_MS),
     ];
   };

@@ -16,8 +16,8 @@
 
 import {
   allGeneratedMissionNames,
-  generateRandomMissionName,
   isGeneratedMissionName,
+  rollMissionName,
 } from '@/core/domain/services/missionNameGenerator';
 import { validateMission } from '@/infrastructure/validation/schemas';
 
@@ -37,25 +37,17 @@ describe('the mission name is a closed vocabulary', () => {
     expect(all.every(isGeneratedMissionName)).toBe(true);
   });
 
-  it('accepts what the generator actually generates', () => {
+  it('accepts what the dice actually rolls, always three words', () => {
     for (let i = 0; i < 50; i++) {
-      expect(isGeneratedMissionName(generateRandomMissionName())).toBe(true);
+      const name = rollMissionName();
+      expect(isGeneratedMissionName(name)).toBe(true);
+      expect(name.split(' ')).toHaveLength(3);
     }
   });
 
-  it('generates three words, so the pool is 8,000 rather than 400 (AB#330)', () => {
-    /**
-     * Story 330 asks for a unique name. These are not unique and cannot be
-     * from a closed vocabulary - see the generator's docstring. What the third
-     * word buys is scarcity: 400 names across 121 missions made a repeat a
-     * mathematical certainty, and 8,000 makes it unlikely enough that the
-     * re-roll button covers it.
-     */
-    expect(allGeneratedMissionNames()).toHaveLength(8000);
-
-    for (let i = 0; i < 50; i++) {
-      expect(generateRandomMissionName().split(' ')).toHaveLength(3);
-    }
+  it('has 32,768 three-word names to draw on (AB#330)', () => {
+    // Uniqueness itself is the registry's job: uniqueMissionNames.test.ts.
+    expect(allGeneratedMissionNames()).toHaveLength(32 ** 3);
   });
 
   it('still accepts the two-word names already on live missions', () => {

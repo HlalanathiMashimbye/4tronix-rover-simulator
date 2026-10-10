@@ -2,11 +2,12 @@
  * The words in a mission's link: /missions/sunny-crater-climber-jLSLqP.
  *
  * David asked for the three-word name instead of the random ID. The name
- * alone cannot be the link: the generator has 8,000 names, so two missions
- * share one well before the archive reaches a few hundred, and a link that
- * opens another child's mission is worse than an ugly one. So the name is
- * followed by the start of the mission ID, and only that part finds the
- * mission; the words are there for people.
+ * alone cannot be the link yet: missions named before 8 October 2026 got
+ * random names from 8,000, and many of them share one, and a link that opens
+ * another child's mission is worse than an ugly one. So the name is followed
+ * by the start of the mission ID, and only that part finds the mission; the
+ * words are there for people. Missions named since are unique
+ * (IMissionNameRegistry), so their words alone could find them.
  *
  * Only generated names go into a link. Early missions carry names a child
  * typed (missionNameGenerator.ts, AB#402), one of them inappropriate, and a

@@ -16,7 +16,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 let reduced = false;
 jest.mock('motion/react', () => ({ ...jest.requireActual('motion/react'), useReducedMotion: () => reduced }));
 let named = 0;
-jest.mock('@/core/domain/services/missionNameGenerator', () => ({ generateRandomMissionName: () => `Name ${++named}` }));
+jest.mock('@/core/domain/services/missionNameGenerator', () => ({ rollMissionName: () => `Name ${++named}` }));
 
 import { MissionNameInput } from '@/components/mission/MissionNameInput';
 

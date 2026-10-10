@@ -6,7 +6,7 @@ import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
-import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
+import { rollMissionName } from '@/core/domain/services/missionNameGenerator';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { findSlope } from '@/core/domain/safety/slopeCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
@@ -119,10 +119,18 @@ export function MissionWorkspace() {
    * until the browser is the only thing rendering.
    */
   const [missionName, setMissionName] = useState('');
+  /**
+   * What the mission just sent is called, for the confirmation. Usually the
+   * name the learner rolled; `renamed` when another mission took that name
+   * first and the server gave this one the next free name
+   * (IMissionNameRegistry). The roll is free and reserves nothing, so this is
+   * where a learner finds out.
+   */
+  const [sent, setSent] = useState<{ name: string; renamed: boolean } | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setMissionName(generateRandomMissionName());
+      setMissionName(rollMissionName());
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -314,7 +322,8 @@ export function MissionWorkspace() {
 
       setSubmitSuccess(true);
       setLaunchOpen(false);
-      setMissionName(generateRandomMissionName());
+      setSent(result.mission.name ? { name: result.mission.name, renamed: result.mission.name !== missionName } : null);
+      setMissionName(rollMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
       // for that answer rather than racing it: the prompt covers the whole
@@ -467,6 +476,8 @@ export function MissionWorkspace() {
         open={missionSentOpen}
         onClose={() => setMissionSentOpen(false)}
         email={learnerEmail}
+        name={sent?.name ?? null}
+        renamed={sent?.renamed ?? false}
       />
     </div>
   );
