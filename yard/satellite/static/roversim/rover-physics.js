@@ -202,7 +202,9 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(VEHICLE_WIDTH_CM / 2, DISTANCE_
  *
  * Confirmed by prediction rather than by fitting: at this value a 90 degree
  * turn sleeps 1.987s, and four of them brought the rover back to its starting
- * heading. At the old value they overshot by 60 to 90 degrees.
+ * heading. At the old value they overshot by 60 to 90 degrees. (A quarter
+ * turn that follows a drive needs a little longer than that: see
+ * SPIN_START_UP_SECONDS.)
  *
  * IT IS ONE SURFACE AND ONE BATTERY STATE. Grip changes how much the tyres
  * slide, so a smooth floor will not give the same number. To recalibrate, spin
@@ -210,6 +212,41 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(VEHICLE_WIDTH_CM / 2, DISTANCE_
  * (measured degrees per second) / 57.65.
  */
 export const SPIN_RATE_CALIBRATION = 0.7856;
+/**
+ * How long a spin runs before the rover starts to turn, when its wheels were
+ * pointing straight.
+ *
+ * A spin first swings the four corner wheels out to 50 degrees, and until
+ * they get there the motors mostly scrub. The six runs above could not see
+ * this: they spun for 5 to 41 seconds, where a fifth of a second is lost in
+ * the noise. A quarter turn is 2 seconds, and there it is a tenth of the turn.
+ *
+ * MEASURED ON THE ROVER IN THE YARD, 10 October 2026, speed 60, from the
+ * satellite camera's recordings of a lap round the yard (twelve spins):
+ *
+ *     1.99s, wheels already turned from the spin before  ->  92, 90 deg
+ *     1.99s, wheels straight  ->  86, 82, 76, 80, 80, 82 deg   (mean 81)
+ *     2.23s, wheels straight  ->  92, 92, 98, 90 deg           (mean 93)
+ *
+ * A straight-line fit gives 45.8 deg/s, which is SPIN_RATE_CALIBRATION's
+ * 45.29 again, and 0.21s lost at the start; it puts a quarter turn from
+ * straight wheels at 2.178s. This is that quarter turn less the 1.987s the
+ * rate alone accounts for, so the number a learner meets most, "turn 90", is
+ * the one pinned to the measurement. Interpolating between the two laps with
+ * no model at all says 2.170s.
+ *
+ * Before this the simulator drew four clean right angles for a lap whose
+ * real turns came out at about 80 degrees each, and the rover finished 59cm
+ * from where the simulator put it. With 2.23s spins it finished 25cm away.
+ *
+ * A SINGLE SPIN STILL SCATTERS BY ABOUT 3 DEGREES around the fit, so this is
+ * the middle of what the rover does, not a promise about any one turn. One
+ * surface, one battery charge, speed 60 only, and angles read off a camera to
+ * about 4 degrees. To recalibrate, time quarter turns that each follow a
+ * straight drive, and set this to (seconds that give 90 degrees) minus
+ * (90 / spinDegreesPerSecond).
+ */
+export const SPIN_START_UP_SECONDS = 0.19;
 /**
  * How much of the geometric turn the rover actually achieves when steering.
  *
@@ -258,6 +295,15 @@ export class RoverPhysics {
     /** The yard whose walls stop the rover. */
     constructor(yard = YARD) {
         this.yard = yard;
+        /**
+         * Whether the corner wheels are out at the angle a spin needs. A spin puts
+         * them there and a drive brings them back; stopping leaves them where they
+         * are, as the rover's own library does, so a spin straight after a spin
+         * starts turning at once (SPIN_START_UP_SECONDS).
+         */
+        this.wheelsTurnedForSpin = false;
+        /** Seconds of the current spin still to go before the rover starts to turn. */
+        this.spinStartUpLeft = 0;
         this.state = {
             x: 0,
             y: 0,
@@ -283,6 +329,7 @@ export class RoverPhysics {
         const steer = Math.abs(degrees ?? DEFAULT_STEER_DEGREES);
         switch (command) {
             case 'forward':
+                this.wheelsTurnedForSpin = false;
                 this.state.servos[SERVO_FL] = 0;
                 this.state.servos[SERVO_FR] = 0;
                 this.state.servos[SERVO_RL] = 0;
@@ -291,6 +338,7 @@ export class RoverPhysics {
                 this.state.speedR = speed;
                 break;
             case 'reverse':
+                this.wheelsTurnedForSpin = false;
                 this.state.servos[SERVO_FL] = 0;
                 this.state.servos[SERVO_FR] = 0;
                 this.state.servos[SERVO_RL] = 0;
@@ -299,22 +347,17 @@ export class RoverPhysics {
                 this.state.speedR = -speed;
                 break;
             case 'spinLeft':
-                this.state.servos[SERVO_FL] = 50;
-                this.state.servos[SERVO_FR] = -50;
-                this.state.servos[SERVO_RL] = -50;
-                this.state.servos[SERVO_RR] = 50;
+                this.turnWheelsForSpin();
                 this.state.speedL = -speed;
                 this.state.speedR = speed;
                 break;
             case 'spinRight':
-                this.state.servos[SERVO_FL] = 50;
-                this.state.servos[SERVO_FR] = -50;
-                this.state.servos[SERVO_RL] = -50;
-                this.state.servos[SERVO_RR] = 50;
+                this.turnWheelsForSpin();
                 this.state.speedL = speed;
                 this.state.speedR = -speed;
                 break;
             case 'steerLeft':
+                this.wheelsTurnedForSpin = false;
                 this.state.servos[SERVO_FL] = -steer;
                 this.state.servos[SERVO_FR] = -steer;
                 this.state.servos[SERVO_RL] = steer;
@@ -323,6 +366,7 @@ export class RoverPhysics {
                 this.state.speedR = speed;
                 break;
             case 'steerRight':
+                this.wheelsTurnedForSpin = false;
                 this.state.servos[SERVO_FL] = steer;
                 this.state.servos[SERVO_FR] = steer;
                 this.state.servos[SERVO_RL] = -steer;
@@ -401,7 +445,11 @@ export class RoverPhysics {
         if (this.isSpinning()) {
             const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
             const radiansPerSecond = (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_RATE_CALIBRATION;
-            const heading = this.state.heading + (radiansPerSecond * dt * 180) / Math.PI;
+            // The wheels swing out first, and the rover does not turn until they
+            // are there (SPIN_START_UP_SECONDS).
+            const startingUp = Math.min(dt, this.spinStartUpLeft);
+            this.spinStartUpLeft -= startingUp;
+            const heading = this.state.heading + (radiansPerSecond * (dt - startingUp) * 180) / Math.PI;
             // It cannot reach a wall without moving, and it did not move. It can
             // swing a corner into a rock beside it, though.
             this.state.hitWall = false;
@@ -456,6 +504,19 @@ export class RoverPhysics {
      * last given, so manual control and a replayed mission cannot disagree about
      * what the rover is doing.
      */
+    /**
+     * Swing the corner wheels out for a spin. If they were straight, the spin
+     * that follows spends its first moments getting them there.
+     */
+    turnWheelsForSpin() {
+        this.state.servos[SERVO_FL] = 50;
+        this.state.servos[SERVO_FR] = -50;
+        this.state.servos[SERVO_RL] = -50;
+        this.state.servos[SERVO_RR] = 50;
+        if (!this.wheelsTurnedForSpin)
+            this.spinStartUpLeft = SPIN_START_UP_SECONDS;
+        this.wheelsTurnedForSpin = true;
+    }
     isSpinning() {
         return this.state.speedL !== 0 && this.state.speedL === -this.state.speedR;
     }
@@ -493,6 +554,8 @@ export function spinDegreesPerSecond(speed = 60) {
         return cached;
     const probe = new RoverPhysics();
     probe.setCommand('spinRight', speed);
+    // Past the start-up first: this is the rate once the rover is turning.
+    probe.update(SPIN_START_UP_SECONDS);
     probe.update(1);
     const rate = Math.abs(probe.getState().heading);
     spinRateCache.set(speed, rate);
@@ -505,10 +568,25 @@ export function spinDegreesPerSecond(speed = 60) {
  * build a square should say "turn 90", not solve 90 / 32.9 with a number the
  * interface never told them. Rounded to 3dp because that is what ends up in
  * the generated time.sleep() a learner reads.
+ *
+ * A spin from straight wheels is given SPIN_START_UP_SECONDS on top, since
+ * that long passes before the rover turns at all. Say `wheelsTurnedForSpin`
+ * when the spin follows another spin with no drive between: the wheels are
+ * already out, and the extra would overshoot by about 9 degrees.
  */
-export function spinSecondsForDegrees(degrees, speed = 60) {
+export function spinSecondsForDegrees(degrees, speed = 60, wheelsTurnedForSpin = false) {
     const rate = spinDegreesPerSecond(speed);
-    if (rate <= 0)
+    if (rate <= 0 || degrees === 0)
         return 0;
-    return Math.round((Math.abs(degrees) / rate) * 1000) / 1000;
+    const startUp = wheelsTurnedForSpin ? 0 : SPIN_START_UP_SECONDS;
+    return Math.round((startUp + Math.abs(degrees) / rate) * 1000) / 1000;
+}
+/**
+ * The other way round: how far a spin of `seconds` turns the rover. For
+ * missions saved when the blocks asked for seconds, so a block shows the turn
+ * its stored time really makes.
+ */
+export function spinDegreesForSeconds(seconds, speed = 60, wheelsTurnedForSpin = false) {
+    const startUp = wheelsTurnedForSpin ? 0 : SPIN_START_UP_SECONDS;
+    return Math.max(0, seconds - startUp) * spinDegreesPerSecond(speed);
 }
