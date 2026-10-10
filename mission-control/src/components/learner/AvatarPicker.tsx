@@ -32,6 +32,7 @@ interface AvatarPickerProps {
   initialName?: string;
   onConfirm: (avatar: LearnerAvatar, displayName: string) => void;
   onRestore?: () => void;
+  confirmLabel?: string;
 }
 
 export function AvatarPicker({
@@ -40,6 +41,7 @@ export function AvatarPicker({
   initialName,
   onConfirm,
   onRestore,
+  confirmLabel = "Let’s go!",
 }: AvatarPickerProps) {
   const [page, setPage] = useState(0);
   const [displayName, setDisplayName] = useState(
@@ -172,7 +174,7 @@ export function AvatarPicker({
           onClick={handleConfirm}
           className="clay clay-press rounded-xl bg-gradient-mars px-6 py-2.5 text-sm font-bold text-primary-foreground"
         >
-          Let&apos;s go! 
+          {confirmLabel}
         </button>
       </div>
     </div>

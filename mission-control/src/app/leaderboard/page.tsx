@@ -1,8 +1,13 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { Trophy, RotateCcw, LogOut, LogIn } from 'lucide-react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Trophy, LogOut, LogIn, Pencil } from 'lucide-react';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
+import { useLearner } from '@/contexts/LearnerContext';
+import { Avatar } from '@/components/learner/Avatar';
+import { AvatarPicker } from '@/components/learner/AvatarPicker';
+import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
+import type { LearnerAvatar } from '@/core/domain/entities/Learner';
 
 interface LeaderboardEntry {
   displayName: string;
@@ -14,7 +19,20 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { status, optIn, optOut, regenerateNickname } = useLeaderboard();
+  const [showPicker, setShowPicker] = useState(false);
+  const { status, optIn, optOut, refresh } = useLeaderboard();
+  const { learner, updateProfile } = useLearner();
+
+  const handleProfileUpdate = useCallback(
+    async (avatar: LearnerAvatar, displayName: string) => {
+      const ok = await updateProfile(displayName, avatar);
+      if (ok) {
+        setShowPicker(false);
+        await refresh();
+      }
+    },
+    [updateProfile, refresh],
+  );
 
   const loadLeaderboard = async () => {
     try {
@@ -59,11 +77,23 @@ export default function LeaderboardPage() {
 
         <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col items-center justify-center pb-5">
           <div className="rounded-3xl border border-border bg-card p-8 clay max-w-md text-center">
-            <Trophy className="h-16 w-16 text-gradient-mars mx-auto mb-4" />
+            {learner?.avatar ? (
+              <div className="mx-auto mb-4">
+                <Avatar avatar={learner.avatar} size={80} />
+              </div>
+            ) : (
+              <Trophy className="h-16 w-16 text-gradient-mars mx-auto mb-4" />
+            )}
             <h2 className="font-display text-2xl font-bold text-foreground mb-2">Join the Leaderboard</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              See how you rank among other learners. Your real identity stays private—we&apos;ll give you a random nickname like &quot;Brave Rover.&quot;
-            </p>
+            {learner?.displayName ? (
+              <p className="text-sm text-muted-foreground mb-6">
+                You&apos;ll appear as <span className="font-semibold text-foreground">{learner.displayName}</span> on the leaderboard. See how you rank among other learners!
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-6">
+                See how you rank among other learners. Your real identity stays private.
+              </p>
+            )}
 
             <div className="space-y-2">
               <button
@@ -103,7 +133,8 @@ export default function LeaderboardPage() {
         {status && status.optedIn && (
           <div className="shrink-0 rounded-xl border border-border bg-card p-3 clay">
             <div className="flex items-center justify-between gap-4">
-              <div className="flex gap-6 items-center">
+              <div className="flex gap-4 sm:gap-6 items-center">
+                <Avatar avatar={learner?.avatar} size={40} />
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Your Rank</p>
                   <p className="text-lg font-bold text-gradient-mars">
@@ -126,12 +157,12 @@ export default function LeaderboardPage() {
 
               <div className="flex gap-1 shrink-0">
                 <button
-                  onClick={regenerateNickname}
+                  onClick={() => setShowPicker(true)}
                   className="clay clay-press flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted/50"
-                  title="Get a new nickname"
+                  title="Change avatar and nickname"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">New</span>
+                  <Pencil className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Edit</span>
                 </button>
                 <button
                   onClick={optOut}
@@ -142,6 +173,28 @@ export default function LeaderboardPage() {
                   <span className="hidden sm:inline">Hide</span>
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Avatar / nickname picker modal */}
+        {showPicker && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 clay">
+              <AvatarPicker
+                learnerId={getLearnerID()}
+                initialAvatar={learner?.avatar}
+                initialName={learner?.displayName}
+                onConfirm={handleProfileUpdate}
+                confirmLabel="Save"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPicker(false)}
+                className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}
@@ -200,13 +253,18 @@ export default function LeaderboardPage() {
                           {index === 0 && '🏆 '} {index === 1 && '🥈 '} {index === 2 && '🥉 '}
                           #{index + 1}
                         </td>
-                        <td className="px-3 sm:px-4 py-2 font-semibold text-foreground truncate">
-                          {entry.displayName}
-                          {status?.optedIn && entry.displayName === status.displayName && (
-                            <span className="ml-1 text-xs bg-gradient-mars text-primary-foreground px-1.5 py-0.5 rounded">
-                              You
-                            </span>
-                          )}
+                        <td className="px-3 sm:px-4 py-2 font-semibold text-foreground">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {status?.optedIn && entry.displayName === status.displayName && (
+                              <Avatar avatar={learner?.avatar} size={24} className="shrink-0" />
+                            )}
+                            <span className="truncate">{entry.displayName}</span>
+                            {status?.optedIn && entry.displayName === status.displayName && (
+                              <span className="shrink-0 text-xs bg-gradient-mars text-primary-foreground px-1.5 py-0.5 rounded">
+                                You
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-3 sm:px-4 py-2 text-center text-foreground font-medium">
                           {entry.completedChallenges}
