@@ -141,6 +141,36 @@ describe('POST /api/cron/youtube-link', () => {
       expect(applyBookkeeping).not.toHaveBeenCalled();
     });
 
+    it('gives one upload to one run, not to each waiting run on successive polls', async () => {
+      /**
+       * Seen on the live site on 10 October 2026. A mission was run twice and
+       * filmed once; the upload was still among the recent uploads on the
+       * next poll, the other run still had no video, and it got the same one.
+       * Two polls here, with the first poll's write visible to the second.
+       */
+      const runs: Array<{ runId: string; yardId: string; status: string; completedAt: string; youtubeUrl?: string }> = [
+        { runId: 'r-a', yardId: 'curiosity', status: 'completed', completedAt: '2026-10-10T09:00:00Z' },
+        { runId: 'r-b', yardId: 'curiosity', status: 'completed', completedAt: '2026-10-10T10:00:00Z' },
+      ];
+      fetchRecentUploads.mockResolvedValue([
+        { videoId: 'wThPlyLSVmw', title: '', description: 'MissionID: m1\nYard: curiosity' },
+      ]);
+      findRuns.mockImplementation(async () => runs.map((r) => ({ ...r })));
+      applyBookkeeping.mockImplementation(
+        async (_missionId: string, runId: string, _yardId: string, change: { youtubeUrl: string }) => {
+          const written = runs.find((r) => r.runId === runId);
+          if (written) written.youtubeUrl = change.youtubeUrl;
+        },
+      );
+
+      await POST(request('right-secret'));
+      const second = await (await POST(request('right-secret'))).json();
+
+      expect(applyBookkeeping).toHaveBeenCalledTimes(1);
+      expect(second.linked).toBe(0);
+      expect(runs.map((r) => r.youtubeUrl)).toEqual([undefined, 'https://www.youtube.com/watch?v=wThPlyLSVmw']);
+    });
+
     it('carries on when one mission fails, rather than losing the batch', async () => {
       fetchRecentUploads.mockResolvedValue([
         { videoId: 'a', description: 'MissionID: bad' },

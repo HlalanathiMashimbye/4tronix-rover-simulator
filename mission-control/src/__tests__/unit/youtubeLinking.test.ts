@@ -5,6 +5,7 @@
 import {
   claimedMissions,
   missionFromVideo,
+  planVideoLink,
   runToLink,
   watchUrl,
 } from '@/core/domain/services/youtubeLinking';
@@ -254,5 +255,109 @@ describe('a mission run more than once at the same yard', () => {
     ];
 
     expect(runToLink(runs)).toBeNull();
+  });
+
+  describe('and filmed fewer times than it was run', () => {
+    /**
+     * Seen on the live site on 10 October 2026: a mission run twice, one
+     * video uploaded, and the learner's page showing that video on both runs.
+     * An upload stays among the channel's recent uploads for many polls, and
+     * each poll handed it to the next run still waiting.
+     */
+    const FILMED = 'wThPlyLSVmw';
+    const ANOTHER = 'secondRun02';
+
+    const claim = (videoId: string) => ({ missionId: 'm1', yardId: 'curiosity', videoId });
+
+    /** The runs as the next poll finds them, once a link has been written. */
+    const afterLinking = (runs: MissionRun[], runId: string, videoId: string): MissionRun[] =>
+      runs.map((r) => (r.runId === runId ? { ...r, youtubeUrl: watchUrl(videoId) } : r));
+
+    const twoRuns = [
+      run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z' }),
+      run({ runId: 'r2', completedAt: '2026-10-10T10:00:00Z' }),
+    ];
+
+    it('gives one video to one run, however many polls see it', () => {
+      const first = planVideoLink(claim(FILMED), twoRuns, undefined);
+      expect(first).toEqual({ kind: 'link', runId: 'r2', yardId: 'curiosity', completes: false });
+
+      const second = planVideoLink(claim(FILMED), afterLinking(twoRuns, 'r2', FILMED), undefined);
+      expect(second.kind).toBe('skip');
+    });
+
+    it('still gives a genuinely different video to the run left waiting', () => {
+      // The guard is about THIS video, not about the mission having a video.
+      const plan = planVideoLink(claim(ANOTHER), afterLinking(twoRuns, 'r2', FILMED), undefined);
+
+      expect(plan).toEqual({ kind: 'link', runId: 'r1', yardId: 'curiosity', completes: false });
+    });
+
+    it('knows its video in whatever form an operator pasted the link', () => {
+      // Attached by hand as a share link, which is not the url the linker writes.
+      const runs = [
+        twoRuns[0],
+        run({ ...twoRuns[1], youtubeUrl: `https://youtu.be/${FILMED}` }),
+      ];
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+    });
+
+    it('will not take a video that is already on another yard\'s run', () => {
+      const runs = [
+        run({ runId: 'r-dbn', yardId: 'durban', completedAt: '2026-10-10T10:00:00Z', youtubeUrl: watchUrl(FILMED) }),
+        run({ runId: 'r-ct', completedAt: '2026-10-10T09:00:00Z' }),
+      ];
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+    });
+
+    it('does not close a re-run still waiting with the video of the run before it', () => {
+      /**
+       * The same fault with a worse ending. The queued run has no video, so
+       * it was "the run to link", and linking an open run completes it and
+       * emails the learner about a drive the rover has not done yet.
+       */
+      const runs = [
+        run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z', youtubeUrl: watchUrl(FILMED) }),
+        run({ runId: 'r2', status: 'queued', startedAt: '2026-10-10T10:00:00Z' }),
+      ];
+      const mission = { status: 'queued' as const, yardId: 'curiosity' };
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+      expect(planVideoLink(claim(FILMED), runs, mission).kind).toBe('skip');
+    });
+  });
+
+  describe('and re-uploaded', () => {
+    /**
+     * Unchanged by the one-video-one-run rule, and pinned here so it stays
+     * that way: a re-upload has a new id, so it is a new video as far as the
+     * linker can tell.
+     */
+    const ORIGINAL = 'wThPlyLSVmw';
+    const REUPLOAD = 'reUploaded3';
+
+    const upload = (videoId: string) => ({ videoId, title: 'm1__curiosity', description: '' });
+
+    it('does not replace the video a run already has', () => {
+      const runs = [run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z', youtubeUrl: watchUrl(ORIGINAL) })];
+      const [claim] = claimedMissions([upload(REUPLOAD), upload(ORIGINAL)]);
+
+      expect(claim.videoId).toBe(REUPLOAD);
+      expect(planVideoLink(claim, runs, undefined).kind).toBe('skip');
+    });
+
+    it('goes to a run that is still waiting, as any new video would', () => {
+      const runs = [
+        run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z' }),
+        run({ runId: 'r2', completedAt: '2026-10-10T10:00:00Z', youtubeUrl: watchUrl(ORIGINAL) }),
+      ];
+      const [claim] = claimedMissions([upload(REUPLOAD), upload(ORIGINAL)]);
+
+      expect(planVideoLink(claim, runs, undefined)).toEqual({
+        kind: 'link', runId: 'r1', yardId: 'curiosity', completes: false,
+      });
+    });
   });
 });

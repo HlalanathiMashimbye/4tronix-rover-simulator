@@ -83,6 +83,16 @@ export interface VideoClaim {
   yardId: string | null;
 }
 
+/**
+ * A claim, together with the upload that made it.
+ *
+ * The video id travels with the claim because deciding where a video goes
+ * needs to know WHICH video it is, not only which mission it names: the same
+ * upload is seen again on every poll for as long as it stays among the
+ * channel's recent uploads.
+ */
+export type ClaimedVideo = VideoClaim & { videoId: string };
+
 export function missionFromVideo(
   video: Pick<ChannelVideo, 'title' | 'description'>,
 ): VideoClaim | null {
@@ -123,9 +133,9 @@ export function getYouTubeId(url: string | undefined | null): string | null {
  * video wins, because that is almost always why they did it, but two yards'
  * videos of the same mission are two different runs and both survive.
  */
-export function claimedMissions(videos: ChannelVideo[]): Array<VideoClaim & { videoId: string }> {
+export function claimedMissions(videos: ChannelVideo[]): ClaimedVideo[] {
   const seen = new Set<string>();
-  const claims: Array<VideoClaim & { videoId: string }> = [];
+  const claims: ClaimedVideo[] = [];
 
   for (const video of videos) {
     const claim = missionFromVideo(video);
@@ -183,6 +193,14 @@ export function runToLink(runs: MissionRun[]): MissionRun | null {
  * Cancelled and failed runs are left alone: a video does not overrule a person
  * who decided that attempt did not count.
  *
+ * ONE VIDEO, ONE RUN. A video already on any run of the mission is skipped
+ * before anything else is considered. "A run with no video" and "a run this
+ * video has not been given to" are different questions, and asking only the
+ * first let a single upload fill every waiting run of its mission, one per
+ * poll: a mission run twice and filmed once showed the same video on both
+ * runs (10 October 2026). The same gap would have closed a re-run still
+ * sitting in the queue with the footage of the run before it.
+ *
  * `mission` is `undefined` when it has not been read and `null` when it was
  * read and does not exist (or is deleted).
  */
@@ -194,10 +212,18 @@ export type VideoLinkPlan =
 const OPEN: readonly MissionStatus[] = ['queued', 'processing'];
 
 export function planVideoLink(
-  claim: VideoClaim,
+  claim: ClaimedVideo,
   runs: MissionRun[],
   mission: { status: MissionStatus; yardId: string } | null | undefined,
 ): VideoLinkPlan {
+  // Every run, not only the claimed yard's: a video an operator attached by
+  // hand at another yard is just as taken. Read with getYouTubeId rather than
+  // compared to watchUrl, because a pasted share or embed link holds the same
+  // video as the watch link this linker writes.
+  if (runs.some((r) => getYouTubeId(r.youtubeUrl) === claim.videoId)) {
+    return { kind: 'skip', reason: 'video already linked' };
+  }
+
   const candidates = claim.yardId ? runs.filter((r) => r.yardId === claim.yardId) : runs;
   const withoutVideo = candidates.filter((r) => !r.youtubeUrl);
 
