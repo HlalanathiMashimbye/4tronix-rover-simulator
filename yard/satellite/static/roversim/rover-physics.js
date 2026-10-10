@@ -222,31 +222,43 @@ export const SPIN_RATE_CALIBRATION = 0.7856;
  * the noise. A quarter turn is 2 seconds, and there it is a tenth of the turn.
  *
  * MEASURED ON THE ROVER IN THE YARD, 10 October 2026, speed 60, from the
- * satellite camera's recordings of a lap round the yard (twelve spins):
+ * satellite camera's recordings of three laps round the yard (sixteen spins):
  *
  *     1.99s, wheels already turned from the spin before  ->  92, 90 deg
  *     1.99s, wheels straight  ->  86, 82, 76, 80, 80, 82 deg   (mean 81)
+ *     2.18s, wheels straight  ->  92, 84, 80, 80 deg           (mean 84)
  *     2.23s, wheels straight  ->  92, 92, 98, 90 deg           (mean 93)
  *
- * A straight-line fit gives 45.8 deg/s, which is SPIN_RATE_CALIBRATION's
- * 45.29 again, and 0.21s lost at the start; it puts a quarter turn from
- * straight wheels at 2.178s. This is that quarter turn less the 1.987s the
- * rate alone accounts for, so the number a learner meets most, "turn 90", is
- * the one pinned to the measurement. Interpolating between the two laps with
- * no model at all says 2.170s.
+ * This is set so that the number a learner meets most, "turn 90", sleeps
+ * 2.23s: that quarter turn less the 1.987s the rate alone accounts for. 2.23s
+ * is a time the rover has actually driven, and the lap driven with it is the
+ * one that finished nearest the simulator:
  *
- * Before this the simulator drew four clean right angles for a lap whose
- * real turns came out at about 80 degrees each, and the rover finished 59cm
- * from where the simulator put it. With 2.23s spins it finished 25cm away.
+ *     lap driven with 1.99s spins  ->  finished 59cm from the simulator's end
+ *     lap driven with 2.18s spins  ->  52cm
+ *     lap driven with 2.23s spins  ->  26cm
  *
- * A SINGLE SPIN STILL SCATTERS BY ABOUT 3 DEGREES around the fit, so this is
- * the middle of what the rover does, not a promise about any one turn. One
- * surface, one battery charge, speed 60 only, and angles read off a camera to
- * about 4 degrees. To recalibrate, time quarter turns that each follow a
- * straight drive, and set this to (seconds that give 90 degrees) minus
- * (90 / spinDegreesPerSecond).
+ * A straight-line fit through all sixteen spins agrees to a hundredth of a
+ * second: 45.6 deg/s, which is SPIN_RATE_CALIBRATION's 45.29 again, 0.24s
+ * lost at the start, and a quarter turn at 2.22s.
+ *
+ * IT WAS 0.19 FOR A FEW HOURS, fitted to the first twelve spins, which put a
+ * quarter turn at 2.18s and claimed a scatter of 3 degrees. The lap driven to
+ * check that is the 2.18s row above, and it came out worse than 2.23s. The
+ * spins inside one lap are not independent measurements: taken one lap at a
+ * time, the three laps put the start-up at 0.20, 0.33 and 0.18s, and that
+ * much difference is 7 degrees of a quarter turn.
+ *
+ * SO THIS IS THE MIDDLE OF WHAT THE ROVER DOES, to about 5 degrees on any one
+ * turn and about 7 from one lap to the next. Do not retune it from a single
+ * lap. One surface, one battery charge, speed 60 only, angles read off a
+ * camera to about 4 degrees, and taken before the rover was tightened up and
+ * its wheel servos re-zeroed (calibrateServos.py, yard/docs/rover-server.md),
+ * so measure again once that is done. To recalibrate, time quarter turns that
+ * each follow a straight drive, over more than one lap, and set this to
+ * (seconds that give 90 degrees) minus (90 / spinDegreesPerSecond).
  */
-export const SPIN_START_UP_SECONDS = 0.19;
+export const SPIN_START_UP_SECONDS = 0.243;
 /**
  * How much of the geometric turn the rover actually achieves when steering.
  *
@@ -572,7 +584,7 @@ export function spinDegreesPerSecond(speed = 60) {
  * A spin from straight wheels is given SPIN_START_UP_SECONDS on top, since
  * that long passes before the rover turns at all. Say `wheelsTurnedForSpin`
  * when the spin follows another spin with no drive between: the wheels are
- * already out, and the extra would overshoot by about 9 degrees.
+ * already out, and the extra would overshoot by about 11 degrees.
  */
 export function spinSecondsForDegrees(degrees, speed = 60, wheelsTurnedForSpin = false) {
     const rate = spinDegreesPerSecond(speed);
