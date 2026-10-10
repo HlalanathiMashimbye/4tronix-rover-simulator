@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Compass, Rocket } from 'lucide-react';
+import { Compass } from 'lucide-react';
+import Image from 'next/image';
 import { hasSeenWelcome, recordWelcomeSeen } from '@/infrastructure/browser/platformMilestones';
 import { RecoveryCodeCard } from '@/components/learner/RecoveryCodeCard';
 import { RestoreFromCode } from '@/components/learner/RestoreFromCode';
@@ -109,6 +110,7 @@ export function WelcomeCard() {
 
   return (
     <>
+      {/* ── Avatar picker modal ── */}
       {open && (
         <div
           className={`fixed inset-0 z-[100] grid place-items-center overflow-y-auto px-4 py-8 ${visible ? '' : 'pointer-events-none'}`}
@@ -117,19 +119,19 @@ export function WelcomeCard() {
           aria-labelledby="welcome-title"
         >
           <div
-            className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
+            className={`absolute inset-0 bg-black/70 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
             onClick={close}
           />
 
           <div
-            className={`relative z-[101] w-full max-w-md rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+            className={`relative z-[101] w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-xl transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
               visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
             }`}
           >
             <button
               type="button"
               onClick={close}
-              className="absolute right-4 top-4 text-muted-foreground transition-colors hover:text-foreground"
+              className="absolute right-4 top-4 z-10 text-muted-foreground transition-colors hover:text-foreground"
               aria-label="Close"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -137,28 +139,36 @@ export function WelcomeCard() {
               </svg>
             </button>
 
-            <h2 id="welcome-title" className="font-display text-xl font-bold text-foreground">
-              Who&apos;s flying today?
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Pick an avatar and a name for the leaderboard.
-            </p>
+            <div className="flex items-center justify-center pb-2 pt-6">
+              <div className="h-16 w-16 overflow-hidden rounded-2xl">
+                <Image src="/rover-hero.jpg" alt="" width={128} height={128} className="h-full w-full object-cover" />
+              </div>
+            </div>
 
-            <div className="mt-4">
-              {sessionId && (
-                <AvatarPicker
-                  learnerId={sessionId}
-                  initialAvatar={learner?.avatar}
-                  initialName={learner?.displayName}
-                  onConfirm={handleConfirm}
-                  onRestore={handleRestore}
-                />
-              )}
-              {saving && (
-                <div className="mt-2 text-center text-xs text-muted-foreground">
-                  Saving…
-                </div>
-              )}
+            <div className="px-6 pb-6">
+              <h2 id="welcome-title" className="text-center font-display text-2xl font-bold text-foreground">
+                Who&apos;s flying today?
+              </h2>
+              <p className="mt-1 text-center text-sm text-muted-foreground">
+                Pick an avatar and a name for the leaderboard.
+              </p>
+
+              <div className="mt-4">
+                {sessionId && (
+                  <AvatarPicker
+                    learnerId={sessionId}
+                    initialAvatar={learner?.avatar}
+                    initialName={learner?.displayName}
+                    onConfirm={handleConfirm}
+                    onRestore={handleRestore}
+                  />
+                )}
+                {saving && (
+                  <div className="mt-2 text-center text-xs text-muted-foreground">
+                    Saving…
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -176,6 +186,7 @@ export function WelcomeCard() {
         onBack={handleBackFromRecovery}
       />
 
+      {/* ── Tour offer modal ── */}
       {showTourOffer && (
         <div
           className={`fixed inset-0 z-[100] grid place-items-center px-4 py-8 ${tourVisible ? '' : 'pointer-events-none'}`}
@@ -184,43 +195,46 @@ export function WelcomeCard() {
           aria-labelledby="tour-title"
         >
           <div
-            className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${tourVisible ? 'opacity-100' : 'opacity-0'}`}
+            className={`absolute inset-0 bg-black/70 transition-opacity duration-200 motion-reduce:transition-none ${tourVisible ? 'opacity-100' : 'opacity-0'}`}
             onClick={closeTourOffer}
           />
 
           <div
-            className={`relative z-[101] w-full max-w-sm rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+            className={`relative z-[101] w-full max-w-sm overflow-hidden rounded-2xl border border-border bg-card text-center shadow-xl transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
               tourVisible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
             }`}
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-              <Compass className="h-7 w-7 text-primary" aria-hidden="true" />
+            <div className="flex items-center justify-center pb-2 pt-8">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-secondary">
+                <Compass className="h-8 w-8 text-foreground" aria-hidden="true" />
+              </div>
             </div>
 
-            <h2 id="tour-title" className="mt-3 font-display text-xl font-bold text-foreground">
-              Ready to explore?
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              A quick tour will show you where everything is and end with your
-              first mission to the rover.
-            </p>
+            <div className="px-6 pb-6">
+              <h2 id="tour-title" className="font-display text-2xl font-bold text-foreground">
+                Ready to explore? 🧭
+              </h2>
+              <p className="mx-auto mt-2 max-w-[260px] text-sm text-muted-foreground">
+                A quick tour will show you where everything is and end with your
+                first mission to the rover.
+              </p>
 
-            <div className="mt-5 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={handleShowMeAround}
-                className="clay clay-press flex items-center justify-center gap-2 rounded-xl bg-gradient-mars px-4 py-2.5 text-sm font-bold text-primary-foreground"
-              >
-                <Rocket className="h-4 w-4" aria-hidden="true" />
-                Show me around
-              </button>
-              <button
-                type="button"
-                onClick={closeTourOffer}
-                className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                I&apos;ll explore on my own
-              </button>
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleShowMeAround}
+                  className="clay clay-press rounded-xl bg-gradient-mars px-4 py-3 text-sm font-bold text-primary-foreground"
+                >
+                  TAKE OFF! (Quick Tour)
+                </button>
+                <button
+                  type="button"
+                  onClick={closeTourOffer}
+                  className="rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  I&apos;ll explore solo
+                </button>
+              </div>
             </div>
           </div>
         </div>
