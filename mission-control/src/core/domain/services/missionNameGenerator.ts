@@ -7,15 +7,19 @@
  * NAMES NEVER REPEAT (David, 8 October 2026). A mission's three words are how
  * a learner finds it again, so two missions sharing them is a bug, and "it's a
  * solved computer science problem". Names used to be picked at random in the
- * browser from 8,000 combinations, which made repeats certain once a few
- * hundred missions existed (the birthday problem), however big the lists.
+ * browser from 8,000 combinations and kept whatever they were, which made
+ * repeats certain once a few hundred missions existed (the birthday problem).
  *
- * Randomness is the problem, so there is none. Each mission takes the next
- * number from a counter when it is sent (IMissionNameRegistry), and
- * missionNameForNumber turns that number into words one-to-one: different
- * numbers, different names, by construction, until the 32,768 run out. The
- * number is stepped through the combinations by a stride rather than counted
- * straight, so consecutive missions do not share two of their three words.
+ * What every site with names like these does: suggestions are free, and the
+ * name is made unique once, at the moment it is taken. The learner rolls a
+ * name in the browser (rollMissionName), as many times as they like, and
+ * rolling costs nothing and reserves nothing. When the mission is sent the
+ * server claims that name with a single create-if-it-does-not-exist
+ * (IMissionNameRegistry.claim), which only one mission can ever win. If
+ * someone else got there first, the mission takes the next name from a
+ * counter instead: missionNameForNumber turns the counter's number into words
+ * one-to-one, stepping through the combinations by a stride so consecutive
+ * missions do not share two of their three words.
  *
  * Combinations made only of the first twenty words of each list are skipped:
  * those are the 8,000 the random generator could produce, and missions
@@ -31,13 +35,14 @@
  * THE WORD LISTS ARE A SAFETY CONTROL, NOT DECORATION (AB#402).
  *
  * A mission name is shown prominently on a world-readable document: the feed,
- * every card, the operator queue. When the browser chose it, the API had to
- * check it: 47 of the first 400 missions carry names the generator could
- * never have produced - "MARK ROBER", "misson imposible", and one deliberately
- * inappropriate entry that reached the operator's queue. Now the server names
- * every mission and ignores any name the browser sends, and a link only
- * carries a name isGeneratedMissionName accepts (missionSlug). Adding a word
- * here adds it to what is published, so treat this list as reviewed content.
+ * every card, the operator queue. The name box is read-only, but for a while
+ * the API took any string, so the control existed only in the browser: 47 of
+ * the first 400 missions carry names the generator could never have produced
+ * - "MARK ROBER", "misson imposible", and one deliberately inappropriate entry
+ * that reached the operator's queue. isGeneratedMissionName is what makes the
+ * vocabulary the actual boundary, enforced server-side in
+ * validation/schemas.ts. Adding a word here adds it to what a learner may
+ * publish, so treat this list as reviewed content.
  */
 
 const PART0_WORDS = [
@@ -172,12 +177,16 @@ const STRIDE = (() => {
 })();
 
 /**
- * The name for the nth mission named this way, or null when n is not one to
- * hand out: past the last combination, or a combination of only the original
- * words, which older missions may already carry.
+/** Whether a combination is one of the 8,000 the old random names came from. */
+const isRetired = (i0: number, i1: number, i2: number) =>
+  i0 < WORDS_BEFORE_UNIQUE_NAMES && i1 < WORDS_BEFORE_UNIQUE_NAMES && i2 < WORDS_BEFORE_UNIQUE_NAMES;
+
+/**
+ * The name for the nth mission named from the counter, or null when n is not
+ * one to hand out: past the last combination, or a combination of only the
+ * original words, which older missions may already carry.
  *
- * Different numbers give different names, always: the registry hands out
- * each number once, so no two missions can share a name.
+ * Different numbers give different names, always.
  */
 export function missionNameForNumber(n: number): string | null {
   if (!Number.isInteger(n) || n < 0 || n >= MISSION_NAME_COMBINATIONS) return null;
@@ -186,8 +195,34 @@ export function missionNameForNumber(n: number): string | null {
   const rest = Math.floor(combination / PART2_WORDS.length);
   const i1 = rest % PART1_WORDS.length;
   const i0 = Math.floor(rest / PART1_WORDS.length);
-  const retired = i0 < WORDS_BEFORE_UNIQUE_NAMES && i1 < WORDS_BEFORE_UNIQUE_NAMES && i2 < WORDS_BEFORE_UNIQUE_NAMES;
-  return retired ? null : `${PART0_WORDS[i0]} ${PART1_WORDS[i1]} ${PART2_WORDS[i2]}`;
+  return isRetired(i0, i1, i2) ? null : `${PART0_WORDS[i0]} ${PART1_WORDS[i1]} ${PART2_WORDS[i2]}`;
+}
+
+/**
+ * A name for the learner to look at, and roll again if they like.
+ *
+ * A suggestion, not a reservation: nothing is written anywhere, so rolling is
+ * free and a name rolled and never sent is not used up. It may be one another
+ * mission takes first, which is settled when this one is sent.
+ */
+export function rollMissionName(random: () => number = Math.random): string {
+  for (;;) {
+    const name = missionNameForNumber(Math.floor(random() * MISSION_NAME_COMBINATIONS));
+    if (name !== null) return name;
+  }
+}
+
+/**
+ * Whether a name is one a new mission may take: three known words, at least
+ * one of them added when names became unique. A name of only the original
+ * words is refused here even though a link may carry it, because an older
+ * mission may have it and nothing records which ones do.
+ */
+export function isNewMissionName(name: string): boolean {
+  const parts = name.split(' ');
+  if (parts.length !== 3) return false;
+  const [i0, i1, i2] = [PART0_WORDS.indexOf(parts[0]), PART1_WORDS.indexOf(parts[1]), PART2_WORDS.indexOf(parts[2])];
+  return i0 >= 0 && i1 >= 0 && i2 >= 0 && !isRetired(i0, i1, i2);
 }
 
 /**

@@ -6,6 +6,7 @@ import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
+import { rollMissionName } from '@/core/domain/services/missionNameGenerator';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { findSlope } from '@/core/domain/safety/slopeCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
@@ -106,11 +107,34 @@ export function MissionWorkspace() {
   // the effect below in the same tick the prompt closes.
   const awaitingEmailChoiceRef = useRef(false);
   /**
-   * The name the server gave the mission just sent, for the confirmation.
-   * There is no name before sending: the server names each mission from a
-   * counter when it arrives, so no two share one (IMissionNameRegistry).
+   * A name is generated so the learner never faces a blank, unnamed mission:
+   * they can only re-roll it, not type their own.
+   *
+   * Generated on mount rather than in useState's initialiser. That initialiser
+   * runs during render, which happens on the server too - this is a client
+   * component but Next still server-renders the first HTML - so the server
+   * picked one name, the browser picked another, and React threw a hydration
+   * mismatch on every single load of this page. The name is random by design,
+   * so there is no way to make the two agree; the fix is not to render one
+   * until the browser is the only thing rendering.
    */
-  const [sentName, setSentName] = useState<string | null>(null);
+  const [missionName, setMissionName] = useState('');
+  /**
+   * What the mission just sent is called, for the confirmation. Usually the
+   * name the learner rolled; `renamed` when another mission took that name
+   * first and the server gave this one the next free name
+   * (IMissionNameRegistry). The roll is free and reserves nothing, so this is
+   * where a learner finds out.
+   */
+  const [sent, setSent] = useState<{ name: string; renamed: boolean } | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setMissionName(rollMissionName());
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // Load mission from remixFrom parameter (for cross-device remix via email)
   useEffect(() => {
@@ -275,6 +299,7 @@ export function MissionWorkspace() {
         // shows up in their cross-device history.
         ...(learnerEmail ? { learnerEmail } : {}),
         ...(editorMode === 'blockly' && blocklyState ? { blocklyState } : {}),
+        name: missionName,
       });
 
       if (!validation.success) {
@@ -297,7 +322,8 @@ export function MissionWorkspace() {
 
       setSubmitSuccess(true);
       setLaunchOpen(false);
-      setSentName(result.mission.name ?? null);
+      setSent(result.mission.name ? { name: result.mission.name, renamed: result.mission.name !== missionName } : null);
+      setMissionName(rollMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
       // for that answer rather than racing it: the prompt covers the whole
@@ -366,6 +392,8 @@ export function MissionWorkspace() {
   const submitBar =
     editorMode === 'manual' ? undefined : (
       <MissionSubmitBar
+        missionName={missionName}
+        onMissionNameChange={setMissionName}
         onSubmit={handleSubmitToQueue}
         submitting={submitting}
         submitSuccess={submitSuccess}
@@ -448,7 +476,8 @@ export function MissionWorkspace() {
         open={missionSentOpen}
         onClose={() => setMissionSentOpen(false)}
         email={learnerEmail}
-        name={sentName}
+        name={sent?.name ?? null}
+        renamed={sent?.renamed ?? false}
       />
     </div>
   );

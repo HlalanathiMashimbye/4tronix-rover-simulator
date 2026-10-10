@@ -14,6 +14,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'curiosity',
         learnerId: 'learner-123',
         sessionId: 'test-session-123',
+        name: 'Red Explorer',
         code: 'rover.forward(100)\nrover.wait(2)',
       };
 
@@ -29,6 +30,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'yard-1',
         learnerId: 'learner-456',
         sessionId: 'session-456',
+        name: 'Rock Mapper',
         code: 'rover.turn_left(50)',  // Updated to use approved command
       };
 
@@ -108,6 +110,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'yard-1',
         learnerId: 'learner-123',
         sessionId: 'session-123',
+        name: 'Dust Nomad',
         code: 'a'.repeat(10001),
       };
 
@@ -174,6 +177,7 @@ describe('Mission Schema Validation', () => {
         yardId: 'rover-yard-1',
         learnerId: 'learner_abc123',
         sessionId: 'sess_abc123',
+        name: 'Solar Probe',
         code: 'rover.forward(100)\nrover.stop()',
       };
 
@@ -198,6 +202,7 @@ describe('Mission Schema Validation', () => {
       yardId: 'curiosity',
       learnerId: 'learner-123',
       sessionId: 'test-session-123',
+      name: 'Red Explorer',
       code: 'rover.forward(100)',
     };
 

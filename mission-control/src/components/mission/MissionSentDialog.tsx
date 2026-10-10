@@ -28,13 +28,19 @@ interface MissionSentDialogProps {
   /** Set when the learner has an email saved: changes what we promise them. */
   email: string | null;
   /**
-   * What the server called the mission. The learner first learns it here: it
-   * is how they find the mission again, so it is said, not left to the feed.
+   * What the mission is called. It is how the learner finds it again, so it
+   * is said here, not left to the feed.
    */
   name: string | null;
+  /**
+   * The name they rolled had just been taken by another mission, so this one
+   * got the next free name. Rare, and said plainly when it happens: a name
+   * that silently changed is one a learner would look for and not find.
+   */
+  renamed?: boolean;
 }
 
-export function MissionSentDialog({ open, onClose, email, name }: MissionSentDialogProps) {
+export function MissionSentDialog({ open, onClose, email, name, renamed = false }: MissionSentDialogProps) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
 
@@ -94,7 +100,8 @@ export function MissionSentDialog({ open, onClose, email, name }: MissionSentDia
 
         {name && (
           <p className="mt-1 text-sm text-muted-foreground">
-            It is called <span className="font-bold text-foreground" data-mission-name>{name}</span>.
+            {renamed ? 'Another mission just took that name, so yours is called ' : 'It is called '}
+            <span className="font-bold text-foreground" data-mission-name>{name}</span>.
           </p>
         )}
 

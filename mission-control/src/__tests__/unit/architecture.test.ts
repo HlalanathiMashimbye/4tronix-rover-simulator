@@ -207,21 +207,6 @@ describe('the server/browser boundary', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('names missions on the server only', () => {
-    /**
-     * Names were rolled in the browser until 8 October 2026, and repeated,
-     * because a browser cannot know which names other missions have. Now the
-     * server takes each from a counter (IMissionNameRegistry). A browser file
-     * that makes names again would bring the repeats back while every test of
-     * the registry stayed green.
-     */
-    const naming = /from '@\/(core\/domain\/services\/missionNameGenerator|core\/domain\/repositories\/IMissionNameRegistry|infrastructure\/persistence\/FirestoreMissionNameRegistry)'/;
-    const offenders = [...sourceFiles('app'), ...sourceFiles('components'), ...sourceFiles('contexts'), ...sourceFiles('hooks')]
-      .filter((f) => naming.test(read(f)));
-
-    expect(offenders).toEqual([]);
-  });
-
   it('hands the browser a repository with no way to write', () => {
     /**
      * Checked by the compiler, not by reading source. Each line below names a

@@ -1,16 +1,18 @@
 /**
- * Mission names handed out from a counter in Firestore (IMissionNameRegistry).
+ * Mission names taken in Firestore (IMissionNameRegistry).
  *
- * `counters/missionNames` holds the next number, and one transaction reads it,
- * turns it into a name and moves it on, so two missions sent at the same
- * moment cannot both get the same number: Firestore retries whichever
- * transaction lost the race, and it reads the moved-on counter.
+ * A taken name is a document, `missionNames/{name}`, and taking one is
+ * create(), which fails if the document exists. That one write is the whole
+ * guarantee: however many missions ask for a name at once, Firestore lets
+ * exactly one create it. No read first, so claiming costs one write.
  *
- * Each name handed out also gets `missionNames/{name}`. The numbers alone make
- * names unique; the record is there for the day someone edits a word list in
- * the middle instead of appending (missionNameGenerator.ts says why that would
- * remap the numbers). A name that already has a record is skipped, so that
- * mistake costs a number, not a duplicate. One read per mission sent.
+ * `counters/missionNames` is for the mission that lost: one transaction reads
+ * the next number, turns it into a name (missionNameForNumber, one-to-one),
+ * skips any that already has a document, and moves the counter on.
+ *
+ * Missions sent before 8 October 2026 have no documents here. They do not
+ * need them: their names use only the original words, and no name with only
+ * those is ever claimed or handed out (isNewMissionName).
  *
  * Server only. The rules deny both collections to browsers by matching
  * nothing, and the Admin SDK does not read the rules.
@@ -24,8 +26,21 @@ import { MISSION_NAME_COMBINATIONS, missionNameForNumber } from '@/core/domain/s
 const COUNTER = { collection: 'counters', doc: 'missionNames' } as const;
 const NAMES_COLLECTION = 'missionNames';
 
+/** gRPC's ALREADY_EXISTS, which create() fails with when the document is there. */
+const ALREADY_EXISTS = 6;
+
 export class FirestoreMissionNameRegistry implements IMissionNameRegistry {
   constructor(private readonly db: Firestore) {}
+
+  async claim(name: string): Promise<boolean> {
+    try {
+      await this.db.collection(NAMES_COLLECTION).doc(name).create({ takenAt: new Date().toISOString() });
+      return true;
+    } catch (error) {
+      if ((error as { code?: unknown }).code === ALREADY_EXISTS) return false;
+      throw error;
+    }
+  }
 
   async takeNext(): Promise<string> {
     const counterRef = this.db.collection(COUNTER.collection).doc(COUNTER.doc);
@@ -33,7 +48,7 @@ export class FirestoreMissionNameRegistry implements IMissionNameRegistry {
       const counter = await tx.get(counterRef);
       const next = counter.data()?.next;
       for (let n = typeof next === 'number' ? next : 0; n < MISSION_NAME_COMBINATIONS; n++) {
-        // Combinations of only the original words are retired, not taken.
+        // Combinations of only the original words are never handed out.
         const name = missionNameForNumber(n);
         if (name === null) continue;
         const nameRef = this.db.collection(NAMES_COLLECTION).doc(name);

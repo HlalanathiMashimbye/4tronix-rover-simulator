@@ -2,13 +2,14 @@
 
 import { useMemo } from 'react';
 import { Rocket } from 'lucide-react';
+import { MissionNameInput } from '@/components/mission/MissionNameInput';
 import { PreFlightChecklist } from '@/components/mission/PreFlightChecklist';
 import { runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
 import type { Crash } from '@/core/domain/safety/crashCheck';
 import type { Slope } from '@/core/domain/safety/slopeCheck';
 
 /**
- * Checks and launch, in Create Mission's footer card (MissionWorkspace):
+ * Checks, name and launch, in Create Mission's footer card (MissionWorkspace):
  * under the editor on a laptop, beside the simulator on a tablet, in the
  * launch sheet on a phone.
  *
@@ -28,6 +29,8 @@ import type { Slope } from '@/core/domain/safety/slopeCheck';
  * drop their words and the button says only "Send".
  */
 interface MissionSubmitBarProps {
+  missionName: string;
+  onMissionNameChange: (name: string) => void;
   onSubmit: () => void;
   submitting: boolean;
   submitSuccess: boolean;
@@ -41,6 +44,8 @@ interface MissionSubmitBarProps {
 }
 
 export function MissionSubmitBar({
+  missionName,
+  onMissionNameChange,
   onSubmit,
   submitting,
   submitSuccess,
@@ -71,12 +76,12 @@ export function MissionSubmitBar({
         }
       />
 
-      {/* No name box: the server names the mission when it arrives, and the
-          confirmation says what it is called (MissionSentDialog). */}
       <div className="flex items-center gap-1.5">
+        <MissionNameInput value={missionName} onChange={onMissionNameChange} />
+
         <button
           onClick={onSubmit}
-          disabled={submitting || !hasCode || !preFlight.ready}
+          disabled={submitting || !hasCode || !missionName.trim() || !preFlight.ready}
           // The visible words shorten in a narrow column; the name does not.
           aria-label={submitting ? 'Sending' : 'Send to Mission Control'}
           // The chips and the line above say which check is holding it, but a
@@ -89,9 +94,9 @@ export function MissionSubmitBar({
           // visible answer to "is it my turn yet".
           // send-ready: two breaths of glow and a shine as it turns green,
           // once, so the moment it becomes the learner's turn is seen.
-          className={`clay clay-press flex h-9 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`clay clay-press flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-40 ${
             preFlight.ready ? 'bg-gradient-buzz' : 'bg-gradient-mars'
-          } ${preFlight.ready && hasCode && !submitting ? 'send-ready' : ''}`}
+          } ${preFlight.ready && hasCode && missionName.trim() && !submitting ? 'send-ready' : ''}`}
         >
           {submitting ? (
             <>

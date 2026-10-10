@@ -16,11 +16,19 @@ import { Mission } from '@/core/domain/entities/Mission';
 import { CreateMissionDto } from '@/core/application/dto/mission';
 import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
 
-/** Hands out "Name 1", "Name 2"...: the registry's contract, without Firestore. */
-class CountingNameRegistry implements IMissionNameRegistry {
-  private taken = 0;
+/** The registry's contract without Firestore: a name is taken once, and the next free one is "Name N". */
+class InMemoryNameRegistry implements IMissionNameRegistry {
+  readonly taken = new Set<string>();
+  private counter = 0;
+  async claim(name: string): Promise<boolean> {
+    if (this.taken.has(name)) return false;
+    this.taken.add(name);
+    return true;
+  }
   async takeNext(): Promise<string> {
-    return `Name ${++this.taken}`;
+    const name = `Name ${++this.counter}`;
+    this.taken.add(name);
+    return name;
   }
 }
 
@@ -125,34 +133,48 @@ const makeDto = (
 ): CreateMissionDto => ({
   learnerId: 'learner-123',
   sessionId: 'session-123',
+  // Rolled by the dice: "Comet" is one of the words added with unique names.
+  name: 'Swift Comet Explorer',
   ...overrides,
 });
 
 describe('MissionService', () => {
   let service: MissionService;
   let repository: MockMissionRepository;
+  let names: InMemoryNameRegistry;
 
   beforeEach(() => {
     repository = new MockMissionRepository();
-    service = new MissionService(repository, new CountingNameRegistry());
+    names = new InMemoryNameRegistry();
+    service = new MissionService(repository, names);
   });
 
   describe('naming', () => {
-    it('names every mission from the registry, never the same name twice', async () => {
-      const first = await service.submitMission(makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }));
-      const second = await service.submitMission(makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }));
+    const send = (name: string) => service.submitMission(makeDto({ yardId: 'yard-1', code: 'rover.forward(60)', name }));
 
-      expect(first.mission?.name).toBe('Name 1');
-      expect(second.mission?.name).toBe('Name 2');
+    it('keeps the name the learner rolled when no mission has it', async () => {
+      expect((await send('Brave Nebula Scout')).mission?.name).toBe('Brave Nebula Scout');
     });
 
-    it('ignores a name sent with the mission', async () => {
-      // A stale tab still sends one; a script could send anything. Neither
-      // decides what a public document is called.
-      const dto = { ...makeDto({ yardId: 'yard-1', code: 'rover.forward(60)' }), name: 'meet me at the gate' };
-      const result = await service.submitMission(dto);
+    it('never gives two missions the same name, even when they rolled the same one', async () => {
+      const first = await send('Brave Nebula Scout');
+      const second = await send('Brave Nebula Scout');
+
+      expect(first.mission?.name).toBe('Brave Nebula Scout');
+      expect(second.mission?.name).toBe('Name 1');
+    });
+
+    it('does not let a mission keep a name made only of the original words', async () => {
+      // An older mission may carry it, from before names were recorded, so it
+      // is never claimed: a stale tab still sends, under the next free name.
+      const result = await send('Swift Helios Explorer');
 
       expect(result.mission?.name).toBe('Name 1');
+      expect(names.taken.has('Swift Helios Explorer')).toBe(false);
+    });
+
+    it('does not claim free text, should any get past the schema', async () => {
+      expect((await send('meet me at the gate')).mission?.name).toBe('Name 1');
     });
   });
 

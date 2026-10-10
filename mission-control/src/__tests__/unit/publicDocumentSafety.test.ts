@@ -7,18 +7,17 @@
  * because of how young the users are.
  *
  * The mission NAME is the sharp end: it is shown on every card, in the feed and
- * in the operator queue. The input was read-only for a while, but the API
+ * in the operator queue. The input has been read-only for a while, but the API
  * accepted any string up to 100 characters, so the control lived only in the
  * browser. 47 of the first 400 missions carry names the generator could never
  * have produced, including one deliberately inappropriate entry that reached an
- * operator's queue. Since 8 October 2026 the server names every mission and the
- * browser's say is gone altogether.
+ * operator's queue.
  */
 
 import {
   allGeneratedMissionNames,
   isGeneratedMissionName,
-  missionNameForNumber,
+  rollMissionName,
 } from '@/core/domain/services/missionNameGenerator';
 import { validateMission } from '@/infrastructure/validation/schemas';
 
@@ -26,6 +25,7 @@ const valid = {
   yardId: 'curiosity',
   learnerId: 'learner-123',
   sessionId: 'V1StGXR8Z5jdHi6BmyT8r',
+  name: 'Red Explorer',
   code: 'rover.forward(60)',
 };
 
@@ -37,13 +37,17 @@ describe('the mission name is a closed vocabulary', () => {
     expect(all.every(isGeneratedMissionName)).toBe(true);
   });
 
-  it('accepts every name the server hands out, all of them three words', () => {
-    for (let n = 0; n < 500; n++) {
-      const name = missionNameForNumber(n);
-      if (name === null) continue;
+  it('accepts what the dice actually rolls, always three words', () => {
+    for (let i = 0; i < 50; i++) {
+      const name = rollMissionName();
       expect(isGeneratedMissionName(name)).toBe(true);
       expect(name.split(' ')).toHaveLength(3);
     }
+  });
+
+  it('has 32,768 three-word names to draw on (AB#330)', () => {
+    // Uniqueness itself is the registry's job: uniqueMissionNames.test.ts.
+    expect(allGeneratedMissionNames()).toHaveLength(32 ** 3);
   });
 
   it('still accepts the two-word names already on live missions', () => {
@@ -91,15 +95,21 @@ describe('the mission name is a closed vocabulary', () => {
 });
 
 describe('the API is the boundary, not the input control', () => {
-  it('drops a name posted straight at the API: the server names missions', () => {
-    // Free text from curl, or a stale tab's old name, is not refused, since
-    // the stale tab is a learner; it just never reaches the mission
-    // (MissionService names it from IMissionNameRegistry).
-    for (const name of ['meet me at the gate', 'Red Explorer']) {
-      const result = validateMission({ ...valid, name });
-      expect(result.success).toBe(true);
-      expect(result.data).not.toHaveProperty('name');
-    }
+  it('accepts a generated name', () => {
+    expect(validateMission(valid).success).toBe(true);
+  });
+
+  it('refuses free text posted straight at the API', () => {
+    // A read-only field in the browser stops nobody with curl.
+    const result = validateMission({ ...valid, name: 'meet me at the gate' });
+
+    expect(result.success).toBe(false);
+    expect(result.errors?.join(' ')).toContain('generated, not typed');
+  });
+
+  it('refuses a name that is nearly right', () => {
+    expect(validateMission({ ...valid, name: 'Red Explorer!' }).success).toBe(false);
+    expect(validateMission({ ...valid, name: 'red explorer' }).success).toBe(false);
   });
 
   it('refuses a sessionId carrying anything but an id', () => {
