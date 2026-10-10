@@ -21,8 +21,11 @@ it('says a short, clean drive looks fine', () => {
   expect(find(SHORT_DRIVE, 'duration').message).toBe('Runs 3s');
 });
 
+// Backwards from the start is the door wall, 25 cm behind it.
+const INTO_THE_WALL = 'rover.reverse(100)\ntime.sleep(40)\nrover.stop()\n';
+
 it('stops a mission that reaches the edge of the yard, and says when', () => {
-  const longDrive = 'rover.forward(100)\ntime.sleep(40)\nrover.stop()\n';
+  const longDrive = INTO_THE_WALL;
   const edge = find(longDrive, 'crash');
   expect(edge.level).toBe('stop');
   expect(edge.atSeconds).toBeGreaterThan(0);
@@ -30,15 +33,14 @@ it('stops a mission that reaches the edge of the yard, and says when', () => {
   expect(edge.message).toContain(`${edge.atSeconds}s`);
 });
 
-// Turned towards R4, south-east of the start, and driven at it (AB#466).
-const INTO_A_ROCK =
-  'rover.spinLeft(60)\ntime.sleep(1.4)\nrover.stop()\nrover.forward(60)\ntime.sleep(4)\nrover.stop()\n';
+// Straight on from the start, along the seam into R4 (AB#466).
+const INTO_A_ROCK = 'rover.forward(60)\ntime.sleep(14)\nrover.stop()\n';
 
 it('stops a mission that drives into a rock, naming the rock and when', () => {
   const rock = find(INTO_A_ROCK, 'crash');
   expect(rock.level).toBe('stop');
   expect(rock.message).toContain('R4');
-  expect(rock.atSeconds).toBeGreaterThan(1.4);
+  expect(rock.atSeconds).toBeGreaterThan(5);
   expect(rock.message).toContain(`${rock.atSeconds}s`);
 });
 
@@ -81,7 +83,7 @@ describe("the phone's one-line summary", () => {
 
   it('keeps the fact that matters in the short form', () => {
     expect(find(SHORT_DRIVE, 'duration').short).toBe('3s');
-    const edge = find('rover.forward(100)\ntime.sleep(40)\nrover.stop()\n', 'crash');
+    const edge = find(INTO_THE_WALL, 'crash');
     expect(edge.short).toBe(`Edge at ${edge.atSeconds}s`);
     const rock = find(INTO_A_ROCK, 'crash');
     expect(rock.short).toBe(`R4 at ${rock.atSeconds}s`);

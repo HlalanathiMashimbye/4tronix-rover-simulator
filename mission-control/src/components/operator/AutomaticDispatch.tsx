@@ -8,7 +8,7 @@ import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl }
 import { missionClipboardText } from '@/lib/missionClipboard';
 
 /** How to put the rover on the start mark: the tape in the yard says where. */
-const START_MARK_HOW = 'Centre it on the cross, facing the front wall.';
+const START_MARK_HOW = 'Centre it on the cross, facing along the seam, away from the door.';
 
 type CheckKey = 'camera' | 'rover' | 'recording';
 type CheckState = 'waiting' | 'ready' | 'failed';

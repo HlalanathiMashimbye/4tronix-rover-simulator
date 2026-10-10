@@ -10,7 +10,9 @@ reproduces all of it from the originals.
 ![The yard from above, with its rocks, start spot and high ground](yard-measurements/yard-map.jpg)
 
 *Left: the photos straightened into a top-down map, as the yard was at 15:52
-with the rover on its start spot. Right: where the ground rises (red) and
+with the rover on what was then its start spot, the middle of the seam. The
+start is now at the seam's west end, by the door: see
+[the start mark](#the-start-mark). Right: where the ground rises (red) and
 dips (blue), from a stereo pair taken at 14:27, when R4 was sitting on the
 seam. That is the blob above its circle. [`yard-top-down.jpg`](yard-measurements/yard-top-down.jpg)
 is the left half without the markings.*
@@ -33,29 +35,40 @@ fails if the two ever disagree.
 | Depth, north to south | **249 cm** | Photos only, within about 2 cm. The front wall hides the last strip of floor from the camera, so if anything it is a little more |
 | Seam between the two floor boards | 121 cm from the back wall | Photos, within 1 cm |
 | Door | The southern half of the west side, from the seam to the front wall | Confirmed by the team |
-| Start | **The middle of the seam: x 116.5, y 121, facing south** | The team's choice. In the photos the rover sat at x 112, y 119 |
+| Start | **On the seam by the door: x 25, y 121, facing east** | David's call, 8 Oct 2026. Until then it was the middle of the seam facing south, where the photos show the rover |
 | Start mark | **A cross, arms 14 cm from the centre** | Not taped yet: see [The start mark](#the-start-mark) |
 
 ## The start mark
 
-Every mission in the simulator starts on the middle of the seam, facing the
-front wall (AB#465). A rover put down anywhere else runs a different mission
-from the one the learner watched, so the spot is taped on the floor, and both
-run pages remind the operator to use it, beside their Send buttons.
+Every mission in the simulator starts on the seam just inside the door,
+facing east along it (AB#465). A rover put down anywhere else runs a different
+mission from the one the learner watched, so the spot is taped on the floor,
+and both run pages remind the operator to use it, beside their Send buttons.
+
+It moved there from the middle of the seam on 8 October 2026, at David's
+request. The middle sat on the southern mound's slope, so every run began on
+tilted ground and the operator had to walk into the yard to place the rover.
+By the door the floor is level, the operator places it with one reach, and
+driving straight on meets the mound and R4, so a mission's first job is to
+steer round them.
 
 **Taping it** (once, with a tape measure and green tape if there is some: the
 simulator draws the mark green):
 
-1. Find the middle of the seam: 116.5 cm from the west wall, the door side,
-   measured along the seam. It is the same from the east wall.
+1. Find the spot on the seam 25 cm in from the west wall, the door side,
+   measured along the seam.
 2. Tape a cross there: one strip along the seam and one across it, each
    28 cm long and centred on the spot, so every arm is 14 cm.
+
+If an old cross is still taped in the middle of the seam, take it up: two
+marks on the floor is one too many.
 
 A cross and not an arrow: an arrow reads as "drive this way", and a mission
 can just as well start by reversing.
 
 **Using it**, before every run: the rover's centre, between its middle
-wheels, over the middle of the cross, facing the front wall. Parked like
+wheels, over the middle of the cross, facing along the seam, away from the
+door. Parked like
 that, all four tips of the cross show, about 4 cm past the rover on each
 side, which is what centres it.
 
@@ -73,13 +86,16 @@ what happened next to what the simulator says:
 
 | Run | Code | The simulator says |
 |---|---|---|
-| A, a near miss | `rover.forward(60)` `time.sleep(5)` `rover.stop()` | Passes R4, about 3 cm clear |
-| B, head on | `rover.spinLeft(60)` `time.sleep(1.4)` `rover.stop()` `rover.forward(60)` `time.sleep(4)` `rover.stop()` | Hits R4 at 2.1 s |
-| C, a glancing blow | `rover.spinLeft(60)` `time.sleep(0.7)` `rover.stop()` `rover.forward(60)` `time.sleep(4)` `rover.stop()` | Clips R4 with a front corner at 1.1 s |
+| A, a near miss | `rover.spinLeft(60)` `time.sleep(0.15)` `rover.stop()` `rover.forward(60)` `time.sleep(16)` `rover.stop()` | Passes R4, about 4 cm clear |
+| B, head on | `rover.spinRight(60)` `time.sleep(0.15)` `rover.stop()` `rover.forward(60)` `time.sleep(14)` `rover.stop()` | Hits R4 at 10.8 s |
+| C, a glancing blow | `rover.forward(60)` `time.sleep(14)` `rover.stop()` | Clips R4 with its right front corner at 10.6 s |
 
 A disagreeing with the simulator is the most likely, and the most useful to
-know: 3 cm is about what a turn's drift and the hand placing the rover can
-add up to, so if the real rover clips R4 there, the rocks need a margin.
+know: 4 cm is about what a turn's drift and the hand placing the rover can
+add up to, so if the real rover clips R4 there, the rocks need a margin. All
+three cross the southern mound's slope on the way, which the simulator drives
+as flat (see [Slope zones](#slope-zones-ab468)), so drift there is part of
+what they measure.
 
 ## Rocks
 
@@ -102,8 +118,8 @@ where it belongs.
 
 **Two mounds in the middle**, with their peaks at (94, 94) and (84, 137): the
 two bright spots with rings of cracked texture around them. The start is
-33 cm east and 16 cm north of the southern peak, so **the rover starts on that
-mound's north-eastern slope**, not on level ground.
+59 cm west and 16 cm north of the southern peak, on level floor: along the seam the mound only
+begins to rise about 50 cm from the west wall.
 
 How high they are is not known. The stereo finds them in every pair of photos
 tried, but when this was first measured, scaling its answer to centimetres
@@ -120,10 +136,10 @@ What the simulator draws as rising ground: yellow, then orange, then red at
 the top. **Drawn by eye** from the rings of cracked texture round each peak in
 the floor photo, not measured, because the heights are not known (above).
 
-Only round the peaks. The whole mound rises gently and the start is on it, so
-a zone over the whole mound would flag every mission before it had moved. The
-start is 35 cm from the nearer peak, outside the yellow ring. The zones are
-judged at the rover's centre.
+Only round the peaks. The whole mound rises gently, so a zone over the whole
+of it would flag nearly every mission, and a flag that is always up teaches a
+learner to ignore it. The start is 61 cm from the nearer peak, well outside
+the yellow ring. The zones are judged at the rover's centre.
 
 A zone changes nothing in the physics: the simulated rover drives over it as
 if flat. It is a warning that from there the real run may not match: it may
