@@ -28,6 +28,19 @@
 
 import type { MissionStatus } from './Mission';
 
+export interface AutomaticUploadStatusView {
+  missionId: string;
+  dispatchId: string;
+  yardId: string;
+  recordingName: string;
+  status: 'uploading' | 'uploaded' | 'failed';
+  attempts: number;
+  videoId?: string;
+  url?: string;
+  errorMessage?: string | null;
+  updatedAt: string;
+}
+
 export interface MissionRun {
   /** Unique identifier for this execution attempt. Document id. */
   runId: string;

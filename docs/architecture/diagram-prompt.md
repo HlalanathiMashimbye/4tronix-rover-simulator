@@ -24,12 +24,12 @@ them to the rover; the run is filmed and the video published back to the
 learner. The venue network is frequently offline, so the yard runs
 offline-first: nothing on the run path leaves the LAN.
 
-**The one idea the drawing must carry:** no network path joins the cloud and
-the yard. No server calls a server across that line, and nothing syncs. The
-only bridge is the operator's browser, a device physically standing on the
-venue LAN while signed in to the cloud console. It carries each mission across
-by navigation, and the video comes back by way of YouTube. If a reader takes
-away one thing, it is that boundary and the person straddling it.
+**The one idea the drawing must carry:** the rover run path stays on the yard
+LAN. The operator carries missions from the cloud to the yard in their
+browser; when optional automatic uploads are configured, the satellite sends
+finished recordings outbound to Mission Control over a separate authenticated
+path. Cloud services never dispatch or stop a rover. If a reader takes away
+one thing, it is that boundary and the operator who carries each mission.
 
 ## Layout
 
@@ -104,8 +104,10 @@ local-network permission`.
 
 ## Band B: yard satellite, Flask on mro.local:3001
 
-The satellite holds no cloud credential, asks for no sign-in, and talks only to
-the rover and the camera on the LAN. Three columns.
+The satellite asks for no sign-in and holds no Firebase or YouTube OAuth
+credential. When configured, it has a separate shared credential for outbound
+completed-recording delivery to Mission Control; the rover and camera remain
+on the LAN. Three columns.
 
 **B1 Surfaces.** `/run/` operator run station, `/code/` tablet Blockly editor,
 `/monitor/` TV display, `/settings` health and tunables. Four labels, no body

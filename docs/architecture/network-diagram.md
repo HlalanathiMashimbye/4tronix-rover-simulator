@@ -6,9 +6,9 @@ Companion writeup for `Mission Control: Network Diagram` (August 2026).
 > satellite's Firestore mirror, its sync worker, recovery and lease, and its
 > own operator console with `OPERATOR_AUTH=off`, none of which exists any
 > more; in zone C it is the run station, not a console, that sends a mission
-> to the rover. The satellite now holds no cloud credential and has no
-> sign-in, and an operator carries each mission across from Mission Control,
-> which is the only operator surface. See
+> to the rover. The satellite has no sign-in and holds no Firebase or YouTube
+> OAuth credential. It can deliver completed recordings to Mission Control
+> using a separate shared ingest credential. See
 > [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and
 > [`yard/docs/what-the-yard-no-longer-does.md`](../../yard/docs/what-the-yard-no-longer-does.md).
 

@@ -5,9 +5,11 @@ override with `SATELLITE_PORT`). It serves the tablet Blockly interface, the TV
 monitor and the operator's run station, proxies API calls to the rover server,
 records runs, and works with no internet at all.
 
-It holds no cloud credential. It talks to the rover and the camera over the
-local network and to nothing else. See [../docs/satellite.md](../docs/satellite.md)
-for setup and [../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
+It holds no Firebase or YouTube OAuth credential. If automatic uploads are
+enabled, it uses the separate `YOUTUBE_UPLOAD_INGEST_SECRET` to deliver
+completed recordings to Mission Control; the rover run path remains local.
+See [../docs/satellite.md](../docs/satellite.md) for setup and
+[../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
 for what the Firestore mirror used to do and why it went.
 
 | File | Role |

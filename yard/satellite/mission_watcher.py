@@ -102,7 +102,7 @@ def finished_runs(rover_url):
     return runs
 
 
-def stop_finished_recordings(rover_url, yard_id=None):
+def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None):
     """Stop filming every run at this yard the rover says is over. Returns them.
 
     keep=True for errors as well as successes: a run the rover could not
@@ -118,14 +118,23 @@ def stop_finished_recordings(rover_url, yard_id=None):
     for recording in recordings_at(yard_id):
         own = dispatches_for(recording, yard_id)
         if own:
-            over = any(instruction_id in own for instruction_id, _ in runs)
+            finished = [(instruction_id, mission_id) for instruction_id, mission_id in runs
+                        if instruction_id in own]
+            over = bool(finished)
         else:
+            finished = []
             over = any(recording_key(mission_id) == recording for _, mission_id in runs)
         if not over:
             continue
-        stop_recording(recording, yard_id, keep=True)
+        kept, path = stop_recording(recording, yard_id, keep=True)
         stopped.append(recording)
         print(f'[watcher] Rover finished {recording}; recording saved.')
+        if kept and path and finished and on_recording_ready:
+            instruction_id, mission_id = finished[0]
+            try:
+                on_recording_ready(mission_id, instruction_id, yard_id, path)
+            except Exception as error:
+                print(f'[watcher] Could not start automatic upload for {recording}: {type(error).__name__}.')
     return stopped
 
 
@@ -154,7 +163,8 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
         tick = 0
         while True:
             try:
-                stop_finished_recordings(rover_url_getter())
+                from youtube_upload import start_recording_upload
+                stop_finished_recordings(rover_url_getter(), on_recording_ready=start_recording_upload)
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
 

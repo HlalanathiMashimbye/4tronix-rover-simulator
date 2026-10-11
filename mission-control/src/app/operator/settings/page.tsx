@@ -27,7 +27,11 @@ import { readSetting } from '@/infrastructure/config/runtimeSettingsStore';
  */
 export const metadata = { title: 'Platform settings' };
 
-export default async function OperatorSettingsPage() {
+export default async function OperatorSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ youtubeOAuth?: string | string[] }>;
+}) {
   const session = await getOperatorSession();
 
   if (!session) {
@@ -42,6 +46,7 @@ export default async function OperatorSettingsPage() {
   const values = await Promise.all(names.map((name) => readSetting(name)));
   const settings = names.map((name, i) => describeSetting(name, values[i]));
   const yards = await adminYardRepository().findAll();
+  const { youtubeOAuth } = await searchParams;
 
   return (
     <main className="relative flex min-h-page flex-col overflow-y-auto px-4 sm:px-6">
@@ -65,7 +70,10 @@ export default async function OperatorSettingsPage() {
 
       <div className="mx-auto grid w-full max-w-page gap-3 pb-8 lg:grid-cols-2 lg:items-start">
         <YardManager initialYards={yards} />
-        <SettingsManager initialSettings={settings} />
+        <SettingsManager
+          initialSettings={settings}
+          youtubeOAuthResult={typeof youtubeOAuth === 'string' ? youtubeOAuth : undefined}
+        />
         <YardLayoutEditor initialYards={yards} />
       </div>
     </main>
