@@ -31,13 +31,15 @@ The Yard system consists of three devices working together:
 | **Satellite** | mro.local:3001 | Web interfaces (`/`, `/run/`, `/code/`, `/monitor/`, `/settings`) and the recordings |
 | **Camera** | mro.local:8890 | Pi AI camera WebSocket stream |
 
-The satellite has no sign-in and holds no cloud credential: it talks to the
-rover and the camera on this network and to nothing else. Missions reach it by
-hand. An operator copies one out of Mission Control's operator console
-(`/operator` there), pastes it into the **run station** here (`/run/`) and
-presses Send; the station records the run and hands them the video. Marking
-the mission complete and attaching the video happen in Mission Control, not
-here. [what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md)
+The satellite has no sign-in and holds no Firebase or YouTube OAuth
+credential. It talks to the rover and camera on the local network. Missions
+still reach it by hand: an operator copies one out of Mission Control's
+operator console (`/operator` there), pastes it into the **run station** here
+(`/run/`) and presses Send. When optional automatic uploads are configured,
+the satellite uses a separate shared credential to deliver a finished
+recording outbound to Mission Control; this does not put cloud calls on the
+rover run path. Marking the mission complete and attaching the video happen
+in Mission Control, not here. [what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md)
 covers the Firestore mirror and the satellite's own console that this replaced.
 
 ## Rover Server Architecture (Ports & Adapters)

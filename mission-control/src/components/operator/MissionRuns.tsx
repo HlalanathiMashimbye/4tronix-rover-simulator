@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ClipboardList, Loader2, MapPin, Play, Plus, Trash2, Video } from 'lucide-react';
 
 import { yardLabelOf, findYardIn, type Yard } from '@/core/domain/entities/Yard';
-import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import type { AutomaticUploadStatusView, MissionRun } from '@/core/domain/entities/MissionRun';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
 import { isHandledAutomatically, automatedReason } from '@/core/domain/services/consoleMode';
 
@@ -49,6 +49,38 @@ export function MissionRuns({
   const [editing, setEditing] = useState<string | null>(null);
   const [url, setUrl] = useState('');
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
+  const [automaticUploads, setAutomaticUploads] = useState<AutomaticUploadStatusView[]>([]);
+  const [automaticUploadError, setAutomaticUploadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch(
+          `/api/operator/youtube-upload/status?missionId=${encodeURIComponent(missionId)}`,
+          { cache: 'no-store' },
+        );
+        const payload = await response.json() as {
+          success?: boolean;
+          error?: string;
+          uploads?: AutomaticUploadStatusView[];
+        };
+        if (!response.ok || !payload.success) throw new Error(payload.error ?? 'Could not load upload status.');
+        if (active) {
+          setAutomaticUploads(payload.uploads ?? []);
+          setAutomaticUploadError(null);
+        }
+      } catch {
+        if (active) setAutomaticUploadError('Could not load automatic upload status.');
+      }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [missionId]);
 
   // In auto, completion and linking videos normally happen by themselves. The
   // run controls still show: a wrong link, a run logged twice, or a video the
@@ -259,6 +291,35 @@ export function MissionRuns({
           );
         })}
       </ul>
+
+      {(automaticUploads.length > 0 || automaticUploadError) && (
+        <section aria-label="Automatic YouTube uploads" className="mt-3 grid gap-2">
+          <h4 className="text-xs font-semibold text-foreground">Automatic YouTube uploads</h4>
+          {automaticUploads.map((upload) => (
+            <div
+              key={`${upload.yardId}:${upload.dispatchId}`}
+              className="flex flex-wrap items-center gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2 text-xs"
+            >
+              <span className="font-medium">{upload.recordingName}</span>
+              <span className="text-muted-foreground">
+                {upload.status === 'uploading' ? 'Uploading' : upload.status === 'uploaded' ? 'Uploaded' : 'Failed'}
+              </span>
+              {upload.status === 'uploaded' && upload.url && (
+                <a href={upload.url} target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">
+                  Watch automatic upload
+                </a>
+              )}
+              {upload.status === 'failed' && upload.errorMessage && (
+                <span role="status" className="text-destructive">{upload.errorMessage}</span>
+              )}
+              <span className="ml-auto text-muted-foreground">
+                {upload.yardId} · dispatch {upload.dispatchId}
+              </span>
+            </div>
+          ))}
+          {automaticUploadError && <p role="alert" className="text-xs text-destructive">{automaticUploadError}</p>}
+        </section>
+      )}
 
       {error && (
         <p role="alert" className="mt-2 text-[11px] font-medium text-destructive">

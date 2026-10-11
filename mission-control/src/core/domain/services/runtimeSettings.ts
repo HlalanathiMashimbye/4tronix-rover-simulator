@@ -97,6 +97,51 @@ export const SETTINGS: Record<string, SettingSpec> = {
     secret: false,
     validate: (v) => (v.startsWith('UC') ? null : 'A channel id starts with UC.'),
   },
+  youtubeClientId: {
+    group: 'youtube',
+    secretId: 'youtube-client-id',
+    envVar: 'YOUTUBE_CLIENT_ID',
+    label: 'YouTube OAuth client ID',
+    help: 'Client ID for automatic uploads through the YouTube Data API.',
+    secret: false,
+  },
+  youtubeClientSecret: {
+    group: 'youtube',
+    secretId: 'youtube-client-secret',
+    envVar: 'YOUTUBE_CLIENT_SECRET',
+    label: 'YouTube OAuth client secret',
+    help: 'Client secret for automatic uploads through the YouTube Data API.',
+    secret: true,
+  },
+  youtubeRefreshToken: {
+    group: 'youtube',
+    secretId: 'youtube-refresh-token',
+    envVar: 'YOUTUBE_REFRESH_TOKEN',
+    label: 'YouTube refresh token',
+    help: 'Server-side OAuth token used to upload recordings automatically.',
+    secret: true,
+  },
+  youtubeUploadPrivacy: {
+    group: 'youtube',
+    secretId: 'youtube-upload-privacy',
+    envVar: 'YOUTUBE_UPLOAD_PRIVACY',
+    label: 'Automatic upload privacy',
+    help: 'Default privacy for newly uploaded videos: private, unlisted or public.',
+    secret: false,
+    validate: (v) => {
+      const allowed = ['private', 'unlisted', 'public'];
+      return allowed.includes(v.toLowerCase()) ? null : 'Use private, unlisted or public.';
+    },
+  },
+  youtubeMadeForKids: {
+    group: 'youtube',
+    secretId: 'youtube-made-for-kids',
+    envVar: 'YOUTUBE_MADE_FOR_KIDS',
+    label: 'Upload as made for kids',
+    help: 'Whether automatic uploads are marked Made for Kids.',
+    secret: false,
+    validate: (v) => ['true', 'false'].includes(v.toLowerCase()) ? null : 'Use true or false.',
+  },
 };
 
 export type SettingName = keyof typeof SETTINGS;

@@ -132,10 +132,12 @@ describe('a queued mission', () => {
       await openMission();
       await screen.findByRole('button', { name: /send to rover/i });
 
-      // The console reads the upload checker's status on its own; that is not
-      // the yard, and not a send.
+      // Read-only channel and upload-status checks are not a yard dispatch.
       const calls = fetchSpy.mock.calls.map(([url]) => String(url));
-      expect(calls.filter((url) => url !== '/api/operator/youtube-link')).toEqual([]);
+      expect(calls.filter((url) => ![
+        '/api/operator/youtube-link',
+        '/api/operator/youtube-upload/status?missionId=m1',
+      ].includes(url))).toEqual([]);
     } finally {
       global.fetch = originalFetch;
     }

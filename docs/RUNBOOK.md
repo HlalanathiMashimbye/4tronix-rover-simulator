@@ -74,15 +74,32 @@ at all now, so **keep Firebase values out of `yard/satellite/.env`**: it needs
 | Where | Holds | Credential |
 |---|---|---|
 | `mission-control/.env` | `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_PROJECT_ID`; optionally `RESEND_*`, `YOUTUBE_*`, `CRON_SECRET` | ADC |
-| `yard/satellite/.env` | `YARD_ID`, and the ports if they differ; the rest lives on `/settings` | none: the satellite holds no cloud credential |
+| `yard/satellite/.env` | `YARD_ID`, ports if they differ, and optionally `YOUTUBE_UPLOAD_INGEST_SECRET` | shared upload-ingest credential only; no Firebase or YouTube OAuth credentials |
 | `yard/rover/.env` | `ROVER_SERVER_PORT`, `YARD_TYPE`, `POSTHOG_*` (optional) | none needed |
-| Cloud Run (staging/prod) | `FIREBASE_PROJECT_ID`; `CRON_SECRET` mounted; Resend and YouTube settings read from Secret Manager per request, edited on `/operator/settings` | ADC via runtime service account |
+| Cloud Run (staging/prod) | `FIREBASE_PROJECT_ID`; `CRON_SECRET` and `YOUTUBE_UPLOAD_INGEST_SECRET` mounted; Resend and YouTube settings read from Secret Manager per request, edited on `/operator/settings` | ADC via runtime service account |
 
 **No service-account key is mounted anywhere.** Cloud Run runs as its own
 runtime service account, and `firebase-admin.ts` refuses to start if
 `FIREBASE_CLIENT_EMAIL` or `FIREBASE_PRIVATE_KEY` is set. Nothing to rotate,
 nothing to leak. If you find yourself pasting a private key into a `.env`,
 stop and use ADC.
+
+### YouTube automatic-upload secrets
+
+The YouTube upload OAuth client ID and secret, refresh token, privacy and
+Made-for-Kids setting are separate from Firebase operator sign-in. They use
+the existing Secret Manager-backed `/operator/settings` values. Terraform
+creates their Secret Manager resources and grants the runtime account the
+existing accessor/version-adder permissions. Configure the Google OAuth Web
+client redirect URIs as listed in
+[Mission Control's YouTube setup](../mission-control/README.md#youtube-upload-authorization-and-configuration).
+
+Terraform also generates `YOUTUBE_UPLOAD_INGEST_SECRET` and mounts it into
+Cloud Run. The satellite needs the same value in `yard/satellite/.env` plus
+`MISSION_CONTROL_URL` for the matching deployment; do not put any YouTube
+OAuth credential on the satellite. Retrieve and transfer the ingest secret
+using the team's approved secret-handling process. It is used only to
+authenticate the satellite's closed-recording upload requests.
 
 ### Local setup from scratch
 

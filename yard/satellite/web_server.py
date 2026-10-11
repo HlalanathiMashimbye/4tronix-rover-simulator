@@ -143,11 +143,9 @@ app.register_blueprint(operator_console.operator_bp)
 # Request timeout for rover API calls
 ROVER_TIMEOUT = 5.0
 
-# Where the console's "Mission Control" link points. The satellite never talks
-# to Mission Control itself - this is purely a door for the operator, who works
-# with both screens open and needs a way back that is not typing a URL on a
-# tablet. Env first so a yard can pin it, then the config file, then the
-# deployed hub.
+# Where the console's "Mission Control" link points and, when automatic
+# uploads are configured, where completed recordings are delivered. Env first
+# so a yard can pin it, then the config file, then the deployed hub.
 MISSION_CONTROL_URL = (os.environ.get('MISSION_CONTROL_URL')
                        or _load_config().get('mission_control_url')
                        or 'https://marsyard.labs.ws')
@@ -718,4 +716,3 @@ if __name__ == '__main__':
         lambda: os.environ.get('ROVER_URL', 'http://marspi.local:8523'))())
 
     app.run(host='0.0.0.0', port=port, threaded=True, use_reloader=False)
-

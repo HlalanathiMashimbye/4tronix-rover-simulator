@@ -60,6 +60,41 @@ resource "google_secret_manager_secret" "youtube_channel_id" {
   }
 }
 
+resource "google_secret_manager_secret" "youtube_client_id" {
+  secret_id = "youtube-client-id"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_client_secret" {
+  secret_id = "youtube-client-secret"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_refresh_token" {
+  secret_id = "youtube-refresh-token"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_upload_privacy" {
+  secret_id = "youtube-upload-privacy"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret" "youtube_made_for_kids" {
+  secret_id = "youtube-made-for-kids"
+  replication {
+    auto {}
+  }
+}
+
 # The shared secret Cloud Scheduler presents to /api/cron/youtube-link.
 #
 # GENERATED, not seeded with a placeholder. Both sides of this are Terraform's
@@ -82,6 +117,23 @@ resource "google_secret_manager_secret" "cron_secret" {
 resource "google_secret_manager_secret_version" "cron_secret" {
   secret      = google_secret_manager_secret.cron_secret.id
   secret_data = random_password.cron_secret.result
+}
+
+resource "random_password" "youtube_upload_ingest_secret" {
+  length  = 48
+  special = false
+}
+
+resource "google_secret_manager_secret" "youtube_upload_ingest_secret" {
+  secret_id = "youtube-upload-ingest-secret"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "youtube_upload_ingest_secret" {
+  secret      = google_secret_manager_secret.youtube_upload_ingest_secret.id
+  secret_data = random_password.youtube_upload_ingest_secret.result
 }
 
 resource "google_secret_manager_secret_version" "seed" {
@@ -120,7 +172,8 @@ locals {
   #
   # Resend is unrelated to how Firestore is authenticated: a third-party API
   # key with no ADC equivalent, so it stays.
-  # ONLY CRON_SECRET IS MOUNTED. The rest are read from Secret Manager at
+  # CRON_SECRET and the satellite-ingest credential are mounted. Other
+  # editable settings are read from Secret Manager at
   # request time so the admin settings page can change them without a deploy.
   #
   # Mounting them would defeat that twice over: Cloud Run resolves a secret env
@@ -128,19 +181,25 @@ locals {
   # running ones, and runtimeSettingsStore prefers the environment when it is
   # set, so a mounted value would win over the live read forever.
   #
-  # CRON_SECRET stays because Terraform generates it and no human edits it.
+  # Both mounted secrets are Terraform-generated and are not admin-editable.
   secrets = {
-    CRON_SECRET = google_secret_manager_secret.cron_secret
+    CRON_SECRET                  = google_secret_manager_secret.cron_secret
+    YOUTUBE_UPLOAD_INGEST_SECRET = google_secret_manager_secret.youtube_upload_ingest_secret
   }
 
   # Read at request time, written by the settings page. Listed separately so
   # the runtime account still gets accessor and adder on each of them.
   editable_secrets = {
-    resend_api_key        = google_secret_manager_secret.resend_api_key
-    resend_from_email     = google_secret_manager_secret.resend_from_email
-    youtube_api_key       = google_secret_manager_secret.youtube_api_key
-    youtube_channel_id    = google_secret_manager_secret.youtube_channel_id
-    youtube_link_interval = google_secret_manager_secret.youtube_link_interval
+    resend_api_key         = google_secret_manager_secret.resend_api_key
+    resend_from_email      = google_secret_manager_secret.resend_from_email
+    youtube_api_key        = google_secret_manager_secret.youtube_api_key
+    youtube_channel_id     = google_secret_manager_secret.youtube_channel_id
+    youtube_link_interval  = google_secret_manager_secret.youtube_link_interval
+    youtube_client_id      = google_secret_manager_secret.youtube_client_id
+    youtube_client_secret  = google_secret_manager_secret.youtube_client_secret
+    youtube_refresh_token  = google_secret_manager_secret.youtube_refresh_token
+    youtube_upload_privacy = google_secret_manager_secret.youtube_upload_privacy
+    youtube_made_for_kids  = google_secret_manager_secret.youtube_made_for_kids
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
@@ -334,6 +393,7 @@ resource "google_cloud_run_v2_service" "mission_control" {
   depends_on = [
     google_secret_manager_secret_iam_member.runtime_secret_access,
     google_secret_manager_secret_version.seed,
+    google_secret_manager_secret_version.youtube_upload_ingest_secret,
   ]
 }
 

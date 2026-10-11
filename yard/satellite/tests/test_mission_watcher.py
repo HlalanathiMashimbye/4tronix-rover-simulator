@@ -78,6 +78,39 @@ def test_a_run_the_rover_could_not_execute_still_keeps_its_film(monkeypatch, rec
     assert os.path.exists(path), 'the file must survive an errored run'
 
 
+def test_a_saved_recording_triggers_upload_with_the_exact_dispatch_id(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'completed',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+
+    stopped = mission_watcher.stop_finished_recordings(
+        'http://rover',
+        yard_id=YARD,
+        on_recording_ready=lambda *args: calls.append(args),
+    )
+
+    assert stopped == ['m1']
+    assert len(calls) == 1
+    assert calls[0][:3] == ('m1', 'dispatch-9', YARD)
+    assert calls[0][3].endswith('.mp4')
+
+
+def test_repeated_watcher_events_do_not_trigger_a_second_upload(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'completed',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+    ready = lambda *args: calls.append(args)
+
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, on_recording_ready=ready)
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, on_recording_ready=ready)
+
+    assert len(calls) == 1
+
+
 def test_a_run_still_going_is_left_filming(monkeypatch, recorder):
     _rover_says(monkeypatch, [{'status': 'running', 'params': {'mission_id': 'm1'}}])
     recorder.start_recording('m1', YARD)
