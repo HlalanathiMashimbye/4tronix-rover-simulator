@@ -183,23 +183,23 @@ locals {
   #
   # Both mounted secrets are Terraform-generated and are not admin-editable.
   secrets = {
-    CRON_SECRET                 = google_secret_manager_secret.cron_secret
+    CRON_SECRET                  = google_secret_manager_secret.cron_secret
     YOUTUBE_UPLOAD_INGEST_SECRET = google_secret_manager_secret.youtube_upload_ingest_secret
   }
 
   # Read at request time, written by the settings page. Listed separately so
   # the runtime account still gets accessor and adder on each of them.
   editable_secrets = {
-    resend_api_key        = google_secret_manager_secret.resend_api_key
-    resend_from_email     = google_secret_manager_secret.resend_from_email
-    youtube_api_key       = google_secret_manager_secret.youtube_api_key
-    youtube_channel_id    = google_secret_manager_secret.youtube_channel_id
-    youtube_link_interval = google_secret_manager_secret.youtube_link_interval
-    youtube_client_id     = google_secret_manager_secret.youtube_client_id
-    youtube_client_secret = google_secret_manager_secret.youtube_client_secret
-    youtube_refresh_token = google_secret_manager_secret.youtube_refresh_token
+    resend_api_key         = google_secret_manager_secret.resend_api_key
+    resend_from_email      = google_secret_manager_secret.resend_from_email
+    youtube_api_key        = google_secret_manager_secret.youtube_api_key
+    youtube_channel_id     = google_secret_manager_secret.youtube_channel_id
+    youtube_link_interval  = google_secret_manager_secret.youtube_link_interval
+    youtube_client_id      = google_secret_manager_secret.youtube_client_id
+    youtube_client_secret  = google_secret_manager_secret.youtube_client_secret
+    youtube_refresh_token  = google_secret_manager_secret.youtube_refresh_token
     youtube_upload_privacy = google_secret_manager_secret.youtube_upload_privacy
-    youtube_made_for_kids = google_secret_manager_secret.youtube_made_for_kids
+    youtube_made_for_kids  = google_secret_manager_secret.youtube_made_for_kids
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when
