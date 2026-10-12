@@ -150,6 +150,14 @@ After that, a push to main auto-deploys staging via
 `.github/workflows/deploy-staging.yml`; prod is a manual, approval-gated
 promotion via `deploy-prod.yml`.
 
+Both end with the same smoke check, `scripts/smoke-check.sh <url>`: the
+learner home serves, `/operator` is a 200 showing the sign-in form and none of
+the console, and `/api/operator/missions` answers an anonymous caller with a
+401. It needs no credentials, so it can be run by hand against either URL. A
+service still on the placeholder image the apply starts it with
+(`cloudrun/container/hello`, which answers 200 on every path) fails it, and
+that is the right answer for a URL nothing has been deployed to yet.
+
 ### Email sending while no domain is verified
 
 `RESEND_FROM_EMAIL` defaults to `onboarding@resend.dev`, Resend's shared

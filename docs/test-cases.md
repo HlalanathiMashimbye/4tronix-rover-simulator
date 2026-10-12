@@ -105,6 +105,7 @@ This matrix covers the implemented automated test modules in the repository. Eac
 | TC-099 | Satellite status page (12 cases) | Healthy, amber, red and unreachable rover/camera states | Status indicators and configured URLs display the correct state | All cases in [test_status_page.py](../yard/satellite/tests/test_status_page.py) pass |
 | TC-100 | Satellite tunables (13 cases) | Defaults, environment, stored values, bounds and invalid values | Precedence, clamping, persistence and unknown-key handling are correct | All cases in [test_tunables.py](../yard/satellite/tests/test_tunables.py) pass |
 | TC-101 | YouTube recording titles (3 cases) | Stamped, unstamped and malformed recording filenames | Valid recording titles match the linker format and invalid titles do not | All cases in [test_youtube_recording_title.py](../yard/satellite/tests/test_youtube_recording_title.py) pass |
+| TC-102 | Deploy smoke check (8 cases) | A healthy deployment, and ones with the learner home down, `/operator` missing or not sign-in, console content served signed out, or an open operator API | The script exits 0 only for the healthy deployment | All cases in [deploySmokeCheck.test.ts](../mission-control/src/__tests__/unit/deploySmokeCheck.test.ts) pass |
 
 ## Planned test placeholders
 
