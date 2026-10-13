@@ -11,6 +11,43 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The satellite can turn its camera's picture round.** The Cape Town camera
+  films the yard half a turn round from the simulator's map: the start spot is
+  on the right of the video and on the left of the simulation, and north is at
+  the bottom. Nobody noticed until a mission's page showed the two at the same
+  size, one above the other (13 October). Settings has a "Which way up" choice
+  now, "As mounted" or "Turned round". It saves on the click and the picture
+  turns within a second, with no camera restart. The turn is made where a
+  frame is made, so the monitor, the run station and the recording all follow,
+  and detection boxes are moved with the picture and drawn after it so their
+  labels stay the right way up. A yard that sets nothing is left as it was.
+  Recordings already made, and the videos already on YouTube, do not change.
+
+- **The TV monitor shows the whole of the camera's picture.** The camera is
+  4:3 and a television is 16:9. The monitor gave the camera two thirds of the
+  screen whatever its shape and drew the picture to that width, so on a 1080p
+  television the picture was taller than the screen and the bottom 130px of
+  the yard, its near wall, was off the foot of it. The camera's panel is now
+  as wide as a 4:3 picture is at the screen's full height, and the queue has
+  the width that leaves: the picture fills its panel, nothing is cut off and
+  nothing stands beside it. The two bars along the top were 71px and 49px tall
+  and are one height. The canvas also takes each frame's own size now. It was
+  a fixed 640 x 480 that every frame was drawn down to, so the two sharper
+  picture qualities on Settings changed nothing on the one screen they are
+  for; the run station's live view shares the fix.
+
+- **The run station's live view is the camera's picture, with no bars beside
+  it.** Its column was a fixed share of the window, wider at every laptop size
+  than a 4:3 picture as tall as the column left room for, so the picture sat
+  in the middle of its panel with a dark bar down each side: 118px of bar at
+  1366 x 768, while the rail beside it scrolled for want of width. The column
+  is now as wide as the picture. Its height is what the panel's header and
+  controls leave, which changes with a warning showing and with how the words
+  wrap, so the page measures it and refits when either changes. The rail has
+  the width the picture gave up (792px instead of 557 at that size). On an
+  upright tablet, where the width is the limit, the panel ends under its
+  buttons instead of stretching the view to the foot of the screen. Stacked
+  on a phone it is unchanged.
 - **The yard console's top bar fits a tablet and a phone.** Laid out in full the bar is
   about 950px wide once the rover is online with a queue, and the only width
   it changed at was the phone's, 760px. Everything between pushed the rover

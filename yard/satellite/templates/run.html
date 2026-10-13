@@ -85,12 +85,25 @@
         }
 
         /* ---- Body: the live view, then a rail ----------------------------
-           The rail scales with the window instead of being pinned at 400px:
-           the live view letterboxes to 4:3 anyway, so width past its height
-           limit was empty margin while the rail scrolled. */
+           THE LIVE COLUMN IS AS WIDE AS THE CAMERA'S PICTURE. The picture is
+           4:3 and its height is whatever the column's header and controls
+           leave it, so the width that fits it is four thirds of a height
+           only the page knows once it is laid out. --live-w is that width,
+           worked out by the script at the foot of this page (fitLiveColumn). The column used to be a fixed share of the window,
+           wider than the picture at every laptop size: the picture sat in
+           the middle of it with a dark bar down each side, 118px of bar at
+           1366 x 768, while the rail beside it scrolled for want of width.
+
+           The limits stay here. Never over 57.4% of the row, the share it
+           used to have (1.35 of 2.35), so a tall window does not hand the
+           rail's width to the picture; never under 22rem, which is what the
+           two buttons under it need; and the rail never under 340px. Until
+           the script has run, --live-w is unset and the column is its old
+           share. */
         .desk-grid {
             flex: 1; min-height: 0;
-            display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, 1fr);
+            display: grid;
+            grid-template-columns: minmax(0, min(max(var(--live-w, 100%), 22rem), 57.4%)) minmax(340px, 1fr);
             gap: 0.8rem;
         }
 
@@ -104,10 +117,23 @@
             display: flex; align-items: center; justify-content: center;
             background: var(--bg-2);
         }
+        /* Beside the rail the view is the picture's own shape, and the panel
+           is as tall as what is in it. Where the column's width is the limit
+           (an upright tablet) that ends the panel under its buttons, instead
+           of stretching the view to the foot of the screen with the picture
+           in the middle of a dark box. Where the height is the limit the
+           panel stops at the row's height, the view gives up the difference,
+           and fitLiveColumn narrows the column until it is 4:3 again.
+           Stacked on a phone the view keeps a share of the height, as it had. */
+        @media (min-width: 721px) {
+            .live-panel { align-self: start; max-height: 100%; }
+            .live-view { flex: 0 1 auto; aspect-ratio: 4 / 3; }
+        }
         /* width/height + object-fit rather than max-*: the canvas fills the
-           panel and keeps the camera's 4:3, letterboxing instead of
-           stretching. Same reasoning as the monitor's canvas. */
-        #cameraCanvas { width: 100%; height: 100%; object-fit: contain; }
+           panel and keeps the camera's 4:3, fitted rather than stretched.
+           Same reasoning as the monitor's canvas, and like it out of the
+           flow, so the canvas takes the view's size and never gives it one. */
+        #cameraCanvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
         .live-msg {
             position: absolute; display: flex; flex-direction: column; align-items: center; gap: 0.4rem;
             color: var(--text-faint); font-size: var(--fs-sm);
@@ -1018,6 +1044,47 @@
         },
     });
     feed.connect(`ws://${window.location.hostname}:` + {{ camera_port | tojson }});
+
+    // ---- The live column is as wide as its picture ------------------------
+    // The picture is 4:3 and as tall as the row less the panel's header and
+    // its controls. Those two are as tall as their words make them, which
+    // changes with the column's width and with whether a warning is showing,
+    // so the width is measured here and handed to the stylesheet as --live-w
+    // (.desk-grid has the limits, and what this replaced).
+    //
+    // Watching the header and the controls as well as the row: a warning
+    // appearing takes 40px from the picture, and the column narrows to match
+    // rather than leaving the picture short of its box.
+    (function fitLiveColumn() {
+        const grid = document.querySelector('.desk-grid');
+        const panel = grid && grid.querySelector('.live-panel');
+        if (!panel || typeof ResizeObserver === 'undefined') return;
+        const head = panel.querySelector('.panel-head');
+        const foot = panel.querySelector('.live-foot');
+
+        let queued = false;
+        function fit() {
+            queued = false;
+            const edgesTall = panel.offsetHeight - panel.clientHeight;
+            const edgesWide = panel.offsetWidth - panel.clientWidth;
+            const tall = grid.clientHeight - head.offsetHeight - foot.offsetHeight - edgesTall;
+            const wide = Math.max(0, Math.floor(tall * 4 / 3)) + edgesWide;
+            grid.style.setProperty('--live-w', wide + 'px');
+        }
+        // One fit a frame however many of the three changed in it, and never
+        // from inside the observer's own callback, which is how a layout
+        // that answers a resize with a resize ends up in a loop.
+        function later() {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(fit);
+        }
+        const observer = new ResizeObserver(later);
+        [grid, head, foot].forEach((el) => observer.observe(el));
+        // Now, and not a frame from now. The observer would get to it, but
+        // the page would paint once with the column at its old share first.
+        fit();
+    })();
 
     // What the rover is doing right now, from the same queue stream the
     // monitor watches. This is the "monitoring" half of the page: the SSE
