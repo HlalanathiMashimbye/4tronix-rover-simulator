@@ -55,11 +55,19 @@ the settings page, and read by every simulator through `useYardLayout`.
 easings.ts            CSS easing curves
 missionDuration.ts    a human label for how long a run took
 roverCommandHelp.ts   help text per rover command, for editor hovers
-missionRuns.ts        which runs a learner can actually watch
+missionRuns.ts        which of the rover's runs a learner can watch
 missionClipboard.ts   what every Copy button puts on the clipboard
 yardConsole.ts        where this operator's yard console lives, and whether this browser may reach it
 appSurfaces.ts        which surface of the app a path belongs to
+missionLayout.ts      one feed or three columns, for the box a mission's page has
 ```
+
+`missionLayout.ts` is arithmetic and nothing else: a box's width and height
+in, an arrangement and two column widths out. It is here, and not a container
+query in `globals.css`, because the page renders a different tree for three
+columns (the operator's note moves from the code's card to under the rover's
+videos) and CSS cannot move an element. `hooks/useMissionLayout.ts` measures
+the box and asks it; `globals.css` sizes the columns from the answer.
 
 `appSurfaces.ts` exists so the navbar can drop the learner's floating Create
 Mission button on the operator console without naming the operator route.

@@ -37,6 +37,15 @@ interface YouTubeEmbedProps {
    * outside. This is the one moment we can see, and it is enough.
    */
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * Take the shape of the box it is in, instead of being 16:9.
+   *
+   * For the mission page's feed, whose video tiles are 4:3 because that is
+   * what the yard's camera records. In its own 16:9 a recording sat between
+   * two black bars, and the poster (YouTube's 4:3 hqdefault) was cropped top
+   * and bottom to fit.
+   */
+  fill?: boolean;
 }
 
 export function YouTubeEmbed({
@@ -45,6 +54,7 @@ export function YouTubeEmbed({
   showFallbackLink = true,
   muted = false,
   onPlayingChange,
+  fill = false,
 }: YouTubeEmbedProps) {
   const [playing, setPlaying] = useState(false);
   // The mute setting AS IT WAS when play was tapped, frozen deliberately.
@@ -76,8 +86,8 @@ export function YouTubeEmbed({
   }, [muted, playing]);
 
   return (
-    <div className="flex w-full flex-col gap-1.5">
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+    <div className={`flex w-full flex-col gap-1.5 ${fill ? 'h-full' : ''}`}>
+      <div className={`relative w-full overflow-hidden bg-black ${fill ? 'h-full' : 'aspect-video rounded-lg'}`}>
         {playing ? (
           <iframe
             ref={frameRef}

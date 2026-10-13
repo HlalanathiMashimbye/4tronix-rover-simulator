@@ -34,19 +34,19 @@ describe('a note from the yard', () => {
      */
     render(<OperatorFeedback runs={[run(), run({ yardId: 'other' })]} />);
 
-    expect(screen.getByText(/no notes yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no operator note yet/i)).toBeInTheDocument();
   });
 
   it('treats feedback that is only whitespace as nothing written', () => {
     render(<OperatorFeedback runs={[run({ feedback: '   ' })]} />);
 
-    expect(screen.getByText(/no notes yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no operator note yet/i)).toBeInTheDocument();
   });
 
   it('drops the empty state once a note arrives', () => {
     render(<OperatorFeedback runs={[run({ feedback: 'Good job!' })]} />);
 
-    expect(screen.queryByText(/no notes yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no operator note yet/i)).not.toBeInTheDocument();
     expect(screen.getByText(/good job!/i)).toBeInTheDocument();
   });
 
@@ -115,5 +115,66 @@ describe('a note from the yard', () => {
     render(<OperatorFeedback runs={[run({ feedback: 'Good job!', feedbackBy: 'kamo@uct.ac.za' })]} />);
 
     expect(screen.getByText('kamo@uct.ac.za')).toBeInTheDocument();
+  });
+});
+
+describe('a mission that has finished and has no note yet', () => {
+  it('still says it is where the operator writes, and then points at Remix', () => {
+    // The prompt was a banner of its own above the player, and then for a
+    // while this slot's whole line: "How did it go? Remix it...". Nothing in
+    // that said whose slot it was, and the review of 13 October 2026 asked
+    // where the operator's feedback had gone.
+    render(<OperatorFeedback runs={[run()]} ask />);
+
+    expect(screen.getByText(/no operator note yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/remix it to go further or fix it/i)).toBeInTheDocument();
+  });
+
+  it('gives way to a note once an operator writes one', () => {
+    // A person's answer beats our prompt.
+    render(<OperatorFeedback runs={[run({ feedback: 'Nice square!' })]} ask />);
+
+    expect(screen.getByText('Nice square!')).toBeInTheDocument();
+    expect(screen.queryByText(/no operator note yet/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/remix it/i)).not.toBeInTheDocument();
+  });
+
+  it('does not point at Remix on a mission that has not finished, which has none', () => {
+    render(<OperatorFeedback runs={[run()]} />);
+
+    expect(screen.getByText(/no operator note yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/remix it/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('with a box to fill, under the one video of three columns', () => {
+  it('still names the operator when there is no note', () => {
+    render(<OperatorFeedback runs={[run()]} ask roomy />);
+
+    expect(screen.getByText(/no operator note yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/remix it to go further or fix it/i)).toBeInTheDocument();
+  });
+
+  it('shows the note and who wrote it', () => {
+    render(<OperatorFeedback runs={[run({ feedback: 'Try 90 degrees.', feedbackBy: 'kamo@uct.ac.za' })]} roomy />);
+
+    expect(screen.getByText('Try 90 degrees.')).toBeInTheDocument();
+    expect(screen.getByText('kamo@uct.ac.za')).toBeInTheDocument();
+  });
+
+  it('puts what the page hands it inside the card, under the words', () => {
+    // Remix: an empty card with a sentence in it and the button somewhere
+    // else read as a hole with a border.
+    render(
+      <OperatorFeedback runs={[run()]} ask roomy>
+        <button type="button">Remix</button>
+      </OperatorFeedback>,
+    );
+    const card = screen.getByRole('region', { name: 'Notes from the yard' });
+    const words = screen.getByText(/no operator note yet/i);
+    const button = screen.getByRole('button', { name: 'Remix' });
+
+    expect(card).toContainElement(button);
+    expect(words.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
