@@ -222,7 +222,7 @@ export function Navbar() {
 
             {learner && (
               <Link
-                href="/profile"
+                href="/leaderboard"
                 className="hidden shrink-0 rounded-full ring-2 ring-transparent transition-all hover:ring-primary/40 md:block"
                 title={learner.displayName ?? 'Set up your profile'}
               >

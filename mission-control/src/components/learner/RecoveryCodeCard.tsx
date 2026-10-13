@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Copy, Download, KeyRound, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Download, Check } from 'lucide-react';
+import Image from 'next/image';
 import { useLearner } from '@/contexts/LearnerContext';
 
 const EXIT_MS = 200;
@@ -10,9 +11,10 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSkip?: () => void;
+  onBack?: () => void;
 }
 
-export function RecoveryCodeCard({ open, onClose, onSkip }: Props) {
+export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   const { generateRecoveryCode } = useLearner();
   const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,8 +68,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip }: Props) {
   const handleCopy = async () => {
     if (!code) return;
     try {
-      const recoveryText = code;
-      await navigator.clipboard.writeText(recoveryText);
+      await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -95,93 +96,109 @@ export function RecoveryCodeCard({ open, onClose, onSkip }: Props) {
       aria-labelledby="recovery-title"
     >
       <div
-        className={`absolute inset-0 bg-black/60 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-black/70 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
 
       <div
-        className={`relative z-[101] w-full max-w-md rounded-2xl border border-border/70 bg-card/95 p-6 shadow-2xl backdrop-blur-sm transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+        className={`relative z-[101] w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-xl transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15">
-          <KeyRound className="h-7 w-7 text-primary" aria-hidden="true" />
+        <div className="flex items-center justify-center py-5">
+          <div className="h-16 w-16 overflow-hidden rounded-2xl">
+            <Image src="/rover-hero.jpg" alt="" width={128} height={128} className="h-full w-full object-cover" />
+          </div>
         </div>
 
-        <h2 id="recovery-title" className="mt-3 font-display text-xl font-bold text-foreground">
-          Your recovery code
-        </h2>
+        <div className="px-6 pb-6">
+          <h2 id="recovery-title" className="text-center font-display text-2xl font-bold text-foreground">
+            Your secret key! 🔐
+          </h2>
 
-        <p className="mt-2 text-sm text-muted-foreground">
-          Write this down or save it. You can enter it on another device to pick up
-          your missions and progress.
-        </p>
+          <p className="mt-2 text-center text-sm text-muted-foreground">
+            Save this code — it&apos;s your pass to pick up your missions on any device.
+          </p>
 
-        {loading && (
-          <div className="mt-4 flex justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
-          </div>
-        )}
+          {loading && (
+            <div className="mt-5 flex justify-center">
+              <div className="h-7 w-7 animate-spin rounded-full border-2 border-border border-t-foreground" />
+            </div>
+          )}
 
-        {error && (
-          <p className="mt-4 text-sm text-red-400">{error}</p>
-        )}
+          {error && (
+            <p className="mt-4 text-center text-sm text-red-400">{error}</p>
+          )}
 
-        {code && !loading && (
-          <>
-            <div className="mt-4 flex items-center justify-center rounded-xl border border-border bg-background/70 px-5 py-4">
-              <span className="font-mono text-2xl font-bold tracking-[0.15em] text-foreground">
+          {code && !loading && (
+            <div
+              className="mt-5 flex items-center gap-2 rounded-xl px-4 py-3"
+              style={{
+                background: 'oklch(0.42 0.17 285)',
+                border: '1.5px solid oklch(0.52 0.19 285)',
+              }}
+            >
+              <span className="min-w-0 flex-1 font-mono text-2xl font-bold tracking-[0.15em] text-white">
                 {code}
               </span>
-            </div>
-
-            <div className="mt-4 flex gap-2">
               <button
                 type="button"
                 onClick={handleCopy}
-                className="clay clay-press flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label={copied ? 'Copied' : 'Copy code'}
               >
-                {copied ? (
-                  <><Check className="h-4 w-4 text-emerald-500" aria-hidden="true" /> Copied</>
-                ) : (
-                  <><Copy className="h-4 w-4" aria-hidden="true" /> Copy</>
-                )}
+                {copied
+                  ? <Check className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+                  : <Copy className="h-4 w-4" aria-hidden="true" />}
               </button>
               <button
                 type="button"
                 onClick={handleDownload}
-                className="clay clay-press flex flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Download code"
               >
-                <Download className="h-4 w-4" aria-hidden="true" /> Download
+                <Download className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-          </>
-        )}
+          )}
 
-        <div className="mt-4 flex flex-col gap-2 sm:flex-row-reverse">
-          <button
-            type="button"
-            onClick={onClose}
-            className="clay clay-press flex-1 rounded-xl bg-gradient-mars px-4 py-2.5 text-center text-sm font-bold text-primary-foreground"
-          >
-            Done
-          </button>
-          {onSkip && (
+          <div className="mt-5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ArrowLeft className="h-3 w-3" aria-hidden="true" />
+                  Back
+                </button>
+              )}
+              {onSkip && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  Skip
+                </button>
+              )}
+            </div>
             <button
               type="button"
-              onClick={onSkip}
-              className="flex-1 rounded-xl px-4 py-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+              onClick={onClose}
+              className="clay clay-press rounded-xl bg-gradient-mars px-6 py-2.5 text-sm font-bold text-primary-foreground"
             >
-              I&apos;ll skip this
+              Done
             </button>
+          </div>
+
+          {onSkip && (
+            <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
+              Skipping means clearing your browser loses your progress.
+            </p>
           )}
         </div>
-
-        {onSkip && (
-          <p className="mt-3 text-center text-xs text-muted-foreground">
-            If you skip, clearing your browser will lose your missions and progress.
-          </p>
-        )}
       </div>
     </div>
   );
