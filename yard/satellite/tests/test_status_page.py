@@ -257,6 +257,88 @@ def test_settings_is_two_stacks_on_a_wide_screen_and_one_column_on_a_phone(page:
     assert not list_scrolls_inside(page, '#recordingsList')
 
 
+# The chip at its widest in a working yard. Offline is its shortest wording,
+# and a bar measured only against that fits and then overflows the moment the
+# rover comes up.
+ROVER_ONLINE_WITH_A_QUEUE = {
+    'reachable': True, 'status': 'ok', 'driver': 'real', 'queue_size': 12, 'url': 'http://x',
+}
+
+# Edges, not styles: what the operator can reach without scrolling sideways.
+# The console's fonts swap in after first paint at other widths than the
+# fallback's, so a bar measured before they settle is a different bar.
+TOP_BAR = """async () => {
+    await document.fonts.ready;
+    const chip = document.getElementById('sysRover').getBoundingClientRect();
+    const dot = document.querySelector('#sysRover .sys-dot').getBoundingClientRect();
+    const txt = document.querySelector('#sysRover .sys-txt');
+    return {
+        viewport: window.innerWidth,
+        page: document.documentElement.scrollWidth,
+        chip_left: chip.left, chip_right: chip.right,
+        dot_left: dot.left, dot_right: dot.right, dot_width: dot.width,
+        text_cut: txt.scrollWidth > txt.clientWidth,
+        inter: [...document.fonts].some((f) => f.status === 'loaded' && f.family.replace(/['"]/g, '') === 'Inter'),
+    };
+}"""
+
+
+def top_bar(page, live_server, path, width, rover):
+    mock_status(page, rover=rover)
+    page.set_viewport_size({'width': width, 'height': 1024})
+    page.goto(f'{live_server}{path}')
+    page.wait_for_function(
+        "document.querySelector('#sysRover .sys-txt').textContent.includes('queue')"
+    )
+    return page.evaluate(TOP_BAR)
+
+
+@pytest.mark.parametrize('width', [768, 820, 1024])
+@pytest.mark.parametrize('path', ['/settings', '/', '/run/'])
+def test_the_top_bar_fits_a_tablet_with_the_rover_chip_on_screen(page: Page, live_server, path, width):
+    """The bar's only breakpoint was the phone's, at 760px, and laid out in
+    full it is about 950px wide. At 768, a tablet held upright, the rover chip
+    sat wholly past the right edge and every console page scrolled sideways.
+    1024 is here because that is where the full labels come back."""
+    bar = top_bar(page, live_server, path, width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['page'] <= bar['viewport'], bar
+    # Not scrolling is not enough: clipping the bar would pass that with the
+    # chip still out of sight.
+    assert 0 <= bar['chip_left'] and bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+
+
+@pytest.mark.parametrize('width', [768, 820, 1024])
+def test_a_tablet_shows_the_status_of_a_running_yard_whole(page: Page, live_server, width):
+    """Fitting by cutting the chip short passes the test above: with the
+    labels left on at 820 the chip is down to its dot and the page still does
+    not scroll. What a running yard shows has to be readable, queue and all."""
+    bar = top_bar(page, live_server, '/settings', width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    # The widths are counted in the console's own font. Run with no internet a
+    # fallback of other widths stands in, and what holds then is the test
+    # below, not this one.
+    if not bar['inter']:
+        pytest.skip('Inter did not load, and the bar is measured in it')
+    assert not bar['text_cut'], bar
+
+
+def test_a_status_too_long_for_the_bar_shortens_and_keeps_its_dot(page: Page, live_server):
+    """The chip's words come from the rover, so no counting of widths covers
+    them all. A queue this long stands in for any status longer than the bar
+    was measured for: the text gives, the page does not."""
+    rover = {**ROVER_ONLINE_WITH_A_QUEUE, 'queue_size': 10 ** 15}
+    bar = top_bar(page, live_server, '/settings', 768, rover)
+
+    # Without this the rest proves nothing: the status has to be one that
+    # cannot fit.
+    assert bar['text_cut'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+
+
 def test_typing_an_address_still_works_as_the_fallback(page: Page, live_server):
     mock_status(page)
     posted = capture_save(page, 'http://newrover.local:8523')
