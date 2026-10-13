@@ -335,6 +335,46 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
 
 .hub-note { margin-top: 1.6rem; color: var(--text-faint); font-size: 0.78rem; line-height: 1.6; max-width: 640px; }
 
+/* ---- The bar below a laptop's width -------------------------------------
+   Laid out in full the bar is about 950px wide once the rover is online with
+   a queue, and its only breakpoint was the phone's, at 760px, set before the
+   way back to Mission Control went in at the front of it. Between the two the
+   rover chip was pushed past the right edge: at 768, a tablet held upright,
+   it was wholly off screen and the page scrolled sideways to reach it.
+
+   So the labels a phone already gives up go first, from here down, and the
+   page links stay a row of pills. An operator changes station far more often
+   than they read the brand, and the phone's sheet costs a tap every time.
+   1000px rather than 950 because settings.html already steps there, and so a
+   tablet whose fallback font runs wider than Inter still has room.
+
+   Kept above the phone block: its sheet restyles the same links and has to
+   win. */
+@media (max-width: 1000px) {
+  .topbar { gap: 0.6rem; padding: 0 0.9rem; }
+  .brand-txt small { display: none; }
+  /* Icon only: the chevron, where a back control belongs, and the tooltip
+     still say where it goes. */
+  .mc-back span { display: none; }
+  .mc-back { padding: 0; width: 36px; justify-content: center; }
+  /* The last few pixels "Rover online · queue 12" needs at 768. */
+  header.topbar .topnav a { gap: 0.3rem; padding: 0.25rem 0.5rem; }
+}
+
+/* The chip is the one item in the bar whose words the page does not choose:
+   they come from the rover, and a queue of 4 and a queue of 400 are different
+   widths. So it is the one item allowed to give. Its text shortens to an
+   ellipsis and the dot, which never shrinks, is what is left last. Without
+   this, a status longer than the widths above were counted for is back to
+   pushing the page sideways.
+
+   Not on a phone. There the menu button is in the row and would share the
+   squeeze, cutting the queue's number off at widths where it shows today. */
+@media (min-width: 761px) {
+  .topbar-right, .sys { min-width: 0; }
+  .sys-txt { overflow: hidden; text-overflow: ellipsis; }
+}
+
 @media (max-width: 760px) {
   .stations { grid-template-columns: 1fr; }
   .navtoggle { display: inline-flex; }
@@ -351,13 +391,7 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
   .navtoggle { margin-left: auto; }
   .topbar { position: relative; }
   .station.hero { flex-direction: column; align-items: flex-start; }
-  .topbar { gap: 0.6rem; padding: 0 0.9rem; }
   .op-email { display: none; }
-  .brand-txt small { display: none; }
-  /* Icon only: the label does not fit beside the brand on a phone, and the
-     chevron plus the tooltip still say where it goes. */
-  .mc-back span { display: none; }
-  .mc-back { padding: 0; width: 36px; justify-content: center; }
 }
 
 /* ==========================================================================

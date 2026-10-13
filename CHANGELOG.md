@@ -11,6 +11,29 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The yard console's top bar fits a tablet.** Laid out in full the bar is
+  about 950px wide once the rover is online with a queue, and the only width
+  it changed at was the phone's, 760px. Everything between pushed the rover
+  chip past the right edge. On a tablet held upright, 768 wide, the chip was
+  wholly off screen on the hub, the run station and Settings, and each of
+  them scrolled sideways, which a console page is never to do. The breakpoint
+  is older than the way back to Mission Control at the front of the bar
+  (#216), and no test had measured the bar at any width.
+
+  Below 1000px the bar now gives up the two labels a phone already did, the
+  words on the back button and the line under "Mars Yard", and the page links
+  stay a row of pills set a little closer: an operator changes station more
+  often than they do anything else up there, and the phone's menu costs a tap
+  each time. At 768 the chip reads "Rover online · queue 12" whole. The chip
+  is also the one item in the bar allowed to shrink. Its words come from the
+  rover, so a status longer than the bar was counted for shortens to an
+  ellipsis beside its dot where it used to widen the page.
+
+  Phones are as they were, which is not right yet: at 375 wide and under, the
+  chip still pushes the page sideways once the rover is online with a queue.
+  A phone's bar has no row of links to take room back from, so that needs its
+  own answer.
+
 - **A mission's page is a feed of everything there is to watch.** The
   simulation and the rover's videos shared one frame with arrows, the rover
   first and the simulation last, so a mission with a video hid its simulation.
