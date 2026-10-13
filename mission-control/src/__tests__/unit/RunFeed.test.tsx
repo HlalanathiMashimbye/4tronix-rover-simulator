@@ -20,15 +20,26 @@ const simulatorMounts = jest.fn();
 jest.mock('@/components/mission/RoverSimulator', () => {
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   return {
-    RoverSimulator: ({ onFinished }: { onFinished?: () => void }) => {
+    RoverSimulator: ({
+      onFinished,
+      onRunningChange,
+    }: {
+      onFinished?: () => void;
+      onRunningChange?: (running: boolean) => void;
+    }) => {
       // Once per mount, so a remount is something a test can see.
       useEffect(() => {
         simulatorMounts();
       }, []);
       return (
-        <button type="button" data-testid="simulator" onClick={onFinished}>
-          simulator
-        </button>
+        <>
+          <button type="button" data-testid="simulator" onClick={onFinished}>
+            simulator
+          </button>
+          <button type="button" onClick={() => onRunningChange?.(true)}>
+            start playing
+          </button>
+        </>
       );
     },
   };
@@ -99,6 +110,25 @@ describe('each tile says what it is', () => {
     expect(within(tile).getByText('58s')).toBeInTheDocument();
   });
 
+  it('puts a dot on the simulation\'s badge while it plays, without moving the icon off its centre', () => {
+    // .live-dot sets its own position, and outranks a position utility on
+    // the same element. Carrying both, the dot stopped floating over the
+    // badge's corner and sat in the row beside the icon, which pushed the
+    // icon out of the middle of its circle (seen 13 October 2026).
+    const { container } = render(feed([run('a')]));
+    const badge = within(screen.getByRole('region', { name: /^Simulation/ }));
+    expect(container.querySelector('.live-dot')).toBeNull();
+
+    fireEvent.click(badge.getByRole('button', { name: 'start playing' }));
+
+    const dot = container.querySelector('.live-dot')!;
+    expect(dot).not.toBeNull();
+    expect(dot).not.toHaveClass('absolute');
+    // Its holder is what is lifted out of the row, so the icon has the row.
+    expect(dot.parentElement).toHaveClass('absolute');
+    expect(dot.parentElement!.parentElement!.querySelector('svg')).not.toBeNull();
+  });
+
   it('names a rover run by where it was driven', () => {
     render(feed([run('a')]));
 
@@ -164,7 +194,26 @@ describe('each picture is its own shape', () => {
       expect(rule(`.${name}`)).not.toBeNull();
     }
     expect(rule('.runFeedSim')).toMatch(/var\(--yard-aspect\)/);
-    expect(rule('.runFeedVideo')).toMatch(/aspect-ratio:\s*4\s*\/\s*3/);
+    expect(rule('.runFeedVideo')).toMatch(/aspect-ratio:\s*var\(--video-aspect\)/);
+    // What the yard's camera records, said once.
+    expect(css.match(/--video-aspect:\s*4\s*\/\s*3;/g)).toHaveLength(1);
+  });
+
+  it('makes the simulation the size of a video on a phone, where one is under the other', () => {
+    // At the yard's own shape it was half as tall again as the rover's video
+    // beneath it, and the two could not be held against each other (the
+    // review of 13 October 2026).
+    const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf8');
+    const phone = [...css.matchAll(/@media \(max-width: 767px\) \{\n([\s\S]*?)\n\}\n/g)]
+      .map((block) => block[1])
+      .find((block) => block.includes('.runFeedSim'));
+
+    expect(phone).toBeDefined();
+    // The video's shape, from the same definition the video's tile reads, and
+    // still no taller than a phone's open code leaves it.
+    expect(phone).toMatch(/\.runFeedSim \{\s*height:\s*min\(calc\(\(100cqw - 2px\) \/ \(var\(--video-aspect\)\)\), var\(--sim-cap, 1000rem\)\);/);
+    // A mission with no video has nothing to match and keeps the yard's shape.
+    expect(phone).toMatch(/\.missionBody:not\(\[data-alone\]\) \.runFeedSim \{/);
   });
 
 });
@@ -365,6 +414,19 @@ describe('the pill that says there is more', () => {
       fireEvent.scroll(document.querySelector('.runFeedRest')!);
 
       expect(pill()).not.toHaveAttribute('data-shown');
+    });
+
+    it('counts again once the tiles have landed, since they arrive from a little lower', async () => {
+      // Mid-flight the second video is 40% in view and counts as still to
+      // come. Landed, it is over half, and nothing scrolls or resizes to say
+      // so: a transform changes no box.
+      tops = [150, 480];
+      render(feed([run('b'), run('a')]));
+      await waitFor(() => expect(pill()).toHaveAttribute('data-shown'));
+
+      tops = [150, 440];
+
+      await waitFor(() => expect(pill()).not.toHaveAttribute('data-shown'), { timeout: 2500 });
     });
 
     it('takes the learner to the first video they have not seen', async () => {

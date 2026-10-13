@@ -54,13 +54,23 @@ which is often longer than the diff.
   "How did it go? Remix it to go further or fix it." was a full-width banner
   above the player with the Remix button it was about at the far end of the
   row above. The banner is gone. The operator's note and Remix are together,
-  in one of three places. On a phone, a bar at the foot of the page. Beside
-  one feed, the foot of the code's card, where the note is shown whole however
-  long it is. In three columns, under the rover's videos, since the note is
-  about the rover's run: a bar under the list when there are several, and with
-  one video a card that takes what is left of the column under it, with Remix
-  inside. With no note yet the slot says "No operator note yet" and then
-  points at Remix, so it always says whose it is.
+  in one of three places. On a phone, a bar at the foot of the page. From a
+  tablet up, the foot of the code's card, where the note is shown whole
+  however long it is. In three columns with one video, under that video: it
+  is all in view, and what is left of its column would otherwise be empty, so
+  the note takes it as a card with Remix inside. With several videos the
+  column is all videos and the two stay in the code's card. With no note yet
+  the slot says "No operator note yet" and then points at Remix, so it always
+  says whose it is.
+
+  On a phone the simulation's tile is the size of a video's, 4:3, so the two
+  can be held against each other one above the other. At the yard's own shape
+  it was half as tall again as the rover's video beneath it. The yard is
+  nearly square, so there it is drawn about 1.4 times as wide as it is; a
+  mission with no video keeps the yard's shape.
+
+  The dot on the simulation's badge while it plays no longer pushes the map
+  icon off the centre of its circle.
 
 - **David's MacBook satellite mode, merged from upstream.** His three commits
   (MacBook mode, the `mac-env/` ignore, and the bash 3.2 fix to

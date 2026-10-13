@@ -22,13 +22,13 @@ import { CodeLines } from '@/components/mission/CodeLines';
  * Closed, nothing below the bar is rendered. The block viewer sizes its
  * program to its box, and in a box of no height it sized it to nothing.
  *
- * `footer` is set into the foot of the card, under the code. Beside one feed
- * (an upright tablet, a narrow window, a mission with no video) that is where
- * the page puts the operator's note and Remix: as a bar across the foot of
- * the page the note went unseen, and the review of 13 October 2026 reported
- * that those sizes had no operator's note at all. The two share a line where
- * the card is wide enough and stack where it is not. In three columns the
- * page puts them under the rover's videos instead, and the card has no foot.
+ * `footer` is set into the foot of the card, under the code. Beside the feed
+ * or the videos' column that is where the page puts the operator's note and
+ * Remix: as a bar across the foot of a tablet's or a laptop's page the note
+ * went unseen, and the review of 13 October 2026 reported that those sizes
+ * had no operator's note at all. The two share a line where the card is wide
+ * enough and stack where it is not. A phone keeps them as a bar of its own,
+ * and so does not hand this one a foot.
  */
 export function MissionCode({
   mission,

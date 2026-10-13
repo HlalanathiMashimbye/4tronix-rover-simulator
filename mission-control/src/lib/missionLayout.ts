@@ -6,8 +6,7 @@
  * for more.
  *
  * `wide`: three things side by side. The simulation, as tall as the box. The
- * rover's videos in a column of their own that scrolls down, with the
- * operator's note under them. The code.
+ * rover's videos in a column of their own that scrolls down. The code.
  *
  * WHY `wide` EXISTS. A laptop's window is short and wide, and the stack there
  * was a column of thumbnails beside a thousand pixels of code. Its first
@@ -18,12 +17,12 @@
  * leave a strip of nothing under them that grows with every pixel of height
  * ("a tonne of whitespace at the bottom of the video, that's where the
  * comment should go"). Here the simulation takes the height, the videos
- * scroll the way everything else does, and what is left under the first video
- * is where the note goes.
+ * scroll the way everything else does, and what is left under a single video
+ * is where the note goes. With several, the next video is what shows there.
  *
  * Decided here rather than in a container query because the page renders a
- * different tree for it (the note moves from the code's card to under the
- * videos), and CSS cannot move an element. So this is the one owner: the page
+ * different tree for it (with one video the note moves from the code's card
+ * to under it), and CSS cannot move an element. So this is the one owner: the page
  * reads the answer, and globals.css sizes the columns from the two widths it
  * is handed (`missionLayoutStyle`).
  */
@@ -47,7 +46,7 @@ const CODE_MIN_REM = 18;
 const VIDEOS_WORTH_REM = 20;
 /** Under this a video is a thumbnail again, which is what `wide` is for avoiding. */
 const VIDEOS_MIN_REM = 15;
-/** Kept clear under the first video for the operator's note and Remix. */
+/** Kept clear under the first video: for the note's card, or for the next video to show. */
 const NOTE_ROOM_REM = 7;
 /** What the yard's camera records. */
 const VIDEO_ASPECT = 4 / 3;

@@ -866,8 +866,8 @@
 
 /* A mission's page (MissionVideoClient): a feed of everything there is to
    watch, the code, and the operator's note with Remix: a bar under both on a
-   phone, the foot of the code's card beside one feed, and under the rover's
-   videos where there is room for three columns.
+   phone, the foot of the code's card from a tablet up, and under the rover's
+   one video where there are three columns and only one video.
 
    The feed is one tile per picture, the simulation first and then each time a
    rover drove it (RunFeed has why). Each tile is the shape of its picture, so
@@ -883,6 +883,9 @@
    the tile's own border. */
 .missionBody {
   --tile-chrome: calc(2.25rem + 2px);
+  /* What the yard's camera records, and so the shape of a video's tile. On a
+     phone the simulation's tile is this shape too (.runFeedSim, below). */
+  --video-aspect: 4 / 3;
   display: flex;
   flex: 1 1 0;
   gap: 0.5rem;
@@ -931,8 +934,29 @@
   transition: height 360ms var(--ease-spring);
 }
 .runFeedVideo {
-  aspect-ratio: 4 / 3;
+  aspect-ratio: var(--video-aspect);
   background: black;
+}
+
+/* ON A PHONE THE SIMULATION IS THE SIZE OF A VIDEO, where one is under the
+   other and a learner holds them against each other. At the yard's own shape
+   the simulation was half as tall again as the rover's video beneath it, and
+   the review of 13 October 2026 asked for the two to be the same size.
+
+   The yard is 233 by 249, nearly square, so in a 4:3 box it is drawn about
+   1.4 times as wide as it is. That is the price: the other ways to the same
+   size are a bar either side of the yard, which was turned down on the 12th,
+   or cropping one of the two. It is the stretch a phone's simulation already
+   takes while its code is open.
+
+   Not for a mission with no video, which has nothing to match and keeps the
+   yard's shape, and not from a tablet up, where the two are side by side or
+   the column is sized to fit both at their own shapes. The 2px is the tile's
+   border, which the video's box is inside of as well. */
+@media (max-width: 767px) {
+  .missionBody:not([data-alone]) .runFeedSim {
+    height: min(calc((100cqw - 2px) / (var(--video-aspect))), var(--sim-cap, 1000rem));
+  }
 }
 
 /* The videos, which fold to nothing while a phone's code is open. A grid row
@@ -1022,6 +1046,16 @@
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(3px); }
 }
+/* On a phone the first video ends at the foot of the feed, or within a few
+   pixels of it, now that the simulation above it is a video's size. That
+   corner is where a playing video has its full-screen button, so the pill
+   stands clear of the strip of controls. After the rule above, which it has
+   to follow to outrank. */
+@media (max-width: 767px) {
+  .runFeedMore {
+    bottom: 3.5rem;
+  }
+}
 
 /* A phone: the feed is the page's whole width, and the code is a bar under
    the simulation that opens in place (MissionCode). Open, it takes what the
@@ -1105,13 +1139,14 @@
    the code. missionLayout has why, and what this replaced.
 
    The feed stops being a list here and becomes the grid the first two columns
-   are: the simulation down the left of it, and on the right the videos with
-   what the page puts under them (.runFeedFoot, the operator's note). It is
-   the videos that scroll, downwards like everything else on the site.
+   are: the simulation down the left of it, the videos on the right. It is the
+   videos that scroll, downwards like everything else on the site.
 
-   ONE VIDEO is all in view, so its row is as tall as it is and the foot takes
-   what is left of the column: that is the room the note's card fills. MORE
-   THAN ONE and the videos take what the foot does not need, and scroll in it.
+   ONE VIDEO is all in view, so its row is as tall as it is, and under it is
+   .runFeedFoot, which takes what is left of the column: the operator's note
+   as a card, where there would otherwise be nothing. MORE THAN ONE and the
+   column is all videos, the whole height of it, and the note is in the code's
+   card instead (MissionVideoClient).
 
    Selectors carry .missionBody[data-layout] so they outrank the column rules
    above, which a wide window also matches. */
@@ -1128,7 +1163,7 @@
   border-radius: 0;
 }
 .missionBody[data-layout="wide"] .runFeedWrap[data-more] .runFeed {
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
 }
 .missionBody[data-layout="wide"] .runFeed > .runFeedTile {
   grid-column: 1;
@@ -1200,8 +1235,7 @@
   }
 }
 
-/* The pill stands in the videos' cell, at the foot of what shows of them, so
-   it is above the note whatever height the note turns out to be. */
+/* The pill stands in the videos' cell, at the foot of what shows of them. */
 .missionBody[data-layout="wide"] .runFeedMore {
   position: relative;
   right: auto;

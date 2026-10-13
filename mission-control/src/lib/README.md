@@ -65,8 +65,8 @@ missionLayout.ts      one feed or three columns, for the box a mission's page ha
 `missionLayout.ts` is arithmetic and nothing else: a box's width and height
 in, an arrangement and two column widths out. It is here, and not a container
 query in `globals.css`, because the page renders a different tree for three
-columns (the operator's note moves from the code's card to under the rover's
-videos) and CSS cannot move an element. `hooks/useMissionLayout.ts` measures
+columns (with one video, the operator's note moves from the code's card to
+under it) and CSS cannot move an element. `hooks/useMissionLayout.ts` measures
 the box and asks it; `globals.css` sizes the columns from the answer.
 
 `appSurfaces.ts` exists so the navbar can drop the learner's floating Create
