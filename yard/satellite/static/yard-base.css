@@ -237,9 +237,13 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
 
 /* Nav toggle: hidden on a desktop-width bar, the only nav control below 760px.
    The bar carries four links plus the rover chip, which stop fitting beside
-   the brand on a phone. */
+   the brand on a phone.
+
+   It does not shrink. Left to, it was the first thing in a crowded row to
+   give: at 390 wide it was a 22px sliver for a thumb, on a page that looked
+   as if it fitted because it did not scroll. */
 .navtoggle {
-  display: none; align-items: center; justify-content: center;
+  display: none; align-items: center; justify-content: center; flex-shrink: 0;
   width: 40px; height: 40px; border-radius: 999px; margin-left: auto;
   border: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
   background: color-mix(in oklab, var(--card) 40%, transparent);
@@ -368,12 +372,13 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
    this, a status longer than the widths above were counted for is back to
    pushing the page sideways.
 
-   Not on a phone. There the menu button is in the row and would share the
-   squeeze, cutting the queue's number off at widths where it shows today. */
-@media (min-width: 761px) {
-  .topbar-right, .sys { min-width: 0; }
-  .sys-txt { overflow: hidden; text-overflow: ellipsis; }
-}
+   At every width. It used to stop above a phone's, where the menu button is
+   in the row and shared the squeeze, so the queue's number was cut off at
+   widths where it showed. The button holds its 40px now and the phone's bar,
+   below, makes room for the status whole, so there too this is only what
+   happens to a status nobody counted for. */
+.topbar-right, .sys { min-width: 0; }
+.sys-txt { overflow: hidden; text-overflow: ellipsis; }
 
 @media (max-width: 760px) {
   .stations { grid-template-columns: 1fr; }
@@ -392,6 +397,33 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
   .topbar { position: relative; }
   .station.hero { flex-direction: column; align-items: flex-start; }
   .op-email { display: none; }
+}
+
+/* ---- The bar on a phone held upright --------------------------------------
+   With the rover online and a queue the phone's row is about 420px: the way
+   back, the brand, the menu button and a chip reading "Rover online · queue
+   12". At 375 and narrower the page scrolled sideways, and from there to 414
+   it fitted only by squashing the menu button.
+
+   What goes is the name. The tile beside it is the same mark and the same
+   link home, and the name is the one thing in the row the operator did not
+   open the page to read. The other two answers kept it and took the room out
+   of the status: shorter words ("Online · 12"), or the dot and the count
+   alone, which cannot tell offline from degraded.
+
+   440 rather than 420, so that where the name does show there is still room
+   for a queue in the thousands.
+
+   Clipped rather than display: none, which leaves a screen reader a link with
+   no name. */
+@media (max-width: 440px) {
+  .brand-txt { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+}
+
+/* At 320, the narrowest phone, the row above is still 332px. The bar's own
+   spacing gives the rest. */
+@media (max-width: 340px) {
+  .topbar { gap: 0.4rem; padding: 0 0.5rem; }
 }
 
 /* ==========================================================================

@@ -272,11 +272,16 @@ TOP_BAR = """async () => {
     const chip = document.getElementById('sysRover').getBoundingClientRect();
     const dot = document.querySelector('#sysRover .sys-dot').getBoundingClientRect();
     const txt = document.querySelector('#sysRover .sys-txt');
+    const menu = document.getElementById('navToggle').getBoundingClientRect();
+    const brand = document.querySelector('.topbar .brand').getBoundingClientRect();
+    const tile = document.querySelector('.topbar .brand-mark').getBoundingClientRect();
     return {
         viewport: window.innerWidth,
         page: document.documentElement.scrollWidth,
         chip_left: chip.left, chip_right: chip.right,
         dot_left: dot.left, dot_right: dot.right, dot_width: dot.width,
+        menu_left: menu.left, menu_right: menu.right, menu_width: menu.width,
+        brand_width: brand.width, tile_left: tile.left, tile_width: tile.width,
         text_cut: txt.scrollWidth > txt.clientWidth,
         inter: [...document.fonts].some((f) => f.status === 'loaded' && f.family.replace(/['"]/g, '') === 'Inter'),
     };
@@ -337,6 +342,84 @@ def test_a_status_too_long_for_the_bar_shortens_and_keeps_its_dot(page: Page, li
     assert bar['page'] <= bar['viewport'], bar
     assert bar['chip_right'] <= bar['viewport'], bar
     assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+
+
+# A phone held upright, from the narrowest still in use to the widest common.
+PHONE_WIDTHS = [320, 360, 375, 390, 414]
+
+# The menu button's size as yard-base.css sets it, and the least a thumb
+# should be asked to hit.
+MENU_BUTTON = 40
+
+
+@pytest.mark.parametrize('width', PHONE_WIDTHS)
+@pytest.mark.parametrize('path', ['/settings', '/', '/run/'])
+def test_the_top_bar_fits_a_phone_with_the_menu_button_at_its_full_width(page: Page, live_server, path, width):
+    """With the rover online and a queue the phone's row was about 420px. At
+    375 and narrower every console page scrolled sideways. At 390 and 414 the
+    page did not scroll, and only because the menu button had been squashed to
+    22 and 35px, so "does not scroll" alone would have called those fixed."""
+    bar = top_bar(page, live_server, path, width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['page'] <= bar['viewport'], bar
+    assert 0 <= bar['chip_left'] and bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
+    assert 0 <= bar['menu_left'] and bar['menu_right'] <= bar['chip_left'], bar
+
+
+@pytest.mark.parametrize('width', PHONE_WIDTHS)
+def test_a_phone_shows_the_status_of_a_running_yard_whole(page: Page, live_server, width):
+    """Letting the chip shrink passes the test above by itself, with the
+    queue's number behind an ellipsis at 375. The room has to come from
+    somewhere else in the bar: on a phone the status is what is read."""
+    bar = top_bar(page, live_server, '/settings', width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    if not bar['inter']:
+        pytest.skip('Inter did not load, and the bar is measured in it')
+    assert not bar['text_cut'], bar
+
+
+def test_on_a_phone_the_brand_is_its_tile_and_still_a_named_link_home(page: Page, live_server):
+    """Where the room comes from: the words "Mars Yard" go and the tile
+    stays, the same mark and the same link. In no font's measure, unlike the
+    test above, so it holds with the internet off too."""
+    bar = top_bar(page, live_server, '/settings', 375, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['tile_width'] > 0 and bar['tile_left'] >= 0, bar
+    assert bar['brand_width'] == bar['tile_width'], bar
+
+    # Hiding the words outright takes the link's name with them, and a screen
+    # reader is left announcing "link".
+    home = page.get_by_role('link', name='Mars Yard', exact=True)
+    assert home.count() == 1
+    home.click()
+    page.wait_for_url(f'{live_server}/')
+
+
+def test_a_bar_with_room_for_the_name_keeps_it(page: Page, live_server):
+    """The tile alone is for the widths that need it. A wide phone on its
+    side still has the menu button in the bar and room for all of it."""
+    bar = top_bar(page, live_server, '/settings', 480, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['brand_width'] > bar['tile_width'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
+
+
+def test_on_a_phone_a_status_too_long_shortens_and_the_menu_button_does_not(page: Page, live_server):
+    """The same over-long status as on a tablet, where a phone has one more
+    thing in the row that could give. It must be the chip's words: the menu
+    button is the only way to the other pages."""
+    rover = {**ROVER_ONLINE_WITH_A_QUEUE, 'queue_size': 10 ** 15}
+    bar = top_bar(page, live_server, '/settings', 375, rover)
+
+    assert bar['text_cut'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
 
 
 def test_typing_an_address_still_works_as_the_fallback(page: Page, live_server):
