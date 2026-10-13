@@ -165,7 +165,11 @@ start, on purpose.
 
 Checklist:
 - `http://localhost:8080/` loads the feed (Firestore reads work)
-- `http://localhost:8080/operator` is a **404** (must stay dead in prod)
+- `http://localhost:8080/operator` shows the operator **sign-in form** and
+  nothing of the console. (This line used to say 404. The console has lived
+  in Mission Control since AB#341/342; what has to hold now is that nobody
+  reaches it signed out, which is what `scripts/smoke-check.sh <url>` asserts
+  at the end of every deploy.)
 - `/mission` loads, the simulator runs a Blocks program
 - Submit a test mission; it appears in Firestore
 - `docker image ls mission-control:local`: note the size (should be a few

@@ -11,6 +11,7 @@ Linux.
 | `dev-yard.js` | `npm run dev:yard` | Launches the yard rover server the same way (replaces the old POSIX-only shell command). |
 | `free-port.js` | `dev-launcher.js`, `dev:control` | Frees ports 3000/3001/8523 held by stale dev servers before restart. Only kills processes that look like this repo's dev stack. |
 | `firestore-rules-test.mjs` | manual / CI | Exercises `firestore.rules` against the Firestore emulator over the REST API, seeding as owner then attempting each operation unauthenticated (what a browser is). |
+| `smoke-check.sh` | both deploy workflows / manual | Asks a deployed Mission Control, anonymously, whether the learner home serves and the operator console is still behind sign-in. The one definition of a good deploy: staging and prod both run it, so they cannot disagree. `scripts/smoke-check.sh <base-url>`. |
 
 Run everything from the repo root:
 

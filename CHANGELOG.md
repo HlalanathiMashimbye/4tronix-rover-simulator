@@ -100,6 +100,17 @@ which is often longer than the diff.
   back that way, so a restore would have reported success and reshaped the
   schema. Restore procedure is in `docs/RUNBOOK.md` §8 and is still unproven.
 
+- **The prod smoke check asserts the operator boundary, from the same script
+  as staging** (`scripts/smoke-check.sh`). `deploy-prod.yml` had never been
+  run, and still ended by asserting that `/operator` was a 404, the line
+  staging dropped in #93 when the console shipped. Prod promotes the digest
+  serving on staging, so the first production deploy would have deployed
+  correctly and then gone red. The check lived in two workflows and only one
+  was fixed, so it now lives in one script both call, and
+  `architecture.test.ts` fails if either workflow grows its own again. The
+  script's failing paths are tested against a stub server for the first time:
+  until now nothing had ever shown it would notice a leaked console.
+
 ---
 
 ## 2026-08-31 to 2026-09-03 - The yard hands its console to Mission Control
