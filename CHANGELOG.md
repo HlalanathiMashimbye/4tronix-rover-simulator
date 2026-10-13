@@ -11,7 +11,7 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **The yard console's top bar fits a tablet.** Laid out in full the bar is
+- **The yard console's top bar fits a tablet and a phone.** Laid out in full the bar is
   about 950px wide once the rover is online with a queue, and the only width
   it changed at was the phone's, 760px. Everything between pushed the rover
   chip past the right edge. On a tablet held upright, 768 wide, the chip was
@@ -29,10 +29,19 @@ which is often longer than the diff.
   rover, so a status longer than the bar was counted for shortens to an
   ellipsis beside its dot where it used to widen the page.
 
-  Phones are as they were, which is not right yet: at 375 wide and under, the
-  chip still pushes the page sideways once the rover is online with a queue.
-  A phone's bar has no row of links to take room back from, so that needs its
-  own answer.
+  A phone's bar has no row of links to take room back from. With the rover
+  online and a queue its row is about 420px, so at 375 wide and under the page
+  scrolled sideways, and from there to 414 it fitted only because the menu
+  button had been squashed from 40px to as little as 22. What goes now, at
+  440px and under, is the name. The rover tile beside it is the same mark and
+  the same link home, and the status is what an operator opens the page to
+  read, so it stays whole from 320 wide up. Two other cuts were mocked up
+  beside it on 13 October, both keeping "Mars Yard" and taking the room out of
+  the status: shorter words ("Online · 12"), or the dot and the count alone,
+  which cannot tell offline from degraded. The menu button no longer shrinks
+  at any width, and with that settled the chip's ellipsis applies on a phone
+  too, as the last resort it is on a tablet. The name is clipped rather than
+  removed, so a screen reader still has a name for the link.
 
 - **A mission's page is a feed of everything there is to watch.** The
   simulation and the rover's videos shared one frame with arrows, the rover
