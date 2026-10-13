@@ -3,30 +3,31 @@ import { watchableRuns, type MissionRun } from '@/core/domain/entities/MissionRu
 import { getYouTubeId } from '@/core/domain/services/youtubeLinking';
 
 /**
- * The runs a learner can watch for one mission, in the order they see them.
+ * The rover's runs a learner can watch for one mission, newest first.
  *
  * Lives here rather than inside the mission page because the ORDER and the
  * COUNT are decisions, not rendering details.
  *
- * David raised it at the 2026-08-27 standup: a child could not tell that a
- * real rover had driven their code, because the run selector was a closed
- * dropdown with the simulation first. The single most exciting thing this
- * platform does was behind a control that looked empty.
+ * THE SIMULATION IS NOT ONE OF THEM. It was, twice, and both times it was
+ * David who could not find something. At the 2026-08-27 standup a child could
+ * not tell that a real rover had driven their code: the run selector was a
+ * closed dropdown with the simulation first. So real runs went first, in a
+ * left/right gallery with the simulation as its last card. On 10 October 2026
+ * he opened a mission with a video and could not find the simulation: it was
+ * behind the arrows.
  *
- * So real runs come first and the page opens on one. A child who already
- * watched the simulation while writing the code should not have to go looking
- * for the rover.
+ * Whichever of the two is behind a control is the one that gets missed. So
+ * the mission page shows all of it at once, as a feed with the simulation
+ * first (RunFeed), and this list is only what there can be more than one of:
+ * the times a rover drove it.
  */
-
-export type RunKind = 'sim' | 'real';
 
 export interface RunOption {
   id: string;
-  /** The card's headline. A place name for a real run. */
+  /** The card's headline. A place name where the yard has one. */
   label: string;
-  /** The line under it, saying what kind of run this is. */
+  /** The line under it, saying what this is a video of. */
   sublabel: string;
-  kind: RunKind;
   /** Platform-hosted video. This is the primary viewing surface when present. */
   videoUrl?: string;
   youtubeId?: string;
@@ -60,13 +61,6 @@ function runDateLabel(completedAt: string | undefined | null): string {
 }
 
 
-const SIM_OPTION: RunOption = {
-  id: 'sim',
-  label: 'Simulation',
-  sublabel: 'On screen',
-  kind: 'sim',
-};
-
 /**
  * `yards` is passed in rather than imported.
  *
@@ -81,7 +75,7 @@ export function buildRunOptions(
   runs: MissionRun[] = [],
   yards: Yard[] = [],
 ): RunOption[] {
-  if (!mission) return [SIM_OPTION];
+  if (!mission) return [];
 
   const options: RunOption[] = [];
 
@@ -101,7 +95,6 @@ export function buildRunOptions(
       // which, and look like a bug.
       label: findYardIn(yards, run.yardId)?.city ?? runDateLabel(run.completedAt),
       sublabel: 'Real rover',
-      kind: 'real',
       youtubeId,
       thumbnailUrl: thumbnailFor(youtubeId),
       startedAt: run.startedAt,
@@ -122,7 +115,6 @@ export function buildRunOptions(
         id: 'real-legacy',
         label: findYardIn(yards, mission.yardId)?.city ?? 'Real rover',
         sublabel: 'Real rover',
-        kind: 'real',
         videoUrl: hostedVideoUrl,
         youtubeId,
         thumbnailUrl: youtubeId ? thumbnailFor(youtubeId) : undefined,
@@ -130,13 +122,5 @@ export function buildRunOptions(
     }
   }
 
-  options.push(SIM_OPTION);
   return options;
-}
-
-/** "2 rover runs · simulation" - the scale of the strip, before scrolling it. */
-export function describeRuns(options: RunOption[]): string {
-  const real = options.filter((o) => o.kind === 'real').length;
-  if (real === 0) return 'Simulation only';
-  return `${real} rover ${real === 1 ? 'run' : 'runs'} · simulation`;
 }

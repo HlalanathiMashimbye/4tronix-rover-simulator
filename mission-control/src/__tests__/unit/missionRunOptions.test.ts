@@ -1,9 +1,10 @@
 /**
- * Which run a learner lands on, and in what order.
+ * Which of the rover's runs a learner can step through.
  *
- * David's point at the 2026-08-27 standup: a child could not tell that a real
- * rover had driven their code, because the selector was a closed dropdown with
- * the simulation first. The ordering here is the fix, so it is pinned.
+ * The simulation is not one of them. It was the last card in the same gallery
+ * until 10 October 2026, when David opened a mission with a video and could
+ * not find its simulation. It is always on the page now (RunFeed.test.tsx),
+ * and this list is the rover's runs alone, so that is what is pinned.
  */
 
 import { buildRunOptions, getYouTubeId } from '@/lib/missionRuns';
@@ -21,14 +22,27 @@ const YARDS = [
 ];
 
 
-describe('what a learner sees first', () => {
-  it('puts the real rover run before the simulation', () => {
-    // A child opening their mission lands on the rover, not on a simulation
-    // they already watched while writing the code.
+describe("the rover's runs", () => {
+  it('lists the rover run and nothing else', () => {
+    // The simulation used to be appended here, which is what put it behind
+    // the arrows of every mission with a video.
     const runs = buildRunOptions({ youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ', yardId: 'curiosity' }, [], YARDS);
 
-    expect(runs[0].kind).toBe('real');
-    expect(runs[1].kind).toBe('sim');
+    expect(runs).toHaveLength(1);
+    expect(runs[0].youtubeId).toBe('dQw4w9WgXcQ');
+  });
+
+  it('lists every run that has a video, newest first', () => {
+    const run = (id: string, completedAt: string) => ({
+      runId: id, yardId: 'curiosity', status: 'completed' as const, youtubeUrl: `https://youtu.be/${id}`, completedAt,
+    });
+    const runs = buildRunOptions(
+      { yardId: 'curiosity' },
+      [run('aaaaaaaaaaa', '2026-08-05T10:00:00Z'), run('bbbbbbbbbbb', '2026-08-06T10:00:00Z')],
+      YARDS,
+    );
+
+    expect(runs.map((r) => r.youtubeId)).toEqual(['bbbbbbbbbbb', 'aaaaaaaaaaa']);
   });
 
   it('names the city on the real run, so it means something to a nine-year-old', () => {
@@ -42,34 +56,28 @@ describe('what a learner sees first', () => {
     // No place name, but the run is real and must not be hidden for it.
     const runs = buildRunOptions({ youtubeUrl: 'https://youtu.be/dQw4w9WgXcQ', yardId: 'durban-9' }, [], YARDS);
 
-    expect(runs[0].kind).toBe('real');
+    expect(runs).toHaveLength(1);
     expect(runs[0].label).toBe('Real rover');
   });
 
-  it('falls back to the simulation when no rover has run it yet', () => {
-    const runs = buildRunOptions({ yardId: 'curiosity' }, [], YARDS);
-
-    expect(runs).toHaveLength(1);
-    expect(runs[0].kind).toBe('sim');
+  it('is empty when no rover has run it yet', () => {
+    expect(buildRunOptions({ yardId: 'curiosity' }, [], YARDS)).toEqual([]);
   });
 
   it('treats a legacy videoUrl the same as youtubeUrl', () => {
     // Older missions carry videoUrl. A child with one should still land on it.
     const runs = buildRunOptions({ videoUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ' }, [], YARDS);
 
-    expect(runs[0].kind).toBe('real');
+    expect(runs[0].youtubeId).toBe('dQw4w9WgXcQ');
   });
 
-  it('offers no real run for an unparseable video url', () => {
+  it('offers no run for an unparseable video url', () => {
     // Better to show only the simulation than a player with nothing in it.
-    const runs = buildRunOptions({ youtubeUrl: 'not-a-youtube-link' }, [], YARDS);
-
-    expect(runs).toHaveLength(1);
-    expect(runs[0].kind).toBe('sim');
+    expect(buildRunOptions({ youtubeUrl: 'not-a-youtube-link' }, [], YARDS)).toEqual([]);
   });
 
   it('survives a mission that has not loaded yet', () => {
-    expect(buildRunOptions(null)[0].kind).toBe('sim');
+    expect(buildRunOptions(null)).toEqual([]);
   });
 });
 

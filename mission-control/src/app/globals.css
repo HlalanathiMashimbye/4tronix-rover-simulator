@@ -862,16 +862,366 @@
   .workspaceSplitGrid:not(.workspaceSplitGrid--fixed) {
     grid-template-rows: minmax(0, 3fr) minmax(0, 2fr);
   }
+}
 
-  /* A mission's page (the fixed variant): the player on top, the code
-     below, half each, the same shape as Create Mission. It used to grow and
-     scroll, with a 45vh floor on the code, which made the blocks a second
-     screen down; then the player kept its 16:9 height and the code had the
-     rest, which on a tall phone left the video a strip at the top (6 Oct
-     2026). The simulator stretches to its half and the video sits centred
-     in it on black, as any player letterboxes. */
-  .workspaceSplitGrid--fixed {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+/* A mission's page (MissionVideoClient): a feed of everything there is to
+   watch, the code, and the operator's note with Remix: a bar under both on a
+   phone, the foot of the code's card beside one feed, and under the rover's
+   videos where there is room for three columns.
+
+   The feed is one tile per picture, the simulation first and then each time a
+   rover drove it (RunFeed has why). Each tile is the shape of its picture, so
+   nothing is stretched and nothing is padded out: the simulation's is the
+   yard's (--yard-aspect, width over depth) and a video's is 4:3, what the
+   yard's camera records.
+
+   ONLY THE FEED SCROLLS, and in three columns only its videos. The page is
+   pinned to the viewport like every other, and the videos are the one thing
+   on it that grows without bound: a mission can be driven any number of times.
+
+   --tile-chrome is what a tile adds to its picture's height: the caption and
+   the tile's own border. */
+.missionBody {
+  --tile-chrome: calc(2.25rem + 2px);
+  display: flex;
+  flex: 1 1 0;
+  gap: 0.5rem;
+  min-height: 0;
+  /* size: the feed's column is as wide as its pictures need to fill this
+     box's HEIGHT, and on a phone the simulation's height is capped by it. */
+  container-type: size;
+}
+.runFeedWrap {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+.runFeed {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Lands on a tile's top edge when a flick ends near one, and nowhere
+     otherwise: mandatory snapping fought a slow drag through a tall tile. */
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+  border-radius: 1rem;
+}
+.runFeed::-webkit-scrollbar {
+  display: none;
+}
+.runFeedTile {
+  flex: none;
+  scroll-snap-align: start;
+}
+.runFeedSim {
+  position: relative;
+  width: 100%;
+  /* As tall as the yard is at this width, and no taller than --sim-cap, which
+     only a phone with its code open sets. Capped, the yard stretches a little
+     to fill, as it always has on a phone that had to share its screen with
+     the code: the alternative there is a bar either side of it. Animated,
+     because it is the simulation making room, and a jump read as a reload. */
+  height: min(calc(100cqw / var(--yard-aspect)), var(--sim-cap, 1000rem));
+  transition: height 360ms var(--ease-spring);
+}
+.runFeedVideo {
+  aspect-ratio: 4 / 3;
+  background: black;
+}
+
+/* The videos, which fold to nothing while a phone's code is open. A grid row
+   can be animated to 0fr; a height of auto cannot be animated to 0. */
+.runFeedRest {
+  display: grid;
+  flex: none;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 360ms var(--ease-spring),
+    opacity 200ms ease;
+}
+.runFeedRestInner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+.runFeedRest:has(> .runFeedRestInner:empty) {
+  display: none;
+}
+
+.runFeedIconButton {
+  position: relative;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  color: var(--muted-foreground);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease;
+}
+/* The picture of the button stays small; a finger gets 44px. */
+.runFeedIconButton::after {
+  content: "";
+  position: absolute;
+  inset: -0.5rem;
+}
+.runFeedIconButton:hover {
+  color: var(--foreground);
+  background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
+/* "1 more video", at the foot of the feed for as long as there is one wholly
+   out of view further on (RunFeed counts). It bobs three times each time it
+   arrives and then holds still: it is a pointer, and one that never stops is
+   the thing a child watches instead of the rover. */
+.runFeedMore {
+  position: absolute;
+  /* In the corner, not the middle: a video half in view has its play button
+     in the middle of what shows, and the pill sat on top of it. */
+  right: 0.625rem;
+  bottom: 0.625rem;
+  z-index: 20;
+  display: inline-flex;
+  height: 2.25rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.875rem 0 0.625rem;
+  border-radius: 9999px;
+  background: var(--gradient-mars);
+  color: var(--primary-foreground);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  translate: 0 0.75rem;
+  transition:
+    opacity 200ms ease,
+    translate 320ms var(--ease-spring);
+}
+.runFeedMore[data-shown] {
+  opacity: 1;
+  pointer-events: auto;
+  translate: 0 0;
+}
+.runFeedMore[data-shown] .runFeedMoreArrow {
+  animation: feed-more-bob 900ms var(--ease-in-out) 600ms 3;
+}
+@keyframes feed-more-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
+/* A phone: the feed is the page's whole width, and the code is a bar under
+   the simulation that opens in place (MissionCode). Open, it takes what the
+   simulation leaves, the simulation gives up some height to it, the videos
+   fold away and the feed stops scrolling, so the simulation holds still above
+   the line it is running. */
+.missionCode[data-collapsible] {
+  flex: none;
+  transition: flex-grow 360ms var(--ease-spring);
+}
+.runFeed[data-code-open] {
+  /* A little over half to the simulation's tile. At 46% a 640px phone drew
+     the yard nearly twice as wide as it is deep; at this it is a stretch of
+     under one and a half there, and none to speak of on a taller phone. */
+  --sim-cap: calc(56cqh - var(--tile-chrome));
+  overflow: hidden;
+}
+.runFeed[data-code-open] .missionCode[data-collapsible] {
+  flex: 1 1 0;
+  min-height: 7rem;
+}
+.runFeed[data-code-open] .runFeedRest {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+/* From a tablet up there is room beside the feed, so the code is always open
+   there and the feed is a column.
+
+   THE COLUMN IS AS WIDE AS ITS PICTURES NEED TO FILL ITS HEIGHT, the rule
+   Create Mission's simulator column already follows (.buildSim). With a video,
+   that is the width at which the simulation and the first video are both in
+   view, one above the other, which is the whole point of the feed: a wider
+   column would show a bigger simulation and put the video below the fold.
+   Without one it is the width of a simulation as tall as the column.
+
+   Never under 15rem, where a caption no longer fits beside its badge, and
+   never over 55% of the page, so the code keeps the larger share of a window
+   that is taller than it is wide. */
+@media (min-width: 768px) {
+  .runFeedWrap {
+    flex: none;
+    width: clamp(
+      15rem,
+      calc((100cqh - 0.5rem - 2 * var(--tile-chrome)) / (1 / var(--yard-aspect) + 0.75)),
+      55cqw
+    );
+  }
+  /* More than one video: narrower by what lets the next one's caption show
+     under the first. A column that fitted two tiles exactly said nothing
+     about a third, and the pill that did say sat on the first video's own
+     controls, over its full-screen button. Now it sits on the caption that
+     is showing, which belongs to the video it is pointing at. */
+  .runFeedWrap[data-more] {
+    width: clamp(
+      15rem,
+      calc((100cqh - 1rem - 3 * var(--tile-chrome)) / (1 / var(--yard-aspect) + 0.75)),
+      55cqw
+    );
+  }
+  .runFeedMore {
+    bottom: 0.1875rem;
+  }
+  .missionBody[data-alone] .runFeedWrap {
+    width: clamp(15rem, calc((100cqh - var(--tile-chrome)) * var(--yard-aspect)), 55cqw);
+  }
+  /* The column's own width now, not the page's. */
+  .runFeedSim {
+    height: auto;
+    aspect-ratio: var(--yard-aspect);
+  }
+  .missionBody > .missionCode {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* THREE COLUMNS, where lib/missionLayout finds the room (data-layout="wide",
+   with the two widths it worked out as --sim-w and --videos-w): the
+   simulation as tall as the box, the rover's videos in a column of their own,
+   the code. missionLayout has why, and what this replaced.
+
+   The feed stops being a list here and becomes the grid the first two columns
+   are: the simulation down the left of it, and on the right the videos with
+   what the page puts under them (.runFeedFoot, the operator's note). It is
+   the videos that scroll, downwards like everything else on the site.
+
+   ONE VIDEO is all in view, so its row is as tall as it is and the foot takes
+   what is left of the column: that is the room the note's card fills. MORE
+   THAN ONE and the videos take what the foot does not need, and scroll in it.
+
+   Selectors carry .missionBody[data-layout] so they outrank the column rules
+   above, which a wide window also matches. */
+.missionBody[data-layout="wide"] .runFeedWrap,
+.missionBody[data-layout="wide"] .runFeedWrap[data-more] {
+  width: calc(var(--sim-w) + 0.5rem + var(--videos-w));
+}
+.missionBody[data-layout="wide"] .runFeed {
+  display: grid;
+  grid-template-columns: var(--sim-w) var(--videos-w);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: visible;
+  scroll-snap-type: none;
+  border-radius: 0;
+}
+.missionBody[data-layout="wide"] .runFeedWrap[data-more] .runFeed {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.missionBody[data-layout="wide"] .runFeed > .runFeedTile {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: start;
+}
+.missionBody[data-layout="wide"] .runFeedRest {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y proximity;
+  scrollbar-width: none;
+  border-radius: 1rem;
+}
+.missionBody[data-layout="wide"] .runFeedRest::-webkit-scrollbar {
+  display: none;
+}
+.missionBody[data-layout="wide"] .runFeedRestInner {
+  overflow: visible;
+}
+.runFeedFoot {
+  display: flex;
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+}
+/* The operator's note where it has a box to fill instead of a line to keep to
+   (OperatorFeedback, roomy): under the one video of three columns, in what is
+   left of that column. How tall that is depends on the window, from about
+   7rem to half the screen, so the card asks its own height. Short, it is a
+   row: the badge, the words, Remix at the end. From 10.5rem, which is what
+   the three need one above the other, it is a stack, centred, with Remix
+   under the words: a row floating in the middle of a tall card read as a bar
+   that had come loose.
+
+   Centred by auto margins and not by justify-content, so that when a long
+   note overflows a short card its first line can still be scrolled back to. */
+.noteCard {
+  container-type: size;
+}
+.noteCardInner {
+  display: flex;
+  width: 100%;
+  margin: auto 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+.noteCardWords {
+  /* All the room going, a thousand to Remix's one (RemixButton), so in a row
+     the button is its own width and not half the card. */
+  flex: 999 1 0;
+  min-width: 0;
+}
+@container (min-height: 10.5rem) {
+  .noteCardInner {
+    width: auto;
+    max-width: 65ch;
+    margin: auto;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+  .noteCardWords {
+    flex: none;
+  }
+}
+
+/* The pill stands in the videos' cell, at the foot of what shows of them, so
+   it is above the note whatever height the note turns out to be. */
+.missionBody[data-layout="wide"] .runFeedMore {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  justify-self: end;
+  margin: 0 0.625rem 0.25rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runFeedSim,
+  .runFeedRest,
+  .runFeedMore,
+  .missionCode[data-collapsible] {
+    transition: none;
+  }
+  .runFeedMore[data-shown] .runFeedMoreArrow {
+    animation: none;
   }
 }
 
@@ -935,11 +1285,6 @@
 @media (min-width: 1024px) {
   .workspaceSplitGrid {
     align-items: stretch;
-  }
-
-  /* A mission's page: video and code half each (see MissionVideoClient). */
-  .workspaceSplitGrid--fixed {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr);
   }
 }
 

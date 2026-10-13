@@ -11,6 +11,57 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A mission's page is a feed of everything there is to watch.** The
+  simulation and the rover's videos shared one frame with arrows, the rover
+  first and the simulation last, so a mission with a video hid its simulation.
+  David opened one on 10 October and could not find it. It was the second time
+  one of the two went missing behind a control (in August it was the rover,
+  behind a dropdown), so now nothing chooses: one tile each, the simulation
+  first and then every time a rover drove it, newest first. The feed is the
+  one thing on the page that scrolls.
+
+  Each tile is the shape of its picture: the simulation's is the yard's, a
+  video's is 4:3, which is what the yard's camera records. Two earlier cuts
+  put them in frames of other shapes and filled the difference, first with
+  black bars beside the yard and then with a card of small print. From a
+  tablet up the feed is a column as wide as the simulation and the first video
+  need to both be in view, the rule Create Mission's simulator column already
+  follows, and the code is beside it.
+
+  A laptop's window is short and wide, and that column made the pictures
+  thumbnails beside a thousand pixels of code. So where a window has the room
+  the page is three columns: the simulation as tall as the page, the rover's
+  videos in a column of their own that scrolls down, and the code. A first
+  answer laid the feed on its side, the simulation and the first video at one
+  height with more videos off to the right. A list that runs sideways is not
+  something a mouse wheel finds, and two pictures of fixed shape side by side
+  left a strip of nothing under them that grew with the window. A mission no
+  rover has driven was getting that layout too, and drew its one simulation at
+  half size in an empty column; it has the simulation at full height beside
+  the code now. `lib/missionLayout` decides which arrangement a window gets.
+
+  A pill says how many videos are still to come and takes the learner to the
+  next one. It is there for as long as there is one less than half in view,
+  and comes back when they scroll back; at first it went for good at the first
+  scroll. Where the feed is a column and there is more than one video, the
+  next one's caption shows under the first and the pill sits on it.
+
+  On a phone the code is a bar under the simulation, closed while there are
+  videos under it to find. Open, it takes the room the videos had and the
+  simulation holds still above the line it is running. With no video it starts
+  open, the other half of the screen as it always was.
+
+  "How did it go? Remix it to go further or fix it." was a full-width banner
+  above the player with the Remix button it was about at the far end of the
+  row above. The banner is gone. The operator's note and Remix are together,
+  in one of three places. On a phone, a bar at the foot of the page. Beside
+  one feed, the foot of the code's card, where the note is shown whole however
+  long it is. In three columns, under the rover's videos, since the note is
+  about the rover's run: a bar under the list when there are several, and with
+  one video a card that takes what is left of the column under it, with Remix
+  inside. With no note yet the slot says "No operator note yet" and then
+  points at Remix, so it always says whose it is.
+
 - **David's MacBook satellite mode, merged from upstream.** His three commits
   (MacBook mode, the `mac-env/` ignore, and the bash 3.2 fix to
   `start-mac.sh`) are now in this fork's history, so handing the repo back is
