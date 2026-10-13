@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
 import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
 import { describeCheck } from './describeCheck';
@@ -65,24 +65,10 @@ export function ChallengeInstructionsPanel({
   onPredict,
 }: ChallengeInstructionsPanelProps) {
   const [hintOpen, setHintOpen] = useState(false);
-  const hintRef = useRef<HTMLDivElement>(null);
   const hasHints = Boolean(step.hints && step.hints.length > 0);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (hintRef.current && !hintRef.current.contains(event.target as Node)) {
-        setHintOpen(false);
-      }
-    }
-
-    if (hintOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [hintOpen]);
-
   return (
-    <div className="flex shrink-0 flex-col gap-3 overflow-y-auto rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4">
+    <div className="sticky top-[var(--app-chrome)] z-20 flex max-h-[50vh] shrink-0 flex-col gap-3 overflow-y-auto rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4 md:relative md:top-auto md:z-auto md:max-h-none">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0 flex-1">
           <StepDots stepIndex={stepIndex} totalSteps={totalSteps} />
@@ -167,34 +153,16 @@ export function ChallengeInstructionsPanel({
 
         <div className="flex flex-wrap gap-2 md:shrink-0 md:justify-end">
           {hasHints && (
-            <div className="relative" ref={hintRef}>
-              <button
-                type="button"
-                onClick={() => setHintOpen(!hintOpen)}
-                aria-expanded={hintOpen}
-                aria-controls="challenge-hints"
-                className={pillClass('orange')}
-              >
-                <Lightbulb className="h-5 w-5" aria-hidden="true" />
-                Hint
-              </button>
-              {hintOpen && (
-                <div
-                  id="challenge-hints"
-                  className="absolute right-0 top-full z-20 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-orange-edge bg-kid-panel p-4 shadow-lg"
-                >
-                  <p className="font-display text-base font-bold text-kid-orange-text">Hints</p>
-                  <ul className="mt-2 space-y-2 text-sm text-foreground">
-                    {step.hints!.map((hint, i) => (
-                      <li key={i} className="flex gap-2">
-                        <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-kid-orange-text" aria-hidden="true" />
-                        {hint}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setHintOpen(!hintOpen)}
+              aria-expanded={hintOpen}
+              aria-controls="challenge-hints"
+              className={pillClass('orange')}
+            >
+              <Lightbulb className="h-5 w-5" aria-hidden="true" />
+              Hint
+            </button>
           )}
 
           <button type="button" onClick={onBack} disabled={!canGoBack} className={pillClass('plain')}>
@@ -219,6 +187,23 @@ export function ChallengeInstructionsPanel({
           )}
         </div>
       </div>
+
+      {hasHints && hintOpen && (
+        <div
+          id="challenge-hints"
+          className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-orange-edge p-4"
+        >
+          <p className="font-display text-base font-bold text-kid-orange-text">Hints</p>
+          <ul className="mt-2 space-y-2 text-sm text-foreground">
+            {step.hints!.map((hint, i) => (
+              <li key={i} className="flex gap-2">
+                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-kid-orange-text" aria-hidden="true" />
+                {hint}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
