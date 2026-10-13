@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { MessageSquare } from 'lucide-react';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 
@@ -19,11 +20,57 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  * rather than letting them disappear quietly.
  *
  * It holds its line when there is nothing to show yet rather than rendering
- * null, so the row below the stats does not appear out of nowhere and shove
- * the layout the first time somebody writes something. Saying "no notes yet"
- * also tells a child that a note is a thing that can arrive.
+ * null, so the row does not appear out of nowhere and shove the layout the
+ * first time somebody writes something. Saying "No operator note yet" also
+ * tells a child that a note is a thing that can arrive, and from whom.
+ *
+ * `ask` is for a mission that has finished and has no note yet. The line then
+ * goes on to point at the Remix button the page puts beside it. That prompt
+ * was a full-width banner of its own above the player, a row of every screen,
+ * nowhere near the button it was about. For a while it was this slot's whole
+ * line ("How did it go? Remix it to go further or fix it."), and the slot no
+ * longer said whose it was: the review of 13 October 2026 looked at it and
+ * asked where the operator's feedback had gone. So the line always opens by
+ * naming the operator, and the prompt is what follows. A note, once there is
+ * one, replaces both: a person's answer beats our prompt.
+ *
+ * WHERE IT IS, which is three places (MissionVideoClient decides):
+ *
+ * On a phone, a bar at the foot of the page, where it has to stay a bar: two
+ * lines of the note and no more.
+ *
+ * Beside one feed (an upright tablet, a narrow window), set into the foot of
+ * the code's card, which has height to give, so from `md` the note is shown
+ * whole. An operator can write 280 characters (the cap in
+ * api/operator/missions), about eight lines in the narrowest card, and a note
+ * cut short on a tablet cannot be read at all: there is no hover there to
+ * show the rest. The name of who wrote it drops under the note when the two
+ * do not fit on a line. The slot asks for 15rem before it will share a line
+ * with Remix, and takes all the room going: Remix then wraps under it and
+ * fills that line (RemixButton).
+ *
+ * In three columns, under the rover's videos: the note is about the rover's
+ * run, and under the video is where the review of 13 October 2026 went
+ * looking for it. With several videos it is the same bar, under the list.
+ * With one, the video is all in view and what is left of the column under it
+ * is this slot's, so it is `roomy`: a card that takes that room, the words
+ * in the middle of it at a size to be read from a chair, and whatever the
+ * page hands it (Remix) under them. An empty card with a sentence in one
+ * corner read as a hole with a border.
  */
-export function OperatorFeedback({ runs }: { runs: MissionRun[] }) {
+export function OperatorFeedback({
+  runs,
+  ask = false,
+  roomy = false,
+  children,
+}: {
+  runs: MissionRun[];
+  ask?: boolean;
+  /** It has a box to fill rather than a line to keep to. */
+  roomy?: boolean;
+  /** What goes under the words in the roomy card: the next thing to press. */
+  children?: ReactNode;
+}) {
   const withFeedback = runs
     .filter((run) => run.feedback && run.feedback.trim().length > 0)
     // Newest first. Runs written before feedbackAt existed sort last rather
@@ -32,33 +79,78 @@ export function OperatorFeedback({ runs }: { runs: MissionRun[] }) {
 
   const note = withFeedback[0];
   const others = withFeedback.length - 1;
+  const tone = note ? 'border-primary/30 bg-primary/5' : 'border-border/60 bg-card/50';
+  const author = note && (
+    <>
+      {note.feedbackBy || 'Your operator'}
+      {others > 0 && ` +${others}`}
+    </>
+  );
+  const nothingYet = (
+    <>
+      <span className="font-display font-bold text-foreground">No operator note yet.</span>{' '}
+      {ask ? 'Remix it to go further or fix it.' : 'One can arrive after your rover run.'}
+    </>
+  );
+
+  if (roomy) {
+    return (
+      // .noteCard lays the three out by the height it turns out to have
+      // (globals.css): in a row while the box is short, stacked and centred
+      // once it is tall. The box scrolls if a long note meets a short one.
+      <section
+        aria-label="Notes from the yard"
+        className={`noteCard flex min-h-0 min-w-0 flex-1 overflow-y-auto rounded-2xl border px-4 py-3 ${tone}`}
+      >
+        <div className="noteCardInner">
+          <span
+            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+              note ? 'bg-primary/15 text-primary' : 'bg-foreground/10 text-muted-foreground'
+            }`}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </span>
+          <div className="noteCardWords">
+            {note ? (
+              <>
+                <p className="text-sm leading-relaxed text-foreground">{note.feedback}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{author}</p>
+              </>
+            ) : (
+              <p className="text-sm leading-relaxed text-muted-foreground [&>span]:block [&>span]:text-base">
+                {nothingYet}
+              </p>
+            )}
+          </div>
+          {children}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       aria-label="Notes from the yard"
-      className={`flex shrink-0 items-center gap-2 rounded-xl border px-3 py-1.5 text-xs ${
-        note ? 'border-primary/30 bg-primary/5' : 'border-border/60 bg-card/50'
-      }`}
+      className={`flex min-h-10 min-w-0 flex-[999_1_15rem] items-center gap-x-2 gap-y-0.5 rounded-xl border px-3 py-1.5 text-xs md:flex-wrap ${tone}`}
     >
-      <MessageSquare
-        className={`h-3.5 w-3.5 shrink-0 ${note ? 'text-primary' : 'text-muted-foreground'}`}
-      />
+      {/* The icon and the words are one thing to the line they are on: only
+          the name wraps away from them. md:basis-80 is the width under which
+          the note would rather have the line to itself. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:basis-80 md:items-start">
+        <MessageSquare className={`h-3.5 w-3.5 shrink-0 md:mt-px ${note ? 'text-primary' : 'text-muted-foreground'}`} />
 
-      {note ? (
-        <>
-          <p className="min-w-0 flex-1 truncate text-foreground" title={note.feedback}>
+        {note ? (
+          <p className="line-clamp-2 min-w-0 flex-1 text-foreground md:line-clamp-none" title={note.feedback}>
             {note.feedback}
           </p>
-          <p className="shrink-0 text-[11px] text-muted-foreground">
-            {note.feedbackBy || 'Your operator'}
-            {others > 0 && ` +${others}`}
+        ) : (
+          <p className="line-clamp-2 min-w-0 flex-1 text-muted-foreground md:line-clamp-none [&>span]:text-sm">
+            {nothingYet}
           </p>
-        </>
-      ) : (
-        <p className="min-w-0 flex-1 truncate text-muted-foreground">
-          No notes yet. Your operator can leave one after watching your run.
-        </p>
-      )}
+        )}
+      </div>
+
+      {note && <p className="ml-auto shrink-0 text-[11px] text-muted-foreground">{author}</p>}
     </section>
   );
 }

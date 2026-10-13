@@ -70,18 +70,18 @@ export function formatDuration(seconds: number): string {
 }
 
 /**
- * What to show, given the run being watched.
+ * What to show, given the rover's run being watched, if there is one.
  *
- * A real run shows what it actually took, when that is credible. Everything
- * else - the simulation, and a real run whose record is not believable - shows
- * how long the program itself runs, which is true of every mission and is
- * never absent.
+ * A rover's run shows what it actually took, when that is credible. Everything
+ * else - a mission no rover has driven, and a run whose record is not
+ * believable - shows how long the program itself runs, which is true of every
+ * mission and is never absent.
  */
 export function durationLabel(
   trajectory: TrajectoryPoint[],
-  run?: { kind: 'sim' | 'real'; startedAt?: string | null; completedAt?: string | null },
+  run?: { startedAt?: string | null; completedAt?: string | null },
 ): string {
-  if (run?.kind === 'real') {
+  if (run) {
     const measured = measuredSeconds(run.startedAt, run.completedAt);
     if (measured !== null) return formatDuration(measured);
   }

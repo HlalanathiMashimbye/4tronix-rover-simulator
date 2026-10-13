@@ -124,7 +124,7 @@ describe('src/lib stays small', () => {
       'roverSimRender', 'roverBlockly',
     ];
     const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns',
-                        'missionClipboard', 'yardConsole', 'appSurfaces'];
+                        'missionClipboard', 'yardConsole', 'appSurfaces', 'missionLayout'];
 
     const actual = sourceFiles('lib')
       .map((f) => f.replace(/\\/g, '/').replace(/^lib\//, '').replace(/\.tsx?$/, ''))

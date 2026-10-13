@@ -54,7 +54,6 @@ describe('what the learner sees', () => {
   it('shows what a real run actually took', () => {
     expect(
       durationLabel(trajectory(8), {
-        kind: 'real',
         startedAt: '2026-08-01T10:00:00Z',
         completedAt: '2026-08-01T10:00:12Z',
       }),
@@ -65,25 +64,24 @@ describe('what the learner sees', () => {
     // Better a true statement about the mission than a negative number.
     expect(
       durationLabel(trajectory(8), {
-        kind: 'real',
         startedAt: '2026-08-01T10:00:00Z',
         completedAt: '2026-08-01T09:00:00Z',
       }),
     ).toBe('8s');
   });
 
-  it('shows the programme length for the simulation', () => {
-    expect(durationLabel(trajectory(17), { kind: 'sim' })).toBe('17s');
+  it('shows the programme length for a mission no rover has driven', () => {
+    expect(durationLabel(trajectory(17))).toBe('17s');
   });
 
   it('never says "Not yet" for a mission that has a programme', () => {
     // The whole complaint: a completed mission with a video reading "Not yet".
-    expect(durationLabel(trajectory(5), { kind: 'real' })).toBe('5s');
+    expect(durationLabel(trajectory(5), {})).toBe('5s');
   });
 
   it('says nothing rather than 0s when there is no programme at all', () => {
     // "0s" reads as a rover that never moved.
-    expect(durationLabel([], { kind: 'sim' })).toBe('—');
+    expect(durationLabel([])).toBe('—');
   });
 });
 
