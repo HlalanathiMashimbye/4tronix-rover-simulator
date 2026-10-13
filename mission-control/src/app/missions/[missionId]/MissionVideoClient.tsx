@@ -196,25 +196,21 @@ export default function MissionVideoClient({
       {remixButton}
     </>
   );
-  // Under the videos, in three columns. One video is all in view and leaves
-  // the rest of its column to the note, which takes it as a card with Remix
-  // inside. More than one and the column is a list, so the two are a bar
-  // under it.
-  const underVideos =
-    runs.length === 1 ? (
-      <OperatorFeedback runs={missionRuns} ask={remixable} roomy>
-        {remixButton}
-      </OperatorFeedback>
-    ) : (
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">{debrief}</div>
-    );
+  // Three columns, one video: the video is all in view and what is left of
+  // its column under it would be empty, so the note takes it, as a card with
+  // Remix inside ("a tonne of whitespace at the bottom of the video, that's
+  // where the comment should go", 13 October 2026). With more than one video
+  // that column is a list and every pixel of it is a video's, so the two stay
+  // in the code's card ("in the code part to make space for the videos", the
+  // same day).
+  const noteUnderTheVideo = wide && runs.length === 1;
 
   return (
     // Pinned to the viewport at every size, like Create Mission (AB#455). On a
     // phone this used to stack the panels and scroll the whole page, with the
     // tab bar and the floating button on top of the blocks. Now the one thing
     // that scrolls is the feed of pictures (.missionBody in globals.css), and
-    // the note and Remix stay put.
+    // on a phone the note and Remix stay put under it.
     <main data-surface="mission" className="h-page overflow-hidden px-3 py-2">
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
@@ -282,7 +278,13 @@ export default function MissionVideoClient({
             onSimFinished={watchedSim}
             yardId={mission.yardId}
             codeOpen={isPhone && codeOpen}
-            videosFoot={wide ? underVideos : undefined}
+            videosFoot={
+              noteUnderTheVideo ? (
+                <OperatorFeedback runs={missionRuns} ask={remixable} roomy>
+                  {remixButton}
+                </OperatorFeedback>
+              ) : undefined
+            }
             codeSlot={
               isPhone ? (
                 <MissionCode
@@ -295,11 +297,15 @@ export default function MissionVideoClient({
               ) : null
             }
           />
-          {/* Beside one feed the note and Remix are the foot of the code's
-              card (MissionCode). In three columns they are under the videos,
-              and the code has its whole card. */}
+          {/* Beside the feed, or beside the videos' column, the note and
+              Remix are the foot of the code's card (MissionCode). Under the
+              one video of three columns, the code has its whole card. */}
           {!isPhone && (
-            <MissionCode mission={mission} highlight={runningSource} footer={wide ? undefined : debrief} />
+            <MissionCode
+              mission={mission}
+              highlight={runningSource}
+              footer={noteUnderTheVideo ? undefined : debrief}
+            />
           )}
         </div>
 

@@ -36,6 +36,8 @@ import { readStoredSound, serverSoundSnapshot, setMuted, subscribeToSound } from
  * put them in frames of other shapes and filled the difference: black bars
  * beside the yard, then a card of small print beside it. Both read as the
  * layout apologising. A tile that fits its picture has nothing left over.
+ * The one exception is a phone, where the simulation's tile is the size of
+ * the video's under it so the two can be compared (globals.css has the cost).
  *
  * The simulation comes first because it is the one the code on this page is
  * about: its playhead is what lights the running line (AB#450). `codeSlot` is
@@ -124,6 +126,11 @@ export function RunFeed({
       if (further > 0) setLastBelow(further);
     };
     const frame = requestAnimationFrame(measure);
+    // And once more when the tiles have landed. They arrive on a spring, a
+    // little low and a little small, and a transform resizes nothing, so
+    // nothing below would say so: a video that ends up just over half in view
+    // was counted as still to come, from where it was in mid-air.
+    const landed = setTimeout(measure, 1200);
     // Scroll events do not bubble, and which of the two scrolls is the
     // layout's business.
     feed.addEventListener('scroll', measure, { passive: true });
@@ -136,6 +143,7 @@ export function RunFeed({
     for (const child of feed.children) observer?.observe(child);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(landed);
       feed.removeEventListener('scroll', measure);
       rest.removeEventListener('scroll', measure);
       observer?.disconnect();
@@ -321,7 +329,16 @@ function FeedTile({
           }`}
         >
           {icon}
-          {live && <span className="live-dot absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-500" />}
+          {/* The dot is inside a holder that places it. .live-dot sets its
+              own position (relative, for its ring), and globals.css is not
+              in a layer, so it beat the `absolute` this span used to carry:
+              the dot sat in the row beside the icon and pushed it 4px off
+              the centre of its badge. */}
+          {live && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-2 w-2">
+              <span className="live-dot h-full w-full rounded-full bg-emerald-500" />
+            </span>
+          )}
         </span>
         <h2 className="shrink-0 font-display text-sm font-bold text-foreground">{label}</h2>
         <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">{detail}</p>

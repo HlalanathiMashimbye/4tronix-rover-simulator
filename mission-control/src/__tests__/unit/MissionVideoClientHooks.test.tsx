@@ -181,15 +181,17 @@ describe('the note and Remix', () => {
     expect(foot.queryByRole('button', { name: /remix/i })).not.toBeInTheDocument();
     expect(screen.getAllByTestId('operator-note')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: /remix/i })).toHaveLength(1);
-    // Outside the feed, which scrolls: the bar does not.
+    // Outside the feed, which scrolls: the bar does not. The review of 13
+    // October 2026 tried them in the code's card there and wanted them back.
     expect(screen.getByTestId('feed')).not.toContainElement(screen.getByTestId('operator-note'));
   });
 
   describe('in three columns', () => {
     const under = () => within(screen.getByTestId('under-videos'));
+    const codeFoot = () => within(screen.getByTestId('code-foot'));
     const addRun = () => roverRuns.push({ id: 'run-2' });
 
-    it('are under the rover\'s videos, and the code has its whole card', async () => {
+    it('are under the video when there is one, where its column would otherwise be empty', async () => {
       // "A tonne of whitespace at the bottom of the video, that's where the
       // comment should go" (13 October 2026).
       threeColumns = true;
@@ -197,12 +199,12 @@ describe('the note and Remix', () => {
 
       expect(under().getByTestId('operator-note')).toBeInTheDocument();
       expect(under().getByRole('button', { name: /remix/i })).toBeInTheDocument();
-      expect(within(screen.getByTestId('code-foot')).queryByTestId('operator-note')).not.toBeInTheDocument();
+      expect(codeFoot().queryByTestId('operator-note')).not.toBeInTheDocument();
       expect(screen.getAllByTestId('operator-note')).toHaveLength(1);
       expect(screen.getAllByRole('button', { name: /remix/i })).toHaveLength(1);
     });
 
-    it('make one card of the room under a single video, with Remix inside it', async () => {
+    it('make one card of that room, with Remix inside it', async () => {
       threeColumns = true;
       await load('completed');
       const note = under().getByTestId('operator-note');
@@ -211,14 +213,18 @@ describe('the note and Remix', () => {
       expect(note).toContainElement(under().getByRole('button', { name: /remix/i }));
     });
 
-    it('are a bar under the list when there are several videos to scroll', async () => {
+    it('are in the code card when there are several videos, so the column is all videos', async () => {
+      // "The remix and operator note should be in the code part to make
+      // space for the videos" (the same day, with two videos on screen).
       threeColumns = true;
       addRun();
       await load('completed');
-      const note = under().getByTestId('operator-note');
 
-      expect(note).toHaveAttribute('data-roomy', 'no');
-      expect(note).not.toContainElement(under().getByRole('button', { name: /remix/i }));
+      expect(screen.getByTestId('under-videos')).toBeEmptyDOMElement();
+      expect(codeFoot().getByTestId('operator-note')).toHaveAttribute('data-roomy', 'no');
+      expect(codeFoot().getByRole('button', { name: /remix/i })).toBeInTheDocument();
+      expect(screen.getAllByTestId('operator-note')).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: /remix/i })).toHaveLength(1);
     });
 
     it('tell the stylesheet, with the widths the layout worked out', async () => {
@@ -237,6 +243,7 @@ describe('the note and Remix', () => {
       await load('completed');
 
       expect(under().queryByTestId('operator-note')).not.toBeInTheDocument();
+      expect(codeFoot().queryByTestId('operator-note')).not.toBeInTheDocument();
       expect(document.querySelector('.missionBody')).not.toHaveAttribute('data-layout');
       expect(screen.getAllByTestId('operator-note')).toHaveLength(1);
     });

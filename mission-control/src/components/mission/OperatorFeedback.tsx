@@ -39,24 +39,24 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  * On a phone, a bar at the foot of the page, where it has to stay a bar: two
  * lines of the note and no more.
  *
- * Beside one feed (an upright tablet, a narrow window), set into the foot of
+ * Beside the feed or the videos (a tablet, a laptop), set into the foot of
  * the code's card, which has height to give, so from `md` the note is shown
  * whole. An operator can write 280 characters (the cap in
  * api/operator/missions), about eight lines in the narrowest card, and a note
  * cut short on a tablet cannot be read at all: there is no hover there to
  * show the rest. The name of who wrote it drops under the note when the two
- * do not fit on a line. The slot asks for 15rem before it will share a line
- * with Remix, and takes all the room going: Remix then wraps under it and
- * fills that line (RemixButton).
+ * do not fit on a line. From `md` the slot asks for 15rem before it will
+ * share a line with Remix, and takes all the room going: Remix then wraps
+ * under it and fills that line (RemixButton).
  *
- * In three columns, under the rover's videos: the note is about the rover's
- * run, and under the video is where the review of 13 October 2026 went
- * looking for it. With several videos it is the same bar, under the list.
- * With one, the video is all in view and what is left of the column under it
- * is this slot's, so it is `roomy`: a card that takes that room, the words
- * in the middle of it at a size to be read from a chair, and whatever the
- * page hands it (Remix) under them. An empty card with a sentence in one
- * corner read as a hole with a border.
+ * Under the one video of three columns. A single video is all in view, and
+ * what is left of its column under it would be empty; that is where the
+ * review of 13 October 2026 said the comment should go. There it is `roomy`:
+ * a card that takes that room, the words at a size to be read from a chair,
+ * and whatever the page hands it (Remix) with them. An empty card with a
+ * sentence in one corner read as a hole with a border. With more than one
+ * video the column is a list and the note is back in the code's card, so the
+ * videos have all of it.
  */
 export function OperatorFeedback({
   runs,
@@ -131,7 +131,7 @@ export function OperatorFeedback({
   return (
     <section
       aria-label="Notes from the yard"
-      className={`flex min-h-10 min-w-0 flex-[999_1_15rem] items-center gap-x-2 gap-y-0.5 rounded-xl border px-3 py-1.5 text-xs md:flex-wrap ${tone}`}
+      className={`flex min-h-10 min-w-0 flex-[999_1_0%] items-center gap-x-2 gap-y-0.5 rounded-xl border px-3 py-1.5 text-xs md:basis-60 md:flex-wrap ${tone}`}
     >
       {/* The icon and the words are one thing to the line they are on: only
           the name wraps away from them. md:basis-80 is the width under which
