@@ -34,8 +34,8 @@ def recording_filename_pattern():
     """RECORDING_FILENAME_PATTERN, read out of the TypeScript source itself.
 
     Only the shared subset of regex syntax is exercised here (character
-    classes, anchors, a non-capturing group, \\d and {n}), which both engines
-    read the same way.
+    classes, anchors, a non-capturing group, a lazy quantifier, \\d and {n}),
+    which both engines read the same way.
     """
     with open(YOUTUBE_LINKING_TS, encoding='utf-8') as f:
         source = f.read()
@@ -77,5 +77,58 @@ class TestRecordingTitleStillMatches:
         assert match.group(1) == 'm1'
         assert match.group(2) == 'curiosity'
 
-    def test_a_third_segment_that_is_not_the_stamp_does_not_match(self, recording_filename_pattern):
-        assert recording_filename_pattern.match('m1__curiosity__notastamp') is None
+    def test_a_third_segment_that_is_not_the_stamp_is_not_read_as_one(self, recording_filename_pattern):
+        # This asserted None until mission ids were allowed their underscores.
+        # An id may hold two side by side, so the title now reads as a mission
+        # called m1__curiosity, which nothing is. What it must never do is the
+        # thing a generic third segment would: claim mission m1 at curiosity.
+        match = recording_filename_pattern.match('m1__curiosity__notastamp')
+        assert match
+        assert match.group(1) == 'm1__curiosity'
+        assert match.group(2) == 'notastamp'
+
+
+class TestEveryIdTheYardCanFileIsReadBack:
+    """recording_key keeps underscores, so the linker has to read them back.
+
+    THE SECOND DRIFT, and the same shape as the first. recording_key lets
+    `A-Za-z0-9_-` through, which is nanoid's whole alphabet, while the title
+    match allowed everything except the underscore. About 28% of mission ids
+    have one, so the satellite wrote
+    `U3himA_pHY0Ragj_zGYag__curiosity__20261010T124247Z.mp4` and Mission
+    Control could not read its own mission id back out of it.
+
+    Each id goes through recording_key first, because that is what the web
+    server does to a name before start_recording ever sees it.
+    """
+
+    @pytest.mark.parametrize('mission_id', [
+        'U3himA_pHY0Ragj_zGYag',    # the real one, 10 October 2026
+        'rc6LJehZ3_hLDfM6Fh5MU',    # one underscore
+        'V1StGXR8_Z5jdHi6B-myT',    # an underscore and a hyphen
+        'rc6LJehZ3ehLDfM6Fh5M_',    # ends in one: three in a row in the filename
+        '_c6LJehZ3ehLDfM6Fh5MU',    # starts with one
+        'rc6LJehZ3__LDfM6Fh5MU',    # two side by side, which is not the separator
+    ])
+    def test_the_id_comes_back_whole(self, recording_filename_pattern, mission_id):
+        ok, path = recording_control.start_recording(
+            recording_control.recording_key(mission_id), 'curiosity')
+        assert ok
+
+        title = os.path.splitext(os.path.basename(path))[0]
+        match = recording_filename_pattern.match(title)
+
+        assert match, (
+            f'{title!r} (produced by start_recording) does not match '
+            'RECORDING_FILENAME_PATTERN, so this mission can never be linked '
+            'from an unrenamed upload'
+        )
+        assert match.group(1) == mission_id
+        assert match.group(2) == 'curiosity'
+
+    def test_an_id_ending_in_an_underscore_comes_back_from_an_unstamped_title(
+            self, recording_filename_pattern):
+        match = recording_filename_pattern.match('rc6LJehZ3ehLDfM6Fh5M___curiosity')
+        assert match
+        assert match.group(1) == 'rc6LJehZ3ehLDfM6Fh5M_'
+        assert match.group(2) == 'curiosity'

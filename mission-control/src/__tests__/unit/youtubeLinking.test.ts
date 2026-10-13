@@ -10,6 +10,7 @@ import {
   watchUrl,
 } from '@/core/domain/services/youtubeLinking';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { yardIdComplaint } from '@/core/domain/entities/Yard';
 
 function run(over: Partial<MissionRun> = {}): MissionRun {
   return { yardId: 'curiosity', status: 'completed', ...over } as MissionRun;
@@ -57,10 +58,21 @@ describe('the filename YouTube turns into a title', () => {
     expect(missionFromVideo({ title: 'm-7f3a91__curiosity', description: '' })?.missionId).toBe('m-7f3a91');
   });
 
-  it('rejects a stamp that is not the shape recording_control writes', () => {
-    // A third segment that is not the UTC stamp format must not qualify -
-    // otherwise any two-underscore title would claim a mission.
-    expect(missionFromVideo({ title: 'm1__curiosity__notastamp', description: '' })).toBeNull();
+  it('does not take a third segment for the stamp unless it is the shape recording_control writes', () => {
+    /**
+     * The stamp is matched by its shape, never as "whatever comes third". If
+     * it were, this title would claim mission m1 at curiosity, and a video
+     * somebody named by hand would land on a real learner's run.
+     *
+     * It is not null either, and cannot be. A mission id may hold two
+     * underscores side by side, so the one reading left is a mission called
+     * `m1__curiosity` at a yard called `notastamp`. Nothing has that id, which
+     * makes it the wasted lookup further down rather than a wrong link.
+     */
+    expect(missionFromVideo({ title: 'm1__curiosity__notastamp', description: '' })).toEqual({
+      missionId: 'm1__curiosity',
+      yardId: 'notastamp',
+    });
   });
 
   it('still works when the description was pasted as well', () => {
@@ -95,6 +107,103 @@ describe('the filename YouTube turns into a title', () => {
      * on a learner's page.
      */
     expect(missionFromVideo({ title: 'holiday__beach', description: '' })?.missionId).toBe('holiday');
+  });
+});
+
+describe('a mission id with underscores in it', () => {
+  /**
+   * Mission ids are nanoid's, and its alphabet is A-Za-z0-9_-. About 28% of
+   * 21-character ids hold at least one underscore, and the filename pattern
+   * used to refuse every one of them, so the unrenamed upload of those
+   * missions never linked. The first title here is a real recording from
+   * 10 October 2026 that did not match.
+   */
+  const STAMP = '20261010T124247Z';
+  const titled = (title: string) => missionFromVideo({ title, description: '' });
+
+  it('reads the real recording that never linked', () => {
+    expect(titled(`U3himA_pHY0Ragj_zGYag__curiosity__${STAMP}`)).toEqual({
+      missionId: 'U3himA_pHY0Ragj_zGYag',
+      yardId: 'curiosity',
+    });
+    expect(titled('U3himA_pHY0Ragj_zGYag__curiosity')).toEqual({
+      missionId: 'U3himA_pHY0Ragj_zGYag',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('reads an id with a single underscore', () => {
+    expect(titled(`rc6LJehZ3_hLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('rc6LJehZ3_hLDfM6Fh5MU');
+    expect(titled('rc6LJehZ3_hLDfM6Fh5MU__curiosity')?.missionId).toBe('rc6LJehZ3_hLDfM6Fh5MU');
+  });
+
+  it('still reads an id with a hyphen, alone or beside an underscore', () => {
+    expect(titled(`rc6LJehZ3-hLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('rc6LJehZ3-hLDfM6Fh5MU');
+    expect(titled('rc6LJehZ3-hLDfM6Fh5MU__curiosity')?.missionId).toBe('rc6LJehZ3-hLDfM6Fh5MU');
+    expect(titled(`V1StGXR8_Z5jdHi6B-myT__curiosity__${STAMP}`)?.missionId).toBe('V1StGXR8_Z5jdHi6B-myT');
+    expect(titled('V1StGXR8_Z5jdHi6B-myT__curiosity')?.missionId).toBe('V1StGXR8_Z5jdHi6B-myT');
+  });
+
+  it('gives an id that ends in an underscore its underscore back', () => {
+    /**
+     * Three in a row: the id's own, then the separator. A yard cannot start
+     * with an underscore, so it is the last two that separate, and reading it
+     * the other way would look up a mission one character short of its id.
+     */
+    expect(titled(`rc6LJehZ3ehLDfM6Fh5M___curiosity__${STAMP}`)).toEqual({
+      missionId: 'rc6LJehZ3ehLDfM6Fh5M_',
+      yardId: 'curiosity',
+    });
+    expect(titled('rc6LJehZ3ehLDfM6Fh5M___curiosity')).toEqual({
+      missionId: 'rc6LJehZ3ehLDfM6Fh5M_',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('reads an id that starts with an underscore', () => {
+    expect(titled(`_c6LJehZ3ehLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('_c6LJehZ3ehLDfM6Fh5MU');
+    expect(titled('_c6LJehZ3ehLDfM6Fh5MU__curiosity')?.missionId).toBe('_c6LJehZ3ehLDfM6Fh5MU');
+  });
+
+  it('keeps a double underscore that belongs to the id', () => {
+    // nanoid can put two side by side. The separator is the one in front of
+    // the yard, not the first one in the title.
+    expect(titled(`rc6LJehZ3__LDfM6Fh5MU__curiosity__${STAMP}`)).toEqual({
+      missionId: 'rc6LJehZ3__LDfM6Fh5MU',
+      yardId: 'curiosity',
+    });
+    expect(titled('rc6LJehZ3__LDfM6Fh5MU__curiosity')).toEqual({
+      missionId: 'rc6LJehZ3__LDfM6Fh5MU',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('ignores a title that merely has underscores in it', () => {
+    // Single underscores are how people type spaces into a file name. Only
+    // the double one in front of a yard is ours.
+    expect(titled('mars_yard_open_day')).toBeNull();
+    expect(titled('rover_run_2_final')).toBeNull();
+    expect(titled('IMG_20261010_124247')).toBeNull();
+  });
+
+  it('needs a yard with no underscore in it after the separator', () => {
+    // These have the double underscore, and nothing after it that a yard id
+    // could be.
+    expect(titled('open_day__take_2')).toBeNull();
+    expect(titled('m1__curiosity_')).toBeNull();
+    expect(titled(`m1__curiosity_${STAMP}`)).toBeNull();
+  });
+
+  it('rests on a yard id never holding an underscore or looking like a stamp', () => {
+    /**
+     * The split is only unambiguous because of what a yard id cannot be, and
+     * that rule lives in entities/Yard, not here. If it is ever loosened this
+     * goes red, and the filename pattern has to be thought about again.
+     */
+    expect(yardIdComplaint('curiosity')).toBeNull();
+    expect(yardIdComplaint('cape_town')).not.toBeNull();
+    expect(yardIdComplaint('_curiosity')).not.toBeNull();
+    expect(yardIdComplaint(STAMP)).not.toBeNull();
   });
 });
 
