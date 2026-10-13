@@ -531,6 +531,19 @@
                     </div>
                     <div class="info-pop" id="tip-quality" role="tooltip">Sharper fills a big screen better and costs more bandwidth. Picking one saves and restarts the camera.</div>
 
+                    <!-- A camera goes where there is something to mount it
+                         on. Where that leaves the yard upside down against
+                         the simulator's map, this turns the picture rather
+                         than sending someone up a ladder. -->
+                    <div class="settings-divider"></div>
+                    <div class="sync-field num-field">
+                        <span class="sync-label">Which way up
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-rotation" aria-label="About which way up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <div class="seg" id="tunRotation" role="radiogroup" aria-label="Which way up"></div>
+                    </div>
+                    <div class="info-pop" id="tip-rotation" role="tooltip">Turned round shows the picture half a turn over. Pick the one that puts the start spot where the simulator has it. New recordings follow; ones already made do not change.</div>
+
                     <div class="settings-divider"></div>
                     <label class="sync-field num-field">
                         <span class="sync-label">Wait for camera up to
@@ -847,6 +860,48 @@
         let lastResolutionOptions = null;
         const tunMsg = document.getElementById('tunMsg');
 
+        // Which way up is a choice too, and unlike picture quality it needs
+        // no restart: the camera asks which way up on its way to each frame,
+        // so the picture turns within a second of the click.
+        let rotationChoice = null;
+        let lastRotationOptions = null;
+
+        function paintRotation(options, current) {
+            const box = document.getElementById('tunRotation');
+            if (!box || !options) return;
+            rotationChoice = current;
+            box.innerHTML = '';
+            options.values.forEach((value, i) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.setAttribute('role', 'radio');
+                b.dataset.value = value;
+                b.setAttribute('aria-checked', String(value === current));
+                b.textContent = options.labels[i];
+                b.addEventListener('click', () => chooseRotation(value));
+                box.appendChild(b);
+            });
+        }
+
+        async function chooseRotation(value) {
+            if (value === rotationChoice) return;
+            const before = rotationChoice;
+            paintRotation(lastRotationOptions, value);
+            setStatus(tunMsg, 'Saving\u2026');
+            try {
+                const resp = await fetch('/operator/api/config/tunables', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cameraRotation: value }),
+                });
+                if (!resp.ok) throw new Error('save failed');
+                flashSaved(document.getElementById('tunRotation'));
+                setStatus(tunMsg, 'Saved. The picture turns within a second.', 'ok', 6000);
+            } catch (e) {
+                paintRotation(lastRotationOptions, before);
+                setStatus(tunMsg, 'Could not turn the picture. It is as it was.', 'bad');
+            }
+        }
+
         // The slider's own readout, since a range input shows no number on
         // its own. Kept in sync on every drag and every time something
         // programmatic sets .value (page load, a save's repaint) - a range
@@ -887,6 +942,8 @@
                 }
                 lastResolutionOptions = (d.options || {}).cameraResolution || null;
                 paintResolution(lastResolutionOptions, d.values.cameraResolution);
+                lastRotationOptions = (d.options || {}).cameraRotation || null;
+                paintRotation(lastRotationOptions, d.values.cameraRotation);
             } catch (e) { /* offline: leave the fields as they are */ }
         }
 

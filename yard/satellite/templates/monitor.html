@@ -27,25 +27,47 @@
         }
 
         .container {
+            /* The one height both panels' headers are. They were whatever
+               their contents made them, 71px and 49px, so the two bars along
+               the top of the television did not line up. */
+            --monitor-header: 4.5rem;
             display: flex;
             width: 100%;
             height: 100%;
         }
 
-        /* Left panel - Camera feed (2/3) */
+        /* Left panel - the camera's picture.
+
+           AS WIDE AS THE PICTURE IS AT THE SCREEN'S FULL HEIGHT. The camera
+           is 4:3 and a television is 16:9. This panel was two thirds of the
+           screen whatever its shape, which on a television is wider than a
+           4:3 picture of that height, and the picture was drawn to the width:
+           its bottom eighth was off the foot of the screen (the yard's near
+           wall, 130px of it at 1080p). Sized from the height instead, the
+           picture fills its panel exactly, nothing is cut off and nothing
+           stands beside it, and the queue gets the width that is left.
+
+           It may shrink (a squarer screen, where the queue's 340px comes
+           first); the picture is then fitted inside and the space is above
+           and below it. */
         .camera-panel {
-            flex: 2;
+            flex: 0 1 auto;
+            width: calc((100vh - var(--monitor-header)) * 4 / 3);
+            min-width: 0;
             display: flex;
             flex-direction: column;
             background: var(--surface);
             border-right: 2px solid var(--border);
+            box-sizing: content-box;
         }
 
         .camera-header {
             display: flex;
+            flex: none;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 20px;
+            height: var(--monitor-header);
+            padding: 0 20px;
             background: var(--surface-2);
             border-bottom: 1px solid var(--border);
         }
@@ -90,6 +112,10 @@
 
         .camera-view {
             flex: 1;
+            /* Without this a flex item is never shorter than its content, and
+               its content is a canvas that is three quarters as tall as it is
+               wide: the view grew past the foot of the screen to hold it. */
+            min-height: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -104,9 +130,14 @@
                television. It now fills the panel.
 
                object-fit: contain keeps the camera's 4:3 (the IMX500 is
-               4056x3040 and camera_server streams 640x480, both 4:3), so a
-               16:9 screen letterboxes at the sides rather than stretching
-               faces sideways. */
+               4056x3040 and camera_server streams 4:3 at every quality), so
+               where the panel is not 4:3 itself the picture is fitted inside
+               it rather than stretched.
+
+               Out of the flow, so it takes the view's size and never gives
+               it one. */
+            position: absolute;
+            inset: 0;
             width: 100%;
             height: 100%;
             object-fit: contain;
@@ -192,21 +223,25 @@
             font-size: 48px;
         }
 
-        /* Right panel - Queue status (1/3) */
+        /* Right panel - the queue: whatever the picture leaves, and never
+           under 340px, which is what its header needs to stay on one line. It was
+           capped at 400, which on a television left the
+           camera's panel wider than its picture. */
         .queue-panel {
-            flex: 1;
+            flex: 1 0 340px;
             display: flex;
             flex-direction: column;
-            min-width: 300px;
-            max-width: 400px;
+            min-width: 340px;
             position: relative;
         }
 
         .queue-header {
             display: flex;
+            flex: none;
             align-items: center;
             justify-content: space-between;
-            padding: 12px 20px;
+            height: var(--monitor-header);
+            padding: 0 20px;
             background: var(--surface-2);
             border-bottom: 1px solid var(--border);
         }
@@ -215,6 +250,11 @@
             font-size: 18px;
             font-weight: 500;
             color: var(--text-faint);
+            /* One line, in a bar of one line's height. */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
 
         .rover-badge {

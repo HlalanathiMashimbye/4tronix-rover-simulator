@@ -5,7 +5,7 @@ import os
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 # live_server comes from conftest.py: one session server shared with
 # test_blockly_codegen.py, on an ephemeral port.
@@ -464,15 +464,20 @@ def test_rover_url_edit_rejected_shows_error(page: Page, live_server):
 TUNABLE_VALUES = {
     'cameraReadyTimeout': 2.0,
     'cameraResolution': '640x480',
+    'cameraRotation': '0',
     'cleanupGracePeriod': 72.0,
     'cleanupMaxAge': 21.0,
     'cleanupMinFreeGB': 2.0,
 }
-RESOLUTION_OPTIONS = {
+CHOICE_OPTIONS = {
     'cameraResolution': {
         'values': ['640x480', '1280x960', '1920x1440'],
         'labels': ['Standard', 'Sharp', 'Sharpest'],
-    }
+    },
+    'cameraRotation': {
+        'values': ['0', '180'],
+        'labels': ['As mounted', 'Turned round'],
+    },
 }
 
 
@@ -489,7 +494,7 @@ def mock_tunables(page, clamp_to=None, fail=False):
         request = route.request
         if request.method != 'POST':
             route.fulfill(status=200, content_type='application/json', body=json.dumps(
-                {'values': TUNABLE_VALUES, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+                {'values': TUNABLE_VALUES, 'options': CHOICE_OPTIONS, 'limits': {}}))
             return
 
         body = json.loads(request.post_data)
@@ -503,7 +508,7 @@ def mock_tunables(page, clamp_to=None, fail=False):
         if clamp_to is not None:
             in_force.update(clamp_to)
         route.fulfill(status=200, content_type='application/json', body=json.dumps(
-            {'status': 'ok', 'values': in_force, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+            {'status': 'ok', 'values': in_force, 'options': CHOICE_OPTIONS, 'limits': {}}))
 
     page.route('**/api/config/tunables', handle)
     return posted
@@ -610,12 +615,72 @@ def test_a_value_above_the_slider_says_the_real_number(page: Page, live_server):
     page.route('**/api/config/tunables', lambda route: route.fulfill(
         status=200, content_type='application/json',
         body=json.dumps({'values': dict(TUNABLE_VALUES, cameraReadyTimeout=7.5),
-                         'options': RESOLUTION_OPTIONS, 'limits': {}})))
+                         'options': CHOICE_OPTIONS, 'limits': {}})))
     page.goto(f'{live_server}/status')
     wait_for_badge(page, 'satellite')
 
     page.wait_for_function(
         "document.getElementById('tunMsg').textContent.includes('In force: 7.5s')")
+
+
+# --- Which way up the camera's picture is ------------------------------------
+# The Cape Town camera films the yard half a turn round from the simulator's
+# map. Settings turns the picture, which is a choice like picture quality, and
+# unlike it needs no camera restart.
+
+def test_which_way_up_is_a_choice_that_starts_on_what_is_in_force(page: Page, live_server):
+    open_tuned_settings(page, live_server)
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    expect(choice.get_by_role('radio', name='As mounted')).to_have_attribute('aria-checked', 'true')
+    expect(choice.get_by_role('radio', name='Turned round')).to_have_attribute('aria-checked', 'false')
+
+
+def test_turning_the_picture_saves_on_the_click_and_does_not_restart_the_camera(page: Page, live_server):
+    posted = open_tuned_settings(page, live_server)
+    restarts = []
+    page.route('**/operator/api/camera/start', lambda route: (
+        restarts.append(1),
+        route.fulfill(status=200, content_type='application/json', body='{}')))
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    choice.get_by_role('radio', name='Turned round').click()
+
+    expect(choice.get_by_role('radio', name='Turned round')).to_have_attribute('aria-checked', 'true')
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent.startsWith('Saved')")
+    assert posted == [{'cameraRotation': '180'}]
+    # The camera asks which way up on its way to every frame. Taking it down
+    # and up again, as a change of quality has to, would blank the monitor
+    # for a setting that needed nothing of the kind.
+    assert restarts == []
+
+
+def test_a_turn_that_could_not_be_saved_goes_back_and_says_so(page: Page, live_server):
+    open_tuned_settings(page, live_server, fail=True)
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    choice.get_by_role('radio', name='Turned round').click()
+
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent.includes('Could not turn the picture')")
+    expect(choice.get_by_role('radio', name='As mounted')).to_have_attribute('aria-checked', 'true')
+
+
+def test_a_satellite_that_does_not_offer_the_choice_shows_no_broken_control(page: Page, live_server):
+    # An older web server answering a newer page, half way through a pull.
+    mock_status(page)
+    page.route('**/api/config/tunables', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps({'values': {k: v for k, v in TUNABLE_VALUES.items() if k != 'cameraRotation'},
+                         'options': {'cameraResolution': CHOICE_OPTIONS['cameraResolution']},
+                         'limits': {}})))
+    page.goto(f'{live_server}/status')
+    wait_for_badge(page, 'satellite')
+    page.wait_for_function("document.getElementById('tunGracePeriod').value === '72'")
+
+    expect(page.get_by_role('radiogroup', name='Which way up').get_by_role('radio')).to_have_count(0)
+    expect(page.get_by_role('radiogroup', name='Picture quality').get_by_role('radio')).to_have_count(3)
 
 
 # --- Camera picked by name ---------------------------------------------------

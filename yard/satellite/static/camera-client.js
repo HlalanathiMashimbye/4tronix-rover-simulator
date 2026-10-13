@@ -72,8 +72,18 @@
         displayFrame(frameData) {
             const img = new Image();
             img.onload = () => {
-                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-                this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
+                // The canvas has as many pixels as the frame does. It was a
+                // fixed 640 x 480, so a camera set to "Sharp" or "Sharpest"
+                // on Settings had its frames drawn down to 640 x 480 and then
+                // stretched back up to fill a television: the setting cost
+                // bandwidth and bought nothing on the one screen it is for.
+                // The page's CSS decides how big the canvas is shown; this
+                // only decides how much detail there is to show.
+                if (this.canvas.width !== img.naturalWidth || this.canvas.height !== img.naturalHeight) {
+                    this.canvas.width = img.naturalWidth;
+                    this.canvas.height = img.naturalHeight;
+                }
+                this.ctx.drawImage(img, 0, 0);
             };
             img.src = 'data:image/jpeg;base64,' + frameData;
         }

@@ -329,6 +329,27 @@ ws.onmessage = (event) => {
 - Supports multiple connected clients
 - Auto-reconnection handling
 
+### Which way up the picture is
+
+A camera goes where there is something to mount it on. If that leaves the
+yard half a turn round from the simulator's map, turn the picture rather than
+the camera: **Settings → Camera → Which way up → Turned round**. It saves on
+the click and the picture turns within a second, with no restart.
+
+The test is the start spot. The simulator draws north at the top, so the
+start spot is on the left of the map. Stand the camera's picture next to it
+(a mission's page in Mission Control shows the two together) and pick the
+setting that puts the start spot on the left of the video too. Cape Town's
+camera needs "Turned round"; that is how the setting came to exist.
+
+The turn is made in `camera_server.py`, where a frame is made, so the monitor,
+the run station's live view and the recording that goes to YouTube all get
+the same picture. Detection boxes are moved with it and drawn afterwards, so
+their labels still read the right way up. Recordings already made are not
+changed. `CAMERA_ROTATION=180` seeds it for a fresh box; the stored setting
+wins. Only `0` and `180` are accepted: a quarter turn would make the 4:3
+picture 3:4, and everything after the camera is 4:3.
+
 ## Tablet Interface (/code/)
 
 ### Tabs
@@ -399,14 +420,28 @@ const isSpyMode = urlParams.get('spy') === 'true' || urlParams.get('mock') === '
 ### Layout
 
 ```
-┌────────────────────────────┬──────────────┐
-│                            │   Current    │
-│                            │   Pending    │
-│      Camera Feed           │   History    │
-│        (2/3)               │    (1/3)     │
-│                            │              │
-└────────────────────────────┴──────────────┘
+┌─────────────────────────────┬─────────────┐
+│                             │   Current   │
+│                             │   Pending   │
+│      Camera Feed            │   History   │
+│   (4:3, the screen's        │  (the rest, │
+│    full height)             │  340px min) │
+└─────────────────────────────┴─────────────┘
 ```
+
+The camera's panel is as wide as a 4:3 picture is at the screen's full height,
+and the queue has what is left. On a 16:9 television that is a picture
+1344 x 1008 beside a queue 574 wide, with nothing cut off and nothing beside
+the picture. On a squarer screen the queue keeps its 340px and the picture is
+fitted in the space that leaves, with room above and below it.
+
+It used to be two thirds and one third whatever the screen's shape, with the
+picture drawn to the panel's width: on a 1080p television the bottom 130px of
+the yard was off the foot of the screen.
+
+The canvas takes each frame's own size, so "Sharp" and "Sharpest" on Settings
+really are sharper here. It was a fixed 640 x 480 that every frame was drawn
+down to.
 
 ### Features
 

@@ -45,6 +45,33 @@ RESOLUTION_LABELS = {
 }
 
 
+# Which way up the picture is. A camera goes where there is something to mount
+# it on, and at Cape Town that left the yard half a turn round from the
+# simulator's map: the start spot on the right of the video and on the left of
+# the simulation. Nobody noticed until the two were shown at the same size,
+# one above the other (13 October 2026).
+#
+# Half a turn or none, and nothing between. A quarter turn would make the 4:3
+# picture 3:4, and everything downstream of the camera is 4:3.
+CAMERA_ROTATIONS = Choices(('0', '180'))
+
+ROTATION_LABELS = {
+    '0': 'As mounted',
+    '180': 'Turned round',
+}
+
+# What the Settings page calls each value of a tunable that is picked.
+CHOICE_LABELS = {
+    'cameraResolution': RESOLUTION_LABELS,
+    'cameraRotation': ROTATION_LABELS,
+}
+
+
+def camera_turned_round():
+    """Whether the camera's picture is to be shown half a turn round."""
+    return get('cameraRotation') == '180'
+
+
 def resolution_size(value=None):
     """The chosen resolution as a (width, height) pair."""
     raw = value if value is not None else get('cameraResolution')
@@ -77,6 +104,7 @@ TUNABLES = {
     'cameraHost': ('camera_host', 'CAMERA_HOST', 'localhost', str, None),
     'cameraReadyTimeout': ('camera_ready_timeout', 'CAMERA_READY_TIMEOUT', 2.0, float, (0.5, 30.0)),
     'cameraResolution': ('camera_resolution', 'CAMERA_RESOLUTION', '640x480', str, CAMERA_RESOLUTIONS),
+    'cameraRotation': ('camera_rotation', 'CAMERA_ROTATION', '0', str, CAMERA_ROTATIONS),
     'cleanupGracePeriod': ('cleanup_grace_hours', 'CLEANUP_GRACE_HOURS', 72.0, float, (1.0, 168.0)),
     'cleanupMaxAge': ('cleanup_max_days', 'CLEANUP_MAX_DAYS', 21.0, float, (1.0, 60.0)),
     'cleanupMinFreeGB': ('cleanup_min_free_gb', 'CLEANUP_MIN_FREE_GB', 2.0, float, (0.5, 16.0)),
@@ -143,7 +171,7 @@ def options():
     into that it has to validate afterwards.
     """
     return {name: {'values': list(spec[4]),
-                   'labels': [RESOLUTION_LABELS.get(v, v) for v in spec[4]]}
+                   'labels': [CHOICE_LABELS.get(name, {}).get(v, v) for v in spec[4]]}
             for name, spec in TUNABLES.items() if isinstance(spec[4], Choices)}
 
 
