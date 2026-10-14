@@ -137,3 +137,88 @@ def test_a_very_short_window_keeps_the_column_wide_enough_for_its_buttons(page: 
     now = station(page)
 
     assert now['panel']['width'] >= 22 * 16 - 1
+
+
+# --- Stacked on a phone --------------------------------------------------------
+# The rail took the height its cards wanted before the live panel got any, and
+# the panel was left 220px for a header and controls that are 257 on their
+# own. A phone showed no picture at all, and the foot of the panel was cut off
+# through the middle of Send and Stop (found 14 October 2026).
+
+PHONES = [(390, 844), (412, 915), (360, 800)]
+SHORT_PHONES = [(375, 667), (360, 640)]
+
+
+def phone(page: Page):
+    return page.evaluate("""() => {
+        const box = (selector) => {
+            const b = document.querySelector(selector).getBoundingClientRect();
+            return { left: b.left, top: b.top, width: b.width, height: b.height, bottom: b.bottom, right: b.right };
+        };
+        const head = document.querySelector('.live-panel .panel-head');
+        return {
+            panel: box('.live-panel'), view: box('.live-view'), stop: box('#stopBtn'), send: box('#runBtn'),
+            rail: box('.side'), headRunsOver: head.scrollWidth - head.clientWidth,
+            screen: { width: innerWidth, height: innerHeight },
+            scrollsBy: document.documentElement.scrollHeight - innerHeight,
+        };
+    }""")
+
+
+@pytest.mark.parametrize('width,height', PHONES + SHORT_PHONES)
+def test_a_phone_shows_the_picture_with_its_warning_up(page: Page, live_server, width, height):
+    open_station(page, live_server, width, height)
+    page.evaluate("document.getElementById('runWarning').classList.add('show')")
+    settle(page)
+
+    now = phone(page)
+
+    assert now['view']['height'] >= 120, f"the picture has {now['view']['height']:.0f}px"
+
+
+@pytest.mark.parametrize('width,height', PHONES)
+def test_on_a_phone_the_picture_is_the_width_of_the_panel(page: Page, live_server, width, height):
+    open_station(page, live_server, width, height)
+    page.evaluate("document.getElementById('runWarning').classList.add('show')")
+    settle(page)
+
+    now = phone(page)
+
+    assert is_the_pictures_shape(now['view'])
+    assert now['view']['width'] >= now['panel']['width'] - 4
+
+
+@pytest.mark.parametrize('width,height', PHONES + SHORT_PHONES)
+def test_on_a_phone_send_and_stop_are_whole_and_on_the_screen(page: Page, live_server, width, height):
+    open_station(page, live_server, width, height)
+    page.evaluate("document.getElementById('runWarning').classList.add('show')")
+    settle(page)
+
+    now = phone(page)
+
+    for button in (now['stop'], now['send']):
+        # Inside the panel, which clips what runs past it, and on the screen.
+        assert button['bottom'] <= now['panel']['bottom']
+        assert button['bottom'] <= now['screen']['height']
+        # A thumb's worth.
+        assert button['height'] >= 44
+    assert now['scrollsBy'] <= 0
+
+
+@pytest.mark.parametrize('width,height', PHONES + SHORT_PHONES)
+def test_on_a_phone_the_rail_keeps_room_to_be_scrolled_in(page: Page, live_server, width, height):
+    open_station(page, live_server, width, height)
+
+    now = phone(page)
+
+    assert now['rail']['height'] >= 5 * 16 - 1
+    assert now['rail']['bottom'] <= now['screen']['height']
+
+
+@pytest.mark.parametrize('width,height', PHONES + SHORT_PHONES)
+def test_on_a_phone_the_panels_bar_ends_inside_the_panel(page: Page, live_server, width, height):
+    # "Start recording" was cut through its last letter.
+    open_station(page, live_server, width, height)
+
+    assert phone(page)['headRunsOver'] <= 0
+
