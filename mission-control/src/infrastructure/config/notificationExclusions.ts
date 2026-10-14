@@ -24,7 +24,47 @@ export interface NotificationExclusion {
   decidedOn: string;
 }
 
-export const NOTIFICATION_EXCLUSIONS: readonly NotificationExclusion[] = [];
+/** Why every entry below is here: one test session, one problem. */
+const TEST_MISSION_26_SEP =
+  'Test mission sent on 26 Sep 2026 carrying an email hash; its notifications reached someone they were not meant for (AB#470).';
+
+/**
+ * The 26 September test missions that carry an email hash, as confirmed by
+ * the team on 14 October 2026. No other mission sent that day is listed, and
+ * none of them is affected.
+ */
+export const NOTIFICATION_EXCLUSIONS: readonly NotificationExclusion[] = [
+  {
+    // Mighty Rock Seeker
+    missionId: 'dMxaVCCnpGmfaS_902t43',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
+  {
+    // Eager Helios Pioneer
+    missionId: 'cIgRU5eNGqX8CZLUPYrqR',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
+  {
+    // Lucky Mars Prospector
+    missionId: 'Ktlh4oLSZ2-11nxzsN6zG',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
+  {
+    // Steady Sand Wanderer
+    missionId: 'B0q3sdAz7BhJZipS0AMmL',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
+  {
+    // Eager Crater Observer
+    missionId: 'qoDwbhjejm6oz64ZlHVJI',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
+];
 
 export const EXCLUDED_MISSION_IDS: ReadonlySet<string> = new Set(
   NOTIFICATION_EXCLUSIONS.map((exclusion) => exclusion.missionId),

@@ -34,3 +34,27 @@ it('is handed to the one notification service the app builds', () => {
   const factory = container.slice(container.indexOf('export function notificationService'));
   expect(factory.slice(0, factory.indexOf('\n}'))).toContain('EXCLUDED_MISSION_IDS');
 });
+
+it('stops every listed mission, through the service the app builds with the list', async () => {
+  // The listed ids are the 26 Sep test missions (AB#470): each must reach no one.
+  const { MissionNotificationService } = await import('@/core/application/services/MissionNotificationService');
+  const send = jest.fn();
+  const findByLearnerRef = jest.fn(async () => ({ email: 'someone@example.com' }));
+  const service = new MissionNotificationService(
+    { send },
+    { statusUpdate: () => ({ subject: '', html: '' }) },
+    { findByLearnerRef },
+    'http://localhost:3000',
+    EXCLUDED_MISSION_IDS,
+  );
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+  expect(NOTIFICATION_EXCLUSIONS.length).toBeGreaterThan(0);
+  for (const { missionId } of NOTIFICATION_EXCLUSIONS) {
+    const mission = { id: missionId, learnerRef: 'r', name: 'm', code: '', status: 'queued', submittedAt: '' } as never;
+    await expect(service.notifyStatusChange(mission, 'completed')).resolves.toEqual({ sent: false, reason: 'excluded' });
+  }
+  expect(send).not.toHaveBeenCalled();
+  expect(findByLearnerRef).not.toHaveBeenCalled();
+  warn.mockRestore();
+});
