@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { PartyPopper } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
@@ -124,6 +124,9 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   const allStepChecksPass = results.every(Boolean);
   const isFinalStep = stepIndex === challenge.steps.length - 1;
   const isCodeChallenge = challenge.workspaceKind !== 'embedded-platform';
+  const hasChecks = step ? step.checks.length > 0 : false;
+  const prevAllPassRef = useRef(allStepChecksPass);
+  const advanceRef = useRef<() => void>(() => {});
 
   const handleFinish = async () => {
     setFinishing(true);
@@ -159,6 +162,19 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
       setFinishing(false);
     }
   };
+
+  advanceRef.current = isFinalStep
+    ? handleFinish
+    : () => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1));
+
+  useEffect(() => {
+    const wasComplete = prevAllPassRef.current;
+    prevAllPassRef.current = allStepChecksPass;
+    if (!allStepChecksPass || wasComplete || !hasChecks) return;
+    const timer = setTimeout(() => advanceRef.current(), 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on the false→true transition only
+  }, [allStepChecksPass, hasChecks]);
 
   if (!step) {
     return (

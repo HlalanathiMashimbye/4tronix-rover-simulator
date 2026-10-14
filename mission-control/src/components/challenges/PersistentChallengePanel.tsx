@@ -14,7 +14,7 @@
  * /operator/* (an operator is not doing a challenge).
  */
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { CHALLENGES } from '@/infrastructure/config/challenges';
 import {
@@ -70,55 +70,61 @@ export function PersistentChallengePanel() {
     return () => clearTimeout(timer);
   }, [pathname]);
 
-  if (!pathname || !active) return null;
-  const here = normaliseRoute(pathname);
-  if (here.startsWith('/challenges') || here.startsWith('/operator')) return null;
-
-  const challenge = CHALLENGES[active.challengeId as ChallengeId];
-  const step = challenge?.steps[active.stepIndex];
-  if (!challenge || !step) return null;
-
-  const stepIndex = active.stepIndex;
+  // Derive everything unconditionally so hooks below can reference the results.
+  const here = pathname ? normaliseRoute(pathname) : '';
+  const visible = Boolean(
+    pathname && active && !here.startsWith('/challenges') && !here.startsWith('/operator'),
+  );
+  const challenge = active ? CHALLENGES[active.challengeId as ChallengeId] : undefined;
+  const step = challenge?.steps[active?.stepIndex ?? 0];
+  const stepIndex = active?.stepIndex ?? 0;
 
   const evalContext: ChallengeEvalContext = {
     search: { query, activeFilter },
-    loadMoreCalled: false,
-    feedHasMore: undefined,
-    generatedCode: '',
-    trajectoryOutcomes: [],
     visitedRoutes: milestones.visitedRoutes,
     missionCreated: milestones.missionCreated,
     predictionMade: prediction !== null,
   };
 
-  const results = step.checks.map((check) => evaluateCheck(check, evalContext));
-  const explanations = step.checks.map((check, i) => explainOpenCheck(check, evalContext, results[i]));
+  const results = step ? step.checks.map((check) => evaluateCheck(check, evalContext)) : [];
   const allStepChecksPass = results.every(Boolean);
-  const isFinalStep = stepIndex === challenge.steps.length - 1;
+  const isFinalStep = challenge ? stepIndex === challenge.steps.length - 1 : false;
+  const hasChecks = step ? step.checks.length > 0 : false;
 
-  const handleBack = () => {
-    const newIndex = Math.max(0, stepIndex - 1);
-    recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
-    setActive({ challengeId: challenge.id, stepIndex: newIndex });
-  };
+  const prevAllPassRef = useRef(allStepChecksPass);
+  const advanceRef = useRef<() => void>(() => {});
 
-  const handleNext = () => {
-    const newIndex = Math.min(challenge.steps.length - 1, stepIndex + 1);
-    recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
-    setActive({ challengeId: challenge.id, stepIndex: newIndex });
-  };
-
-  const handleFinish = async () => {
-    setFinishing(true);
-    try {
-      const justUnlockedLevelId = await completeChallenge(challenge.id);
-      clearActiveChallenge();
-      if (justUnlockedLevelId && !muted) playLevelUnlockSound();
-      router.push('/challenges');
-    } finally {
-      setFinishing(false);
+  advanceRef.current = () => {
+    if (!challenge || !active) return;
+    if (isFinalStep) {
+      if (finishing) return;
+      setFinishing(true);
+      completeChallenge(challenge.id)
+        .then((justUnlockedLevelId) => {
+          clearActiveChallenge();
+          if (justUnlockedLevelId && !muted) playLevelUnlockSound();
+          router.push('/challenges');
+        })
+        .finally(() => setFinishing(false));
+    } else {
+      const newIndex = Math.min(challenge.steps.length - 1, stepIndex + 1);
+      recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
+      setActive({ challengeId: challenge.id, stepIndex: newIndex });
     }
   };
+
+  useEffect(() => {
+    const wasComplete = prevAllPassRef.current;
+    prevAllPassRef.current = allStepChecksPass;
+    if (!allStepChecksPass || wasComplete || !hasChecks || !visible) return;
+    const timer = setTimeout(() => advanceRef.current(), 1500);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on the false→true transition only
+  }, [allStepChecksPass, hasChecks, visible]);
+
+  if (!visible || !challenge || !step) return null;
+
+  const explanations = step.checks.map((check, i) => explainOpenCheck(check, evalContext, results[i]));
 
   return (
     <div data-surface="challenges" className="px-3 pt-2 md:px-6">
@@ -135,9 +141,27 @@ export function PersistentChallengePanel() {
           results={results}
           explanations={explanations}
           finishLabel={FINISH_LABEL[challenge.workspaceKind] ?? 'Finish challenge'}
-          onBack={handleBack}
-          onNext={handleNext}
-          onFinish={handleFinish}
+          onBack={() => {
+            const newIndex = Math.max(0, stepIndex - 1);
+            recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
+            setActive({ challengeId: challenge.id, stepIndex: newIndex });
+          }}
+          onNext={() => {
+            const newIndex = Math.min(challenge.steps.length - 1, stepIndex + 1);
+            recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
+            setActive({ challengeId: challenge.id, stepIndex: newIndex });
+          }}
+          onFinish={async () => {
+            setFinishing(true);
+            try {
+              const justUnlockedLevelId = await completeChallenge(challenge.id);
+              clearActiveChallenge();
+              if (justUnlockedLevelId && !muted) playLevelUnlockSound();
+              router.push('/challenges');
+            } finally {
+              setFinishing(false);
+            }
+          }}
           finishing={finishing}
           prediction={prediction}
           onPredict={setPrediction}
