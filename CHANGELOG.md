@@ -11,6 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The run station works on a phone.** Stacked, the rail took all the height
+  its cards wanted before the live panel got any: 365px of an iPhone's 598.
+  The panel was left its 220px floor, and its header and controls alone are
+  257. So a phone showed no camera picture at all, and the foot of the panel
+  was cut off through the middle of Send and Stop. The panel now comes first:
+  it is as tall as a picture the width of the phone and the controls under
+  it, and the rail has the rest, never under 7rem, and scrolls inside itself.
+  To find the height, the sentence under the page's title is not shown on a
+  phone and the camera and rover checks sit side by side. On a short phone
+  (667 tall and under) the picture is fitted in what is left, about 150px,
+  with the start-mark reminder on one line and the two buttons at 48px. The
+  panel's bar no longer runs past its edge; "Start recording" was cut through
+  its last letter.
+
 - **The satellite can turn its camera's picture round.** The Cape Town camera
   films the yard half a turn round from the simulator's map: the start spot is
   on the right of the video and on the left of the simulation, and north is at
