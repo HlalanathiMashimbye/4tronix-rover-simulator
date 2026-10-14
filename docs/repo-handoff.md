@@ -10,10 +10,12 @@ branch rules, collaborators, open pull requests. Nor does it move the one piece
 of trust that lives outside GitHub entirely, which is Google Cloud's rule about
 which repo may deploy. Everything below is one of those.
 
-Checked against both repos on 25 Sep 2026; commits, branches, open PRs and
-collaborators rechecked on 5 Oct 2026. The Actions variables were not
-rechecked, because reading them needs admin. Re-check anything marked with a
-count before relying on it, because the fork keeps moving.
+Checked against both repos on 25 Sep 2026, and rechecked on 5 Oct and on
+14 Oct 2026. The 14 Oct pass was made with admin on the fork, so it is the
+first since September to cover the Actions variables, the branch rules and
+the environments as well as commits, branches, open PRs and collaborators.
+Re-check anything marked with a count before relying on it, because the fork
+keeps moving.
 
 ## Before the merge
 
@@ -23,8 +25,9 @@ count before relying on it, because the fork keeps moving.
       separate Mac camera server was not kept, because the fork's
       `camera_server.py` already does that job; his camera list and launcher
       now drive it. The CHANGELOG entry says what moved where, so David can
-      see his work landed. If upstream gains commits before the handoff,
-      repeat this:
+      see his work landed. On 14 Oct upstream still had nothing the fork
+      lacks: its last push was 20 Aug 2026, and the fork is 655 commits
+      ahead of it. If upstream gains commits before the handoff, repeat this:
 
       ```bash
       git fetch upstream && git log --oneline origin/main..upstream/main
@@ -36,8 +39,9 @@ count before relying on it, because the fork keeps moving.
       runs, which looks exactly like everything passing.
 - [ ] **Decide who keeps access.** The fork's collaborators are
       `HlalanathiMashimbye` (admin) and `wernervrens`, `kamolinks`, `Kelani12`,
-      `CLXKON001` (write). David decides who carries over. Werner needs write
-      at least, because he owns `infra/` and the prod/staging plan.
+      `CLXKON001` (write), unchanged on 14 Oct. David decides who carries
+      over. Werner needs write at least, because he owns `infra/` and the
+      prod/staging plan.
 
 ## The move, in order
 
@@ -46,15 +50,24 @@ deploy, because until then every workflow that touches Google Cloud fails at
 the login step.
 
 1. **Push `main`.**
-2. **Push the branches that are still alive.** Most of the fork's 47 branches
-   are merged or dead. These are not:
-   - `feat/challenges`, which carries the whole Challenges feature as one
-     commit on top of `main`. Read [challenges-branch.md](challenges-branch.md)
-     before touching it: a plain rebase onto a `main` that already contains it
-     silently deletes the feature.
+2. **Push the branches that are still alive.** The fork has 35 branches
+   (14 Oct; it had 47 on 5 Oct), and most are merged or dead. These are not:
    - `docs/prod-staging-split-plan`, Werner's draft PR #186.
    - `fix/cloud-run-request-cpu`, draft PR #240 (Cloud Run billed per
      request).
+   - `feat/challenges`, the prototypes: challenges, the leaderboard, avatars
+     and recovery codes. They are kept out of `main` on purpose, and David
+     does not want them in the product. Read
+     [challenges-branch.md](challenges-branch.md) before touching the branch,
+     or before deciding it moves at all: it says why they are prototypes, and
+     why a plain rebase onto a `main` that already contains them silently
+     deletes them. It was 5 commits ahead of `main` on 14 Oct.
+   - Four branches with unmerged work and no open pull request. Nothing on
+     GitHub says whether they are alive, so ask their authors before the
+     move: `fix/challenges_responsiveness` and `feat/Welcome_Tour` (Kamogelo
+     Tsele), and `feat/test-feedback-and-scoring-ab448-449` and
+     `feat/feedback-bank-ab471-main` (Konke Cele; the last one's PR, #292,
+     was closed without merging).
 
    Merging or closing #240 on the fork before the handoff leaves less to
    carry. Push it only if it is still open.
@@ -64,10 +77,10 @@ the login step.
      fix/cloud-run-request-cpu
    ```
 
-3. **Copy the Actions variables.** There are 19, and no secrets: everything
-   authenticates through workload identity, so no key needs moving. The values
-   are safe to copy verbatim, including the Firebase web config, which is
-   public by design. Needs admin on upstream.
+3. **Copy the Actions variables.** There are 19, and no secrets (recounted
+   on 14 Oct): everything authenticates through workload identity, so no key
+   needs moving. The values are safe to copy verbatim, including the Firebase
+   web config, which is public by design. Needs admin on upstream.
 
    ```bash
    FROM=HlalanathiMashimbye/4tronix-rover-simulator
@@ -81,7 +94,8 @@ the login step.
    `deploy-staging.yml` also reads `NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID`,
    which the fork never set. Builds pass without it and Analytics simply gets
    no measurement ID. Set it on upstream if Analytics is wanted, otherwise
-   leave it.
+   leave it. It is the only one: the workflows read 20 variables and the
+   other 19 are all set.
 
 4. **Tell Google Cloud to trust the new repo.** `bt-impact-academy` only
    accepts GitHub logins from the repo named in `var.github_repository`,
@@ -108,11 +122,18 @@ the login step.
      The fork requires 0 approvals, so the PR rule is there to stop direct
      pushes, not to require review.
 
+   Both were read back on 14 Oct: the five names still match the jobs in
+   `ci.yml`, and the ruleset is active.
+
 6. **Create the `production` environment, with required reviewers.** It has
-   never existed on the fork. `deploy-prod.yml` names it, and GitHub creates
-   a missing environment unprotected on first use, so the first prod
-   promotion would ship with no approval at all. Create it before anyone
-   runs that workflow. Werner's plan (#186) makes this Phase 0.
+   never existed on the fork, and still did not on 14 Oct. `deploy-prod.yml`
+   names it, and GitHub creates a missing environment unprotected on first
+   use, so the first prod promotion would ship with no approval at all.
+   Create it before anyone runs that workflow. Werner's plan (#186) makes
+   this Phase 0.
+
+   The fork does have one environment, `copilot`. It has no part in any
+   deploy and does not need recreating.
 
 7. **Repoint the yard's Pis.** The satellite and the rover each run from a
    git checkout, and pulling is how they update. Their `origin` may still be
@@ -126,6 +147,10 @@ the login step.
    git pull
    ```
 
+   A Pi's own settings are not in git and are not touched by this. The
+   satellite keeps its yard id, the rover's address and its camera settings
+   in `satellite_config.json`, which is ignored.
+
 8. **Reopen the open PRs on upstream.** Pull requests do not move with a
    merge. #186 matters most, because its discussion is the prod/staging plan;
    do the same for #240 if it is still open. Their branches are
@@ -135,18 +160,29 @@ the login step.
 ## How to know it worked
 
 - [ ] A throwaway PR on upstream runs all five checks, and they pass.
-- [ ] Merging it triggers `Deploy staging`, which authenticates and deploys.
-      This is the real proof of step 4.
+- [ ] Merging it triggers `Deploy staging`, which authenticates, deploys and
+      ends on the smoke check (`scripts/smoke-check.sh`). This is the real
+      proof of step 4.
 - [ ] `terraform-plan` runs green on a PR that touches `infra/`.
 - [ ] The satellite's `git pull` fetches from upstream.
 
-## Only if the Drive backup gets built
+## No secrets to move
 
-The off-site backup proposed in Sep (a weekly zip of the managed Firestore
-export, copied to a Drive folder David owns) would add the repo's first
-secret: David's Drive token. Secrets are never readable back out of GitHub,
-so it cannot be copied like the variables above. David signs in again and
-the secret is created fresh on upstream.
+The fork has no Actions secrets (14 Oct), so step 3 is the whole of it.
+
+Two things looked as if they would add one, and neither did:
+
+- **The off-site backup proposed in September** would have copied a zip to a
+  Drive folder with David's token. It was not built. Backups are a managed
+  Firestore export on a schedule, set up in Terraform
+  (`infra/modules/firestore-backup`), and what Terraform made stays in Google
+  Cloud whichever repo deploys to it.
+- **Automatic YouTube upload** (#304) keeps its credentials in Secret Manager,
+  created by Terraform. The satellite's half is in the Pi's own environment.
+
+If a secret is ever added, it cannot be copied like the variables: secrets are
+never readable back out of GitHub. Whoever holds the value creates it again on
+upstream.
 
 ## Deliberately left pointing at the fork
 
