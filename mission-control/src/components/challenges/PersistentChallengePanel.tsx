@@ -127,7 +127,7 @@ export function PersistentChallengePanel() {
   const explanations = step.checks.map((check, i) => explainOpenCheck(check, evalContext, results[i]));
 
   return (
-    <div data-surface="challenges" className="px-3 pt-2 md:px-6">
+    <div data-surface="challenges" className="sticky top-[var(--app-chrome)] z-30 bg-background px-3 md:relative md:top-auto md:z-auto md:bg-transparent md:px-6">
       <div className="mx-auto max-w-page">
         <ChallengeInstructionsPanel
           step={step}

@@ -172,8 +172,8 @@ export default function RootLayout({
               {/* Keeps content clear of the fixed bottom tab bar. The same
                   token the full-height pages subtract, so the padding here and
                   the height there cannot disagree - see .h-page. */}
-              <PersistentChallengePanel />
               <div id={PAGE_AREA_ID} className="pb-[var(--app-bottom-chrome)]">
+                <PersistentChallengePanel />
                 <PageTransition>{children}</PageTransition>
               </div>
               {/* Measures the id above and publishes it as --app-chrome, which
