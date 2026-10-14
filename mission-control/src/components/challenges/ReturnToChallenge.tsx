@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Star, Target, X } from 'lucide-react';
+import { ArrowLeft, Circle, Star, Target, X } from 'lucide-react';
 import { CHALLENGES } from '@/infrastructure/config/challenges';
 import { readActiveChallenge, type ActiveChallenge } from '@/infrastructure/browser/activeChallenge';
 import { normaliseRoute } from '@/infrastructure/browser/platformMilestones';
 import type { ChallengeId } from '@/core/domain/entities/Challenge';
+import { describeCheck } from './describeCheck';
 import { pillClass } from './pill';
 
 /**
@@ -53,41 +54,60 @@ export function ReturnToChallenge() {
     <aside
       aria-label="Your challenge"
       data-surface="challenges"
-      className="fixed bottom-[calc(var(--app-bottom-chrome)+0.75rem)] left-3 right-20 z-50 md:bottom-6 md:left-auto md:right-6 md:w-96"
+      className="fixed top-[calc(var(--app-chrome)+0.5rem)] left-3 right-3 z-40 md:top-auto md:bottom-6 md:left-auto md:right-6 md:w-96"
     >
-      {/* pop-in: lands once, with the small bounce the rest of the app uses
-          for something arriving (globals.css), and not at all under reduced
-          motion. The same card as the challenge panels, so it reads as part
-          of the challenge that sent the learner here. */}
-      <div className="pop-in flex items-start gap-3 rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-blue-edge bg-kid-panel p-3 shadow-lg">
-        <span
-          aria-hidden="true"
-          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-b-4 text-kid-ink ${
-            foundIt ? 'border-kid-green-edge bg-kid-green' : 'border-kid-orange-edge bg-kid-orange'
-          }`}
-        >
-          {foundIt ? <Star className="h-6 w-6 fill-current" /> : <Target className="h-6 w-6" />}
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-display text-base font-bold text-foreground">
-            {foundIt ? 'You found it! Go back and tick it off.' : 'Your challenge is waiting for you!'}
-          </p>
-          <p className="truncate text-xs text-kid-muted-text">
-            {challenge.title}: {step.title}
-          </p>
-          <Link href={`/challenges/${challenge.id}`} className={`${pillClass('blue')} mt-2`}>
-            <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-            Back to my challenge
-          </Link>
+      <div className="pop-in max-h-[50vh] overflow-y-auto rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4 shadow-lg">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span
+              aria-hidden="true"
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-b-2 text-kid-ink ${
+                foundIt ? 'border-kid-green-edge bg-kid-green' : 'border-kid-orange-edge bg-kid-orange'
+              }`}
+            >
+              {foundIt ? <Star className="h-4 w-4 fill-current" /> : <Target className="h-4 w-4" />}
+            </span>
+            <p className="font-display text-sm font-bold text-kid-muted-text">
+              {challenge.title}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setClosedOn(here)}
+            aria-label="Hide this for now"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-kid-muted-text hover:text-foreground"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setClosedOn(here)}
-          aria-label="Hide this for now"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-kid-muted-text hover:text-foreground"
-        >
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
+
+        <h2 className="mt-2 font-display text-lg font-bold text-foreground">{step.title}</h2>
+        <p className="mt-1 whitespace-pre-line text-sm leading-relaxed text-foreground">{step.instructions}</p>
+
+        {step.checks.length > 0 && (
+          <ul aria-label="What to do" className="mt-2 flex flex-wrap gap-1.5">
+            {step.checks.map((check, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-1.5 rounded-full border-2 border-dashed border-kid-panel-edge px-2.5 py-1 text-xs font-bold text-kid-muted-text"
+              >
+                <Circle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {describeCheck(check)}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {foundIt && (
+          <p className="mt-2 text-sm font-bold text-kid-green-text">
+            You found it! Go back and tick it off.
+          </p>
+        )}
+
+        <Link href={`/challenges/${challenge.id}`} className={`${pillClass('blue')} mt-3`}>
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+          Back to my challenge
+        </Link>
       </div>
     </aside>
   );

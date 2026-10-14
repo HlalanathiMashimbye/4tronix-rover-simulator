@@ -44,7 +44,7 @@ import {
   readActiveChallenge,
   recordActiveChallenge,
 } from '@/infrastructure/browser/activeChallenge';
-import { ReturnToChallenge } from '@/components/challenges/ReturnToChallenge';
+import { PersistentChallengePanel } from '@/components/challenges/PersistentChallengePanel';
 import { ChallengeWorkspace } from '@/components/challenges/ChallengeWorkspace';
 import { ChallengeBriefingGate } from '@/components/challenges/ChallengeBriefing';
 
@@ -69,46 +69,42 @@ describe('the record of the challenge in progress', () => {
   });
 });
 
-describe('the offer to go back', () => {
-  it('says they found it on the page their step asked them to open, and links to the challenge', () => {
+describe('the persistent challenge panel', () => {
+  it('shows the full instructions panel with the step title on non-challenge pages', () => {
     recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
-    render(<ReturnToChallenge />);
+    render(<PersistentChallengePanel />);
 
-    expect(screen.getByText('You found it! Go back and tick it off.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Back to my challenge/ })).toHaveAttribute('href', `/challenges/${explore.id}`);
+    expect(screen.getByRole('heading', { name: explore.steps[historyStep].title })).toBeInTheDocument();
   });
 
-  it('still offers the way back on any other page', () => {
+  it('evaluates route-visited checks against recorded milestones', () => {
     recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
-    pathname = '/';
-    render(<ReturnToChallenge />);
+    render(<PersistentChallengePanel />);
 
-    expect(screen.getByText('Your challenge is waiting for you!')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Back to my challenge/ })).toBeInTheDocument();
+    // The mock readMilestones returns visitedRoutes: ['/history', '/leaderboard'],
+    // so route-visited checks for /history should be done.
+    const doneItems = screen.getAllByText(/done/);
+    expect(doneItems.length).toBeGreaterThan(0);
   });
 
   it.each(['/challenges', `/challenges/${explore.id}`, '/operator'])('is not shown on %s', (path) => {
     recordActiveChallenge({ challengeId: explore.id, stepIndex: 0 });
     pathname = path;
-    render(<ReturnToChallenge />);
-    expect(screen.queryByRole('complementary', { name: 'Your challenge' })).not.toBeInTheDocument();
+    render(<PersistentChallengePanel />);
+    expect(screen.queryByText(explore.steps[0].title)).not.toBeInTheDocument();
   });
 
   it('is not shown when there is no challenge in progress', () => {
-    render(<ReturnToChallenge />);
-    expect(screen.queryByRole('complementary', { name: 'Your challenge' })).not.toBeInTheDocument();
+    render(<PersistentChallengePanel />);
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
-  it('closes for this page only, and comes back on the next', () => {
+  it('advances the step when Next is clicked', () => {
     recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
-    const { rerender } = render(<ReturnToChallenge />);
+    render(<PersistentChallengePanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Hide this for now' }));
-    expect(screen.queryByRole('complementary', { name: 'Your challenge' })).not.toBeInTheDocument();
-
-    pathname = '/leaderboard';
-    rerender(<ReturnToChallenge />);
-    expect(screen.getByRole('complementary', { name: 'Your challenge' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Next/ }));
+    expect(readActiveChallenge()?.stepIndex).toBe(historyStep + 1);
   });
 });
 

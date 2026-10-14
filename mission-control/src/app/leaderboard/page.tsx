@@ -129,12 +129,15 @@ export default function LeaderboardPage() {
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-4 pb-5">
-        {/* Your Status Card - Compact horizontal layout */}
+        {/* Your Status Card */}
         {status && status.optedIn && (
           <div className="shrink-0 rounded-xl border border-border bg-card p-3 clay">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex gap-4 sm:gap-6 items-center">
-                <Avatar avatar={learner?.avatar} size={40} />
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-6">
+                <div className="flex flex-col items-center gap-1">
+                  <Avatar avatar={learner?.avatar} size={40} />
+                  <p className="max-w-[5rem] truncate text-xs font-semibold text-foreground sm:hidden">{status.displayName}</p>
+                </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Your Rank</p>
                   <p className="text-lg font-bold text-gradient-mars">
@@ -162,7 +165,7 @@ export default function LeaderboardPage() {
                   title="Change avatar and nickname"
                 >
                   <Pencil className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Edit</span>
+                  Edit
                 </button>
                 <button
                   onClick={optOut}
@@ -170,7 +173,7 @@ export default function LeaderboardPage() {
                   title="Hide from leaderboard"
                 >
                   <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Hide</span>
+                  Hide
                 </button>
               </div>
             </div>
