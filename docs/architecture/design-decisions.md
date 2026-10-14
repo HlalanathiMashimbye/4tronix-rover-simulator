@@ -250,13 +250,12 @@ line. Each entry records why and when it was agreed, and a test holds them to
 that.
 
 **Which missions.** 27 missions were submitted on 26 September; 6 carry a
-hash. On 14 October 2026 the team confirmed five of them as the test missions
-and they are on the exclusion list: `dMxaVCCnpGmfaS_902t43` and
-`cIgRU5eNGqX8CZLUPYrqR` (one learner), and `Ktlh4oLSZ2-11nxzsN6zG`,
-`B0q3sdAz7BhJZipS0AMmL` and `qoDwbhjejm6oz64ZlHVJI` (another). The sixth,
-`Y5znqho-0RUiqSdn2f3dq`, shares the second learner's hash and has not been
-confirmed either way; it is not listed. The other 21 missions from that day
-carry no hash and are not affected.
+hash, and on 14 October 2026 the team confirmed all six as test missions. They
+are on the exclusion list: `dMxaVCCnpGmfaS_902t43` and `cIgRU5eNGqX8CZLUPYrqR`
+(one learner and test session), and `Ktlh4oLSZ2-11nxzsN6zG`,
+`B0q3sdAz7BhJZipS0AMmL`, `qoDwbhjejm6oz64ZlHVJI` and `Y5znqho-0RUiqSdn2f3dq`
+(another). The other 21 missions from that day carry no hash and are not
+affected.
 
 ---
 

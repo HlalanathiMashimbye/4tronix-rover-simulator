@@ -64,6 +64,12 @@ export const NOTIFICATION_EXCLUSIONS: readonly NotificationExclusion[] = [
     reason: TEST_MISSION_26_SEP,
     decidedOn: '2026-10-14',
   },
+  {
+    // Proud Crater Mapper: same test session as the three above it
+    missionId: 'Y5znqho-0RUiqSdn2f3dq',
+    reason: TEST_MISSION_26_SEP,
+    decidedOn: '2026-10-14',
+  },
 ];
 
 export const EXCLUDED_MISSION_IDS: ReadonlySet<string> = new Set(
