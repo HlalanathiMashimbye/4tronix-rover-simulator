@@ -168,6 +168,10 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
     : () => setStepIndex((i) => Math.min(challenge.steps.length - 1, i + 1));
 
   useEffect(() => {
+    prevAllPassRef.current = allStepChecksPass;
+  }, [stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps -- sync ref when navigating between steps
+
+  useEffect(() => {
     const wasComplete = prevAllPassRef.current;
     prevAllPassRef.current = allStepChecksPass;
     if (!allStepChecksPass || wasComplete || !hasChecks) return;
