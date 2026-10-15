@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, Circle, Lightbulb, PartyPopper } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Circle, Lightbulb, PartyPopper } from 'lucide-react';
 import type { ChallengeCheckSpec, ChallengeStep } from '@/core/domain/entities/Challenge';
 import { describeCheck } from './describeCheck';
 import { pillClass } from './pill';
@@ -65,106 +65,180 @@ export function ChallengeInstructionsPanel({
   onPredict,
 }: ChallengeInstructionsPanelProps) {
   const [hintOpen, setHintOpen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const hasHints = Boolean(step.hints && step.hints.length > 0);
+  const doneCount = results.filter(Boolean).length;
 
   return (
-    <div className="sticky top-[var(--app-chrome)] z-20 flex max-h-[50vh] shrink-0 flex-col gap-3 overflow-y-auto rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4 md:relative md:top-auto md:z-auto md:max-h-none">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+    <div className="sticky top-[var(--app-chrome)] z-20 shrink-0 rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4 md:relative md:top-auto md:z-auto">
+      {/* Collapsed header — always visible */}
+      <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <StepDots stepIndex={stepIndex} totalSteps={totalSteps} />
           <h2 className="mt-1.5 font-display text-xl font-bold text-foreground md:text-2xl">{step.title}</h2>
-
-          <p className="mt-1 whitespace-pre-line text-base leading-relaxed text-foreground">{step.instructions}</p>
-
-          {step.prediction ? (
-            // PRIMM Predict (AB#453). Picking is all the step asks: no answer is
-            // marked right or wrong, here or later - the run is what answers it.
-            <div className="mt-3">
-              <p id="prediction-question" className="font-display text-base font-bold text-foreground">
-                {step.prediction.question}
-              </p>
-              <div role="group" aria-labelledby="prediction-question" className="mt-2 flex flex-wrap gap-2">
-                {step.prediction.options.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={prediction === option}
-                    onClick={() => onPredict?.(option)}
-                    className={pillClass(prediction === option ? 'blue' : 'plain')}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-              {prediction && (
-                <p className="mt-2 text-sm font-bold text-kid-blue-text" role="status">
-                  Got it! Press Next, then run the code to find out.
-                </p>
-              )}
-            </div>
-          ) : (
-            prediction && (
-              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-kid-orange/20 px-3 py-1 text-sm font-bold text-foreground">
-                Your guess: {prediction}
-              </p>
-            )
-          )}
-
-          <ul aria-label="Mission checklist" className="mt-3 flex flex-wrap gap-2">
-            {checks.map((check, index) => {
-              const done = results[index] ?? false;
-              return (
-                <li
-                  key={index}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold ${
-                    done
-                      ? 'bg-kid-green/15 text-kid-green-text'
-                      : 'border-2 border-dashed border-kid-panel-edge text-kid-muted-text'
-                  }`}
-                >
-                  {done ? (
-                    <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <Circle className="h-5 w-5 shrink-0" aria-hidden="true" />
-                  )}
-                  {describeCheck(check)}
-                  <span className="sr-only">{done ? ' - done' : ' - not done yet'}</span>
-                </li>
-              );
-            })}
-          </ul>
-
-          {/* What the last run still left open, worded as what is missing and
-              never as a verdict (AB#448). Polite live region: it changes as the
-              learner runs, and a screen reader should hear the new state. */}
-          {explanations.some(Boolean) && (
-            <ul aria-live="polite" aria-label="Still to do" className="mt-2 space-y-1">
-              {explanations.map((text, index) =>
-                text ? (
-                  <li key={index} className="flex items-start gap-2 text-sm font-semibold text-kid-orange-text">
-                    <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    {text}
-                  </li>
-                ) : null,
-              )}
-            </ul>
+          {minimized && (
+            <p className="mt-1 text-sm font-semibold text-kid-muted-text">
+              {doneCount}/{checks.length} checks done
+            </p>
           )}
         </div>
+        <button
+          type="button"
+          onClick={() => setMinimized(!minimized)}
+          aria-expanded={!minimized}
+          aria-label={minimized ? 'Expand instructions' : 'Minimise instructions'}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-kid-panel-edge text-foreground active:scale-95"
+        >
+          {minimized ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+        </button>
+      </div>
 
-        <div className="flex flex-wrap gap-2 md:shrink-0 md:justify-end">
+      {/* Expanded body */}
+      {!minimized && (
+        <div className="mt-3 flex max-h-[40vh] flex-col gap-3 overflow-y-auto md:max-h-none">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="whitespace-pre-line text-base leading-relaxed text-foreground">{step.instructions}</p>
+
+              {step.prediction ? (
+                <div className="mt-3">
+                  <p id="prediction-question" className="font-display text-base font-bold text-foreground">
+                    {step.prediction.question}
+                  </p>
+                  <div role="group" aria-labelledby="prediction-question" className="mt-2 flex flex-wrap gap-2">
+                    {step.prediction.options.map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        aria-pressed={prediction === option}
+                        onClick={() => onPredict?.(option)}
+                        className={pillClass(prediction === option ? 'blue' : 'plain')}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                  {prediction && (
+                    <p className="mt-2 text-sm font-bold text-kid-blue-text" role="status">
+                      Got it! Press Next, then run the code to find out.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                prediction && (
+                  <p className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-kid-orange/20 px-3 py-1 text-sm font-bold text-foreground">
+                    Your guess: {prediction}
+                  </p>
+                )
+              )}
+
+              <ul aria-label="Mission checklist" className="mt-3 flex flex-wrap gap-2">
+                {checks.map((check, index) => {
+                  const done = results[index] ?? false;
+                  return (
+                    <li
+                      key={index}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold ${
+                        done
+                          ? 'bg-kid-green/15 text-kid-green-text'
+                          : 'border-2 border-dashed border-kid-panel-edge text-kid-muted-text'
+                      }`}
+                    >
+                      {done ? (
+                        <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <Circle className="h-5 w-5 shrink-0" aria-hidden="true" />
+                      )}
+                      {describeCheck(check)}
+                      <span className="sr-only">{done ? ' - done' : ' - not done yet'}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {explanations.some(Boolean) && (
+                <ul aria-live="polite" aria-label="Still to do" className="mt-2 space-y-1">
+                  {explanations.map((text, index) =>
+                    text ? (
+                      <li key={index} className="flex items-start gap-2 text-sm font-semibold text-kid-orange-text">
+                        <ArrowRight className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                        {text}
+                      </li>
+                    ) : null,
+                  )}
+                </ul>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2 md:shrink-0 md:justify-end">
+              {hasHints && (
+                <button
+                  type="button"
+                  onClick={() => setHintOpen(!hintOpen)}
+                  aria-expanded={hintOpen}
+                  aria-controls="challenge-hints"
+                  className={pillClass('orange')}
+                >
+                  <Lightbulb className="h-5 w-5" aria-hidden="true" />
+                  Hint
+                </button>
+              )}
+
+              <button type="button" onClick={onBack} disabled={!canGoBack} className={pillClass('plain')}>
+                <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                Back
+              </button>
+              {isFinalStep ? (
+                <button
+                  type="button"
+                  onClick={onFinish}
+                  disabled={!allStepChecksPass || finishing}
+                  className={pillClass('green')}
+                >
+                  <PartyPopper className="h-5 w-5" aria-hidden="true" />
+                  {finishing ? 'Finishing...' : finishLabel}
+                </button>
+              ) : (
+                <button type="button" onClick={onNext} disabled={!canGoNext} className={pillClass('blue')}>
+                  Next
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {hasHints && hintOpen && (
+            <div
+              id="challenge-hints"
+              className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-orange-edge p-4"
+            >
+              <p className="font-display text-base font-bold text-kid-orange-text">Hints</p>
+              <ul className="mt-2 space-y-2 text-sm text-foreground">
+                {step.hints!.map((hint, i) => (
+                  <li key={i} className="flex gap-2">
+                    <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-kid-orange-text" aria-hidden="true" />
+                    {hint}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Navigation stays visible when minimized */}
+      {minimized && (
+        <div className="mt-3 flex flex-wrap gap-2">
           {hasHints && (
             <button
               type="button"
-              onClick={() => setHintOpen(!hintOpen)}
-              aria-expanded={hintOpen}
-              aria-controls="challenge-hints"
+              onClick={() => { setMinimized(false); setHintOpen(true); }}
               className={pillClass('orange')}
             >
               <Lightbulb className="h-5 w-5" aria-hidden="true" />
               Hint
             </button>
           )}
-
           <button type="button" onClick={onBack} disabled={!canGoBack} className={pillClass('plain')}>
             <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             Back
@@ -177,7 +251,7 @@ export function ChallengeInstructionsPanel({
               className={pillClass('green')}
             >
               <PartyPopper className="h-5 w-5" aria-hidden="true" />
-              {finishing ? 'Finishing…' : finishLabel}
+              {finishing ? 'Finishing...' : finishLabel}
             </button>
           ) : (
             <button type="button" onClick={onNext} disabled={!canGoNext} className={pillClass('blue')}>
@@ -185,23 +259,6 @@ export function ChallengeInstructionsPanel({
               <ChevronRight className="h-5 w-5" aria-hidden="true" />
             </button>
           )}
-        </div>
-      </div>
-
-      {hasHints && hintOpen && (
-        <div
-          id="challenge-hints"
-          className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-orange-edge p-4"
-        >
-          <p className="font-display text-base font-bold text-kid-orange-text">Hints</p>
-          <ul className="mt-2 space-y-2 text-sm text-foreground">
-            {step.hints!.map((hint, i) => (
-              <li key={i} className="flex gap-2">
-                <Lightbulb className="mt-0.5 h-4 w-4 shrink-0 text-kid-orange-text" aria-hidden="true" />
-                {hint}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
     </div>
