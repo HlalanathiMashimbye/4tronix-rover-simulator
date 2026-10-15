@@ -114,6 +114,10 @@ export function PersistentChallengePanel() {
   };
 
   useEffect(() => {
+    prevAllPassRef.current = allStepChecksPass;
+  }, [stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps -- sync ref when navigating between steps
+
+  useEffect(() => {
     const wasComplete = prevAllPassRef.current;
     prevAllPassRef.current = allStepChecksPass;
     if (!allStepChecksPass || wasComplete || !hasChecks || !visible) return;
