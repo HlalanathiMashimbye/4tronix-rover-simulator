@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Trophy, LogOut, LogIn, Pencil } from 'lucide-react';
+import { Trophy, LogIn, Pencil, Star, EyeOff } from 'lucide-react';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useLearner } from '@/contexts/LearnerContext';
 import { Avatar } from '@/components/learner/Avatar';
@@ -128,53 +128,59 @@ export default function LeaderboardPage() {
         </p>
       </header>
 
-      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-4 pb-5">
+      <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-4 overflow-y-auto pb-5">
         {/* Your Status Card */}
         {status && status.optedIn && (
-          <div className="shrink-0 rounded-xl border border-border bg-card p-3 clay">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-              <div className="flex items-center gap-3 sm:gap-6">
-                <div className="flex flex-col items-center gap-1">
-                  <Avatar avatar={learner?.avatar} size={40} />
-                  <p className="max-w-[5rem] truncate text-xs font-semibold text-foreground sm:hidden">{status.displayName}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Your Rank</p>
-                  <p className="text-lg font-bold text-gradient-mars">
+          <div className="shrink-0 space-y-3">
+            {/* Rank card */}
+            <div className="rounded-2xl border border-border bg-card p-4 clay">
+              <div className="flex items-center gap-4">
+                <Avatar avatar={learner?.avatar} size={48} />
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Your Rank</p>
+                  <p className="text-2xl font-bold text-gradient-mars">
                     {learnerRank ? `#${learnerRank}` : '—'}
                   </p>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Challenges</p>
-                  <p className="text-lg font-bold text-foreground">{status.completedChallenges}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Score</p>
-                  <p className="text-lg font-bold text-primary">{status.score}</p>
-                </div>
-                <div className="hidden sm:block">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Nickname</p>
-                  <p className="text-lg font-semibold text-foreground">{status.displayName}</p>
-                </div>
               </div>
+              <p className="mt-2 text-sm font-semibold text-foreground truncate">{status.displayName}</p>
+            </div>
 
-              <div className="flex gap-1 shrink-0">
-                <button
-                  onClick={() => setShowPicker(true)}
-                  className="clay clay-press flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted/50"
-                  title="Change avatar and nickname"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                  Edit
-                </button>
-                <button
-                  onClick={optOut}
-                  className="clay clay-press flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20"
-                  title="Hide from leaderboard"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Hide
-                </button>
+            {/* Edit / Hide buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setShowPicker(true)}
+                className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50"
+                title="Change avatar and nickname"
+              >
+                <Pencil className="h-4 w-4" />
+                Edit
+              </button>
+              <button
+                onClick={optOut}
+                className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/20"
+                title="Hide from leaderboard"
+              >
+                <EyeOff className="h-4 w-4" />
+                Hide
+              </button>
+            </div>
+
+            {/* Challenges & Score cards */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-border bg-card p-4 clay">
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-mars/15">
+                  <Trophy className="h-5 w-5" style={{ color: 'var(--mars)' }} />
+                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Challenges</p>
+                <p className="text-2xl font-bold text-foreground">{status.completedChallenges}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-card p-4 clay">
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                  <Star className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Score</p>
+                <p className="text-2xl font-bold text-foreground">{status.score}</p>
               </div>
             </div>
           </div>
@@ -202,8 +208,8 @@ export default function LeaderboardPage() {
           </div>
         )}
 
-        {/* Leaderboard Table - Takes most of the space */}
-        <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+        {/* Leaderboard Table */}
+        <div>
           <h2 className="font-display font-bold text-foreground mb-3">Top Learners</h2>
 
           {loading ? (
@@ -222,8 +228,8 @@ export default function LeaderboardPage() {
               </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-border bg-card clay flex flex-col min-h-0">
-              <div className="overflow-y-auto flex-1">
+            <div className="overflow-hidden rounded-xl border border-border bg-card clay">
+              <div>
                 <table className="w-full text-xs sm:text-sm table-fixed">
                   <colgroup>
                     <col className="w-20 sm:w-24" />
