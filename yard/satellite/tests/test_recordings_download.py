@@ -413,6 +413,22 @@ class TestCameraReadiness:
         assert client.get('/api/camera/ready').status_code == 200
 
 
+class TestStatusSaysWhatIsRecording:
+    """The run station takes /api/status's word for when a run has finished:
+    the recording it started drops out of the list."""
+
+    def test_a_recording_is_listed_the_moment_it_starts(self, client, monkeypatch):
+        """The camera's snapshot is kept for four seconds to save probing it.
+        Read from there, the list could be from before Send, without the new
+        recording, which the station read as the run already over."""
+        client.get('/api/status')  # the camera's snapshot, nothing recording
+        monkeypatch.setitem(recording_control._paths, ('m1', 'curiosity'), '/srv/recordings/m1.mp4')
+
+        body = client.get('/api/status').get_json()
+
+        assert body['recording']['active'] == ['m1']
+
+
 class TestSendRecordsFirst:
     """Recording is something the station does, not a button to remember.
 

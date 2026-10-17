@@ -187,6 +187,37 @@
         @keyframes recpulse { 50% { opacity: 0.35; } }
         @media (prefers-reduced-motion: reduce) { .rec-dot.on { animation: none; } }
 
+        /* ---- Recording, said on the picture -------------------------------
+           A 9px dot in a grey button and a grey "Recording" tag were the only
+           signs, so a recording looked exactly like no recording until the
+           video turned up afterwards. The operator is watching the picture,
+           so that is where it is said: a REC badge with a running clock in
+           the corner, the way a camera says it, and a red edge round the
+           view. The red is the camera's, not the theme's: the dark theme's
+           --bad is a pale red that white text cannot be read on, and the
+           badge sits on the picture in either theme. */
+        .rec-badge {
+            position: absolute; top: 0.6rem; left: 0.6rem; z-index: 2;
+            display: inline-flex; align-items: center; gap: 0.45rem;
+            padding: 0.32rem 0.7rem 0.32rem 0.55rem; border-radius: 999px;
+            background: rgb(0 0 0 / 0.62); color: #fff;
+            font-size: 0.8rem; font-weight: 800; letter-spacing: 0.08em;
+            box-shadow: 0 2px 10px rgb(0 0 0 / 0.35);
+        }
+        .rec-badge[hidden] { display: none; }
+        .rec-badge-dot { width: 10px; height: 10px; border-radius: 50%; background: #DC2626; flex: none; }
+        .rec-clock { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0; }
+        .live-panel[data-rec="on"] .rec-badge { background: #DC2626; }
+        .live-panel[data-rec="on"] .rec-badge-dot { background: #fff; animation: recpulse 1.4s ease-in-out infinite; }
+        .live-view::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; transition: box-shadow 200ms ease-out; }
+        .live-panel[data-rec="on"] .live-view::after { box-shadow: inset 0 0 0 3px #DC2626; }
+        /* The panel's bar agrees with the picture. Its "Recording" tag goes
+           while the badge is up: it said the same thing in grey, and on an
+           upright tablet it left "Rover idle" room for one letter. */
+        .live-panel[data-rec="on"] #runState { display: none; }
+        .live-panel[data-rec="on"] #recBtn { color: var(--bad); border-color: color-mix(in oklab, var(--bad) 45%, var(--border)); }
+        @media (prefers-reduced-motion: reduce) { .live-panel[data-rec="on"] .rec-badge-dot { animation: none; } }
+
         /* ---- The rail ---------------------------------------------------- */
         /* overflow-y is a safety valve, not a design: the rail is sized to
            fit, and the page itself never scrolls, so on a window shorter than
@@ -470,6 +501,14 @@
                 <div class="live-view">
                     <canvas id="cameraCanvas" width="640" height="480"></canvas>
                     <div class="live-msg" id="liveMsg">Connecting to camera...</div>
+                    <!-- The clock is hidden from a screen reader: a live
+                         region that changes every second is read out every
+                         second. "Recording" is said once. -->
+                    <div class="rec-badge" id="recBadge" role="status" hidden>
+                        <span class="rec-badge-dot" aria-hidden="true"></span>
+                        <span id="recLabel">REC</span>
+                        <span class="rec-clock" id="recClock" aria-hidden="true"></span>
+                    </div>
                 </div>
                 <div class="live-foot">
                     <div class="warning-box" id="runWarning">Camera not primed, or rover unavailable. Fix this before you run.</div>
@@ -594,11 +633,35 @@
         </div>
     </main>
 
+    <!-- The end of a run. Outside .run-desk so the console's filled primary
+         button applies: on the desk only Send is filled, and here Download
+         is the one thing left to do. -->
+    <dialog class="modal announce" id="doneNotice" aria-labelledby="doneTitle" aria-describedby="doneSub">
+        <div class="announce-body">
+            <div class="announce-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </div>
+            <h2 id="doneTitle">Mission complete</h2>
+            <p id="doneSub"><strong id="doneName">The rover</strong> <span id="doneWhat">has finished, and the video is saved on this satellite.</span></p>
+            <span class="announce-detail" id="doneFile"></span>
+            <button class="btn primary announce-action" id="doneDownload" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download the video
+            </button>
+            <button class="announce-dismiss" id="doneClose" type="button">Close</button>
+        </div>
+    </dialog>
+
 <script>
 (function () {
     const $ = (id) => document.getElementById(id);
     const missionId = $('missionId'), missionName = $('missionName'), runId = $('runId'), code = $('code');
     let recordingName = null;
+    // The file this run is writing, for the notice at its end, and when the
+    // satellite said it had started: only a status asked for after that can
+    // say the recording has stopped.
+    let recordingFile = null;
+    let recordingSince = 0;
     let automaticRunRequested = false;
     let automaticRunStarted = false;
     let runListenerReady = false;
@@ -866,7 +929,7 @@
     });
 
     if (window.YardStatus) {
-        YardStatus.subscribe((snapshot) => {
+        YardStatus.subscribe((snapshot, meta) => {
             roverOk = !!(snapshot.rover && snapshot.rover.reachable && (snapshot.rover.status == null || snapshot.rover.status === 'ok'));
             paintStatus('roverReady', roverOk, roverOk ? 'Available' : 'Not reachable');
             paintCamera(snapshot.camera || {});
@@ -875,13 +938,17 @@
             // to be told. Without this it went on saying "Stop recording"
             // over a file the rover had already finished and the server had
             // already closed, and never showed the operator the video.
+            //
+            // Only an answer to a request sent after the recording started
+            // counts. One already on its way when Send was pressed cannot
+            // have the recording in it, and would announce the run finished
+            // a second after the rover set off.
             const filming = (snapshot.recording && snapshot.recording.active) || [];
-            if (recordingName && !filming.includes(recordingName)) {
-                recordingName = null;
-                $('recDot').classList.remove('on');
-                $('recBtn').lastChild.textContent = ' Start recording';
-                flash($('runMsg'), 'Rover finished. Recording saved - it is in Save the video.', 'ok');
-                loadRecordings();
+            const askedSinceStart = !!(meta && meta.requestedAt > recordingSince);
+            if (recordingName && askedSinceStart && !filming.includes(recordingName)) {
+                const file = recordingFile;
+                forgetRecording();
+                announceDone(file);
             }
             paintGate();
             maybeAutoRun();
@@ -898,23 +965,63 @@
         return (metaValue(missionId) || metaValue(missionName) || 'run');
     }
 
+    // Off, starting (asked for, the camera not yet confirmed) or on. The
+    // badge on the picture, its frame, the panel's tag and the record button
+    // all read it, so they cannot disagree about whether the camera is
+    // filming.
+    let recClockTimer = null;
+    function paintRecording(state) {
+        document.querySelector('.live-panel').dataset.rec = state;
+        $('recBadge').hidden = state === 'off';
+        $('recLabel').textContent = state === 'starting' ? 'Starting recording' : 'REC';
+        $('recDot').classList.toggle('on', state === 'on');
+        $('recBtn').lastChild.textContent = state === 'on' ? ' Stop recording' : ' Start recording';
+        clearInterval(recClockTimer);
+        $('recClock').textContent = '';
+        // A clock that moves is the proof it is still going: a badge alone
+        // looks the same whether the camera is filming or stuck.
+        if (state === 'on') {
+            const tick = () => {
+                const s = Math.max(0, Math.floor((Date.now() - recordingSince) / 1000));
+                $('recClock').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+            };
+            tick();
+            recClockTimer = setInterval(tick, 250);
+        }
+    }
+
+    function forgetRecording() {
+        recordingName = null;
+        recordingFile = null;
+        paintRecording('off');
+        paintGate();
+    }
+
     // Recording is a thing the station does, not a button the operator has to
     // remember. Send starts it; the button in the panel head is the manual
     // override.
     async function startRecording() {
         if (recordingName) return;
-        const resp = await fetch('/api/recording/start', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: runName() }),
-        });
-        const d = await resp.json();
-        if (!resp.ok) throw new Error(d.error || 'Could not start recording');
+        paintRecording('starting');
+        let d;
+        try {
+            const resp = await fetch('/api/recording/start', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: runName() }),
+            });
+            d = await resp.json();
+            if (!resp.ok) throw new Error(d.error || 'Could not start recording');
+        } catch (e) {
+            paintRecording('off');
+            throw e;
+        }
         recordingName = d.name;
+        recordingFile = d.file || null;
+        recordingSince = Date.now();
         // Every run gets its own file now, so the name is not predictable from
         // the mission alone and the operator is told the real one.
         if (d.file) flash($('runMsg'), 'Recording to ' + d.file, 'ok');
-        $('recDot').classList.add('on');
-        $('recBtn').lastChild.textContent = ' Stop recording';
+        paintRecording('on');
         paintGate();
     }
 
@@ -924,10 +1031,7 @@
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: recordingName, keep: true }),
         });
-        recordingName = null;
-        $('recDot').classList.remove('on');
-        $('recBtn').lastChild.textContent = ' Start recording';
-        paintGate();
+        forgetRecording();
         loadRecordings();
     }
 
@@ -940,7 +1044,7 @@
                 flash($('runMsg'), 'Recording', 'ok');
             } else {
                 await stopRecording();
-                flash($('runMsg'), 'Saved - it is in Save the video.', 'ok');
+                flash($('runMsg'), 'Saved. Download it from The video.', 'ok');
             }
         } catch (e) {
             flash($('runMsg'), e.message, 'bad');
@@ -1022,7 +1126,7 @@
             // record is left with a recording that never stops.
             if (recordingName) {
                 await stopRecording();
-                flash($('runMsg'), 'Rover stopped. Recording saved - it is in Save the video.', 'ok');
+                flash($('runMsg'), 'Rover stopped. Recording saved: download it from The video.', 'ok');
             } else {
                 flash($('runMsg'), 'Rover queue cleared', 'ok');
             }
@@ -1046,7 +1150,8 @@
     // pull straight into Downloads. Until that lands this is the real path,
     // not a stand-in: /api/recordings/<name> serves the file over the LAN and
     // the browser saves it. The curl replaces the transport, not the picker.
-    async function loadRecordings() {
+    // Returns the list, and picks `select` in it when it is there.
+    async function loadRecordings(select) {
         const pick = $('videoPick'), get = $('videoGet');
         try {
             const resp = await fetch('/api/recordings');
@@ -1054,7 +1159,7 @@
             if (!list.length) {
                 pick.innerHTML = '<option value="">Nothing recorded yet</option>';
                 pick.disabled = true; get.disabled = true;
-                return;
+                return list;
             }
             pick.disabled = false; get.disabled = false;
             pick.innerHTML = list.map((r) => {
@@ -1063,15 +1168,16 @@
                 opt.textContent = `${r.name}  (${humanBytes(r.bytes)})`;
                 return opt.outerHTML;
             }).join('');
+            if (select && list.some((r) => r.name === select)) pick.value = select;
+            return list;
         } catch (e) {
             pick.innerHTML = '<option value="">Could not read recordings</option>';
             pick.disabled = true; get.disabled = true;
+            return [];
         }
     }
 
-    $('videoGet').addEventListener('click', () => {
-        const name = $('videoPick').value;
-        if (!name) return;
+    function download(name) {
         // A link click rather than fetch: this hands the file to the browser's
         // own download machinery, which is what puts it in Downloads.
         const a = document.createElement('a');
@@ -1081,6 +1187,57 @@
         a.click();
         a.remove();
         flash($('videoMsg'), 'Saving ' + name, 'ok');
+    }
+
+    $('videoGet').addEventListener('click', () => {
+        const name = $('videoPick').value;
+        if (name) download(name);
+    });
+
+    // ---- The end of a run -----------------------------------------------
+    // It was one line of small print under Send and Stop, gone in five
+    // seconds, naming a card ("Save the video") that had been renamed. An
+    // operator watching the yard rather than the screen missed it, and the
+    // download was a 32px icon in the rail. The notice stays until it is
+    // answered, and its one button downloads the file this run wrote.
+    // Pressing Stop does not open it: the operator ended that run, and it
+    // did not complete.
+    const doneNotice = $('doneNotice');
+    const pageTitle = document.title;
+    let doneFile = null;
+
+    async function announceDone(file) {
+        const list = await loadRecordings(file);
+        // The satellite names the file when the recording starts. If it did
+        // not, the newest is this run's: it is the last thing written.
+        const entry = list.find((r) => r.name === file) || (file ? null : list[0]) || null;
+        doneFile = entry ? entry.name : file;
+        $('doneName').textContent = metaValue(missionName) || 'The rover';
+        $('doneWhat').textContent = doneFile
+            ? 'has finished, and the video is saved on this satellite.'
+            : 'has finished. No video of it was found on this satellite.';
+        $('doneFile').textContent = entry ? `${entry.name} · ${humanBytes(entry.bytes)}` : (doneFile || '');
+        $('doneFile').hidden = !doneFile;
+        $('doneDownload').disabled = !doneFile;
+        // For a station left in a background tab: the tab says so too.
+        document.title = 'Mission complete · ' + pageTitle;
+        if (!doneNotice.open) doneNotice.showModal();
+        (doneFile ? $('doneDownload') : $('doneClose')).focus();
+    }
+
+    function closeDone() { if (doneNotice.open) doneNotice.close(); }
+    // Escape closes a dialog by itself; this is the one place either way ends.
+    doneNotice.addEventListener('close', () => { document.title = pageTitle; });
+    $('doneClose').addEventListener('click', closeDone);
+    // The dialog has no padding of its own, so a click on it is a click on
+    // the backdrop.
+    doneNotice.addEventListener('click', (e) => { if (e.target === doneNotice) closeDone(); });
+    // Downloading is what the notice was for, so it goes once that is done;
+    // the rail has the title and description the upload needs next.
+    $('doneDownload').addEventListener('click', () => {
+        if (!doneFile) return;
+        download(doneFile);
+        closeDone();
     });
 
     // ---- The live view --------------------------------------------------

@@ -228,7 +228,9 @@ through.
    → recordings/<mission>__<yard>__<UTC stamp>.mp4
                     │
                     ▼
-6. /run/ sees the recording drop out of /api/status and lists the file
+6. /run/ sees the recording drop out of /api/status, in a status it asked
+   for after the recording started, and says "Mission complete" with one
+   button for the file this run wrote
    GET /api/recordings, then GET /api/recordings/<name> to download it
                     │
                     ▼
