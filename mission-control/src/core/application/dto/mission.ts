@@ -41,7 +41,7 @@ export interface CreateMissionDto {
 
 /** An operator or the satellite recording what happened to a mission. */
 export interface UpdateMissionDto {
-  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'not_completed' | 'cancelled';
   executionResult?: {
     isSuccessful: boolean;
     consoleOutput: string;

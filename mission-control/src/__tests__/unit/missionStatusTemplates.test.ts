@@ -10,7 +10,7 @@ const HISTORY_URL = 'http://localhost:3000/history';
 const MISSION_URL = 'http://localhost:3000/missions/mission-123';
 
 describe('buildMissionStatusEmail', () => {
-  const statuses: MissionStatus[] = ['queued', 'processing', 'completed', 'failed', 'cancelled'];
+  const statuses: MissionStatus[] = ['queued', 'processing', 'completed', 'failed', 'not_completed', 'cancelled'];
 
   it.each(statuses)('includes the mission name in the subject and body for status "%s"', (status) => {
     const { subject, html } = buildMissionStatusEmail(status, {
@@ -82,5 +82,19 @@ describe('buildMissionStatusEmail', () => {
     );
 
     expect(subjects.size).toBe(statuses.length);
+  });
+
+  it('uses a friendly not-completed message instead of raw failure wording', () => {
+    const { subject, html } = buildMissionStatusEmail('not_completed', {
+      missionName: 'Orbital Nomad',
+      learnerName: 'Ada',
+      missionUrl: MISSION_URL,
+      historyUrl: HISTORY_URL,
+    });
+
+    expect(subject).toContain('Not Completed');
+    expect(subject).not.toContain('Failed');
+    expect(html).not.toContain('Failed');
+    expect(html).toContain('re-queued');
   });
 });
