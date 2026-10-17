@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { missionService, notificationService } from '@/infrastructure/container.server';
 
 const notifyRequestSchema = z.object({
-  status: z.enum(['queued', 'processing', 'completed', 'failed', 'cancelled']),
+  status: z.enum(['queued', 'processing', 'completed', 'failed', 'not_completed', 'cancelled']),
 });
 
 export async function POST(
