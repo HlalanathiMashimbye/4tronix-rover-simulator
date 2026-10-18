@@ -5,19 +5,21 @@ import { Dices, RefreshCw } from 'lucide-react';
 import { AvatarRenderer } from './AvatarRenderer';
 import { generateDisplayName } from '@/core/domain/services/displayNameGenerator';
 import { AVATAR_STYLES, type LearnerAvatar } from '@/core/domain/entities/Learner';
+import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 
-const GRID_SIZE = 12;
+const GRID_SIZE_SM = 9;
+const GRID_SIZE_LG = 12;
 
 interface AvatarOption {
   avatar: LearnerAvatar;
   key: string;
 }
 
-function buildGrid(learnerId: string, page: number): AvatarOption[] {
+function buildGrid(learnerId: string, page: number, size: number): AvatarOption[] {
   const options: AvatarOption[] = [];
-  const stylesPerSlot = Math.ceil(GRID_SIZE / AVATAR_STYLES.length);
+  const stylesPerSlot = Math.ceil(size / AVATAR_STYLES.length);
 
-  for (let i = 0; i < GRID_SIZE; i++) {
+  for (let i = 0; i < size; i++) {
     const styleIndex = Math.floor(i / stylesPerSlot) % AVATAR_STYLES.length;
     const style = AVATAR_STYLES[styleIndex];
     const seed = `${learnerId}-${page}-${i}`;
@@ -43,12 +45,15 @@ export function AvatarPicker({
   onRestore,
   confirmLabel = "Let’s go!",
 }: AvatarPickerProps) {
+  const isPhone = useIsPhoneLayout();
+  const gridSize = isPhone ? GRID_SIZE_SM : GRID_SIZE_LG;
+
   const [page, setPage] = useState(0);
   const [displayName, setDisplayName] = useState(
     () => initialName || generateDisplayName(),
   );
 
-  const grid = useMemo(() => buildGrid(learnerId, page), [learnerId, page]);
+  const grid = useMemo(() => buildGrid(learnerId, page, gridSize), [learnerId, page, gridSize]);
 
   const [selected, setSelected] = useState<LearnerAvatar>(
     () => initialAvatar || grid[0].avatar,
@@ -112,7 +117,7 @@ export function AvatarPicker({
             Shuffle
           </button>
         </div>
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
           {grid.map((option) => {
             const isSelected =
               option.avatar.style === effectiveSelected.style &&
@@ -122,7 +127,7 @@ export function AvatarPicker({
                 key={option.key}
                 type="button"
                 onClick={() => setSelected(option.avatar)}
-                className={`flex items-center justify-center rounded-xl border-2 p-1.5 transition-all ${
+                className={`flex items-center justify-center rounded-xl border-2 p-1 transition-all md:p-1.5 ${
                   isSelected
                     ? 'border-primary bg-primary/10'
                     : 'border-transparent bg-secondary hover:bg-secondary/80'

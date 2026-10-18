@@ -28,17 +28,19 @@ interface AvatarRendererProps {
 }
 
 export function AvatarRenderer({ avatar, size = 40, className = '' }: AvatarRendererProps) {
-  const svg = useMemo(() => {
+  const dataUri = useMemo(() => {
     const style = STYLE_MAP[avatar.style as AvatarStyle];
     if (!style) return '';
-    return createAvatar(style, { seed: avatar.seed, size }).toString();
+    return createAvatar(style, { seed: avatar.seed, size }).toDataUri();
   }, [avatar.style, avatar.seed, size]);
 
   return (
-    <div
-      className={`inline-flex shrink-0 items-center justify-center ${className}`}
-      style={{ width: size, height: size }}
-      dangerouslySetInnerHTML={{ __html: svg }}
+    <img
+      src={dataUri}
+      width={size}
+      height={size}
+      className={`inline-flex shrink-0 ${className}`}
+      alt=""
       aria-hidden="true"
     />
   );

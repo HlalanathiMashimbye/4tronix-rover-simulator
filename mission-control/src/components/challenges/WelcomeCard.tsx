@@ -124,7 +124,7 @@ export function WelcomeCard() {
           />
 
           <div
-            className={`relative z-[101] w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-xl transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
+            className={`relative z-[101] w-full max-w-md rounded-2xl border border-border bg-card shadow-xl transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none ${
               visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
             }`}
           >
@@ -145,7 +145,7 @@ export function WelcomeCard() {
               </div>
             </div>
 
-            <div className="px-6 pb-6">
+            <div className="px-4 pb-6 md:px-6">
               <h2 id="welcome-title" className="text-center font-display text-2xl font-bold text-foreground">
                 Who&apos;s flying today?
               </h2>
