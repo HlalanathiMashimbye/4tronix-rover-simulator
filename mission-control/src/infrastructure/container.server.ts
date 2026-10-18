@@ -26,6 +26,8 @@ import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardR
 import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
 import { IRecoveryCodeRepository } from '@/core/domain/repositories/IRecoveryCodeRepository';
 import { FirestoreRecoveryCodeRepository } from '@/infrastructure/persistence/FirestoreRecoveryCodeRepository';
+import { IParentLinkRepository } from '@/core/domain/repositories/IParentLinkRepository';
+import { FirestoreParentLinkRepository } from '@/infrastructure/persistence/FirestoreParentLinkRepository';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
@@ -78,4 +80,9 @@ export function adminLeaderboardRepository(): ILeaderboardRepository {
 /** Privileged. Recovery codes are never browser-accessible. */
 export function adminRecoveryCodeRepository(): IRecoveryCodeRepository {
   return new FirestoreRecoveryCodeRepository(getFirestoreInstance());
+}
+
+/** Privileged. Parent links are never browser-accessible. */
+export function adminParentLinkRepository(): IParentLinkRepository {
+  return new FirestoreParentLinkRepository(getFirestoreInstance());
 }

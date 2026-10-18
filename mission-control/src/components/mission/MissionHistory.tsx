@@ -19,6 +19,8 @@ import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
 import { RecoveryCodeCard } from '@/components/learner/RecoveryCodeCard';
 import { RestoreFromCode } from '@/components/learner/RestoreFromCode';
+import { ParentLinkCard } from '@/components/learner/ParentLinkCard';
+import { ParentRestore } from '@/components/learner/ParentRestore';
 
 export function MissionHistory() {
   const { learnerEmail, openEmailPrompt } = useLearner();
@@ -39,6 +41,8 @@ export function MissionHistory() {
   const [emailLoaded, setEmailLoaded] = useState(false);
   const [showRecoveryCode, setShowRecoveryCode] = useState(false);
   const [showRestoreCode, setShowRestoreCode] = useState(false);
+  const [showParentLink, setShowParentLink] = useState(false);
+  const [showParentRestore, setShowParentRestore] = useState(false);
 
   useEffect(() => {
     // Async now: the id is hashed before querying, because missions carry only
@@ -203,17 +207,42 @@ export function MissionHistory() {
     </div>
   );
 
+  const parentBanner = (
+    <div className="flex shrink-0 items-center justify-between gap-4 rounded-2xl border border-border/60 bg-card/50 px-5 py-3 text-sm">
+      <p className="min-w-0 text-muted-foreground">
+        Parents: link your Google account to keep your child&apos;s progress safe.
+      </p>
+      <div className="flex shrink-0 gap-2">
+        <button
+          onClick={() => setShowParentRestore(true)}
+          className="shrink-0 rounded-full border border-border bg-card px-3.5 py-1.5 text-xs font-bold text-foreground transition-colors hover:border-primary/70"
+        >
+          Restore
+        </button>
+        <button
+          onClick={() => setShowParentLink(true)}
+          className="clay clay-press shrink-0 rounded-full bg-gradient-mars px-3.5 py-1.5 text-xs font-bold text-primary-foreground"
+        >
+          Link account
+        </button>
+      </div>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {emailBanner}
         {recoveryBanner}
+        {parentBanner}
         <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-border/60 bg-card/30 p-8 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-border border-t-primary" />
           <p className="mt-4 text-sm text-muted-foreground">Loading your missions...</p>
         </div>
         <RecoveryCodeCard open={showRecoveryCode} onClose={() => setShowRecoveryCode(false)} />
         <RestoreFromCode open={showRestoreCode} onClose={() => setShowRestoreCode(false)} />
+        <ParentLinkCard open={showParentLink} onClose={() => setShowParentLink(false)} />
+        <ParentRestore open={showParentRestore} onClose={() => setShowParentRestore(false)} />
       </div>
     );
   }
@@ -222,6 +251,7 @@ export function MissionHistory() {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {emailBanner}
       {recoveryBanner}
+      {parentBanner}
 
       {/* Phone-only: the navbar's search is hidden below md, so this page had
           no way to search or filter a learner's own history there. */}
@@ -274,6 +304,8 @@ export function MissionHistory() {
 
       <RecoveryCodeCard open={showRecoveryCode} onClose={() => setShowRecoveryCode(false)} />
       <RestoreFromCode open={showRestoreCode} onClose={() => setShowRestoreCode(false)} />
+      <ParentLinkCard open={showParentLink} onClose={() => setShowParentLink(false)} />
+      <ParentRestore open={showParentRestore} onClose={() => setShowParentRestore(false)} />
     </div>
   );
 }

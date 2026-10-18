@@ -14,6 +14,7 @@ import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/bro
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner, type LearnerAvatar } from '@/core/domain/entities/Learner';
+import { CURRENT_CONSENT_VERSION } from '@/core/domain/services/parentLink';
 
 interface LearnerContextType {
   learner: Learner | null;
@@ -28,6 +29,14 @@ interface LearnerContextType {
   generateRecoveryCode: () => Promise<string | null>;
   restoreFromCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (displayName: string, avatar: LearnerAvatar) => Promise<boolean>;
+  linkParent: (idToken: string) => Promise<{ success: boolean; error?: string }>;
+  unlinkParent: (idToken: string) => Promise<{ success: boolean; error?: string }>;
+  restoreFromParent: (idToken: string) => Promise<{
+    success: boolean;
+    error?: string;
+    learners?: Array<{ learnerId: string; displayName?: string; avatar?: { style: string; seed: string } }>;
+  }>;
+  adoptLearner: (learnerId: string) => Promise<void>;
 }
 
 const LearnerContext = createContext<LearnerContextType | undefined>(undefined);
@@ -257,6 +266,69 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function linkParent(idToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(getLearnerID())}/parent-link`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, consentVersion: CURRENT_CONSENT_VERSION }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'Failed to link parent' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function unlinkParent(idToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(getLearnerID())}/parent-link`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'Failed to unlink parent' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function restoreFromParent(idToken: string): Promise<{
+    success: boolean;
+    error?: string;
+    learners?: Array<{ learnerId: string; displayName?: string; avatar?: { style: string; seed: string } }>;
+  }> {
+    try {
+      const response = await fetch('/api/parent-restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'No linked learners found' };
+      return { success: true, learners: data.learners };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function adoptLearner(learnerId: string): Promise<void> {
+    setLearnerID(learnerId);
+    setLearner(null);
+    setSessionId(null);
+    setLoading(true);
+    await initializeLearnerSession();
+  }
+
   /**
    * Reset session and create new learner identity
    */
@@ -283,6 +355,10 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         generateRecoveryCode,
         restoreFromCode,
         updateProfile,
+        linkParent,
+        unlinkParent,
+        restoreFromParent,
+        adoptLearner,
       }}
     >
       {children}
