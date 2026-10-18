@@ -131,59 +131,106 @@ export default function LeaderboardPage() {
       <div className="mx-auto flex min-h-0 w-full max-w-page flex-1 flex-col gap-4 overflow-y-auto pb-5">
         {/* Your Status Card */}
         {status && status.optedIn && (
-          <div className="shrink-0 space-y-3">
-            {/* Rank card */}
-            <div className="rounded-2xl border border-border bg-card p-4 clay">
-              <div className="flex items-center gap-4">
-                <Avatar avatar={learner?.avatar} size={48} />
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Your Rank</p>
-                  <p className="text-2xl font-bold text-gradient-mars">
-                    {learnerRank ? `#${learnerRank}` : '—'}
-                  </p>
+          <>
+            {/* Desktop: single unified card */}
+            <div className="hidden md:block shrink-0">
+              <div className="rounded-2xl border border-border bg-card p-4 clay">
+                <div className="flex items-center gap-6">
+                  <Avatar avatar={learner?.avatar} size={48} />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-foreground truncate">{status.displayName}</p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Your Rank</p>
+                    <p className="text-2xl font-bold text-gradient-mars">
+                      {learnerRank ? `#${learnerRank}` : '—'}
+                    </p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Challenges</p>
+                    <p className="text-2xl font-bold text-foreground">{status.completedChallenges}</p>
+                  </div>
+
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Score</p>
+                    <p className="text-2xl font-bold text-foreground">{status.score}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowPicker(true)}
+                      className="clay clay-press flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-foreground hover:bg-muted/50"
+                      title="Change avatar and nickname"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={optOut}
+                      className="clay clay-press flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20"
+                      title="Hide from leaderboard"
+                    >
+                      <EyeOff className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <p className="mt-2 text-sm font-semibold text-foreground truncate">{status.displayName}</p>
             </div>
 
-            {/* Edit / Hide buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setShowPicker(true)}
-                className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50"
-                title="Change avatar and nickname"
-              >
-                <Pencil className="h-4 w-4" />
-                Edit
-              </button>
-              <button
-                onClick={optOut}
-                className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/20"
-                title="Hide from leaderboard"
-              >
-                <EyeOff className="h-4 w-4" />
-                Hide
-              </button>
-            </div>
+            {/* Mobile: multi-card layout */}
+            <div className="md:hidden shrink-0 space-y-3">
+              <div className="rounded-2xl border border-border bg-card p-4 clay">
+                <div className="flex items-center gap-4">
+                  <Avatar avatar={learner?.avatar} size={48} />
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Your Rank</p>
+                    <p className="text-2xl font-bold text-gradient-mars">
+                      {learnerRank ? `#${learnerRank}` : '—'}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm font-semibold text-foreground truncate">{status.displayName}</p>
+              </div>
 
-            {/* Challenges & Score cards */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-border bg-card p-4 clay">
-                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-mars/15">
-                  <Trophy className="h-5 w-5" style={{ color: 'var(--mars)' }} />
-                </div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Challenges</p>
-                <p className="text-2xl font-bold text-foreground">{status.completedChallenges}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowPicker(true)}
+                  className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50"
+                  title="Change avatar and nickname"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+                <button
+                  onClick={optOut}
+                  className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/20"
+                  title="Hide from leaderboard"
+                >
+                  <EyeOff className="h-4 w-4" />
+                  Hide
+                </button>
               </div>
-              <div className="rounded-2xl border border-border bg-card p-4 clay">
-                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                  <Star className="h-5 w-5 text-muted-foreground" />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-border bg-card p-4 clay">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-mars/15">
+                    <Trophy className="h-5 w-5" style={{ color: 'var(--mars)' }} />
+                  </div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Challenges</p>
+                  <p className="text-2xl font-bold text-foreground">{status.completedChallenges}</p>
                 </div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Score</p>
-                <p className="text-2xl font-bold text-foreground">{status.score}</p>
+                <div className="rounded-2xl border border-border bg-card p-4 clay">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                    <Star className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Score</p>
+                  <p className="text-2xl font-bold text-foreground">{status.score}</p>
+                </div>
               </div>
             </div>
-          </div>
+          </>
         )}
 
         {/* Avatar / nickname picker modal */}
