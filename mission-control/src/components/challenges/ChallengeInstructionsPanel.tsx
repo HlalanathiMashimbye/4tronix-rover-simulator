@@ -70,7 +70,11 @@ export function ChallengeInstructionsPanel({
   const doneCount = results.filter(Boolean).length;
 
   return (
-    <div className="sticky top-[var(--app-chrome)] z-20 shrink-0 rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4 md:relative md:top-auto md:z-auto">
+    <div className={`sticky top-[var(--app-chrome)] z-20 shrink-0 rounded-3xl border-x-2 border-t-2 border-b-4 p-4 md:relative md:top-auto md:z-auto ${
+      allStepChecksPass
+        ? 'animate-step-celebrate'
+        : 'border-kid-panel-edge bg-kid-panel'
+    }`}>
       {/* Collapsed header — always visible */}
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">

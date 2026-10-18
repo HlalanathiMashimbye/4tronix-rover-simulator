@@ -709,6 +709,25 @@
 }
 .animate-node-glow { animation: node-glow 2.2s ease-in-out infinite; }
 
+@keyframes step-celebrate {
+  0%, 100% {
+    border-color: var(--kid-green-edge);
+    background-color: color-mix(in oklab, var(--kid-green) 8%, var(--kid-panel));
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--kid-green) 40%, transparent);
+  }
+  50% {
+    border-color: var(--kid-green);
+    background-color: color-mix(in oklab, var(--kid-green) 18%, var(--kid-panel));
+    box-shadow: 0 0 16px 4px color-mix(in oklab, var(--kid-green) 25%, transparent);
+  }
+}
+.animate-step-celebrate {
+  animation: step-celebrate 800ms ease-in-out 3;
+  animation-fill-mode: forwards;
+  border-color: var(--kid-green-edge);
+  background-color: color-mix(in oklab, var(--kid-green) 8%, var(--kid-panel));
+}
+
 /*
  * Moments: one-shot motion that says something happened, never decoration
  * on a loop. Each is off under reduced motion (above).

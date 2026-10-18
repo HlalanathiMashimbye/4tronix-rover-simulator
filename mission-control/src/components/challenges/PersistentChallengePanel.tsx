@@ -121,7 +121,7 @@ export function PersistentChallengePanel() {
     const wasComplete = prevAllPassRef.current;
     prevAllPassRef.current = allStepChecksPass;
     if (!allStepChecksPass || wasComplete || !hasChecks || !visible) return;
-    const timer = setTimeout(() => advanceRef.current(), 1500);
+    const timer = setTimeout(() => advanceRef.current(), 3000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on the false→true transition only
   }, [allStepChecksPass, hasChecks, visible]);
