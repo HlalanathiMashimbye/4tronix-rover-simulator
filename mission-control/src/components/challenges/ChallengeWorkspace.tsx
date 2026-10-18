@@ -189,7 +189,7 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col gap-2">
+    <div className="relative flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
       <ChallengeInstructionsPanel
         step={step}
         stepIndex={stepIndex}
@@ -210,8 +210,8 @@ export function ChallengeWorkspace({ challenge }: ChallengeWorkspaceProps) {
         onPredict={setPrediction}
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col gap-2 lg:flex-row">
-        <div className="min-h-0 flex-1">
+      <div className="relative flex flex-1 flex-col gap-2 lg:flex-row">
+        <div className="flex-1">
           <ChallengeCenterPanel
             challenge={challenge}
             onLoadMore={() => setLoadMoreCalled(true)}

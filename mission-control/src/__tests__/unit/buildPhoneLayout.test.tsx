@@ -76,11 +76,9 @@ describe('the navbar on a phone', () => {
     );
   };
 
-  it('drops the tab bar and the floating button while building', () => {
+  it('keeps the tab bar for navigation but drops the floating button while building', () => {
     renderNavbar('/mission');
-    // Exactly "History": the laptop navbar's "My History" is a different
-    // element and stays, hidden by CSS below md.
-    expect(screen.queryByRole('link', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Create Mission')).not.toBeInTheDocument();
   });
 

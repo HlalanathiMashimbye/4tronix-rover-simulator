@@ -106,10 +106,15 @@ export function Navbar() {
    * note there for why this file must not contain the string.
    */
   const onOperatorSurface = isOperatorSurface(pathname);
-  // The build page on a phone is a full-screen tool; see isBuildSurface.
-  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname) || isMissionViewSurface(pathname);
-  // Including this top bar: the build page brings its own slimmer one with a
-  // way back, and the 64px is a fifth of what the blocks get on a phone.
+  const onBuildSurface = isBuildSurface(pathname);
+  const onMissionView = isMissionViewSurface(pathname);
+  // The build page's own PhoneWorkspace header replaces this top bar, and the
+  // 64px it saves is a fifth of what the blocks get on a phone.
+  const hideTopBar = onOperatorSurface || onBuildSurface || onMissionView;
+  // Tab bar stays on the build surface so a learner arriving from a challenge
+  // can navigate away; the FAB is hidden there (you are already creating).
+  const hideTabBar = onOperatorSurface || onMissionView;
+  const hideFAB = onOperatorSurface || onBuildSurface || onMissionView;
 
   const reduceMotion = useReducedMotion();
 
@@ -150,7 +155,7 @@ export function Navbar() {
           (h-page) do not overflow by a pixel. */}
       <nav
         className={`sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)] ${
-          hidePhoneChrome ? 'hidden md:block' : ''
+          hideTopBar ? 'hidden md:block' : ''
         }`}
       >
         {/* Use a balanced three-column layout so the search sits in the true
@@ -251,7 +256,7 @@ export function Navbar() {
           missing here. Create Mission is deliberately NOT in this row: it is
           the floating button below, because an action and a destination
           should not look alike. */}
-      {!hidePhoneChrome && (
+      {!hideTabBar && (
       <nav
         aria-label="Tabs"
         className="fixed bottom-0 left-0 right-0 z-50 h-[var(--app-bottom-chrome)] border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
@@ -286,7 +291,7 @@ export function Navbar() {
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
           rather than the row's flat tabs. */}
-      {!hidePhoneChrome && (
+      {!hideFAB && (
         <Link
           href="/mission"
           aria-label="Create Mission"

@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Blocks, Code2, Eye, Target } from 'lucide-react';
+import { Blocks, Code2, Eye, Play, Target } from 'lucide-react';
 import type { Challenge } from '@/core/domain/entities/Challenge';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { MissionFeed } from '@/components/mission-feed/MissionFeed';
 import { BlocklyEditor } from '@/components/mission/BlocklyEditor';
 import { loadPythonEditor } from '@/components/mission/loadPythonEditor';
+import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { pillClass } from './pill';
 import { SimulationPanel } from '@/components/mission/SimulationPanel';
 import { useYardLayout } from '@/hooks/useYardLayout';
@@ -83,10 +84,12 @@ export function ChallengeCenterPanel({
   target = null,
   holdTarget = false,
 }: ChallengeCenterPanelProps) {
+  const isPhone = useIsPhoneLayout();
   const [trajectory, setTrajectory] = useState<TrajectoryPoint[]>([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [blocksView, setBlocksView] = useState<'blocks' | 'python'>('blocks');
   const [lastGeneratedCode, setLastGeneratedCode] = useState('');
+  const registeredRunRef = useRef<(() => void) | null>(null);
 
   /**
    * The target overlay (AB#447): on when the challenge opens, off once the
@@ -157,8 +160,8 @@ export function ChallengeCenterPanel({
     // painted over the workspace's "Challenge complete!" overlay (z-10) - the
     // toolbox and scrollbars showed through the blur and cut across the card.
     // Contained, they only compete with each other.
-    <div data-testid="challenge-code-workspace" className="isolate flex h-full min-h-0 w-full flex-col gap-2 lg:flex-row">
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel">
+    <div data-testid="challenge-code-workspace" className="isolate flex w-full flex-col gap-2 lg:h-full lg:min-h-[500px] lg:flex-row">
+      <div className="flex min-h-[300px] min-w-0 flex-1 flex-col overflow-hidden rounded-3xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel">
         {challenge.workspaceKind === 'blockly-sim' && (
           <div className="flex shrink-0 gap-1.5 border-b-2 border-kid-panel-edge p-1.5">
             <button
@@ -185,38 +188,52 @@ export function ChallengeCenterPanel({
               <Code2 className="h-5 w-5" aria-hidden="true" />
               Show as Python
             </button>
+            {isPhone && (
+              <button
+                onClick={() => registeredRunRef.current?.()}
+                className="flex min-h-11 items-center justify-center gap-1.5 rounded-full border-b-4 border-kid-green-edge bg-kid-green px-4 font-display text-sm font-bold text-kid-ink transition-colors"
+              >
+                <Play className="h-5 w-5" aria-hidden="true" />
+                Run
+              </button>
+            )}
           </div>
         )}
 
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
           {challenge.workspaceKind === 'blockly-sim' ? (
-            <div className={blocksView === 'blocks' ? 'h-full' : 'hidden'}>
+            <div className={blocksView === 'blocks' ? 'absolute inset-0' : 'hidden'}>
               <BlocklyEditor
+                key={isPhone ? 'phone' : 'desktop'}
+                phone={isPhone}
                 onGenerateCommands={handleRun}
                 onCodeChange={handleCodeChange}
                 onBlocklyStateChange={onBlocklyStateChange}
+                onRegisterRun={(run) => { registeredRunRef.current = run; }}
                 storageKey={`challengeWorkspace:${challenge.id}`}
                 starterWorkspace={challenge.starterBlocks}
               />
             </div>
           ) : (
-            <PythonCodeEditor
-              onGenerateCommands={handleRun}
-              onCodeChange={handleCodeChange}
-              storageKey={`challengeCode:${challenge.id}`}
-              starterCode={challenge.starterCode}
-            />
+            <div className="absolute inset-0">
+              <PythonCodeEditor
+                onGenerateCommands={handleRun}
+                onCodeChange={handleCodeChange}
+                storageKey={`challengeCode:${challenge.id}`}
+                starterCode={challenge.starterCode}
+              />
+            </div>
           )}
 
           {challenge.workspaceKind === 'blockly-sim' && blocksView === 'python' && (
-            <pre className="h-full overflow-auto bg-secondary/40 p-3 font-mono text-xs leading-relaxed text-foreground">
+            <pre className="absolute inset-0 overflow-auto bg-secondary/40 p-3 font-mono text-xs leading-relaxed text-foreground">
               <code>{lastGeneratedCode || '# Add some blocks to see the Python here.'}</code>
             </pre>
           )}
         </div>
       </div>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-h-[250px] min-w-0 flex-1 flex-col gap-2">
         {target && challenge.target && !holdTarget && (
           <div className="flex shrink-0 items-center gap-2 rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel px-3 py-1.5">
             {showPath ? (
@@ -235,15 +252,17 @@ export function ChallengeCenterPanel({
             )}
           </div>
         )}
-        <div className="min-h-0 flex-1">
-          <SimulationPanel
-            trajectory={trajectory}
-            isPlaying={isPlaying}
-            onReset={handleReset}
-            editorMode={challenge.workspaceKind === 'blockly-sim' ? 'blockly' : 'code'}
-            resetVersion={0}
-            target={simTarget}
-          />
+        <div className="relative min-h-0 flex-1">
+          <div className="absolute inset-0">
+            <SimulationPanel
+              trajectory={trajectory}
+              isPlaying={isPlaying}
+              onReset={handleReset}
+              editorMode={challenge.workspaceKind === 'blockly-sim' ? 'blockly' : 'code'}
+              resetVersion={0}
+              target={simTarget}
+            />
+          </div>
         </div>
       </div>
     </div>

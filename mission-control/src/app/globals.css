@@ -367,13 +367,13 @@
   :root { --app-bottom-chrome: 0px; }
 }
 
-/* The operator console, the build page and a mission's own page do not
-   render the learner's tab bar below md (Navbar.tsx; the operator console
-   lays its own inside the page), so there is no fixed chrome to keep clear of. Read from the
-   attribute each surface sets rather than from the route, so the CSS never
-   learns the path. */
+/* The operator console and a mission's own page do not render the learner's
+   tab bar below md (Navbar.tsx; the operator console lays its own inside the
+   page), so there is no fixed chrome to keep clear of. The build page keeps
+   the tab bar so a learner arriving from a challenge can navigate away.
+   Read from the attribute each surface sets rather than from the route, so
+   the CSS never learns the path. */
 :root:has([data-surface="operator"]),
-:root:has([data-surface="build"]),
 :root:has([data-surface="mission"]) { --app-bottom-chrome: 0px; }
 
 /*

@@ -70,7 +70,7 @@ export function ChallengeInstructionsPanel({
   const doneCount = results.filter(Boolean).length;
 
   return (
-    <div className={`sticky top-[var(--app-chrome)] z-20 shrink-0 rounded-3xl border-x-2 border-t-2 border-b-4 p-4 md:relative md:top-auto md:z-auto ${
+    <div className={`relative shrink-0 rounded-3xl border-x-2 border-t-2 border-b-4 p-4 ${
       allStepChecksPass
         ? 'animate-step-celebrate'
         : 'border-kid-panel-edge bg-kid-panel'

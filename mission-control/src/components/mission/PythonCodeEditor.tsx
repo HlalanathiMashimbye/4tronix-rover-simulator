@@ -338,7 +338,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.12 } }}
               transition={reduceMotion ? { duration: 0.15 } : { type: 'spring', stiffness: 520, damping: 32 }}
               style={{ transformOrigin: 'top right' }}
-              className="absolute right-0 top-full z-30 mt-2 w-[min(22rem,100%)] rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-xl"
+              className="absolute right-0 top-full z-30 mt-2 max-h-[min(24rem,50vh)] w-[min(22rem,100%)] overflow-y-auto rounded-2xl border border-border bg-popover p-3 text-popover-foreground shadow-xl"
             >
               <p className="text-xs font-bold">Rover commands</p>
               <p className="mb-2.5 mt-0.5 text-[11px] text-muted-foreground">Pick one to add it where your cursor is.</p>
