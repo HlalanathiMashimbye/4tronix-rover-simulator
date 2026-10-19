@@ -2,6 +2,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
+import type { VideoLinkResult } from '@/core/application/services/VideoLinker';
+import { videoLinker } from '@/infrastructure/container.server';
 import { isAutoUploadConfigured } from '@/infrastructure/youtube/youtubeUpload';
 import {
   recordAutomaticUploadFailure,
@@ -16,7 +18,33 @@ const metadataSchema = z.object({
   runId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
   yardId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
   recordingName: z.string().regex(/^[A-Za-z0-9_.-]{1,180}\.mp4$/i),
+  // What the rover reported for the run. Absent from a satellite older than
+  // this field, which is read as completed, the linker's own assumption.
+  outcome: z.enum(['completed', 'error']).optional(),
 });
+
+/**
+ * The uploaded video, onto the run it shows.
+ *
+ * Through the same linker the scheduled poll uses, because that poll reads
+ * the channel with an API key and never sees a private upload. Not for a run
+ * the rover reported as an error: attaching closes an open run and emails the
+ * learner that it is complete, and whether an errored run counts is the
+ * operator's call. They still have the video, in the upload's row on the
+ * mission.
+ */
+async function linkUpload(
+  upload: { missionId: string; yardId: string; outcome?: 'completed' | 'error' },
+  videoId: string,
+): Promise<VideoLinkResult> {
+  if (upload.outcome === 'error') {
+    return { kind: 'skipped', reason: 'the rover reported an error; left for the operator' };
+  }
+  return videoLinker().link(
+    { missionId: upload.missionId, yardId: upload.yardId, videoId },
+    'youtube-auto-upload',
+  );
+}
 
 function validIngestSecret(supplied: string | null): boolean {
   const expected = process.env.YOUTUBE_UPLOAD_INGEST_SECRET?.trim();
@@ -46,6 +74,7 @@ export async function POST(request: NextRequest) {
     runId: form.get('runId'),
     yardId: form.get('yardId'),
     recordingName: form.get('recordingName'),
+    outcome: form.get('outcome') ?? undefined,
   });
   const file = form.get('file');
   if (!parsed.success) {
@@ -86,7 +115,26 @@ export async function POST(request: NextRequest) {
     if (result.kind === 'claimed') {
       return NextResponse.json({ success: true, status: 'uploaded', ...result });
     }
-    return NextResponse.json({ success: true, status: result.kind, ...result });
+
+    // A fresh upload carries its video id; one already uploaded by an earlier
+    // delivery carries it in its ledger entry. Both are linked, so a delivery
+    // whose link failed is put right by the satellite asking again.
+    const videoId = 'videoId' in result ? result.videoId : 'entry' in result ? result.entry.videoId : undefined;
+    let linked: VideoLinkResult | undefined;
+    if (result.kind === 'uploaded' && videoId) {
+      try {
+        linked = await linkUpload(parsed.data, videoId);
+      } catch {
+        // The upload stands, and the ledger will not repeat it. A 503 makes
+        // the satellite deliver again, which finds it uploaded and links it.
+        console.error(`[youtube-upload] Uploaded ${parsed.data.missionId} but could not attach it to its run.`);
+        return NextResponse.json({ success: false, status: 'uploaded', linked: null }, { status: 503 });
+      }
+      if (linked.kind === 'linked' && linked.emailFailed) {
+        console.error(`[youtube-upload] Could not email the learner for ${parsed.data.missionId}.`);
+      }
+    }
+    return NextResponse.json({ success: true, status: result.kind, ...result, linked });
   } catch {
     console.error('[youtube-upload] Could not claim or record the upload attempt.');
     return NextResponse.json({ success: false, error: 'Could not record the upload attempt.' }, { status: 503 });

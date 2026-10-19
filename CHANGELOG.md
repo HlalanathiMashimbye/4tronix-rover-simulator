@@ -11,6 +11,26 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Automatic uploads reach the run, and wait for a connection.** Two gaps
+  in the automatic YouTube upload (#304), found reviewing it on 20 October.
+  Kept on a branch, not merged: David has lowered auto-upload in priority.
+
+  The uploaded video never reached the learner's page. Its id went into a
+  ledger only operators read, and attaching it was left to the scheduled
+  linker, which reads the channel with an API key and cannot see a private
+  video; uploads are private by default. Now the upload attaches it through
+  the same linker, moved out of the cron route into one application service
+  both call, so it closes an open run and emails the learner exactly as a
+  found video does. Not for a run the rover reported as an error: whether that
+  counts is the operator's call.
+
+  And the satellite gave up after three tries in a few seconds. Serving the
+  yard's wifi, it has no internet, so in the yard as it is normally set up
+  every try failed and none came later. A note beside each recording now waits
+  until Mission Control has the video or has refused it for good, retried
+  every watcher pass when due, and written so that a power cut cannot leave it
+  half written.
+
 - **The run station works on a phone.** Stacked, the rail took all the height
   its cards wanted before the live panel got any: 365px of an iPhone's 598.
   The panel was left its 220px floor, and its header and controls alone are

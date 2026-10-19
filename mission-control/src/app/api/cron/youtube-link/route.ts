@@ -17,15 +17,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { nanoid } from 'nanoid';
-
-import { adminMissionRepository, notificationService } from '@/infrastructure/container.server';
-import type { Mission } from '@/core/domain/entities/Mission';
-import {
-  claimedMissions,
-  planVideoLink,
-  watchUrl,
-} from '@/core/domain/services/youtubeLinking';
+import { videoLinker } from '@/infrastructure/container.server';
+import { claimedMissions } from '@/core/domain/services/youtubeLinking';
 import {
   fetchRecentUploads,
   YouTubeNotConfiguredError,
@@ -91,50 +84,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, checked: videos.length, linked: 0 });
   }
 
-  const repository = adminMissionRepository();
+  const linker = videoLinker();
   const linked: string[] = [];
   const completed: string[] = [];
   const skipped: Array<{ missionId: string; reason: string }> = [];
 
   for (const claim of claims) {
     try {
-      const runs = await repository.findRuns(claim.missionId);
-
-      // Planned from the runs first, which is all an ordinary poll needs. The
-      // mission is read only when the video is about to complete it, or there
-      // is no run to go on: once per mission, not once per poll.
-      let plan = planVideoLink(claim, runs, undefined);
-      let mission: Mission | null = null;
-      if (plan.kind === 'needs-mission' || (plan.kind === 'link' && plan.completes)) {
-        mission = await repository.findById(claim.missionId);
-        if (mission?.deleted) mission = null;
-        plan = planVideoLink(claim, runs, mission);
-      }
-      if (plan.kind !== 'link') {
-        skipped.push({ missionId: claim.missionId, reason: plan.kind === 'skip' ? plan.reason : 'nothing to link' });
+      const result = await linker.link(claim, 'youtube-auto-link');
+      if (result.kind === 'skipped') {
+        skipped.push({ missionId: claim.missionId, reason: result.reason });
         continue;
       }
-
-      await repository.applyBookkeeping(claim.missionId, plan.runId ?? nanoid(), plan.yardId, {
-        status: plan.completes ? 'completed' : null,
-        // Completing settles a review, as an operator's completion does: a
-        // video of the run answers the question the flag was asking.
-        clearsReview: plan.completes,
-        youtubeUrl: watchUrl(claim.videoId),
-        decidedAt: new Date().toISOString(),
-        decidedBy: 'youtube-auto-link',
-      });
       linked.push(claim.missionId);
-      if (plan.completes) completed.push(claim.missionId);
-
-      // The same email an operator's completion sends. Best effort and after
-      // the write: a Resend outage must not undo a mission the video closed.
-      if (plan.completes && mission) {
-        try {
-          await notificationService().notifyStatusChange({ ...mission, status: 'completed' }, 'completed');
-        } catch (error) {
-          console.error(`[youtube-link] Could not email the learner for ${claim.missionId}:`, error);
-        }
+      if (result.completed) completed.push(claim.missionId);
+      if (result.emailFailed) {
+        console.error(`[youtube-link] Could not email the learner for ${claim.missionId}.`);
       }
     } catch (error) {
       // One bad mission must not stop the rest of the batch: the next poll

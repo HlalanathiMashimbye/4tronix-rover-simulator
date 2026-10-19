@@ -95,6 +95,22 @@ def test_a_saved_recording_triggers_upload_with_the_exact_dispatch_id(monkeypatc
     assert len(calls) == 1
     assert calls[0][:3] == ('m1', 'dispatch-9', YARD)
     assert calls[0][3].endswith('.mp4')
+    assert calls[0][4] == 'completed'
+
+
+def test_the_upload_is_told_when_the_rover_could_not_execute_the_run(monkeypatch, recorder):
+    """An uploaded video closes its run in Mission Control. A run the rover
+    reported as an error must reach it saying so, or it is closed as done."""
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'error', 'error': 'SyntaxError',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD,
+                                             on_recording_ready=lambda *args: calls.append(args))
+
+    assert [call[4] for call in calls] == ['error']
 
 
 def test_repeated_watcher_events_do_not_trigger_a_second_upload(monkeypatch, recorder):
@@ -109,6 +125,26 @@ def test_repeated_watcher_events_do_not_trigger_a_second_upload(monkeypatch, rec
     mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, on_recording_ready=ready)
 
     assert len(calls) == 1
+
+
+def test_every_pass_sends_recordings_still_waiting_to_be_delivered(monkeypatch, recorder):
+    """Not only when a run finishes: a satellite that was offline sends what
+    it has once it finds a way out, with no new run needed to set it off."""
+    import youtube_upload
+
+    class Stop(Exception):
+        pass
+
+    _rover_says(monkeypatch, [])
+    kicked = []
+    monkeypatch.setattr(youtube_upload, 'has_due', lambda now=None: True)
+    monkeypatch.setattr(youtube_upload, 'kick', lambda: kicked.append(True))
+    monkeypatch.setattr(mission_watcher.time, 'sleep', lambda _s: (_ for _ in ()).throw(Stop()))
+
+    with pytest.raises(Stop):
+        mission_watcher.start_mission_watcher(lambda: 'http://rover')
+
+    assert kicked == [True]
 
 
 def test_a_run_still_going_is_left_filming(monkeypatch, recorder):

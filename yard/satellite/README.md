@@ -8,6 +8,10 @@ records runs, and works with no internet at all.
 It holds no Firebase or YouTube OAuth credential. If automatic uploads are
 enabled, it uses the separate `YOUTUBE_UPLOAD_INGEST_SECRET` to deliver
 completed recordings to Mission Control; the rover run path remains local.
+Each one waits in a note beside the recording (`<file>.mp4.upload.json`) until
+it is delivered, so a satellite with no internet, which is what it is while it
+serves the yard's wifi, sends its videos once it has a way out
+(`youtube_upload.py`).
 See [../docs/satellite.md](../docs/satellite.md) for setup and
 [../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
 for what the Firestore mirror used to do and why it went.
