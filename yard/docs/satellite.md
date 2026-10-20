@@ -108,44 +108,84 @@ sudo systemctl restart satellite-web
 sudo systemctl restart satellite-camera
 ```
 
-**The restarts ask for the `mars` password.** This used to say the `mars`
-user had passwordless sudo for these two units. On the satellite as it is
-(checked 3 October 2026) it does not: `/etc/sudoers.d/` holds only the
-system's own files, and `sudo -n systemctl restart satellite-web` answers
-"a password is required", with or without `.service` on the end. So:
+**Restarts and shutting down need no password, once the rule is in.** The
+rule is [`yard/deploy/satellite.sudoers`](../deploy/satellite.sudoers): restart
+`satellite-web` and `satellite-camera`, stop the camera, and `systemctl
+poweroff`, for the `mars` user, and nothing else. Install it once, from the
+checkout on the Pi:
 
-- Run the restarts yourself, over an interactive `ssh` session. They cannot be
-  run from a script or by an agent, which cannot type the password.
-- sudo remembers the password for a few minutes, so the second restart
-  usually does not ask again.
-- Keep them as two commands anyway. If a per-unit rule is ever added (see
-  below), sudo matches the whole argument list, and `systemctl restart a b`
-  would match neither rule.
-
-**The Settings page cannot restart the camera either.** Its Restart camera
-button calls `systemctl restart satellite-camera`, which systemd refuses
-without a logged-in user ("Interactive authentication required"), then retries
-through `sudo -n`, which needs the password. The button reports that it cannot
-manage the unit; restart the camera over ssh instead.
-
-**To make restarts passwordless again** (a security setting on the Pi, so a
-deliberate decision, not a fix to apply in passing), add a sudoers file with
-`sudo visudo -f /etc/sudoers.d/satellite` containing exactly:
-
-```
-mars ALL=(root) NOPASSWD: /usr/bin/systemctl restart satellite-web, /usr/bin/systemctl restart satellite-camera
+```bash
+sudo bash yard/docs/setup-scripts/satellite-sudoers.sh
 ```
 
-Confirm the path first with `command -v systemctl` on the Pi; on its Debian it
-is `/usr/bin/systemctl`, but sudo compares full paths. Spelled exactly as above:
-sudo matches the argument list word for word, so
-`satellite-camera.service` would need its own entry (`camera_control.py` tries
-both spellings for this reason). Then update this section.
+That one sudo asks for the `mars` password; nothing after it does. The script
+checks the rule with `visudo` before it goes in, and then tries each command as
+`mars` with `sudo -n` and says which work. Whether it is in on a given Pi:
+
+```bash
+sudo -n -l /usr/bin/systemctl poweroff
+```
+
+prints the command when it is, and asks for a password when it is not. Before
+it is in (it was not, checked 3 October 2026), every restart asks for the
+password, so an agent cannot do one and has to hand the two commands to a
+person.
+
+- Keep restarts as two commands. sudo matches the whole argument list, so
+  `systemctl restart satellite-web satellite-camera` matches no rule.
+- Both spellings of each unit are in the rule, with and without `.service`,
+  because sudo treats them as different commands and `camera_control.py` tries
+  both. `test_satellite_power.py` fails if the code asks sudo for a command
+  the rule does not list, or the rule allows one the code does not use.
+- The path is `/usr/bin/systemctl`, which is where the satellite's Debian puts
+  it. sudo compares full paths, so the script refuses to install on a box
+  where `command -v systemctl` says otherwise.
+- To change what it allows, edit the file in the repo and run the script again.
+  Never edit `/etc/sudoers.d/satellite` on the Pi, where it drifts from here.
+
+**What uses it.** The Settings page's Restart camera and Stop buttons call
+`systemctl` for the camera unit; systemd refuses a service user directly
+("Interactive authentication required"), so they retry through `sudo -n`.
+The power button beside the Satellite chip shuts the satellite down: it closes
+and keeps any recording still open, so the file plays, then powers off
+cleanly. Unplug once the Pi's green light has stopped flashing. Pulling the
+plug instead is how 87 files came back empty on 17 October 2026, a few minutes
+after a git pull: see "Empty files after a power cut" below. Without the rule,
+the button says what setting it up takes rather than failing silently.
+
+Anyone on the yard's wifi can use those buttons: the console has no sign-in,
+because the yard works without internet. That is why the rule allows nothing
+beyond them.
 
 `git checkout -f` discards local edits to tracked files, which is the point.
 `satellite_config.json` and `recordings/` are gitignored, so the yard's own
 settings and its videos survive it. Do not reach for `git clean` - that is what
 would delete the recordings.
+
+### Empty files after a power cut
+
+The card is given a file's data some time after the file is written. Cut the
+power in between and the file is there with nothing in it. On 17 October 2026
+the satellite was switched off at the plug a few minutes after a `git pull`,
+and every file the pull had touched came back 0 bytes, `web_server.py` and
+`camera_server.py` among them.
+
+What it looks like: ssh works, ports 3001 and 8890 refuse connections, and
+`systemctl show satellite-web` says `Result=success`, `ExecMainStatus=0` with
+`NRestarts` climbing. Python ran an empty file and exited cleanly, and systemd
+restarted it every five seconds. `git status` lists the files as modified, and
+`git diff --stat` is all deletions.
+
+The fix, once `git cat-file -p HEAD:yard/satellite/web_server.py` shows the
+stored copy is whole:
+
+```bash
+cd ~/4tronix-rover-simulator && git checkout -f HEAD && sync
+```
+
+systemd starts both services again within fifteen seconds by itself; no
+restart, and no password, is needed. `satellite_config.json` and the
+recordings are gitignored and untouched.
 
 ### What you need
 - A laptop on the same WiFi network as the satellite (`marsyard` or `mars-relay-network`)

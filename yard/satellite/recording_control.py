@@ -176,6 +176,16 @@ def is_recording(mission_id, yard_id):
         return (mission_id, yard_id) in _paths
 
 
+def open_recordings():
+    """(mission_id, yard_id) for every recording open right now, at any yard.
+
+    For shutting down: each has to be closed first, or its file has no index
+    at the end and will not play.
+    """
+    with _lock:
+        return sorted(_paths)
+
+
 def recordings_at(yard_id):
     """The keys recording at this yard right now."""
     with _lock:

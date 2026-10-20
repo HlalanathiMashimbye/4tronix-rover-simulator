@@ -181,8 +181,10 @@ there will cost you an afternoon if you skip them:
   stale code, producing faults that exist nowhere in the repository. Check
   `git log --oneline -1 && git status --porcelain` on it - status must be empty
   - before debugging anything. Never `scp` single files onto it.
-- Restarting the satellite's services needs the `mars` password: there is no
-  passwordless sudo rule for them (checked 3 October 2026), so an agent cannot
-  do it and must hand the two commands to a person. Restart them one command at
-  a time. `yard/docs/satellite.md` has the details and the rule that would
-  change this.
+- Restarting the satellite's services needs no password once
+  `yard/deploy/satellite.sudoers` is installed on it (a person runs
+  `sudo bash yard/docs/setup-scripts/satellite-sudoers.sh` once). Check with
+  `sudo -n -l /usr/bin/systemctl poweroff` over ssh before relying on it: if it
+  asks for a password the rule is not in, and the restarts are for a person to
+  run. Restart them one command at a time. `yard/docs/satellite.md` has the
+  details.
