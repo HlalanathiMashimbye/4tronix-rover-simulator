@@ -161,6 +161,15 @@ export function Navbar() {
           <NavbarSearch />
 
           <div className="flex shrink-0 items-center justify-end gap-2 justify-self-end">
+            <a
+              href="https://sapient.rocks/about/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
+            >
+              About
+            </a>
+
             {/* Desktop destinations - one segmented pill group */}
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (

@@ -81,6 +81,27 @@ describe('the navbar on a phone', () => {
     expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.getByLabelText('Create Mission')).toBeInTheDocument();
   });
+
+  it('shows About on mobile', () => {
+    renderNavbar('/missions');
+    expect(screen.getByRole('link', { name: 'About' })).toBeVisible();
+  });
+
+  it('keeps About beside, but outside, the Home and History icon group', () => {
+    renderNavbar('/missions');
+    const about = screen.getByRole('link', { name: 'About' });
+    const home = screen
+      .getAllByRole('link', { name: 'Home' })
+      .find((link) => link.parentElement?.className.includes('border-border/60'));
+
+    expect(home).toBeDefined();
+    if (!home) throw new Error('Desktop Home link was not rendered');
+    expect(about).toHaveAttribute('href', 'https://sapient.rocks/about/');
+    expect(about).toHaveAttribute('target', '_blank');
+    expect(about).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(about.parentElement).not.toBe(home.parentElement);
+    expect(about.compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
 });
 
 describe('deciding the phone layout', () => {
