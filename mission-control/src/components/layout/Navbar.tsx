@@ -19,6 +19,7 @@ import {
   Plus,
   Sun,
   Moon,
+  HelpCircle,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -29,6 +30,7 @@ import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
 import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
+import { useTour } from '@/contexts/TourContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -48,6 +50,7 @@ export function Navbar() {
   const { theme, toggleTheme } = useTheme();
 
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
+  const { start: startTour, active: tourActive } = useTour();
 
   // What the open panel shows is captured when it opens, not read live.
   // Opening marks everything seen, so a live list would empty itself in front
@@ -189,11 +192,24 @@ export function Navbar() {
             {/* Prominent primary action */}
             <Link
               href="/mission"
+              data-tour-id="tour-create-mission"
               className="clay clay-press hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-gradient-mars px-4 py-2 text-sm font-bold text-primary-foreground md:flex"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create Mission
             </Link>
+
+            {/* Restart tour (desktop only). Not shown while a tour is running. */}
+            {!tourActive && (
+              <button
+                onClick={startTour}
+                className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
+                aria-label="Platform tour"
+                title="Take a tour of Mission Control"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            )}
 
             {/* Theme toggle (desktop; mobile reaches it from the Notifications
                 panel header - the bottom tab bar is a tight 4-slot layout
@@ -205,6 +221,17 @@ export function Navbar() {
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
+
+            {/* Mobile tour help button. */}
+            {!tourActive && (
+              <button
+                onClick={startTour}
+                className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+                aria-label="Platform tour"
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+            )}
 
             {/* Mobile theme toggle. Lives here because the mobile top bar has
                 nothing but the logo, so there is room - it used to be buried in

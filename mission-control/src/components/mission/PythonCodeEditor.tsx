@@ -271,7 +271,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
   }, [commandsOpen]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
+    <div data-tour-id="tour-python-editor" className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
       {/* Not when the layout runs from its own button: on a phone both the
           hint and Run would leave only an empty row behind. */}
       {!phone && (
@@ -295,6 +295,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             aria-expanded={commandsOpen}
             aria-haspopup="dialog"
             title="Rover commands"
+            data-tour-id="tour-code-instructions"
             // Run's height, square.
             className={`clay-press flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
               commandsOpen
@@ -306,6 +307,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
           </button>
           <button
             onClick={handleRun}
+            data-tour-id="tour-run-mission"
             className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
           >
             <Play className="h-3.5 w-3.5" fill="currentColor" />

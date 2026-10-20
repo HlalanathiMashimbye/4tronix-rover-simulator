@@ -65,6 +65,7 @@ export function RunFeed({
   codeSlot,
   codeOpen = false,
   videosFoot,
+  tourId,
 }: {
   /** The rover's runs, newest first. Empty for a mission no rover has driven. */
   runs: RunOption[];
@@ -84,6 +85,7 @@ export function RunFeed({
   codeOpen?: boolean;
   /** What sits under the videos where they have a column to themselves. */
   videosFoot?: ReactNode;
+  tourId?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
@@ -170,7 +172,7 @@ export function RunFeed({
   return (
     // data-more: there is a video after the first. The layout then leaves
     // room to show it: the next one's caption under the first (globals.css).
-    <div className="runFeedWrap" data-more={runs.length > 1 ? '' : undefined}>
+    <div className="runFeedWrap" data-more={runs.length > 1 ? '' : undefined} data-tour-id={tourId}>
       <div
         ref={feedRef}
         className="runFeed"

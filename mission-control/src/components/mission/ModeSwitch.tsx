@@ -34,6 +34,8 @@ export interface ModeOption<T extends string> {
   Icon: LucideIcon;
   /** A sign of interest before the press, for prefetching what it opens. */
   onIntent?: () => void;
+  /** Stable anchor for the platform tour overlay. */
+  tourId?: string;
 }
 
 /** The track's padding round the thumb, in px (p-[3px] below). */
@@ -147,7 +149,7 @@ export function ModeSwitch<T extends string>({
 }
 
 function Segment<T extends string>({
-  option: { label, Icon, onIntent },
+  option: { label, Icon, onIntent, tourId },
   at,
   position,
   active,
@@ -176,6 +178,7 @@ function Segment<T extends string>({
       onPointerEnter={onIntent}
       onFocus={onIntent}
       aria-pressed={active}
+      data-tour-id={tourId}
       className="relative z-10 flex h-[22px] items-center justify-center rounded-full text-xs font-bold text-muted-foreground transition-colors hover:text-foreground md:h-[26px]"
     >
       {/* A small hop for the icon of the mode just picked. */}

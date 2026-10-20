@@ -189,7 +189,7 @@ export default function MissionVideoClient({
   // far end of the row above that; the note's slot carries the prompt now,
   // until an operator's note takes its place (OperatorFeedback). Where the
   // two go depends on the screen, below.
-  const remixButton = remixable && <RemixButton onRemix={remix} nudge={simsWatched} compact />;
+  const remixButton = remixable && <RemixButton onRemix={remix} nudge={simsWatched} compact tourId="tour-remix" />;
   const debrief = (
     <>
       <OperatorFeedback runs={missionRuns} ask={remixable} />
@@ -275,6 +275,7 @@ export default function MissionVideoClient({
             trajectory={simTrajectory}
             simDuration={simDuration}
             onSimSourceChange={setRunningSource}
+            tourId="tour-mission-video"
             onSimFinished={watchedSim}
             yardId={mission.yardId}
             codeOpen={isPhone && codeOpen}
@@ -305,6 +306,7 @@ export default function MissionVideoClient({
               mission={mission}
               highlight={runningSource}
               footer={noteUnderTheVideo ? undefined : debrief}
+              tourId="tour-mission-code"
             />
           )}
         </div>
