@@ -136,15 +136,14 @@ def test_every_pass_sends_recordings_still_waiting_to_be_delivered(monkeypatch, 
         pass
 
     _rover_says(monkeypatch, [])
-    kicked = []
-    monkeypatch.setattr(youtube_upload, 'has_due', lambda now=None: True)
-    monkeypatch.setattr(youtube_upload, 'kick', lambda: kicked.append(True))
+    passes = []
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: passes.append(True))
     monkeypatch.setattr(mission_watcher.time, 'sleep', lambda _s: (_ for _ in ()).throw(Stop()))
 
     with pytest.raises(Stop):
         mission_watcher.start_mission_watcher(lambda: 'http://rover')
 
-    assert kicked == [True]
+    assert passes == [True]
 
 
 def test_a_run_still_going_is_left_filming(monkeypatch, recorder):

@@ -7,6 +7,7 @@ each recording that stays until Mission Control has the video or has said it
 never will.
 """
 
+import io
 import json
 import os
 import sys
@@ -34,6 +35,28 @@ class Reply:
         return self._body
 
 
+def fields_of(call):
+    """The form Mission Control would read: parsed off the streamed body the
+    way the server parses it, not taken from what the code meant to send."""
+    from werkzeug.formparser import parse_form_data
+    _args, kwargs = call
+    body = kwargs['data']
+    if isinstance(body, dict):
+        return body, None
+    raw = body.read()
+    environ = {'wsgi.input': io.BytesIO(raw), 'CONTENT_LENGTH': str(len(raw)),
+               'CONTENT_TYPE': kwargs['headers']['Content-Type'], 'REQUEST_METHOD': 'POST'}
+    _stream, form, files = parse_form_data(environ)
+    upload = files['file']
+    return dict(form), (upload.filename, upload.read())
+
+
+@pytest.fixture(autouse=True)
+def fresh_connection(monkeypatch):
+    monkeypatch.setattr(youtube_upload, '_connection', {'online': None, 'checkedAt': 0.0})
+    monkeypatch.setattr(youtube_upload, '_sending', {})
+
+
 @pytest.fixture
 def yard(monkeypatch, tmp_path):
     """A recordings folder with one finished run in it, a configured satellite,
@@ -53,7 +76,9 @@ def answer(monkeypatch, *replies):
     queue = list(replies)
 
     def post(*args, **kwargs):
-        calls.append((args, kwargs))
+        # Read now, as the network would, while the file is still open.
+        fields = fields_of((args, kwargs))
+        calls.append((args, kwargs, fields))
         reply = queue.pop(0) if len(queue) > 1 else queue[0]
         if isinstance(reply, Exception):
             raise reply
@@ -72,23 +97,26 @@ def note_of(recording):
 
 
 def test_a_finished_run_is_sent_with_its_dispatch_its_yard_and_what_the_rover_said(monkeypatch, yard):
-    calls = answer(monkeypatch, Reply())
+    calls = answer(monkeypatch, Reply(body={'status': 'uploaded', 'url': 'https://www.youtube.com/watch?v=abcdefghijk'}))
 
     assert youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed') == 'queued'
     assert youtube_upload.deliver_due(now=NOW) == [(yard.name, 'done', 'uploaded')]
 
-    args, kwargs = calls[0]
+    args, kwargs, (form, (filename, video)) = calls[0]
     assert args[0] == 'https://mission.example/api/youtube-upload/recording'
-    assert kwargs['headers'] == {'x-youtube-upload-secret': 'local-test-secret'}
-    assert kwargs['data'] == {
+    assert kwargs['headers']['x-youtube-upload-secret'] == 'local-test-secret'
+    assert form == {
         'missionId': 'm1',
         'runId': 'dispatch-1',
         'yardId': 'curiosity',
         'recordingName': yard.name,
         'outcome': 'completed',
     }
-    assert kwargs['files']['file'][0] == yard.name
-    assert note_of(yard) is None, 'delivered, so nothing is left to send'
+    assert filename == yard.name and video == yard.read_bytes()
+    # Kept, with what happened, so Settings can show it without asking anyone.
+    note = note_of(yard)
+    assert note['state'] == 'uploaded' and note['url'] == 'https://www.youtube.com/watch?v=abcdefghijk'
+    assert not youtube_upload.has_due(now=NOW + 3600), 'and never sent again'
 
 
 def test_without_the_credential_nothing_is_noted_and_nothing_is_sent(monkeypatch, yard):
@@ -119,7 +147,7 @@ def test_offline_the_note_stays_and_the_video_goes_once_there_is_a_way_out(monke
     # nothing: the next pass that finds it due sends it.
     assert youtube_upload.has_due(now=NOW + 61)
     assert youtube_upload.deliver_due(now=NOW + 61) == [(yard.name, 'done', 'uploaded')]
-    assert len(calls) == 2 and note_of(yard) is None
+    assert len(calls) == 2 and note_of(yard)['state'] == 'uploaded'
 
 
 def test_it_waits_longer_each_time_and_never_more_than_half_an_hour():
@@ -141,7 +169,7 @@ def test_mission_controls_answer_decides_whether_to_ask_again(monkeypatch, yard,
     youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed')
 
     assert youtube_upload.deliver_due(now=NOW) == [(yard.name, verdict, status)]
-    assert (note_of(yard) is not None) == (verdict == 'retry')
+    assert note_of(yard)['state'] == {'done': 'uploaded', 'give-up': 'manual', 'retry': 'waiting'}[verdict]
     assert yard.exists(), 'the recording stays on the card whatever happens'
 
 
@@ -154,7 +182,7 @@ def test_a_server_error_is_asked_again_and_a_refusal_is_not(monkeypatch, yard, c
     youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed')
 
     assert youtube_upload.deliver_due(now=NOW) == [(yard.name, verdict, f'HTTP {code}')]
-    assert (note_of(yard) is not None) == (verdict == 'retry')
+    assert note_of(yard)['state'] == ('waiting' if verdict == 'retry' else 'manual')
 
 
 def test_the_credential_never_reaches_the_log(monkeypatch, yard, capsys):
@@ -177,9 +205,11 @@ def test_a_recording_too_big_to_send_tells_mission_control_and_stays_for_manual_
     youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed')
 
     assert youtube_upload.deliver_due(now=NOW) == [(yard.name, 'give-up', 'too-large')]
-    assert calls[0][1]['data']['failureCode'] == 'too-large'
-    assert 'files' not in calls[0][1], 'the video itself is not sent'
-    assert note_of(yard) is None and yard.exists()
+    form, video = calls[0][2]
+    assert form['failureCode'] == 'too-large'
+    assert video is None, 'the video itself is not sent'
+    assert note_of(yard)['state'] == 'manual' and note_of(yard)['reason'] == 'too-large'
+    assert yard.exists()
 
 
 def test_a_note_for_a_deleted_recording_is_dropped(monkeypatch, yard):
@@ -235,3 +265,104 @@ def test_only_one_delivery_pass_runs_at_a_time(monkeypatch, yard):
 
     REAL_KICK().join(timeout=2)
     assert passes == [None]
+
+
+def test_the_video_is_sent_as_it_is_read_and_the_page_can_see_how_far(monkeypatch, yard):
+    """Handed files=, requests builds the whole body in memory first: a 30 MB
+    video in a Pi's memory, and progress that jumps from nothing to done."""
+    seen = []
+    youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed')
+
+    def post(url, headers=None, data=None, timeout=None):
+        half = len(data) // 2
+        data.read(half)
+        seen.append(youtube_upload.state_of(str(yard)))
+        data.read()
+        seen.append(youtube_upload.summary()['sending'])
+        return Reply()
+
+    monkeypatch.setattr(youtube_upload.requests, 'post', post)
+    youtube_upload.deliver_due(now=NOW)
+
+    middle, end = seen
+    assert middle['state'] == 'sending' and 40 <= middle['percent'] <= 60, middle
+    assert end['recording'] == yard.name and end['sent'] == end['total']
+    assert youtube_upload.summary()['sending'] is None, 'nothing is going out once it is over'
+    assert youtube_upload.state_of(str(yard))['state'] == 'uploaded'
+
+
+def test_when_the_connection_comes_back_what_waits_goes_within_a_minute(monkeypatch, yard):
+    """Not at the end of whatever back-off the last failure set: up to half an
+    hour, with the operator stood there having plugged the cable in."""
+    answer(monkeypatch, requests.exceptions.ConnectionError())
+    youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), 'completed')
+    for attempt in range(6):
+        youtube_upload.deliver_due(now=NOW + attempt * 3600)
+    assert note_of(yard)['nextTryAt'] - (NOW + 5 * 3600) == youtube_upload.MAX_RETRY_SECONDS
+    assert youtube_upload.summary()['online'] is False
+
+    probes = []
+    monkeypatch.setattr(youtube_upload.requests, 'head', lambda *a, **k: probes.append(a) or Reply())
+    kicked = []
+    monkeypatch.setattr(youtube_upload, 'kick', lambda: kicked.append(True))
+
+    later = NOW + 5 * 3600 + 61
+    youtube_upload.tick(now=later)
+
+    assert len(probes) == 1 and youtube_upload.summary()['online'] is True
+    assert note_of(yard)['nextTryAt'] == 0, 'due now'
+    assert kicked == [True]
+
+    youtube_upload.tick(now=later + 10)
+    assert len(probes) == 1, 'asked at most once a minute'
+
+
+def test_with_nothing_waiting_it_never_asks_the_internet_anything(monkeypatch, yard):
+    probes = []
+    monkeypatch.setattr(youtube_upload.requests, 'head', lambda *a, **k: probes.append(a) or Reply())
+
+    youtube_upload.tick(now=NOW)
+
+    assert probes == []
+
+
+def test_the_tally_counts_what_waits_and_what_settled_since_the_satellite_came_on(monkeypatch, yard, tmp_path):
+    def recording(name):
+        path = tmp_path / name
+        path.write_bytes(b'video')
+        return str(path)
+
+    answer(monkeypatch, Reply(body={'status': 'uploaded', 'url': 'https://youtu.be/x'}))
+    youtube_upload.queue_upload('m1', 'd1', 'curiosity', str(yard), 'completed')
+    youtube_upload.deliver_due(now=NOW)
+    answer(monkeypatch, Reply(body={'status': 'max-attempts'}))
+    youtube_upload.queue_upload('m2', 'd2', 'curiosity', recording('m2__curiosity__20261021T120000Z.mp4'), 'completed')
+    youtube_upload.deliver_due(now=NOW)
+    answer(monkeypatch, requests.exceptions.ConnectionError())
+    youtube_upload.queue_upload('m3', 'd3', 'curiosity', recording('m3__curiosity__20261021T130000Z.mp4'), 'completed')
+    youtube_upload.deliver_due(now=NOW)
+    monkeypatch.setattr(youtube_upload, '_STARTED', NOW - 60)
+
+    tally = youtube_upload.summary()
+
+    assert tally == {'configured': True, 'online': False, 'sending': None,
+                     'waiting': 1, 'uploaded': 1, 'manual': 1}
+
+    # From before this boot: only what still waits counts. A day's videos
+    # already settled are not this day's.
+    monkeypatch.setattr(youtube_upload, '_STARTED', NOW + 60)
+    assert youtube_upload.summary()['uploaded'] == 0 and youtube_upload.summary()['waiting'] == 1
+
+
+def test_the_pages_are_told_through_status_and_the_recordings_list(monkeypatch, yard):
+    import web_server
+    answer(monkeypatch, Reply(body={'status': 'uploaded', 'url': 'https://youtu.be/x'}))
+    youtube_upload.queue_upload('m1', 'd1', 'curiosity', str(yard), 'completed')
+    youtube_upload.deliver_due(now=NOW)
+    client = web_server.app.test_client()
+
+    rows = client.get('/api/recordings').get_json()['recordings']
+    status = client.get('/api/status').get_json()
+
+    assert [r['upload']['state'] for r in rows if r['name'] == yard.name] == ['uploaded']
+    assert status['uploads']['configured'] is True

@@ -16,13 +16,20 @@ the pull had touched empty (17 October 2026). An empty note cannot be read, so
 it is dropped, and the rename means the only way to get one is to lose it
 before it was ever complete.
 
+A NOTE OUTLIVES ITS DELIVERY. Once Mission Control has the video, or has said
+it never will, the note stays with what happened (`uploaded` and the link, or
+`manual` and why), so the Settings page can show each video's state and the
+day's tally without asking anyone.
+
 Never logs the shared credential: errors are reported by type and HTTP status.
 """
 
+import io
 import json
 import os
 import threading
 import time
+import uuid
 
 import requests
 
@@ -41,7 +48,20 @@ DONE = {'uploaded', 'already-uploaded'}
 # allows. The recording stays on the card for the manual upload.
 GIVE_UP = {'not-configured', 'max-attempts'}
 
+# How often to ask whether Mission Control answers, while something waits.
+# Plugging the cable in then starts the uploads within a minute, rather than
+# at the end of whatever back-off the last failure set.
+PROBE_EVERY_SECONDS = 60
+
 _delivering = threading.Lock()
+# What the last request out found: None until one has been tried.
+_connection = {'online': None, 'checkedAt': 0.0}
+# The video going out right now, for the page: in memory only, because a note
+# written on every read would wear the card, and a send that is cut off is
+# simply waiting again.
+_sending = {}
+# This process started at boot, near enough, so "since then" is the day.
+_STARTED = time.time()
 
 
 def _secret():
@@ -78,6 +98,68 @@ def _backoff(attempts):
     return min(MAX_RETRY_SECONDS, FIRST_RETRY_SECONDS * 2 ** max(0, attempts - 1))
 
 
+def _state(note):
+    return note.get('state') or 'waiting'
+
+
+def _saw(online, now=None):
+    """Record what a request out found, and when it is back, wake what waits."""
+    was = _connection['online']
+    _connection['online'] = online
+    _connection['checkedAt'] = time.time() if now is None else now
+    if online and was is False:
+        for path in pending_notes():
+            note = _read_note(path)
+            if note and _state(note) == 'waiting' and note.get('nextTryAt', 0) > 0:
+                note['nextTryAt'] = 0
+                _write_note(path, note)
+
+
+class _Upload:
+    """The request body, read off the card as it is sent.
+
+    Handed `files=`, requests builds the whole multipart body in memory
+    before sending a byte: a 30 MB video in a Pi's memory, and progress that
+    jumps from nothing to done. This is the same body, built on the way out,
+    so every read is a measure of how far the send has got.
+    """
+
+    def __init__(self, fields, name, path, on_read):
+        boundary = uuid.uuid4().hex
+        head = ''.join(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{value}\r\n'
+                       for key, value in fields.items())
+        head += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{name}"\r\n'
+                 'Content-Type: video/mp4\r\n\r\n')
+        tail = f'\r\n--{boundary}--\r\n'.encode()
+        head = head.encode()
+        self.content_type = f'multipart/form-data; boundary={boundary}'
+        self._length = len(head) + os.path.getsize(path) + len(tail)
+        self._parts = [io.BytesIO(head), open(path, 'rb'), io.BytesIO(tail)]
+        self._sent = 0
+        self._on_read = on_read
+
+    def __len__(self):
+        return self._length
+
+    def read(self, size=-1):
+        out = b''
+        while self._parts and (size is None or size < 0 or len(out) < size):
+            want = -1 if size is None or size < 0 else size - len(out)
+            chunk = self._parts[0].read(want)
+            if not chunk:
+                self._parts.pop(0).close()
+                continue
+            out += chunk
+        self._sent += len(out)
+        self._on_read(self._sent, self._length)
+        return out
+
+    def close(self):
+        for part in self._parts:
+            part.close()
+        self._parts = []
+
+
 def queue_upload(mission_id, dispatch_id, yard_id, recording_path, outcome=None):
     """Note that this recording is to be delivered, and try straight away.
 
@@ -93,6 +175,7 @@ def queue_upload(mission_id, dispatch_id, yard_id, recording_path, outcome=None)
         'dispatchId': dispatch_id,
         'yardId': yard_id,
         'outcome': outcome,
+        'state': 'waiting',
         'attempts': 0,
         'nextTryAt': 0,
         'lastError': None,
@@ -128,13 +211,42 @@ def has_due(now=None):
     for path in pending_notes():
         note = _read_note(path)
         # An unreadable note is due too: the pass is what drops it.
-        if note is None or note.get('nextTryAt', 0) <= now:
+        if note is None or (_state(note) == 'waiting' and note.get('nextTryAt', 0) <= now):
             return True
     return False
 
 
+def _waiting_count():
+    return sum(1 for path in pending_notes()
+               if (note := _read_note(path)) and _state(note) == 'waiting')
+
+
+def check_connection(now=None):
+    """Whether Mission Control answers at all. Any reply is a yes."""
+    base = (os.environ.get('MISSION_CONTROL_URL') or 'https://marsyard.labs.ws').rstrip('/')
+    try:
+        requests.head(base, timeout=(3, 3), allow_redirects=False)
+    except requests.exceptions.RequestException:
+        _saw(False, now)
+        return False
+    _saw(True, now)
+    return True
+
+
+def tick(now=None):
+    """One watcher pass: ask after the connection while something waits, then
+    send what is due."""
+    if not _secret():
+        return
+    now = time.time() if now is None else now
+    if _waiting_count() and now - _connection['checkedAt'] >= PROBE_EVERY_SECONDS:
+        check_connection(now)
+    if has_due(now):
+        kick()
+
+
 def _deliver_once(note, recording):
-    """One request. ('done' | 'give-up' | 'retry', what happened)."""
+    """One request. ('done' | 'give-up' | 'retry', what happened, the video's link)."""
     name = os.path.basename(recording)
     fields = {
         'missionId': note['missionId'],
@@ -146,6 +258,7 @@ def _deliver_once(note, recording):
         fields['outcome'] = note['outcome']
     headers = {'x-youtube-upload-secret': _secret()}
 
+    body = None
     try:
         too_large = os.path.getsize(recording) > MAX_RECORDING_BYTES
         if too_large:
@@ -154,33 +267,44 @@ def _deliver_once(note, recording):
             response = requests.post(_endpoint(), headers=headers,
                                      data={**fields, 'failureCode': 'too-large'}, timeout=(5, 10))
         else:
-            with open(recording, 'rb') as video:
-                response = requests.post(_endpoint(), headers=headers, data=fields,
-                                         files={'file': (name, video, 'video/mp4')},
-                                         timeout=(5, 180))
-    except (OSError, requests.exceptions.RequestException) as error:
-        return 'retry', type(error).__name__
+            def progress(sent, total):
+                _sending.update(recording=name, sent=sent, total=total)
 
+            body = _Upload(fields, name, recording, progress)
+            response = requests.post(_endpoint(), headers={**headers, 'Content-Type': body.content_type},
+                                     data=body, timeout=(5, 180))
+    except (OSError, requests.exceptions.RequestException) as error:
+        _saw(False)
+        return 'retry', type(error).__name__, None
+    finally:
+        if body is not None:
+            body.close()
+        _sending.clear()
+
+    _saw(True)
     if response.status_code >= 500 or response.status_code == 429:
-        return 'retry', f'HTTP {response.status_code}'
+        return 'retry', f'HTTP {response.status_code}', None
     if not response.ok:
         # 401 is a credential the two ends do not share, 400 a request that
         # will never be valid. Sending ten megabytes again every half hour
         # over a phone's hotspot would not change either.
-        return 'give-up', f'HTTP {response.status_code}'
+        return 'give-up', f'HTTP {response.status_code}', None
     if too_large:
-        return 'give-up', 'too-large'
+        return 'give-up', 'too-large', None
     try:
-        status = (response.json() or {}).get('status')
+        reply = response.json() or {}
     except ValueError:
-        return 'retry', 'unreadable reply'
+        return 'retry', 'unreadable reply', None
+    status = reply.get('status')
     if status in DONE:
-        return 'done', status
+        # A fresh upload carries its link; one already uploaded carries it in
+        # its ledger entry.
+        return 'done', status, reply.get('url') or (reply.get('entry') or {}).get('url')
     if status in GIVE_UP:
-        return 'give-up', status
+        return 'give-up', status, None
     # in-progress: another attempt holds the upload; asking again later finds
     # out how it went.
-    return 'retry', status or 'no status'
+    return 'retry', status or 'no status', None
 
 
 def deliver_due(now=None):
@@ -203,22 +327,23 @@ def deliver_due(now=None):
             results.append((name, 'give-up', 'recording gone'))
             continue
         moment = time.time() if now is None else now
-        if note.get('nextTryAt', 0) > moment:
+        if _state(note) != 'waiting' or note.get('nextTryAt', 0) > moment:
             continue
 
-        verdict, detail = _deliver_once(note, recording)
+        verdict, detail, url = _deliver_once(note, recording)
         if verdict == 'retry':
             note['attempts'] = int(note.get('attempts', 0)) + 1
             note['nextTryAt'] = moment + _backoff(note['attempts'])
             note['lastError'] = detail
-            _write_note(path, note)
             if note['attempts'] == 1:
                 print(f'[youtube-upload] {name}: not delivered yet ({detail}); will keep trying.')
+        elif verdict == 'done':
+            note.update(state='uploaded', url=url, settledAt=moment, lastError=None)
         else:
-            _drop(path)
-            if verdict == 'give-up':
-                print(f'[youtube-upload] {name}: not uploading automatically ({detail}); '
-                      'the recording stays for the manual upload.')
+            note.update(state='manual', reason=detail, settledAt=moment)
+            print(f'[youtube-upload] {name}: not uploading automatically ({detail}); '
+                  'the recording stays for the manual upload.')
+        _write_note(path, note)
         results.append((name, verdict, detail))
     return results
 
@@ -244,3 +369,36 @@ def kick():
     thread = threading.Thread(target=run, name='youtube-recording-upload', daemon=True)
     thread.start()
     return thread
+
+
+def state_of(recording_path):
+    """What the Settings page shows for one recording, or None if it has no note."""
+    note = _read_note(recording_path + NOTE_SUFFIX)
+    if note is None:
+        return None
+    view = {key: note.get(key) for key in ('url', 'reason', 'attempts', 'nextTryAt', 'lastError', 'settledAt')}
+    view['state'] = _state(note)
+    if _sending.get('recording') == os.path.basename(recording_path) and _sending.get('total'):
+        view['state'] = 'sending'
+        view['percent'] = round(100 * _sending['sent'] / _sending['total'])
+    return view
+
+
+def summary():
+    """For the console's top bar, on every page: what waits, what is going out,
+    and what has settled since the satellite was switched on."""
+    counts = {'waiting': 0, 'uploaded': 0, 'manual': 0}
+    for path in pending_notes():
+        note = _read_note(path)
+        if not note:
+            continue
+        state = _state(note)
+        if state == 'waiting' or note.get('settledAt', 0) >= _STARTED:
+            counts[state] = counts.get(state, 0) + 1
+    sending = dict(_sending) if _sending.get('total') else None
+    return {
+        'configured': bool(_secret()),
+        'online': _connection['online'],
+        'sending': sending,
+        **counts,
+    }

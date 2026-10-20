@@ -29,7 +29,21 @@ which is often longer than the diff.
   every try failed and none came later. A note beside each recording now waits
   until Mission Control has the video or has refused it for good, retried
   every watcher pass when due, and written so that a power cut cannot leave it
-  half written.
+  half written. When the connection comes back, everything waiting goes within
+  a minute, rather than at the end of a half-hour back-off.
+
+  And the operator can see it. A chip in the top bar of every console page
+  says how many videos are waiting, the one going out and how far it has got,
+  or that all of them are on YouTube; below a laptop's width it comes down to
+  its icon and a number, and on an upright tablet the brand's name gives way
+  while it is up. The Recordings card on Settings gives each video its state
+  (uploading and its percentage, waiting, on YouTube with the link, or to
+  upload by hand and why) and the day's tally. It counts down to closing, a
+  setting that defaults to the science centre's 16:30, and from half an hour
+  before it says whether switching off loses anything: videos still waiting
+  go up by themselves next time the satellite is online. The video is now
+  sent as it is read off the card, so the percentage is real and a 30 MB file
+  is never held whole in the Pi's memory.
 
 - **The run station works on a phone.** Stacked, the rail took all the height
   its cards wanted before the live panel got any: 365px of an iPhone's 598.

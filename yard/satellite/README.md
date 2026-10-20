@@ -11,7 +11,9 @@ completed recordings to Mission Control; the rover run path remains local.
 Each one waits in a note beside the recording (`<file>.mp4.upload.json`) until
 it is delivered, so a satellite with no internet, which is what it is while it
 serves the yard's wifi, sends its videos once it has a way out
-(`youtube_upload.py`).
+(`youtube_upload.py`). The note keeps what happened, so the Recordings card on
+Settings shows each video's state and the day's tally, and the top bar of
+every console page says how the day's uploads are going.
 See [../docs/satellite.md](../docs/satellite.md) for setup and
 [../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
 for what the Firestore mirror used to do and why it went.

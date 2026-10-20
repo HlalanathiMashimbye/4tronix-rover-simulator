@@ -176,9 +176,8 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
             # it. Every pass, so a satellite that finds a connection sends
             # them without waiting for another run to finish.
             try:
-                from youtube_upload import has_due, kick
-                if has_due():
-                    kick()
+                from youtube_upload import tick as upload_tick
+                upload_tick()
             except Exception as e:
                 print(f'[watcher] upload check failed: {type(e).__name__}')
 
