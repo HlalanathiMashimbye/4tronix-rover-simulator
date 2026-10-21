@@ -76,6 +76,31 @@ the LT300's may differ a little between hardware versions (2.0 and 3.0).
 6. **The test:** a laptop on `mars-relay-network` opens any website, and then
    `http://mro.local:3001/` once the satellite has joined.
 
+### At a new venue: change only where it gets its internet
+
+The yard's side never changes: `mars-relay-network` and its password are what
+the rover and the satellite know, so they stay the same everywhere. Only the
+network the router joins changes, and that is done on its own page:
+
+1. Join a phone or laptop to `mars-relay-network` and open `http://cudy.net`.
+2. **General Settings, WISP**: scan, pick the venue's network, type its
+   password, Save & Apply. About a minute later the yard is online.
+3. **If the page also asks for the router's own wifi name and password, keep
+   them exactly as they are.** Change those and the rover and the satellite
+   lose the yard's network, and the rover has no screen to fix it from.
+
+Cudy's own firmware joins one network at a time; it does not keep a list and
+pick whichever is in range (asked for on Cudy's forum, not shipped as far as
+their pages show). A SIM in the router is what makes it work anywhere without
+anyone doing step 2: with no venue network it fails over to 4G by itself.
+
+Joining any of several saved networks automatically is what travel routers do,
+and on this hardware it means replacing Cudy's firmware with OpenWrt and its
+`travelmate` package. OpenWrt supports the LT300 v3.0 only (check the label),
+lists it as not recommended for future use because of its small flash and
+memory, and the replacement cannot be undone from the router's own page.
+Not worth it while a SIM does the job.
+
 ### Ask the venue first
 
 - **Is there 2.4GHz?** See above.
