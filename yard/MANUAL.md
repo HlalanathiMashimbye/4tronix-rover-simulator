@@ -26,7 +26,15 @@ The system is three devices:
 4. **Tablets** — open `http://mro.local:3001/code/` (or launch the installed
    PWA from the home screen).
 
-Everything must be on the same WiFi: **`marsyard`** or **`mars-relay-network`**.
+Everything must be on the same WiFi: **`mars-relay-network`**, from the yard's
+router. It is the only network the rover and the satellite know. If the router
+is missing, a phone hotspot with that name and its password stands in.
+
+**Internet for the yard** (videos, the satellite's clock): on a phone on
+`mars-relay-network`, open `http://cudy.net`, then **General Settings, WISP**:
+turn it on, **Rescan**, **Connect** on the venue's wifi and type its password.
+Leave the router's own wifi name and password as they are. A session runs
+without internet; this is only needed once per venue.
 
 ### Check it's all up
 
@@ -79,7 +87,7 @@ Symptom → action, most common first. SSH: user `mars`, password `R0v3r!`.
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Tablet shows **Disconnected** dot | Rover off / wrong WiFi | Check rover power; confirm tablet is on `marsyard`. Check `/status`. |
+| Tablet shows **Disconnected** dot | Rover off / wrong WiFi | Check rover power; confirm tablet is on `mars-relay-network`. Check `/status`. |
 | Rover badge **Unreachable** | Rover off, not on WiFi, or wrong rover URL | Power-cycle the rover; wait 1 min. Still red? Check the rover URL shown on `/status` — the **edit** button fixes it live (e.g. `marspi.local` vs `curiosity.local`). |
 | Rover badge **Processor stalled** | Queue thread died on the rover | `ssh mars@<rover>.local` then `sudo systemctl restart rover-server` |
 | Rover badge **amber (Fake driver)** | Server running without hardware libs | `ssh` to rover, `journalctl -u rover-server -n 50` — usually a missing `PYTHONPATH=/home/mars/marsrover` or hardware lib error. |
@@ -122,7 +130,7 @@ Full walkthroughs: [docs/rover-server.md](docs/rover-server.md) (Bullseye /
 
 Summary for the Bookworm rover:
 
-1. Flash Raspberry Pi OS Bookworm Lite 32-bit; user `mars`, WiFi `marsyard`,
+1. Flash Raspberry Pi OS Bookworm Lite 32-bit; user `mars`, WiFi `mars-relay-network`,
    enable SSH and I2C/SPI.
 2. Install the 4tronix files to `/home/mars/marsrover` (official `rover.sh`),
    clone this repo to `/home/mars/4tronix-rover-simulator`.
@@ -144,7 +152,7 @@ Summary for the Bookworm rover:
 
 Full walkthrough: [docs/satellite.md](docs/satellite.md).
 
-1. Pi with camera attached, hostname `mro`, user `mars`, WiFi `marsyard`.
+1. Pi with camera attached, hostname `mro`, user `mars`, WiFi `mars-relay-network`.
 2. `sudo apt install -y python3-picamera2`, clone the repo, then
    `python3 -m venv --system-site-packages /home/mars/satellite-env` and
    `pip install -r yard/satellite/requirements.txt`.

@@ -2,8 +2,11 @@
 
 **To:** Konke
 **From:** Hlalanathi
-**Status:** unsolved. Everything below is what is known, what is ruled out, and
-the one technique that makes the problem observable at all.
+**Status:** unsolved, and no longer in the way. Since 21 October 2026 the yard
+runs on a router, `mars-relay-network`, and `marsyard` is retired: nothing
+serves it and the satellite no longer knows it (see
+[yard-network.md](yard-network.md)). Kept as the record of what was known,
+what was ruled out, and the one technique that made the problem observable.
 
 ---
 
@@ -21,7 +24,8 @@ The rover is not tied to a device. It is tied to a **name**. Anything that
 serves a network called `marsyard` with the password `curiousinternet` becomes
 the yard, and the rover joins it without being told anything:
 
-- normally the satellite serves it
+- the satellite serves it when the yard's router is not there (normally the
+  rover is on the router's `mars-relay-network` instead)
 - if the satellite dies, a laptop hotspot serves it and the rover follows
 - at a venue with neither, somebody's phone serves it and the rover follows
 
@@ -214,15 +218,15 @@ ip neigh show dev wlan0                # who is actually on the network
 
 | | |
 |---|---|
-| Network name | `marsyard` |
-| Password | `curiousinternet` |
-| Satellite | Raspberry Pi 5, hostname `mro`, user `mars` |
-| Satellite AP address | `192.168.137.1`, console at `http://mro.local:3001/` |
+| Yard network | `mars-relay-network`, from the Cudy LT300 router at `192.168.10.1` (`http://cudy.net`) |
+| Retired network | `marsyard`, password `curiousinternet`: removed from the satellite and the rover on 21 October 2026 |
+| Satellite | Raspberry Pi 5, hostname `mro`, user `mars`, console at `http://mro.local:3001/` |
+| Satellite AP address | `192.168.137.1`, when it served `marsyard` itself (retired) |
 | Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6, 2.4GHz, WPA2, PMF off |
 | Rover | Raspberry Pi Zero W, hostname `curiosity`, user `mars` |
 | Rover MAC prefix | `b8:27:eb:` |
 | Rover service | port 8523, `curl http://curiosity.local:8523/health` |
-| Rover wifi profile | `preconfigured`, unpinned, autoconnect |
+| Rover wifi profile | `mars-relay-network` only, PMF off, autoconnect (`preconfigured`, which was `marsyard`, deleted on 21 October 2026) |
 
 Sudo differs between the two machines, which is confusing until you know:
 
