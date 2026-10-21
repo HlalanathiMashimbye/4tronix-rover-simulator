@@ -11,6 +11,43 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Copy on the run station copies.** Every Copy button selected its text and
+  said "Ctrl-C", because the clipboard API it used only exists on HTTPS or
+  localhost, and the yard serves plain HTTP on a LAN address. The older
+  `document.execCommand('copy')` has no such rule and still works from a
+  button press in every browser, so that is the copy now. The selection and
+  the key are only left for a browser that refuses even that.
+
+  Paste cannot work the same way. No browser lets a plain HTTP page read the
+  clipboard, by any route, so the paste button still opens a box to paste
+  into. It now says the one gesture the device in hand has: "Press ⌘V" (or
+  Ctrl-V) on a laptop, "Press and hold here, then tap Paste" on a tablet.
+  Making paste one press would mean serving the satellite over HTTPS. Sending
+  the mission from Mission Control in Chrome needs no paste at all.
+- **The yard's network is a router that reaches the internet, and the docs
+  say so.** The satellite served `marsyard`, and one radio cannot be an access
+  point and a client, so the yard had no internet: no clock for the satellite,
+  no `git pull` in the room, no upload from where a video was made. A Cudy
+  LT300 now serves `mars-relay-network` and joins whatever wifi is there for
+  the internet: WISP on, at `http://cudy.net`. Set up and working at home on
+  21 October 2026, with the satellite moved onto it;
+  `setup-scripts/satellite-join-relay.sh` does that move for a fresh satellite.
+
+  `marsyard` is retired, for predictability: one name everywhere. A Pi that
+  joins a network stays on it, so with both saved, the satellite fell onto a
+  `marsyard` hotspot when the relay blipped and stayed there after it came
+  back. It is deleted from the satellite and from the rover. If the
+  router is missing, a phone hotspot called `mars-relay-network` with its
+  password stands in for everything.
+
+  The docs had gone on describing the yard as it was. `yard-network.md`, the
+  manual, `bring-up.md` and the rover's handover note describe the router;
+  the network diagram's writeup describes the yard without the Firestore
+  mirror and the signed-in console it still showed; `docs/repo-handoff.md`
+  lists the yard's hardware and its passwords and keys, which no merge moves;
+  the RUNBOOK covers a console that will not come up, restarting the
+  satellite's services and a yard with no internet; and `infra/README.md`
+  gives the three `terraform import`s the next apply needs first.
 - **Automatic uploads reach the run, and wait for a connection.** Two gaps
   in the automatic YouTube upload (#304), found reviewing it on 20 October.
   Kept on a branch, not merged: David has lowered auto-upload in priority.
@@ -44,30 +81,6 @@ which is often longer than the diff.
   go up by themselves next time the satellite is online. The video is now
   sent as it is read off the card, so the percentage is real and a 30 MB file
   is never held whole in the Pi's memory.
-- **The yard's network is a router that reaches the internet, and the docs
-  say so.** The satellite served `marsyard`, and one radio cannot be an access
-  point and a client, so the yard had no internet: no clock for the satellite,
-  no `git pull` in the room, no upload from where a video was made. A Cudy
-  LT300 now serves `mars-relay-network` and joins whatever wifi is there for
-  the internet: WISP on, at `http://cudy.net`. Set up and working at home on
-  21 October 2026, with the satellite moved onto it;
-  `setup-scripts/satellite-join-relay.sh` does that move for a fresh satellite.
-
-  `marsyard` is retired, for predictability: one name everywhere. A Pi that
-  joins a network stays on it, so with both saved, the satellite fell onto a
-  `marsyard` hotspot when the relay blipped and stayed there after it came
-  back. It is deleted from the satellite and from the rover. If the
-  router is missing, a phone hotspot called `mars-relay-network` with its
-  password stands in for everything.
-
-  The docs had gone on describing the yard as it was. `yard-network.md`, the
-  manual, `bring-up.md` and the rover's handover note describe the router;
-  the network diagram's writeup describes the yard without the Firestore
-  mirror and the signed-in console it still showed; `docs/repo-handoff.md`
-  lists the yard's hardware and its passwords and keys, which no merge moves;
-  the RUNBOOK covers a console that will not come up, restarting the
-  satellite's services and a yard with no internet; and `infra/README.md`
-  gives the three `terraform import`s the next apply needs first.
 - **The satellite shuts down from its Settings page, and restarts without a
   password.** It was switched off at the plug. On 17 October that emptied
   every file a `git pull` had written a few minutes before, 87 of them,

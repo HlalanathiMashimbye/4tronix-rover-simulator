@@ -497,7 +497,7 @@
                         <div class="card-actions">
                             <span class="camera-msg" id="importMsg"></span>
                             <button class="btn primary paste-btn" id="importBtn" type="button"
-                                    aria-label="Paste mission" title="Paste mission (fallback if Mission Control's handoff fails)">
+                                    aria-label="Paste mission" title="Paste mission. On a laptop, pressing ⌘V or Ctrl-V anywhere on this page does it too.">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
                             </button>
                         </div>
@@ -679,17 +679,18 @@
     // absent there and cannot be made to work; the operator pastes instead.
     // Both paths end in applyImport, and neither opens a dialog.
     const pasteCatch = $('pasteCatch'), pasteBox = $('pasteBox');
-    const PASTE_KEY = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent)
-        ? '⌘V' : 'Ctrl-V';
+    const APPLE = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent);
+    const PASTE_KEY = APPLE ? '⌘V' : 'Ctrl-V';
+    const COPY_KEY = APPLE ? '⌘C' : 'Ctrl-C';
+    // A finger, not a mouse: there the gesture is a press and hold, not a key.
+    const TOUCH = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
     function hidePaste() { pasteCatch.hidden = true; pasteBox.value = ''; }
 
     function showPaste(reason) {
-        // The shortcut goes in the placeholder, not the label. This station is
-        // operated from a tablet as often as a laptop, and there the gesture is
-        // a long press, not a key combination - a label saying otherwise would
-        // be wrong for half the people reading it.
-        pasteBox.placeholder = `${PASTE_KEY}, or long press and paste`;
+        // Said for the device in hand. This station is run from a tablet as
+        // often as a laptop, and the one gesture each has is different.
+        pasteBox.placeholder = TOUCH ? 'Press and hold here, then tap Paste' : `Press ${PASTE_KEY}`;
         pasteCatch.hidden = false;
         pasteBox.value = '';
         pasteBox.focus();
@@ -785,19 +786,48 @@
         paintYouTube();
     }
 
+    // ---- Copying, on plain HTTP ------------------------------------------
+    // The clipboard API only exists on a secure page, and the yard serves
+    // plain HTTP on a LAN address, so on the machines this runs on it is not
+    // there. Every Copy used to fall back to selecting the text and asking for
+    // Ctrl-C. The older document.execCommand('copy') has no such rule, and
+    // every browser still runs it from a button press, so that is the copy
+    // here. The selection and the key are left for the case it is refused.
+    function copyByCommand(text) {
+        const area = document.createElement('textarea');
+        area.value = text;
+        // Read-only and off screen: no keyboard on a tablet, no jump on a page
+        // that never scrolls. 16px so iOS does not zoom in to it.
+        area.setAttribute('readonly', '');
+        area.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0;font-size:16px;';
+        document.body.appendChild(area);
+        area.select();
+        area.setSelectionRange(0, text.length);
+        let copied = false;
+        try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+        area.remove();
+        return copied;
+    }
+
+    // Synchronous on plain HTTP: the press that asked for the copy has to be
+    // the one that makes it, and an await in between can use it up.
+    function copyText(text) {
+        if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(text).then(() => true, () => copyByCommand(text));
+        }
+        return Promise.resolve(copyByCommand(text));
+    }
+
     // One handler for every Copy on the page, including the YouTube pair.
     document.querySelectorAll('[data-copy]').forEach((btn) => {
         btn.addEventListener('click', async () => {
             const text = metaValue($(btn.dataset.copy));
             if (!text) return;
             const original = btn.textContent;
-            try {
-                await navigator.clipboard.writeText(text);
+            if (await copyText(text)) {
                 btn.textContent = 'Copied';
-            } catch (e) {
-                // Plain HTTP on a LAN address is not a secure context, so the
-                // clipboard API is unavailable on the machine this runs on.
-                // Select the text and name the key instead.
+            } else {
+                // Refused even so: leave the text selected and name the key.
                 const field = $(btn.dataset.copy);
                 if (field.select) { field.select(); } else {
                     const range = document.createRange();
@@ -805,7 +835,7 @@
                     const sel = window.getSelection();
                     sel.removeAllRanges(); sel.addRange(range);
                 }
-                btn.textContent = 'Ctrl-C';
+                btn.textContent = COPY_KEY;
             }
             setTimeout(() => { btn.textContent = original; }, 1600);
         });
