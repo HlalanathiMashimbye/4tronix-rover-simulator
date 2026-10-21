@@ -86,9 +86,12 @@ delete the old network (`sudo nmcli con delete <name>`). That order matters over
 `nmcli --ask device wifi connect` leaves the old network first, which cuts the
 session before its password prompt reaches you.
 
-The rover needs a `mars-relay-network` profile, and then its `marsyard` one
-(`preconfigured`) deleted, once it is on the relay. Check with `nmcli -t -f NAME
-con show` over SSH; if the relay's is missing:
+The rover was moved on 21 October 2026 too: it has a `mars-relay-network`
+profile and nothing else (its `marsyard` one, `preconfigured`, was deleted once
+it was on the relay). For a rover that only knows an old network, add the
+relay's beside it over SSH, switch with a way back, and delete the old one
+last: the rover has no screen, no ethernet and no serial console, so a wifi
+change that goes wrong cuts off the only way in.
 
 ```bash
 sudo nmcli con add type wifi ifname wlan0 con-name mars-relay-network ssid mars-relay-network wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'THE-PASSWORD' 802-11-wireless-security.pmf 1 connection.autoconnect yes

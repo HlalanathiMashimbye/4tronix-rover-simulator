@@ -23,7 +23,7 @@ which is often longer than the diff.
   `marsyard` is retired, for predictability: one name everywhere. A Pi that
   joins a network stays on it, so with both saved, the satellite fell onto a
   `marsyard` hotspot when the relay blipped and stayed there after it came
-  back. It is deleted from the satellite, and to be from the rover. If the
+  back. It is deleted from the satellite and from the rover. If the
   router is missing, a phone hotspot called `mars-relay-network` with its
   password stands in for everything.
 
