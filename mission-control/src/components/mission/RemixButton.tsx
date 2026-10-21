@@ -23,11 +23,13 @@ export function RemixButton({
   onRemix,
   nudge = 0,
   compact = false,
+  tourId,
 }: {
   onRemix: () => void;
   nudge?: number;
   /** Where the narrowest phones have room for the bolt alone. */
   compact?: boolean;
+  tourId?: string;
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -37,6 +39,7 @@ export function RemixButton({
       onClick={onRemix}
       aria-label="Remix"
       title="Tweak the code and run your own version"
+      data-tour-id={tourId}
       // The after: is the tap target. The button stays the size the page's
       // other buttons are (the user's call for phones, 3 October 2026), and a
       // thumb still gets 44px to land on.

@@ -64,6 +64,11 @@
         .sat-chip .stat-ic svg { width: 14px; height: 14px; }
         .cat-name { color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
         .sat-chip .cat-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* Beside the chip because it acts on what the chip names. Without the
+           sudo rule it still opens, to say what setting it up takes, so it is
+           never a button that silently does nothing. */
+        .power-btn[data-ready="false"] { color: var(--text-faint); }
+        .power-cmd { display: block; margin: 0.6rem 0 1.1rem; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg); background: var(--background); font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; color: var(--text); }
 
         /* Pointing at a rover: a switch, a finder, and a typed address, in
            that order, as a two-row grid rather than a run of controls that
@@ -482,6 +487,9 @@
                 <span class="status-label grey" id="label-satellite">checking</span>
                 <span class="cat-detail" id="detail-satellite">Loading&hellip;</span>
             </span>
+            <button class="iconbtn power-btn" id="powerBtn" type="button" aria-label="Shut down the satellite" title="Shut down the satellite">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+            </button>
         </div>
 
         <!-- One card per category - rover, camera, storage, recordings - each
@@ -1367,6 +1375,102 @@
             el.hidden = false;
             setTimeout(function () { el.hidden = true; }, 6000);
         }
+
+        // ---- Shut down ------------------------------------------------------
+        // The satellite used to go off at the plug, which on 17 October left
+        // every file a git pull had just written empty, and leaves a recording
+        // still open unplayable. This is the clean way, from the page that is
+        // already open. What it does is satellite_power.py.
+        (function () {
+            var btn = document.getElementById('powerBtn');
+            var power = { canPowerOff: false, detail: '' };
+
+            fetch('/operator/api/satellite/power').then(function (r) { return r.json(); }).then(function (d) {
+                power = d;
+                btn.dataset.ready = d.canPowerOff ? 'true' : 'false';
+                btn.title = d.canPowerOff ? 'Shut down the satellite' : 'Shutting down needs a one-time setup';
+            }).catch(function () { btn.dataset.ready = 'false'; });
+
+            function dialog(title, lines, actions) {
+                var overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.id = 'powerDialog';
+                var box = document.createElement('div');
+                box.className = 'modal';
+                box.setAttribute('role', 'dialog');
+                box.setAttribute('aria-modal', 'true');
+                var h = document.createElement('h2');
+                h.textContent = title;
+                box.appendChild(h);
+                lines.forEach(function (line) { box.appendChild(line); });
+                if (actions.length) {
+                    var row = document.createElement('div');
+                    row.className = 'modal-actions';
+                    actions.forEach(function (a) { row.appendChild(a); });
+                    box.appendChild(row);
+                }
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+                return overlay;
+            }
+            function para(text, cls) {
+                var p = document.createElement(cls === 'power-cmd' ? 'code' : 'p');
+                if (cls) p.className = cls;
+                p.textContent = text;
+                return p;
+            }
+            function button(label, cls, onClick) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn' + (cls ? ' ' + cls : '');
+                b.textContent = label;
+                b.addEventListener('click', onClick);
+                return b;
+            }
+
+            btn.addEventListener('click', function () {
+                if (!power.canPowerOff) {
+                    var lines = [para('Someone with the mars password runs this once on the Pi, and from then on this button works:'),
+                                 para('sudo bash yard/docs/setup-scripts/satellite-sudoers.sh', 'power-cmd')];
+                    var notSetUp = dialog('Shutting down needs a one-time setup', lines, [
+                        button('Close', '', function () { notSetUp.remove(); }),
+                    ]);
+                    return;
+                }
+
+                var latest = window.YardStatus && YardStatus.latest();
+                var filming = (latest && latest.recording && latest.recording.active) || [];
+                var lines = [para("The console, the camera and the yard's wifi go off.")];
+                if (filming.length) lines.push(para('A recording is running. It is stopped and kept first, so it plays.'));
+                lines.push(para('To turn it back on, unplug it and plug it in again.'));
+                var message = para('', 'url-error');
+                lines.push(message);
+
+                var confirm = dialog('Shut down the satellite?', lines, [
+                    button('Cancel', '', function () { confirm.remove(); }),
+                    button('Shut down', 'danger-solid', async function () {
+                        this.disabled = true;
+                        this.textContent = 'Shutting down…';
+                        try {
+                            var resp = await fetch('/operator/api/satellite/shutdown', { method: 'POST' });
+                            var data = await resp.json().catch(function () { return {}; });
+                            if (!resp.ok) throw new Error(data.error || 'The satellite could not shut down.');
+                            confirm.remove();
+                            // The last thing this page can say: the wifi goes
+                            // with the satellite, so nothing after it arrives.
+                            dialog('Shutting down', [
+                                para("It's safe to unplug once the Pi's green light has stopped flashing, in about 20 seconds."),
+                            ], []);
+                        } catch (e) {
+                            message.textContent = e.message;
+                            this.disabled = false;
+                            this.textContent = 'Shut down';
+                        }
+                    }),
+                ]);
+                confirm.addEventListener('click', function (e) { if (e.target === confirm) confirm.remove(); });
+            });
+        })();
 
         document.getElementById('recDeleteBtn').addEventListener('click', function () {
             var checked = document.querySelectorAll('.rec-check:checked');

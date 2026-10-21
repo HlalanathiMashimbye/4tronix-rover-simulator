@@ -271,7 +271,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
   }, [commandsOpen]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
+    <div data-tour-id="tour-python-editor" className="flex h-full min-h-0 flex-col gap-1.5 overflow-hidden md:gap-2.5">
       {/* Not when the layout runs from its own button: on a phone both the
           hint and Run would leave only an empty row behind. */}
       {!phone && (
@@ -295,6 +295,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             aria-expanded={commandsOpen}
             aria-haspopup="dialog"
             title="Rover commands"
+            data-tour-id="tour-code-instructions"
             // Run's height, square.
             className={`clay-press flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${
               commandsOpen
@@ -306,6 +307,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
           </button>
           <button
             onClick={handleRun}
+            data-tour-id="tour-run-mission"
             className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
           >
             <Play className="h-3.5 w-3.5" fill="currentColor" />
@@ -396,7 +398,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             under reduced motion. It stays open while commands are tapped,
             because a program usually needs more than one. */}
         {phone && (
-          <div className="relative flex h-7 shrink-0 items-center overflow-hidden border-b border-[#2b2b2b] bg-[#252526] pl-2.5 pr-8 font-mono text-[11px]">
+          <div data-tour-id="tour-code-instructions" className="relative flex h-7 shrink-0 items-center overflow-hidden border-b border-[#2b2b2b] bg-[#252526] pl-2.5 pr-8 font-mono text-[11px]">
             <AnimatePresence initial={false} mode="popLayout">
               {helpOpen ? (
                 <motion.div
@@ -445,7 +447,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
               className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-colors ${
                 helpOpen
                   ? 'text-[#858585] [@media(hover:hover)]:hover:bg-[#2a2d2e]'
-                  : 'bg-primary/20 text-primary ring-1 ring-primary/50 [@media(hover:hover)]:hover:bg-primary/30'
+                  : 'bg-primary/60 text-primary-foreground ring-1 ring-primary [@media(hover:hover)]:hover:bg-primary/70'
               }`}
             >
               {helpOpen ? <X className="h-3.5 w-3.5" /> : <Lightbulb className="h-3.5 w-3.5" />}

@@ -11,6 +11,8 @@ import { SearchProvider } from "@/contexts/SearchContext";
 import { PageTransition } from "@/components/layout/PageTransition";
 import { PostHogAnalytics } from "@/components/analytics/PostHogAnalytics";
 import { resolveAppUrl } from "@/infrastructure/config/appUrl";
+import { TourProvider } from "@/contexts/TourContext";
+import { TourOverlay } from "@/components/tour/TourOverlay";
 
 // Runs before hydration (next/script's beforeInteractive: "injected into the
 // initial HTML from the server, downloaded before any Next.js module" -
@@ -153,6 +155,7 @@ export default function RootLayout({
         <PostHogAnalytics>
           <ThemeProvider>
             <LearnerProvider>
+              <TourProvider>
               {/* Wraps Navbar AND the page: the navbar renders the search UI
                   while each page publishes what is searchable. */}
               <SearchProvider>
@@ -168,6 +171,8 @@ export default function RootLayout({
                   is what the full-height pages subtract from the viewport. */}
               <ChromeHeight />
               </SearchProvider>
+              <TourOverlay />
+              </TourProvider>
             </LearnerProvider>
           </ThemeProvider>
         </PostHogAnalytics>

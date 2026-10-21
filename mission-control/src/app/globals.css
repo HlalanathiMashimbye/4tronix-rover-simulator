@@ -671,6 +671,27 @@
   to { transform: translateX(120%); }
 }
 
+/* Platform tour: a spotlight cutout via box-shadow and a pulsing glow ring
+   for steps that need the learner's attention (Remix, Create, Send). */
+.tour-spotlight {
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.85);
+}
+.tour-glow {
+  animation: tour-glow-pulse 1.5s ease-in-out infinite;
+}
+@keyframes tour-glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 9999px rgba(0, 0, 0, 0.85),
+      0 0 0 4px color-mix(in oklab, var(--mars) 55%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9999px rgba(0, 0, 0, 0.85),
+      0 0 0 10px color-mix(in oklab, var(--mars) 30%, transparent);
+  }
+}
+
 /* The simulator's status dot while a run is playing: a ring that keeps
    going out from it, the one loop on the page, because it is a status. */
 .live-dot {
