@@ -1,0 +1,22 @@
+# /etc/sudoers.d/satellite: what the satellite may do as root, with no password.
+#
+# Installed by yard/docs/setup-scripts/satellite-sudoers.sh. Edit it here and
+# install it again; never by hand on the Pi, where it drifts from the repo.
+#
+# sudo matches the whole argument list, so every spelling the code or a person
+# uses is its own entry: `restart satellite-camera.service` is not authorised
+# by a rule for `restart satellite-camera`. camera_control.py tries both, and
+# test_satellite_power.py fails if code asks for a command not listed here.
+#
+# Nothing broader. No reboot, no wildcards, no other units: the console has no
+# sign-in, so whatever this allows, anyone on the yard's wifi can ask for.
+
+Cmnd_Alias SATELLITE_WEB = /usr/bin/systemctl restart satellite-web, \
+                           /usr/bin/systemctl restart satellite-web.service
+Cmnd_Alias SATELLITE_CAMERA = /usr/bin/systemctl restart satellite-camera, \
+                              /usr/bin/systemctl restart satellite-camera.service, \
+                              /usr/bin/systemctl stop satellite-camera, \
+                              /usr/bin/systemctl stop satellite-camera.service
+Cmnd_Alias SATELLITE_POWER = /usr/bin/systemctl poweroff
+
+mars ALL=(root) NOPASSWD: SATELLITE_WEB, SATELLITE_CAMERA, SATELLITE_POWER
