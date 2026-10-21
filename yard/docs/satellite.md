@@ -119,17 +119,23 @@ sudo bash yard/docs/setup-scripts/satellite-sudoers.sh
 ```
 
 That one sudo asks for the `mars` password; nothing after it does. The script
-checks the rule with `visudo` before it goes in, and then tries each command as
-`mars` with `sudo -n` and says which work. Whether it is in on a given Pi:
+checks the rule with `visudo` before it goes in, then reads back what `mars`
+may run with no password and says which commands are in it, and that `reboot`
+is not. It was installed on the satellite on 21 October 2026. Whether it is in
+on a given Pi:
 
 ```bash
-sudo -n -l /usr/bin/systemctl poweroff
+sudo -n -l
 ```
 
-prints the command when it is, and asks for a password when it is not. Before
-it is in (it was not, checked 3 October 2026), every restart asks for the
-password, so an agent cannot do one and has to hand the two commands to a
-person.
+lists the four commands, with both spellings, after `NOPASSWD:`. Without the
+rule it asks for a password instead, and then every restart does too, so an
+agent cannot do one and has to hand the two commands to a person.
+
+Not `sudo -n -l /usr/bin/systemctl poweroff`, which looks like the question
+and is not. Once any entry needs no password, sudo lists without asking for
+one, and naming a command only asks whether `mars` may run it at all. On the
+satellite it said yes to `systemctl reboot`, which still needs the password.
 
 - Keep restarts as two commands. sudo matches the whole argument list, so
   `systemctl restart satellite-web satellite-camera` matches no rule.

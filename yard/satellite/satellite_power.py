@@ -9,8 +9,14 @@ it belongs on the page the operator already has open.
 
 It needs root, so it goes through sudo with no password, for exactly this one
 command (yard/deploy/satellite.sudoers). Whether the rule is there is asked
-first with `sudo -n -l`, which runs nothing, so a missing rule is reported
-before any recording has been stopped.
+first, from sudo's own list of what needs no password, which runs nothing, so
+a missing rule is reported before any recording has been stopped.
+
+NOT `sudo -n -l <command>`, which looks like the question and is not. Once
+any entry needs no password, sudo lists without asking for one, and `-l` with
+a command says yes to anything the user may run at all, password or not. On
+the satellite on 21 October 2026 it said yes to `systemctl reboot`, which the
+rule does not allow.
 """
 
 import os
@@ -35,18 +41,29 @@ def _poweroff_argv():
     return [sudo, '-n', systemctl, 'poweroff']
 
 
+def passwordless(listing, command):
+    """Whether `sudo -l`'s listing grants exactly `command` with no password."""
+    for line in listing.splitlines():
+        if 'NOPASSWD:' not in line:
+            continue
+        granted = line.split('NOPASSWD:', 1)[1]
+        if command in (entry.strip() for entry in granted.split(',')):
+            return True
+    return False
+
+
 def can_power_off():
-    """(allowed, why not). Runs nothing but sudo's own check."""
+    """(allowed, why not). Runs nothing but sudo's own listing."""
     argv = _poweroff_argv()
     if argv is None:
         return False, 'This machine has no systemd to shut down with.'
     sudo, _flag, systemctl, action = argv
     try:
-        result = subprocess.run([sudo, '-n', '-l', systemctl, action],
-                                capture_output=True, text=True, timeout=5)
+        result = subprocess.run([sudo, '-n', '-l'], capture_output=True, text=True, timeout=5)
     except (OSError, subprocess.TimeoutExpired) as error:
         return False, f'Could not ask sudo ({type(error).__name__}).'
-    if result.returncode != 0:
+    # A listing that needs a password means no entry is passwordless at all.
+    if result.returncode != 0 or not passwordless(result.stdout, f'{systemctl} {action}'):
         return False, NOT_SET_UP
     return True, None
 

@@ -183,8 +183,9 @@ there will cost you an afternoon if you skip them:
   - before debugging anything. Never `scp` single files onto it.
 - Restarting the satellite's services needs no password once
   `yard/deploy/satellite.sudoers` is installed on it (a person runs
-  `sudo bash yard/docs/setup-scripts/satellite-sudoers.sh` once). Check with
-  `sudo -n -l /usr/bin/systemctl poweroff` over ssh before relying on it: if it
-  asks for a password the rule is not in, and the restarts are for a person to
-  run. Restart them one command at a time. `yard/docs/satellite.md` has the
-  details.
+  `sudo bash yard/docs/setup-scripts/satellite-sudoers.sh` once; it was
+  installed on 21 October 2026). Check over ssh before relying on it: `sudo -n
+  -l` must list the command after `NOPASSWD:`. Not `sudo -n -l <command>`,
+  which says yes to anything the user may run at all once one entry is
+  passwordless. Restart them one command at a time. `yard/docs/satellite.md`
+  has the details.

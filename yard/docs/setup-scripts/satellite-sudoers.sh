@@ -30,12 +30,27 @@ visudo -cf "$rule"
 install -o root -g root -m 0440 "$rule" "$target"
 visudo -c >/dev/null
 
-echo "Installed $target. Checking as mars, with no password:"
+# Read from sudo's own list of what mars may run with no password. Not with
+# `sudo -n -l <command>`: once any entry is passwordless that says yes to
+# everything mars may run at all, password or not, so it cannot catch a
+# missing entry (it said yes to reboot on 21 October 2026).
+listing="$(sudo -u mars sudo -n -l 2>/dev/null || true)"
+nopasswd() {
+    grep 'NOPASSWD:' <<<"$listing" | sed 's/.*NOPASSWD://' | tr ',' '\n' \
+        | sed 's/^ *//; s/ *$//' | grep -Fxq "/usr/bin/systemctl $1"
+}
+echo "Installed $target. Passwordless for mars:"
 for cmd in "restart satellite-web" "restart satellite-camera" "stop satellite-camera" "poweroff"; do
-    if sudo -u mars sudo -n -l /usr/bin/systemctl $cmd >/dev/null 2>&1; then
+    if nopasswd "$cmd"; then
         echo "  ok    systemctl $cmd"
     else
         echo "  FAIL  systemctl $cmd" >&2
         exit 1
     fi
 done
+# And nothing more than the rule says.
+if nopasswd reboot; then
+    echo "  FAIL  systemctl reboot is passwordless too, which the rule does not allow" >&2
+    exit 1
+fi
+echo "  ok    systemctl reboot still needs the password"

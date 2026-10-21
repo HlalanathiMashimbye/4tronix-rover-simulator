@@ -28,15 +28,24 @@ SUDO, SYSTEMCTL = '/usr/bin/sudo', '/usr/bin/systemctl'
 
 
 class Done:
-    def __init__(self, returncode=0):
+    def __init__(self, returncode=0, stdout=''):
         self.returncode = returncode
-        self.stdout = self.stderr = ''
+        self.stdout = stdout
+        self.stderr = ''
+
+
+# sudo -l on the satellite on 21 October 2026, with the rule installed.
+INSTALLED = """User mars may run the following commands on mro:
+    (ALL : ALL) ALL
+    (root) NOPASSWD: /usr/bin/systemctl restart satellite-web, /usr/bin/systemctl restart satellite-web.service, /usr/bin/systemctl restart satellite-camera, /usr/bin/systemctl restart satellite-camera.service, /usr/bin/systemctl stop satellite-camera, /usr/bin/systemctl stop satellite-camera.service, /usr/bin/systemctl poweroff
+"""
 
 
 @pytest.fixture
 def pi(monkeypatch, tmp_path):
     """A Pi with systemd, sudo, and the recording table empty. `runs` is every
-    command satellite_power ran; `allowed` is what sudo says to `sudo -n -l`."""
+    command satellite_power ran; `listing` is what `sudo -n -l` prints, or
+    None for a sudo that wants a password just to list."""
     monkeypatch.setattr(satellite_power.shutil, 'which',
                         lambda name: {'sudo': SUDO, 'systemctl': SYSTEMCTL}.get(name))
     monkeypatch.setattr(satellite_power.os, 'sync', lambda: None)
@@ -45,12 +54,12 @@ def pi(monkeypatch, tmp_path):
     for table in ('_writers', '_paths', '_started', '_dispatches'):
         monkeypatch.setattr(recording_control, table, {})
 
-    state = {'allowed': True, 'runs': []}
+    state = {'listing': INSTALLED, 'runs': []}
 
     def run(argv, **_kwargs):
         state['runs'].append(argv)
-        if argv[:3] == [SUDO, '-n', '-l']:
-            return Done(0 if state['allowed'] else 1)
+        if argv == [SUDO, '-n', '-l']:
+            return Done(1) if state['listing'] is None else Done(0, state['listing'])
         return Done(0)
 
     monkeypatch.setattr(satellite_power.subprocess, 'run', run)
@@ -59,11 +68,11 @@ def pi(monkeypatch, tmp_path):
 
 def test_it_asks_sudo_whether_it_may_before_doing_anything(pi):
     assert satellite_power.can_power_off() == (True, None)
-    assert pi['runs'] == [[SUDO, '-n', '-l', SYSTEMCTL, 'poweroff']], 'a check, not the command'
+    assert pi['runs'] == [[SUDO, '-n', '-l']], 'a listing, not the command'
 
 
 def test_without_the_rule_it_says_how_to_set_it_up_and_stops_nothing(pi):
-    pi['allowed'] = False
+    pi['listing'] = None
     recording_control.start_recording('m1', 'curiosity')
 
     ok, why = satellite_power.shut_down(schedule=lambda fn: fn())
@@ -71,6 +80,23 @@ def test_without_the_rule_it_says_how_to_set_it_up_and_stops_nothing(pi):
     assert not ok and 'satellite-sudoers.sh' in why
     assert recording_control.is_recording('m1', 'curiosity'), 'a refused shutdown leaves the run filming'
     assert [SUDO, '-n', SYSTEMCTL, 'poweroff'] not in pi['runs']
+
+
+def test_power_off_allowed_only_with_a_password_is_not_allowed(pi):
+    """What `sudo -n -l systemctl poweroff` got wrong: once any entry needs no
+    password, it says yes to everything mars may run at all. On the satellite
+    it said yes to reboot, which needs the password."""
+    pi['listing'] = INSTALLED.replace(', /usr/bin/systemctl poweroff', '')
+
+    assert satellite_power.can_power_off() == (False, satellite_power.NOT_SET_UP)
+
+
+def test_the_listing_is_read_entry_by_entry():
+    assert satellite_power.passwordless(INSTALLED, '/usr/bin/systemctl poweroff')
+    assert satellite_power.passwordless(INSTALLED, '/usr/bin/systemctl restart satellite-camera')
+    assert not satellite_power.passwordless(INSTALLED, '/usr/bin/systemctl reboot')
+    # A prefix of an entry is not the entry.
+    assert not satellite_power.passwordless(INSTALLED, '/usr/bin/systemctl restart satellite')
 
 
 def test_a_machine_without_systemd_cannot_shut_down_from_here(monkeypatch, pi):
@@ -180,3 +206,22 @@ def test_the_installer_checks_the_rule_before_it_goes_in():
 
     assert script.index('visudo -cf') < script.index('install -o root -g root -m 0440')
     assert os.access(INSTALLER, os.X_OK)
+
+
+@pytest.mark.skipif(not shutil.which('bash'), reason='bash is not installed here')
+@pytest.mark.parametrize('command,passwordless', [
+    ('restart satellite-web', True), ('restart satellite-camera', True),
+    ('stop satellite-camera', True), ('poweroff', True),
+    ('reboot', False), ('restart satellite', False),
+])
+def test_the_installer_reads_the_same_list(command, passwordless):
+    """Its check after installing is the installer's own bash, run here on
+    the listing the satellite printed."""
+    script = INSTALLER.read_text()
+    function = script[script.index('nopasswd() {'):script.index('}', script.index('nopasswd() {')) + 1]
+    probe = f'{function}\nnopasswd "{command}"'
+
+    result = subprocess.run(['bash', '-c', probe], capture_output=True, text=True,
+                            env={**os.environ, 'listing': INSTALLED})
+
+    assert (result.returncode == 0) == passwordless, result.stderr
