@@ -215,18 +215,37 @@ def test_a_non_200_from_the_rover_is_not_an_outcome(monkeypatch, recorder):
 def test_a_mission_id_starting_with_a_dash_still_finds_its_recording(monkeypatch, recorder):
     """15 September 2026: mission -BQwFDUWvyhpbQ4ZI8het recorded for 126 minutes.
 
-    The station files a recording under the id reduced for a path, which drops
-    a leading dash. The rover reports the id exactly as it was sent, dash and
-    all, so the watcher looked for a recording that was never filed under that
-    name and nothing ever stopped it.
+    The station filed a recording under the id reduced for a path, which
+    dropped a leading dash. The rover reports the id exactly as it was sent,
+    dash and all, so the watcher looked for a recording that was never filed
+    under that name and nothing ever stopped it.
+
+    The dash is kept now: it is part of the id, and the YouTube linker has to
+    read it back out of the file name. So the recording here is filed with it.
     """
     _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
                                'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het'}}])
-    recorder.start_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+    recorder.start_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
-        'BQwFDUWvyhpbQ4ZI8het']
-    assert not recorder.is_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+        '-BQwFDUWvyhpbQ4ZI8het']
+    assert not recorder.is_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
+
+
+def test_a_hand_typed_name_is_found_under_what_it_was_filed_as(monkeypatch, recorder):
+    """The case that still needs the watcher to reduce what the rover reports.
+
+    An id is filed as it is, so a watcher comparing raw ids would pass every
+    test with an id in it. A name somebody typed is not filed as it is: the
+    rover echoes "Thabo's square!" and the recording is Thabo-s-square.
+    """
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
+                               'params': {'mission_id': "Thabo's square!"}}])
+    recorder.start_recording('Thabo-s-square', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
+        'Thabo-s-square']
+    assert not recorder.is_recording('Thabo-s-square', YARD)
 
 
 def test_a_rerun_is_not_stopped_by_the_previous_run_of_the_same_mission(monkeypatch, recorder):
