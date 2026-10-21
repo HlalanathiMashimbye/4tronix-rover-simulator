@@ -29,6 +29,25 @@ which is often longer than the diff.
   the RUNBOOK covers a console that will not come up, restarting the
   satellite's services and a yard with no internet; and `infra/README.md`
   gives the three `terraform import`s the next apply needs first.
+- **The satellite shuts down from its Settings page, and restarts without a
+  password.** It was switched off at the plug. On 17 October that emptied
+  every file a `git pull` had written a few minutes before, 87 of them,
+  because the card had not been given their data yet, and the console never
+  came back up. A recording still open when the power goes does not play
+  either. The power button beside the Satellite chip now closes and keeps any
+  recording still running, then powers off cleanly, and says when it is safe
+  to unplug.
+
+  Shutting down needs root, and so did restarting the satellite's services
+  after a pull, which meant the `mars` password every time and no restart an
+  agent could do. `yard/deploy/satellite.sudoers` allows exactly those
+  commands with no password: restart `satellite-web` and `satellite-camera`,
+  stop the camera, and power off. Nothing broader, because the console has no
+  sign-in and anyone on the yard's wifi can press its buttons. A test fails if
+  the code asks sudo for a command the rule does not list, or the rule allows
+  one the code does not use. It is installed once on the Pi with
+  `sudo bash yard/docs/setup-scripts/satellite-sudoers.sh`; until then the
+  button says what setting it up takes.
 
 - **The run station works on a phone.** Stacked, the rail took all the height
   its cards wanted before the live panel got any: 365px of an iPhone's 598.

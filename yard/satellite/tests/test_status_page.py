@@ -816,3 +816,73 @@ def test_a_list_that_arrives_after_the_status_opens_on_the_current_camera(page: 
     # Short timeout: the status poll repainting a few seconds later must not be
     # what makes this pass.
     page.wait_for_function("document.getElementById('camera-source').value === '1'", timeout=1000)
+
+
+# ---- Shut down ---------------------------------------------------------------
+
+def power(page, can_power_off=True):
+    """The power check, and every shutdown the page asks for."""
+    asked = []
+    page.route('**/operator/api/satellite/power', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps({'canPowerOff': can_power_off, 'detail': None})))
+    page.route('**/operator/api/satellite/shutdown', lambda route: (asked.append(True), route.fulfill(
+        status=202, content_type='application/json',
+        body=json.dumps({'status': 'shutting-down', 'saved': []})))[1])
+    return asked
+
+
+def open_power_dialog(page):
+    page.wait_for_function("document.getElementById('powerBtn').dataset.ready !== undefined")
+    page.click('#powerBtn')
+    page.wait_for_selector('#powerDialog')
+    return page.inner_text('#powerDialog')
+
+
+def test_shutting_down_asks_first_and_then_says_when_to_unplug(page: Page, live_server):
+    """It used to go off at the plug, which on 17 October emptied every file
+    a git pull had just written. The page says when pulling it is safe."""
+    mock_status(page)
+    asked = power(page)
+    page.goto(f'{live_server}/settings')
+
+    text = open_power_dialog(page)
+    assert 'Shut down the satellite?' in text and "yard's wifi go off" in text
+    page.locator('#powerDialog').get_by_role('button', name='Cancel').click()
+    assert page.locator('#powerDialog').count() == 0
+    assert asked == [], 'Cancel shuts nothing down'
+
+    open_power_dialog(page)
+    page.locator('#powerDialog').get_by_role('button', name='Shut down', exact=True).click()
+    page.wait_for_selector('#powerDialog >> text=green light')
+    assert asked == [True]
+
+
+def test_without_the_sudo_rule_the_button_says_what_setting_it_up_takes(page: Page, live_server):
+    """Never a button that silently does nothing."""
+    mock_status(page)
+    asked = power(page, can_power_off=False)
+    page.goto(f'{live_server}/settings')
+
+    text = open_power_dialog(page)
+
+    assert 'one-time setup' in text
+    assert 'sudo bash yard/docs/setup-scripts/satellite-sudoers.sh' in text
+    assert page.locator('#powerDialog').get_by_role('button', name='Shut down', exact=True).count() == 0
+    assert asked == []
+
+
+def test_a_recording_still_running_is_mentioned_before_shutting_down(page: Page, live_server):
+    payload = {
+        'satellite': {'hostname': 'mro', 'ip': '1.2.3.4'},
+        'rover': {'reachable': False, 'driver': None, 'queue_size': None, 'url': 'http://x'},
+        'camera': {'reachable': True, 'port': 8890},
+        'recording': {'active': ['m1'], 'ready': True},
+    }
+    page.route('**/api/status', lambda route: route.fulfill(
+        status=200, content_type='application/json', body=json.dumps(payload)))
+    power(page)
+    page.goto(f'{live_server}/settings')
+    page.wait_for_function("window.YardStatus && YardStatus.latest()")
+
+    assert 'A recording is running' in open_power_dialog(page)
