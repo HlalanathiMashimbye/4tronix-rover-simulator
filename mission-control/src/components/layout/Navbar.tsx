@@ -271,7 +271,7 @@ export function Navbar() {
           here as an elevated slot, competing with the wayfinding links for
           attention while not being wayfinding at all, and it is the floating
           button below instead: an action and a destination should not look
-          alike. feat/challenges adds a fourth slot back here, a Challenges
+          alike. feat/challenges adds a fifth slot here, a Challenges
           tab - see docs/challenges-branch.md. */}
       {!hidePhoneChrome && (
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">

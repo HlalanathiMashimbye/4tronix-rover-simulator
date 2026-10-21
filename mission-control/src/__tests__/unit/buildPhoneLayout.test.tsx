@@ -26,7 +26,7 @@
  * was checked in a browser at 360x640, 375x667, 390x844 and 412x915.
  */
 
-import { render, screen, fireEvent, act, renderHook } from '@testing-library/react';
+import { render, screen, fireEvent, act, renderHook, within } from '@testing-library/react';
 
 let pathname = '/mission';
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));
@@ -82,25 +82,28 @@ describe('the navbar on a phone', () => {
     expect(screen.getByLabelText('Create Mission')).toBeInTheDocument();
   });
 
-  it('shows About on mobile', () => {
+  // Sapient's About page, in a new tab, from wherever the destinations are.
+  const expectSapientAbout = (link: HTMLElement) => {
+    expect(link).toHaveAttribute('href', 'https://sapient.rocks/about/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  };
+
+  it('puts About in the phone tab bar, beside Home and History', () => {
     renderNavbar('/missions');
-    expect(screen.getByRole('link', { name: 'About' })).toBeVisible();
+    // Exactly "History" is the tab bar's; the laptop pill says "My History".
+    const tabBar = screen.getByRole('link', { name: 'History' }).parentElement!;
+    expectSapientAbout(within(tabBar).getByRole('link', { name: /^About/ }));
   });
 
-  it('keeps About beside, but outside, the Home and History icon group', () => {
+  it('puts About in the laptop pill group, with Home and My History', () => {
     renderNavbar('/missions');
-    const about = screen.getByRole('link', { name: 'About' });
-    const home = screen
+    const pill = screen
       .getAllByRole('link', { name: 'Home' })
-      .find((link) => link.parentElement?.className.includes('border-border/60'));
-
-    expect(home).toBeDefined();
-    if (!home) throw new Error('Desktop Home link was not rendered');
-    expect(about).toHaveAttribute('href', 'https://sapient.rocks/about/');
-    expect(about).toHaveAttribute('target', '_blank');
-    expect(about).toHaveAttribute('rel', 'noopener noreferrer');
-    expect(about.parentElement).not.toBe(home.parentElement);
-    expect(about.compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      .map((link) => link.parentElement!)
+      .find((group) => group.className.includes('border-border/60'));
+    if (!pill) throw new Error('Desktop pill group was not rendered');
+    expectSapientAbout(within(pill).getByRole('link', { name: /^About/ }));
   });
 });
 

@@ -11,6 +11,13 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **About sits with the other destinations.** It was a loose link beside the
+  laptop's Home and My History pill, and on a phone it shared the top bar with
+  the logo. It is now one of the pill's links, and the fourth tab in the phone's
+  bottom bar, still opening Sapient's About page in a new tab. The walkthrough's
+  welcome shows the rover instead of a rocket icon, and its text no longer uses
+  dashes.
+
 - **Copy on the run station copies.** Every Copy button selected its text and
   said "Ctrl-C", because the clipboard API it used only exists on HTTPS or
   localhost, and the yard serves plain HTTP on a LAN address. The older

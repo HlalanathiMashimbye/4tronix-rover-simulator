@@ -61,7 +61,7 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'create-mission',
     target: 'tour-create-mission',
     title: 'Create Your Own!',
-    body: "Now it's your turn — build a mission from scratch!",
+    body: "Now it's your turn: build a mission from scratch!",
     placement: 'bottom',
     mobilePlacement: 'top',
     glow: true,

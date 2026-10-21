@@ -200,7 +200,7 @@ export function TourOverlay() {
     };
   }, [active, currentStep, measure]);
 
-  // No auto-advance on target click — the learner always presses "Next".
+  // No auto-advance on target click: the learner always presses "Next".
   // For clickTargetOnNext steps, handleNext() programmatically clicks the
   // target (mode-switch tab, mission card, etc.) when Next is pressed.
 
@@ -240,17 +240,19 @@ export function TourOverlay() {
           }`}
         >
           <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/15">
-          <Image
-            src="/rover-hero.jpg"
-            alt="Mission Control"
-            width={256}
-            height={256}
-            className="h-full w-full rounded-2xl object-cover"
-            quality={75}
-            priority
-          />
-          <Sparkles className="absolute -right-1 -top-1 h-5 w-5 text-mars-glow animate-pulse" />
-        </div>
+            {/* Decorative: the heading below already says Mission Control,
+                and a screen reader would otherwise say it twice. */}
+            <Image
+              src="/rover-hero.jpg"
+              alt=""
+              width={256}
+              height={256}
+              className="h-full w-full rounded-2xl object-cover"
+              quality={75}
+              priority
+            />
+            <Sparkles className="absolute -right-1 -top-1 h-5 w-5 text-mars-glow animate-pulse" />
+          </div>
           <h2
             id="tour-modal-title"
             className="mt-5 font-display text-xl font-bold text-foreground"
