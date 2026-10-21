@@ -83,6 +83,25 @@ Two things mean stop rather than approve:
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
 
+### Before the next apply: three secrets made by hand
+
+Automatic YouTube upload (#304) added six Secret Manager secrets to Terraform,
+and Terraform has not been applied since. Three of them were created by hand on
+11 October 2026 instead (`youtube-client-id`, `youtube-client-secret`,
+`youtube-refresh-token`; checked 21 October), so the apply fails on "already
+exists" until they are in Terraform's state. From `infra/`:
+
+```bash
+terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_client_id projects/bt-impact-academy/secrets/youtube-client-id
+terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_client_secret projects/bt-impact-academy/secrets/youtube-client-secret
+terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_refresh_token projects/bt-impact-academy/secrets/youtube-refresh-token
+```
+
+Their values stay as they are: Terraform manages these secrets, not their
+versions. Then plan and apply as above. The apply also creates the ingest
+secret and mounts it in both Cloud Run services, which the satellite needs a
+copy of before it can upload.
+
 ### After the apply
 
 ```bash
