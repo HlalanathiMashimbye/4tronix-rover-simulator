@@ -228,7 +228,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0, ya
         </p>
       </div>
 
-      <div className="grid flex-1 content-start grid-cols-2 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-6">
+      <div data-tour-id="tour-drive-buttons" className="grid flex-1 content-start grid-cols-2 gap-x-3 gap-y-2.5 md:gap-x-4 md:gap-y-6">
         {BLOCKS.map((block) => (
           <button
             key={block.command}

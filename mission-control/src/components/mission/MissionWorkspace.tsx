@@ -18,6 +18,7 @@ import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { useYardLayout } from '@/hooks/useYardLayout';
+import { useTour } from '@/contexts/TourContext';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
@@ -161,6 +162,19 @@ export function MissionWorkspace() {
       void loadRemixMission();
     }
   }, [remixFromId]);
+
+  const { currentStep: tourStep, active: tourActive } = useTour();
+  useEffect(() => {
+    if (!tourActive) return;
+    const id = tourStep?.id;
+    if (id === 'manual-mode' || id === 'drive-buttons') {
+      if (editorMode !== 'manual') setEditorMode('manual');
+    } else if (id === 'blockly-mode' || id === 'blockly-editor') {
+      if (editorMode !== 'blockly') setEditorMode('blockly');
+    } else if (id === 'python-mode' || id === 'code-instructions' || id === 'run-mission') {
+      if (editorMode !== 'code') setEditorMode('code');
+    }
+  }, [tourStep?.id, tourActive]); // eslint-disable-line react-hooks/exhaustive-deps -- only drives mode from tour steps
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
