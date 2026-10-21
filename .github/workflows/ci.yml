@@ -173,4 +173,4 @@ jobs:
 
       - name: Run browser tests
         working-directory: yard/satellite
-        run: python -m pytest tests/test_blockly_codegen.py tests/test_status_page.py tests/test_mission_control_return.py tests/test_theme.py tests/test_monitor_page.py tests/test_run_live_view.py -q
+        run: python -m pytest tests/test_blockly_codegen.py tests/test_status_page.py tests/test_mission_control_return.py tests/test_theme.py tests/test_monitor_page.py tests/test_run_live_view.py tests/test_run_station_clipboard.py -q

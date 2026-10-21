@@ -11,6 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Copy on the run station copies.** Every Copy button selected its text and
+  said "Ctrl-C", because the clipboard API it used only exists on HTTPS or
+  localhost, and the yard serves plain HTTP on a LAN address. The older
+  `document.execCommand('copy')` has no such rule and still works from a
+  button press in every browser, so that is the copy now. The selection and
+  the key are only left for a browser that refuses even that.
+
+  Paste cannot work the same way. No browser lets a plain HTTP page read the
+  clipboard, by any route, so the paste button still opens a box to paste
+  into. It now says the one gesture the device in hand has: "Press ⌘V" (or
+  Ctrl-V) on a laptop, "Press and hold here, then tap Paste" on a tablet.
+  Making paste one press would mean serving the satellite over HTTPS. Sending
+  the mission from Mission Control in Chrome needs no paste at all.
+
 - **The satellite shuts down from its Settings page, and restarts without a
   password.** It was switched off at the plug. On 17 October that emptied
   every file a `git pull` had written a few minutes before, 87 of them,
