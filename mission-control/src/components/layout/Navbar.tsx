@@ -3,8 +3,11 @@
  *
  * Desktop (md+): top bar with explicit Home and My History links,
  * a prominent "Create Mission" button, and the notification bell.
- * Mobile (< md): top bar shows logo + bell; the destinations move to a fixed
- * bottom tab bar (kid-friendly, always visible, no hidden hamburger menu).
+ * Mobile (< md): the destinations move to a fixed bottom tab bar
+ * (kid-friendly, always visible, no hidden hamburger menu).
+ * Both: the Help button opens a small menu with the tour and Sapient's About
+ * page. About is not a place in this app, so it is not in either bar: a tab
+ * that opens another website takes a learner out of Mission Control.
  */
 
 'use client';
@@ -20,10 +23,13 @@ import {
   Sun,
   Moon,
   HelpCircle,
+  Info,
+  Compass,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
@@ -164,15 +170,6 @@ export function Navbar() {
           <NavbarSearch />
 
           <div className="flex shrink-0 items-center justify-end gap-2 justify-self-end">
-            <a
-              href="https://sapient.rocks/about/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
-            >
-              About
-            </a>
-
             {/* Desktop destinations - one segmented pill group */}
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -186,7 +183,6 @@ export function Navbar() {
                   </span>
                 </Link>
               ))}
-
             </div>
 
             {/* Prominent primary action */}
@@ -199,16 +195,29 @@ export function Navbar() {
               Create Mission
             </Link>
 
-            {/* Restart tour (desktop only). Not shown while a tour is running. */}
+            {/* Help, on every size: the tour again, and Sapient's About page.
+                Not shown while a tour is running. */}
             {!tourActive && (
-              <button
-                onClick={startTour}
-                className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
-                aria-label="Platform tour"
-                title="Take a tour of Mission Control"
+              <Menu
+                label="Help"
+                icon={<HelpCircle className="h-5 w-5" />}
+                buttonClassName="block rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:p-2.5"
               >
-                <HelpCircle className="h-5 w-5" />
-              </button>
+                <button type="button" role="menuitem" onClick={startTour} className={menuItemClass}>
+                  <Compass className="h-4 w-4 text-primary" />
+                  Take the tour
+                </button>
+                <a
+                  role="menuitem"
+                  href="https://sapient.rocks/about/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={menuItemClass}
+                >
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  About Sapient.rocks
+                </a>
+              </Menu>
             )}
 
             {/* Theme toggle (desktop; mobile reaches it from the Notifications
@@ -221,17 +230,6 @@ export function Navbar() {
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-
-            {/* Mobile tour help button. */}
-            {!tourActive && (
-              <button
-                onClick={startTour}
-                className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
-                aria-label="Platform tour"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            )}
 
             {/* Mobile theme toggle. Lives here because the mobile top bar has
                 nothing but the logo, so there is room - it used to be buried in
