@@ -37,8 +37,8 @@ A Cudy LT300 router serves `mars-relay-network` to the satellite, the rover and
 every tablet, laptop and TV in the room. For the internet it joins whatever
 wifi the venue has, in WISP mode, or a SIM. How it is set up is
 [`yard/docs/yard-network.md`](../../yard/docs/yard-network.md). Before the
-router the satellite served the wifi itself and had no internet, which is
-still the fallback.
+router the satellite served the wifi itself and had no internet; that, and the
+`marsyard` name, were retired on 21 October 2026.
 
 The satellite (`mro.local`, a Pi 5) serves the yard's pages: `/run/`, the run
 station where an operator sends a mission and films it; `/code/` on tablets;

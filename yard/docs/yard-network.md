@@ -11,8 +11,10 @@ internet: one radio cannot be an access point and a client at once (below).
 
 Now the yard has a router of its own. A Cudy LT300 joins the venue's wifi and
 serves **`mars-relay-network`** from it, so the rover, the satellite and every
-tablet are on one network that also reaches the internet. `marsyard` and the
-satellite's access point stay, as the fallback when the router is missing.
+tablet are on one network that also reaches the internet. `marsyard` was
+retired on 21 October 2026, for predictability: one name everywhere. If the
+router is ever missing, a phone hotspot called `mars-relay-network` with the
+same password stands in for it, for everything at once.
 
 ## The router: mars-relay-network
 
@@ -56,30 +58,37 @@ hotspot always works.
 Keep `mars-relay-network` on **WPA2-PSK**, not WPA3 or WPA/WPA2 mixed: the
 rover is a Pi Zero W and cannot join WPA3.
 
-**Do not give the router's upstream the name `marsyard`.** The satellite and
-the rover keep `marsyard` saved as their fallback, and once on a network they
-stay on it. If the relay drops for a moment (the router restarts whenever WISP
-is saved), they fall onto a `marsyard` hotspot that is in range and stay there
-after the relay is back, on a different network from everything else. It
-happened at home on 21 October, where the phone hotspot feeding the router was
-called `marsyard`. Call that hotspot anything else.
+**One name, on purpose.** The satellite and the rover know only
+`mars-relay-network`. They used to keep `marsyard` saved too, and a Pi that
+joins a network stays on it: when the relay dropped for a moment (the router
+restarts whenever WISP is saved), the satellite fell onto a `marsyard` hotspot
+in range and stayed there after the relay came back, on a different network
+from everything else (21 October, at home, where the phone hotspot feeding the
+router was called `marsyard`). So `marsyard` was deleted from them. A Pi with
+one network either is on the yard or visibly is not.
+
+If the router dies, a cable still reaches the satellite (it has a wired
+profile), and a phone hotspot named `mars-relay-network` with the relay's
+password becomes the yard for everything.
 
 ### Putting the satellite and the rover on it
 
-The satellite was moved on 21 October 2026, and keeps `marsyard` as its
-fallback. On a fresh satellite:
+The satellite was moved on 21 October 2026, and `marsyard` then deleted from
+it. On a fresh satellite:
 
 ```bash
 sudo bash yard/docs/setup-scripts/satellite-join-relay.sh
 ```
 
 It writes the password onto the satellite before it switches, then goes back
-to `marsyard` by itself if it did not join. That order matters over SSH:
+to the network it was on by itself if it did not join. Once it is on the relay,
+delete the old network (`sudo nmcli con delete <name>`). That order matters over SSH:
 `nmcli --ask device wifi connect` leaves the old network first, which cuts the
 session before its password prompt reaches you.
 
-The rover needs a `mars-relay-network` profile beside its `marsyard` one.
-Check with `nmcli -t -f NAME con show` over SSH; if it is missing:
+The rover needs a `mars-relay-network` profile, and then its `marsyard` one
+(`preconfigured`) deleted, once it is on the relay. Check with `nmcli -t -f NAME
+con show` over SSH; if the relay's is missing:
 
 ```bash
 sudo nmcli con add type wifi ifname wlan0 con-name mars-relay-network ssid mars-relay-network wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'THE-PASSWORD' 802-11-wireless-security.pmf 1 connection.autoconnect yes
@@ -88,12 +97,12 @@ sudo nmcli con add type wifi ifname wlan0 con-name mars-relay-network ssid mars-
 `pmf 1` turns Protected Management Frames off, which the rover's firmware
 cannot do (see "Why the rover could not join at first", below).
 
-## The fallback: the satellite serves marsyard
+## History: when the satellite served marsyard
 
-Everything from here on describes the satellite as the access point. It is
-how the yard ran before the router, and how it runs again if the router is
-missing: run `satellite-as-access-point.sh` on the satellite, or let
-`satellite-join-relay.sh`'s check do it.
+Retired on 21 October 2026. Everything from here on describes the satellite as
+the access point, which is how the yard ran before the router. It stays
+because it explains how the rover and the Pis behave: why the rover needs PMF
+off, and why one radio cannot be an access point and a client.
 
 ### What talks to what
 

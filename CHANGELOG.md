@@ -17,9 +17,15 @@ which is often longer than the diff.
   no `git pull` in the room, no upload from where a video was made. A Cudy
   LT300 now serves `mars-relay-network` and joins whatever wifi is there for
   the internet: WISP on, at `http://cudy.net`. Set up and working at home on
-  21 October 2026, with the satellite moved onto it and `marsyard` kept as its
-  fallback; `setup-scripts/satellite-join-relay.sh` does that move for a fresh
-  satellite.
+  21 October 2026, with the satellite moved onto it;
+  `setup-scripts/satellite-join-relay.sh` does that move for a fresh satellite.
+
+  `marsyard` is retired, for predictability: one name everywhere. A Pi that
+  joins a network stays on it, so with both saved, the satellite fell onto a
+  `marsyard` hotspot when the relay blipped and stayed there after it came
+  back. It is deleted from the satellite, and to be from the rover. If the
+  router is missing, a phone hotspot called `mars-relay-network` with its
+  password stands in for everything.
 
   The docs had gone on describing the yard as it was. `yard-network.md`, the
   manual, `bring-up.md` and the rover's handover note describe the router;

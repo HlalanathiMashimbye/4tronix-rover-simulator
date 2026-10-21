@@ -33,10 +33,11 @@ def test_joining_the_router_asks_for_its_password():
 
 
 def test_joining_the_router_checks_before_it_goes_back():
-    """It goes back to serving marsyard only if the satellite did not join,
-    never on a timer alone: after the switch nobody can reach it to cancel."""
+    """It goes back to the network it was on only if the satellite did not
+    join, never on a timer alone: after the switch nobody can reach it to
+    cancel."""
     script = (SCRIPTS / 'satellite-join-relay.sh').read_text()
     check = script[script.index('cat > /usr/local/sbin/yard-relay-check'):script.index('CHECK\nchmod')]
 
-    assert check.index('grep -qx "${CLIENT_CON}"') < check.index('nmcli con up "${AP_CON}"')
+    assert check.index('grep -qx "${CLIENT_CON}"') < check.index('nmcli con up "${PREVIOUS}"')
     assert 'exit 0' in check

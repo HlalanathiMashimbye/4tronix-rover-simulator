@@ -3,11 +3,10 @@
 **To:** Konke
 **From:** Hlalanathi
 **Status:** unsolved, and no longer in the way. Since 21 October 2026 the yard
-runs on a router, `mars-relay-network`, and nothing serves `marsyard` from the
-satellite (see [yard-network.md](yard-network.md)). This matters again only in
-the fallback, when the router is missing and the satellite serves `marsyard`
-itself. Everything below is what is known, what is ruled out, and the one
-technique that makes the problem observable at all.
+runs on a router, `mars-relay-network`, and `marsyard` is retired: nothing
+serves it and the satellite no longer knows it (see
+[yard-network.md](yard-network.md)). Kept as the record of what was known,
+what was ruled out, and the one technique that made the problem observable.
 
 ---
 
@@ -220,9 +219,9 @@ ip neigh show dev wlan0                # who is actually on the network
 | | |
 |---|---|
 | Yard network | `mars-relay-network`, from the Cudy LT300 router at `192.168.10.1` (`http://cudy.net`) |
-| Fallback network | `marsyard`, password `curiousinternet` |
+| Retired network | `marsyard`, password `curiousinternet`: removed from the satellite on 21 October 2026, the rover still to do |
 | Satellite | Raspberry Pi 5, hostname `mro`, user `mars`, console at `http://mro.local:3001/` |
-| Satellite AP address | `192.168.137.1`, only when it serves `marsyard` itself |
+| Satellite AP address | `192.168.137.1`, when it served `marsyard` itself (retired) |
 | Satellite wifi MAC | `88:A2:9E:05:50:21`, channel 6, 2.4GHz, WPA2, PMF off |
 | Rover | Raspberry Pi Zero W, hostname `curiosity`, user `mars` |
 | Rover MAC prefix | `b8:27:eb:` |

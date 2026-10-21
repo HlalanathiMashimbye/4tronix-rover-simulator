@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #
-# Make the satellite a client of the yard's router, mars-relay-network, and
-# stop it serving marsyard itself.
+# Make the satellite a client of the yard's router, mars-relay-network.
 #
 # The satellite served the yard's wifi (satellite-as-access-point.sh), and one
 # radio cannot be both: as the access point it had no internet, so neither did
@@ -10,14 +9,14 @@
 # satellite has internet as well as the rover: its clock sets itself, a git
 # pull works in the room, and recordings can upload.
 #
-# The access point profile is kept, with autoconnect off, as the way back if
-# the router is ever missing: run satellite-as-access-point.sh again, or let
-# the check below do it.
-#
 # NOTHING TO CANCEL AFTERWARDS, for the access point script's reason: the SSH
 # session running this is cut when the satellite changes network, so the person
 # who would cancel a rollback has no route to the machine. The check instead
-# asks whether the satellite actually joined, and goes back only if it did not.
+# asks whether the satellite actually joined, and goes back to the network it
+# was on only if it did not.
+#
+# Once it has joined, delete the old network (sudo nmcli con delete <name>):
+# the yard keeps one name, and a Pi with two stays on whichever it found first.
 #
 # Run it on the satellite, with the router on and mars-relay-network up:
 #   sudo bash yard/docs/setup-scripts/satellite-join-relay.sh
@@ -47,9 +46,12 @@ if [[ ${#PSK} -lt 8 ]]; then
     exit 1
 fi
 
-# Serving marsyard, the radio cannot scan, so the router is only looked for
-# when the satellite is a client already. Otherwise the check below is what
-# finds out.
+# Where to go back to if the relay does not join: whatever wifi it is on now.
+PREVIOUS="$(nmcli -t -f NAME,TYPE con show --active | awk -F: '$2=="802-11-wireless"{print $1}' | head -1)"
+
+# Serving its own access point, the radio cannot scan, so the router is only
+# looked for when the satellite is a client already. Otherwise the check below
+# is what finds out.
 SERVING=no
 if nmcli -t -f NAME con show --active | grep -qx "${AP_CON}"; then
     SERVING=yes
@@ -61,8 +63,8 @@ fi
 echo "== plan =="
 echo "  device        : ${WIFI_DEV}"
 echo "  joins         : ${SSID}, as profile '${CLIENT_CON}'"
-echo "  stops serving : ${AP_CON} (kept, autoconnect off)   currently serving: ${SERVING}"
-echo "  check in      : ${CHECK_MIN} min, goes back to ${AP_CON} only if ${SSID} did not join"
+echo "  now on        : ${PREVIOUS:-nothing}   serving its own access point: ${SERVING}"
+echo "  check in      : ${CHECK_MIN} min, goes back to ${PREVIOUS:-nothing} only if ${SSID} did not join"
 echo
 
 # ---- 1. The profiles ------------------------------------------------------
@@ -77,27 +79,26 @@ nmcli con modify "${CLIENT_CON}" \
     connection.autoconnect yes \
     connection.autoconnect-priority 30
 
-# Off, not deleted: it is the yard's way back when the router is missing.
+# An access point profile from before the router must not come back at boot.
 if nmcli -t -f NAME con show | grep -qx "${AP_CON}"; then
     nmcli con modify "${AP_CON}" connection.autoconnect no
 fi
 
-echo "== profile '${CLIENT_CON}' written, autoconnect on; '${AP_CON}' autoconnect off =="
+echo "== profile '${CLIENT_CON}' written, autoconnect on =="
 
 # ---- 2. The check that goes back only on real failure ---------------------
 # systemd-run rather than a backgrounded sleep: it has to outlive the SSH
 # session that is about to be cut.
 cat > /usr/local/sbin/yard-relay-check <<CHECK
 #!/usr/bin/env bash
-# Go back to serving marsyard, but only if the satellite never joined ${SSID}.
+# Go back to ${PREVIOUS:-nothing}, but only if the satellite never joined ${SSID}.
 if nmcli -t -f NAME con show --active | grep -qx "${CLIENT_CON}"; then
     logger -t yard-relay-check "joined ${SSID}, leaving it alone"
     exit 0
 fi
-logger -t yard-relay-check "did NOT join ${SSID}, serving ${AP_CON} again"
-if nmcli -t -f NAME con show | grep -qx "${AP_CON}"; then
-    nmcli con modify "${AP_CON}" connection.autoconnect yes || true
-    nmcli con up "${AP_CON}" || true
+logger -t yard-relay-check "did NOT join ${SSID}, going back to ${PREVIOUS:-nothing}"
+if [ -n "${PREVIOUS}" ]; then
+    nmcli con up "${PREVIOUS}" || true
 fi
 CHECK
 chmod +x /usr/local/sbin/yard-relay-check
@@ -109,14 +110,16 @@ echo "== safety check in ${CHECK_MIN} min: goes back ONLY if ${SSID} did not joi
 # ---- 3. The switch --------------------------------------------------------
 cat <<BANNER
 
-Joining ${SSID}. If this SSH session came in over marsyard, it drops now.
+Joining ${SSID}. If this SSH session came in over ${PREVIOUS:-another network}, it drops now.
 
   1. Put your laptop or tablet on ${SSID}.
   2. Within a minute the satellite answers at:
          http://mro.local:3001/
   3. On it, Settings shows the rover once the rover is on ${SSID} too.
   4. If it never appears, wait ${CHECK_MIN} minutes: the satellite goes back to
-     serving ${AP_CON} by itself, and you can join that to look.
+     ${PREVIOUS:-the network it was on} by itself, and you can join that to look.
+  5. Once it is on ${SSID}, delete the old network:
+         sudo nmcli con delete "${PREVIOUS:-<name>}"
 
 BANNER
 
