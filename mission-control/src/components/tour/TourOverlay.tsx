@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Rocket, X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import Image from 'next/image';
+import { X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useTour, TOUR_STEPS } from '@/contexts/TourContext';
 import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 
@@ -239,9 +240,17 @@ export function TourOverlay() {
           }`}
         >
           <div className="relative mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/15">
-            <Rocket className="h-8 w-8 -rotate-45 text-primary" />
-            <Sparkles className="absolute -right-1 -top-1 h-5 w-5 text-mars-glow animate-pulse" />
-          </div>
+          <Image
+            src="/rover-hero.jpg"
+            alt="Mission Control"
+            width={256}
+            height={256}
+            className="h-full w-full rounded-2xl object-cover"
+            quality={75}
+            priority
+          />
+          <Sparkles className="absolute -right-1 -top-1 h-5 w-5 text-mars-glow animate-pulse" />
+        </div>
           <h2
             id="tour-modal-title"
             className="mt-5 font-display text-xl font-bold text-foreground"

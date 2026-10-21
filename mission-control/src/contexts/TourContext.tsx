@@ -30,7 +30,7 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'welcome',
     target: null,
     title: 'Welcome to Mission Control!',
-    body: 'See how other learners drive a real Mars rover — then build and send your own mission.',
+    body: 'See how other learners drive a real Mars rover, then build and send your own mission.',
     placement: 'center',
   },
   {

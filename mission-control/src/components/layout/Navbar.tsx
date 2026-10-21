@@ -1,10 +1,10 @@
 /**
  * Global Navigation Bar
  *
- * Desktop (md+): top bar with explicit Home and My History links,
+ * Desktop (md+): top bar with a Home, My History and About pill,
  * a prominent "Create Mission" button, and the notification bell.
- * Mobile (< md): top bar shows logo + bell; the destinations move to a fixed
- * bottom tab bar (kid-friendly, always visible, no hidden hamburger menu).
+ * Mobile (< md): the destinations move to a fixed bottom tab bar
+ * (kid-friendly, always visible, no hidden hamburger menu).
  */
 
 'use client';
@@ -20,6 +20,7 @@ import {
   Sun,
   Moon,
   HelpCircle,
+  Info,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -164,15 +165,6 @@ export function Navbar() {
           <NavbarSearch />
 
           <div className="flex shrink-0 items-center justify-end gap-2 justify-self-end">
-            <a
-              href="https://sapient.rocks/about/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-card/60 hover:text-foreground"
-            >
-              About
-            </a>
-
             {/* Desktop destinations - one segmented pill group */}
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
@@ -186,7 +178,18 @@ export function Navbar() {
                   </span>
                 </Link>
               ))}
-
+              <a
+                href="https://sapient.rocks/about/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={desktopLinkClass('about')}
+                aria-label="About Sapient.rocks"
+              >
+                <span className="relative z-10 flex items-center gap-1.5">
+                  <Info className="h-4 w-4" />
+                  About
+                </span>
+              </a>
             </div>
 
             {/* Prominent primary action */}
@@ -260,9 +263,10 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar: three flat, equal-weight slots. Two are
-          destinations (Home, History) and the third opens the notifications
-          panel in place, which is why Alerts is a button and not a Link.
+      {/* Mobile bottom tab bar: four flat, equal-weight slots. Three are
+          destinations (Home, History, About) and the fourth opens the
+          notifications panel in place, which is why Alerts is a button and
+          not a Link.
           Create Mission is deliberately NOT in this row. It used to sit inline
           here as an elevated slot, competing with the wayfinding links for
           attention while not being wayfinding at all, and it is the floating
@@ -297,6 +301,17 @@ export function Navbar() {
             <HistoryIcon className={`h-5 w-5 ${isActive('/history') ? 'pop-in' : ''}`} />
             History
           </Link>
+
+          <a
+            href="https://sapient.rocks/about/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-colors"
+            aria-label="About Sapient.rocks"
+          >
+            <Info className="h-5 w-5" />
+            About
+          </a>
 
           <button
             onClick={openNotifications}
