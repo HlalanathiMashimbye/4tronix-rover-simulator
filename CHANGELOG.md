@@ -11,12 +11,15 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **About sits with the other destinations.** It was a loose link beside the
-  laptop's Home and My History pill, and on a phone it shared the top bar with
-  the logo. It is now one of the pill's links, and the fourth tab in the phone's
-  bottom bar, still opening Sapient's About page in a new tab. The walkthrough's
-  welcome shows the rover instead of a rocket icon, and its text no longer uses
-  dashes.
+- **About is under Help.** It was a loose link beside the laptop's Home and
+  My History pill, and on a phone it shared the top bar with the logo. The
+  Help button, which only restarted the walkthrough, now opens a small menu
+  over the page with "Take the tour" and "About Sapient.rocks". About was not
+  made a tab or put in the pill: both bars are for places in Mission Control,
+  and About opens another website, so a tab there takes a learner out of the
+  app. The phone's bar keeps its three slots, and the fourth Challenges needs
+  when it comes back. The walkthrough's welcome shows the rover instead of a
+  rocket icon, and its text no longer uses dashes.
 
 - **Copy on the run station copies.** Every Copy button selected its text and
   said "Ctrl-C", because the clipboard API it used only exists on HTTPS or

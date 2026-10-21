@@ -1,10 +1,13 @@
 /**
  * Global Navigation Bar
  *
- * Desktop (md+): top bar with a Home, My History and About pill,
+ * Desktop (md+): top bar with explicit Home and My History links,
  * a prominent "Create Mission" button, and the notification bell.
  * Mobile (< md): the destinations move to a fixed bottom tab bar
  * (kid-friendly, always visible, no hidden hamburger menu).
+ * Both: the Help button opens a small menu with the tour and Sapient's About
+ * page. About is not a place in this app, so it is not in either bar: a tab
+ * that opens another website takes a learner out of Mission Control.
  */
 
 'use client';
@@ -21,10 +24,12 @@ import {
   Moon,
   HelpCircle,
   Info,
+  Compass,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
@@ -178,18 +183,6 @@ export function Navbar() {
                   </span>
                 </Link>
               ))}
-              <a
-                href="https://sapient.rocks/about/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className={desktopLinkClass('about')}
-                aria-label="About Sapient.rocks"
-              >
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <Info className="h-4 w-4" />
-                  About
-                </span>
-              </a>
             </div>
 
             {/* Prominent primary action */}
@@ -202,16 +195,29 @@ export function Navbar() {
               Create Mission
             </Link>
 
-            {/* Restart tour (desktop only). Not shown while a tour is running. */}
+            {/* Help, on every size: the tour again, and Sapient's About page.
+                Not shown while a tour is running. */}
             {!tourActive && (
-              <button
-                onClick={startTour}
-                className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
-                aria-label="Platform tour"
-                title="Take a tour of Mission Control"
+              <Menu
+                label="Help"
+                icon={<HelpCircle className="h-5 w-5" />}
+                buttonClassName="block rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:p-2.5"
               >
-                <HelpCircle className="h-5 w-5" />
-              </button>
+                <button type="button" role="menuitem" onClick={startTour} className={menuItemClass}>
+                  <Compass className="h-4 w-4 text-primary" />
+                  Take the tour
+                </button>
+                <a
+                  role="menuitem"
+                  href="https://sapient.rocks/about/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={menuItemClass}
+                >
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  About Sapient.rocks
+                </a>
+              </Menu>
             )}
 
             {/* Theme toggle (desktop; mobile reaches it from the Notifications
@@ -224,17 +230,6 @@ export function Navbar() {
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-
-            {/* Mobile tour help button. */}
-            {!tourActive && (
-              <button
-                onClick={startTour}
-                className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
-                aria-label="Platform tour"
-              >
-                <HelpCircle className="h-5 w-5" />
-              </button>
-            )}
 
             {/* Mobile theme toggle. Lives here because the mobile top bar has
                 nothing but the logo, so there is room - it used to be buried in
@@ -263,15 +258,14 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar: four flat, equal-weight slots. Three are
-          destinations (Home, History, About) and the fourth opens the
-          notifications panel in place, which is why Alerts is a button and
-          not a Link.
+      {/* Mobile bottom tab bar: three flat, equal-weight slots. Two are
+          destinations (Home, History) and the third opens the notifications
+          panel in place, which is why Alerts is a button and not a Link.
           Create Mission is deliberately NOT in this row. It used to sit inline
           here as an elevated slot, competing with the wayfinding links for
           attention while not being wayfinding at all, and it is the floating
           button below instead: an action and a destination should not look
-          alike. feat/challenges adds a fifth slot here, a Challenges
+          alike. feat/challenges adds a fourth slot back here, a Challenges
           tab - see docs/challenges-branch.md. */}
       {!hidePhoneChrome && (
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
@@ -301,17 +295,6 @@ export function Navbar() {
             <HistoryIcon className={`h-5 w-5 ${isActive('/history') ? 'pop-in' : ''}`} />
             History
           </Link>
-
-          <a
-            href="https://sapient.rocks/about/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-colors"
-            aria-label="About Sapient.rocks"
-          >
-            <Info className="h-5 w-5" />
-            About
-          </a>
 
           <button
             onClick={openNotifications}
