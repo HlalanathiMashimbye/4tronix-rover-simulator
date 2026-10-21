@@ -17,12 +17,15 @@ credentials. A yard with no uplink at all runs missions.
         +-- satellite Pi    :3001   the pages, :8890 the camera
 ```
 
-> **The laptop is no longer the hotspot.** The satellite serves `marsyard`
-> itself now, so the yard needs no laptop at all - see
-> [yard-network.md](yard-network.md). The diagram above still describes the
-> first bring-up, where the satellite is a client of a laptop while it is being
-> flashed and configured; the satellite becomes the access point at the end of
-> it, with `setup-scripts/satellite-as-access-point.sh`.
+> **The laptop is no longer the hotspot.** The yard's router serves
+> `mars-relay-network` from the venue's wifi, so the yard needs no laptop at
+> all - see [yard-network.md](yard-network.md). The diagram above still
+> describes the first bring-up, where the satellite is a client of a laptop
+> while it is being flashed and configured; at the end of it the satellite
+> joins the router with `setup-scripts/satellite-join-relay.sh`. `marsyard`
+> was retired on 21 October 2026: flash new cards with `mars-relay-network`,
+> and only that, which is the "exactly one network" rule below carried over to
+> the new name.
 
 Mission Control is not on this diagram on purpose. It runs in a browser, the
 operator copies a mission out of it, and it never speaks to the satellite. If

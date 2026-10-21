@@ -81,7 +81,7 @@ Operators use this app, at `/operator`. The yard satellite (`yard/satellite/`) h
 - **Settling a run.** Complete, cancel, log another run, attach or remove a video, resolve a review, and leave feedback. None of these reaches a rover: sending, stopping and the camera stay on the satellite, because they are physical and stop has to work with no internet. Deleting a mission is admin-only.
 - **Admin pages.** `/operator/team` grants and removes operator access; the first admin on a fresh project comes from `scripts/set-operator-role.mjs` (see `docs/RUNBOOK.md`). `/operator/settings` holds the configuration that used to need a Terraform run: the Resend key and sending address, the YouTube key and channel, the auto-link interval, and the yards.
 - **Attaching videos automatically.** Cloud Scheduler calls `POST /api/cron/youtube-link` with a shared secret, every 15 minutes by default. It reads the channel's 50 most recent uploads, matches the `MissionID:` and `Yard:` lines the run station put in each description, and attaches the video to that yard's run once the run is marked complete. A call only reads YouTube when the interval set on `/operator/settings` (default 15 minutes) has passed since the last check.
-- **Uploading recordings automatically (optional).** When the satellite's rover-history watcher confirms a dispatched run ended, it first closes and keeps the MP4, then posts it to `POST /api/youtube-upload/recording` in a background thread. Mission Control uploads it with the YouTube Data API; a separate private Firestore ledger records its mission, rover dispatch ID, yard, bounded attempts and result. Operators see that state separately from a MissionRun's manual video link. An upload failure never changes mission status or removes the recording. The satellite retries delivery at most three times; operators can always use the existing download, YouTube Studio and add/replace/remove-link controls as before. Automatic upload is disabled until both YouTube OAuth and the satellite-ingest credential are configured. The endpoint accepts recordings up to 30 MiB (Cloud Run's request-body limit); larger recordings remain available for the manual process.
+- **Uploading recordings automatically (optional).** When the satellite's rover-history watcher confirms a dispatched run ended, it closes and keeps the MP4 and leaves a delivery note beside it (`<file>.mp4.upload.json`). Every watcher pass sends what is due to `POST /api/youtube-upload/recording`, and the note stays until Mission Control has the video or answers that it never will, so a satellite serving the yard's wifi, which has no internet, sends its videos the next time it has a way out. Retries start a minute apart and stop doubling at half an hour. Mission Control uploads it with the YouTube Data API; a separate private Firestore ledger records its mission, rover dispatch ID, yard, bounded attempts and result. Then the video goes onto its run through the same linker the scheduled poll uses, which closes an open run and emails the learner, as a found video does. Not for a run the rover reported as an error: that one is left for the operator, with the video in its upload row. An upload failure never changes mission status or removes the recording; operators can always use the existing download, YouTube Studio and add/replace/remove-link controls as before. Automatic upload is disabled until both YouTube OAuth and the satellite-ingest credential are configured. The endpoint accepts recordings up to 30 MiB (Cloud Run's request-body limit); larger recordings remain available for the manual process.
 
 ### YouTube upload authorization and configuration
 
@@ -116,9 +116,14 @@ Replacing a working token requires the explicit **Replace YouTube
 authorization** action. If `YOUTUBE_REFRESH_TOKEN` is set in the process
 environment, it takes precedence and must be updated there deliberately.
 
+**Pick the privacy before the first upload.** A private video is attached to
+its run like any other, but a learner cannot play it, so the mission page
+shows a video nobody can watch. Unlisted plays for anyone with the link and
+stays out of search.
+
 The app's OAuth settings are `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`,
 `YOUTUBE_REFRESH_TOKEN`, `YOUTUBE_UPLOAD_PRIVACY` (`private` by default),
-`YOUTUBE_MADE_FOR_KIDS` (`true` by default), and the shared
+`YOUTUBE_MADE_FOR_KIDS` (`false` by default), and the shared
 `YOUTUBE_UPLOAD_INGEST_SECRET`. The last value authenticates the satellite to
 Mission Control; it is not a YouTube token. Terraform generates and mounts it
 in Cloud Run. Copy that same value into `yard/satellite/.env` as

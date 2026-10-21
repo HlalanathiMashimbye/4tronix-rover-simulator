@@ -94,6 +94,12 @@ existing accessor/version-adder permissions. Configure the Google OAuth Web
 client redirect URIs as listed in
 [Mission Control's YouTube setup](../mission-control/README.md#youtube-upload-authorization-and-configuration).
 
+**Not applied yet (checked 21 October 2026).** `youtube-client-id`,
+`youtube-client-secret` and `youtube-refresh-token` were made by hand on
+11 October, the other three do not exist, and Cloud Run mounts no ingest
+secret. The next `terraform apply` fails on the three that exist until they
+are imported; see [`infra/README.md`](../infra/README.md).
+
 Terraform also generates `YOUTUBE_UPLOAD_INGEST_SECRET` and mounts it into
 Cloud Run. The satellite needs the same value in `yard/satellite/.env` plus
 `MISSION_CONTROL_URL` for the matching deployment; do not put any YouTube
@@ -212,6 +218,57 @@ Work down this list:
   environment `cron_environment` names.
 
 An operator can always attach the link by hand in `/operator`.
+
+### The satellite's console will not come up
+
+First, what it is running: `git log --oneline -1 && git status --porcelain` in
+`~/4tronix-rover-simulator` on the Pi. The status must be empty.
+
+If ssh works but nothing answers on 3001 or 8890, and `git status` lists files
+as modified with `git diff --stat` all deletions, the power went soon after a
+`git pull` and the files came back empty (17 October 2026). Restore them, once
+`git cat-file -p HEAD:yard/satellite/web_server.py` shows the stored copy is
+whole:
+
+```bash
+cd ~/4tronix-rover-simulator && git checkout -f HEAD && sync
+```
+
+systemd brings both services back by itself within fifteen seconds.
+
+The same power cut can empty git's own files. On 21 October, four days later,
+`git pull` failed with `fatal: bad object refs/remotes/origin/...`: two
+remote-tracking refs had been left as empty files. They are git's copy of
+GitHub's branches, so deleting them loses nothing and the next fetch writes
+them again:
+
+```bash
+find .git/refs -type f -size 0 -print -delete && git pull
+```
+
+### Restarting the satellite's services
+
+One command each, never both in one:
+
+```bash
+sudo systemctl restart satellite-web
+sudo systemctl restart satellite-camera
+```
+
+No password once `/etc/sudoers.d/satellite` is in, which it has been since
+21 October 2026 (both restarts were done that way the same day, after pulling
+#320). To check, `sudo -n -l` must show the command after
+`NOPASSWD:`. Not `sudo -n -l <command>`, which says yes to anything `mars` may
+run at all once one entry is passwordless.
+[`yard/docs/satellite.md`](../yard/docs/satellite.md) has the rest.
+
+### The yard has no internet
+
+Nothing in a run needs it: the rover, the satellite and the tablets carry on on
+`mars-relay-network`. The router gets the internet by joining a wifi network:
+on `http://cudy.net`, **General Settings, WISP** must say Connected. If it does
+not, **Rescan** and **Connect** on a network that is there. See
+[`yard/docs/yard-network.md`](../yard/docs/yard-network.md).
 
 ---
 
