@@ -119,6 +119,10 @@ def wait_recording(page: Page):
     page.wait_for_function(
         "document.querySelector('.live-panel').dataset.rec === 'on'"
         " && !document.getElementById('recBadge').hidden")
+    # The red edge fades in over 200ms. Read on the fade's first frame it is
+    # still transparent, which is how CI failed a test that passed locally.
+    page.wait_for_function(
+        "!document.getAnimations().some((a) => a.transitionProperty === 'box-shadow')")
 
 
 # What the operator can see of the recording, read off the page.
