@@ -79,7 +79,7 @@ Symptom → action, most common first. SSH: user `mars`, password `R0v3r!`.
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| Tablet shows **Disconnected** dot | Rover off / wrong WiFi | Check rover power; confirm tablet is on `marsyard`. Check `/status`. |
+| Tablet shows **Disconnected** dot | Rover off / wrong WiFi | Check rover power; confirm tablet is on `mars-relay-network` (or `marsyard` when the router is not there). Check `/status`. |
 | Rover badge **Unreachable** | Rover off, not on WiFi, or wrong rover URL | Power-cycle the rover; wait 1 min. Still red? Check the rover URL shown on `/status` — the **edit** button fixes it live (e.g. `marspi.local` vs `curiosity.local`). |
 | Rover badge **Processor stalled** | Queue thread died on the rover | `ssh mars@<rover>.local` then `sudo systemctl restart rover-server` |
 | Rover badge **amber (Fake driver)** | Server running without hardware libs | `ssh` to rover, `journalctl -u rover-server -n 50` — usually a missing `PYTHONPATH=/home/mars/marsrover` or hardware lib error. |

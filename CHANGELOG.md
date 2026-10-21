@@ -11,6 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The yard's network is a router that reaches the internet.** The satellite
+  served `marsyard`, and one radio cannot be an access point and a client, so
+  the yard had no internet: no clock for the satellite, no `git pull` in the
+  room, no upload from where a video was made. A Cudy LT300 now joins the
+  venue's wifi in WISP mode and serves `mars-relay-network` from it, with a
+  SIM as the optional backup. `yard/docs/yard-network.md` says how to set it
+  up and why each setting is what it is (2.4GHz, WPA2-PSK and no WPA3 for the
+  Pi Zero W rover, isolation off for `.local` names, a LAN range that is not
+  the venue's), and what to ask the venue first. The satellite joins it with
+  `setup-scripts/satellite-join-relay.sh`, which asks for the password rather
+  than holding a copy, and goes back to serving `marsyard` by itself only if
+  it did not join. `marsyard` stays, as the fallback when the router is not
+  there.
+
 - **The run station works on a phone.** Stacked, the rail took all the height
   its cards wanted before the live panel got any: 365px of an iPhone's 598.
   The panel was left its 220px floor, and its header and controls alone are

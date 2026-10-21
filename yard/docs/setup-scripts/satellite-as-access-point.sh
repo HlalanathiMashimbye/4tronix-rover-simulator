@@ -2,6 +2,10 @@
 #
 # Make the satellite serve the yard's wifi, instead of a laptop hotspot.
 #
+# THE FALLBACK NOW. The yard's router serves mars-relay-network from the
+# venue's wifi, and the satellite joins it (satellite-join-relay.sh). This is
+# for when the router is not there.
+#
 # The yard ran on a Windows laptop sharing "marsyard" over ICS: the laptop was
 # the access point, the DHCP server and the gateway, so nothing in the yard
 # worked unless somebody's laptop was open and in the room. This moves that job
