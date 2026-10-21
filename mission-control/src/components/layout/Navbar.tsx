@@ -316,11 +316,13 @@ export function Navbar() {
       {/* Floating Create Mission button. Sits above and overlapping the tab
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
-          rather than the row's flat tabs. */}
-      {!hidePhoneChrome && (
+          rather than the row's flat tabs. During the tour it also appears on
+          mission-view pages so the "Create Your Own!" step has a target. */}
+      {(!hidePhoneChrome || tourActive) && (
         <Link
           href="/mission"
           aria-label="Create Mission"
+          data-tour-id="tour-create-mission"
           className="clay clay-press fixed bottom-14 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
         >
           <Plus className="h-6 w-6" strokeWidth={2.5} />

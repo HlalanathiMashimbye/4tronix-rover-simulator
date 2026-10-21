@@ -294,6 +294,7 @@ export default function MissionVideoClient({
                   collapsible
                   open={codeOpen}
                   onToggle={() => setCodeChoice(!codeOpen)}
+                  tourId="tour-mission-code"
                 />
               ) : null
             }

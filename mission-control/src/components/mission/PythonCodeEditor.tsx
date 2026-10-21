@@ -398,7 +398,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
             under reduced motion. It stays open while commands are tapped,
             because a program usually needs more than one. */}
         {phone && (
-          <div className="relative flex h-7 shrink-0 items-center overflow-hidden border-b border-[#2b2b2b] bg-[#252526] pl-2.5 pr-8 font-mono text-[11px]">
+          <div data-tour-id="tour-code-instructions" className="relative flex h-7 shrink-0 items-center overflow-hidden border-b border-[#2b2b2b] bg-[#252526] pl-2.5 pr-8 font-mono text-[11px]">
             <AnimatePresence initial={false} mode="popLayout">
               {helpOpen ? (
                 <motion.div
@@ -447,7 +447,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
               className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md transition-colors ${
                 helpOpen
                   ? 'text-[#858585] [@media(hover:hover)]:hover:bg-[#2a2d2e]'
-                  : 'bg-primary/20 text-primary ring-1 ring-primary/50 [@media(hover:hover)]:hover:bg-primary/30'
+                  : 'bg-primary/60 text-primary-foreground ring-1 ring-primary [@media(hover:hover)]:hover:bg-primary/70'
               }`}
             >
               {helpOpen ? <X className="h-3.5 w-3.5" /> : <Lightbulb className="h-3.5 w-3.5" />}

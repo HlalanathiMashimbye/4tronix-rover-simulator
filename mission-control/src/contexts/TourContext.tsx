@@ -15,6 +15,7 @@ export interface TourStep {
   title: string;
   body: string;
   placement: 'center' | 'top' | 'bottom' | 'left' | 'right';
+  mobilePlacement?: 'top' | 'bottom' | 'left' | 'right';
   glow?: boolean;
   /** Programmatically click the target when the learner presses Next. */
   clickTargetOnNext?: boolean;
@@ -46,6 +47,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'The Code',
     body: 'This is the code that drove the rover. Every mission starts as blocks or Python.',
     placement: 'left',
+    mobilePlacement: 'top',
   },
   {
     id: 'mission-video',
@@ -53,6 +55,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Watch It Run',
     body: 'The simulation shows how the code plays out on Mars.',
     placement: 'right',
+    mobilePlacement: 'bottom',
   },
   {
     id: 'create-mission',
@@ -60,6 +63,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Create Your Own!',
     body: "Now it's your turn — build a mission from scratch!",
     placement: 'bottom',
+    mobilePlacement: 'top',
     glow: true,
     clickTargetOnNext: true,
     navigateTo: '/mission',
@@ -92,6 +96,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Build Your Mission',
     body: 'Drag a Move Forward block from the toolbox into the workspace.',
     placement: 'right',
+    mobilePlacement: 'top',
   },
   {
     id: 'python-mode',
@@ -108,6 +113,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Rover Commands',
     body: 'Click here to see every command the rover understands. Pick one to add it to your code!',
     placement: 'right',
+    mobilePlacement: 'bottom',
   },
   {
     id: 'run-mission',
@@ -115,6 +121,8 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Launch!',
     body: 'Hit Run to see your mission play out in the simulator.',
     placement: 'left',
+    mobilePlacement: 'bottom',
+    clickTargetOnNext: true,
   },
   {
     id: 'send-mission',
@@ -122,6 +130,7 @@ export const TOUR_STEPS: TourStep[] = [
     title: 'Mission Complete!',
     body: "You've built your first mission! Send it to Mission Control and a real rover will run your code.",
     placement: 'top',
+    mobilePlacement: 'top',
     glow: true,
   },
 ];

@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { Rocket, X, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 import { useTour, TOUR_STEPS } from '@/contexts/TourContext';
+import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 
 const PADDING = 8;
 const TOOLTIP_GAP = 12;
@@ -13,6 +14,16 @@ interface Rect {
   left: number;
   width: number;
   height: number;
+}
+
+function findVisibleTourTarget(id: string): Element | null {
+  const all = document.querySelectorAll(`[data-tour-id="${id}"]`);
+  for (const el of all) {
+    if (el.closest('[inert]')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return el;
+  }
+  return null;
 }
 
 function clampToViewport(rect: Rect): Rect {
@@ -68,13 +79,13 @@ function tooltipPosition(
 
 export function TourOverlay() {
   const { active, step, currentStep, totalSteps, next, prev, skip } = useTour();
+  const isPhone = useIsPhoneLayout();
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
   const [extraRects, setExtraRects] = useState<Rect[]>([]);
   const [measuredStep, setMeasuredStep] = useState(step);
   const [visible, setVisible] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [tooltipH, setTooltipH] = useState(160);
-  const rafRef = useRef(0);
 
   // Measure the tooltip after render.
   useEffect(() => {
@@ -91,7 +102,7 @@ export function TourOverlay() {
       setMeasuredStep(step);
       return;
     }
-    const el = document.querySelector(`[data-tour-id="${currentStep.target}"]`);
+    const el = findVisibleTourTarget(currentStep.target);
     if (!el) {
       setTargetRect(null);
       setExtraRects([]);
@@ -107,7 +118,7 @@ export function TourOverlay() {
     });
     const extras: Rect[] = [];
     for (const id of currentStep.extraTargets ?? []) {
-      const extra = document.querySelector(`[data-tour-id="${id}"]`);
+      const extra = findVisibleTourTarget(id);
       if (extra) {
         const er = extra.getBoundingClientRect();
         extras.push({
@@ -122,31 +133,58 @@ export function TourOverlay() {
     setMeasuredStep(step);
   }, [currentStep, step]);
 
-  // Poll for the target (it may render after async loading).
-  // Stops as soon as the element is found. If the target can't be found
-  // after ~2s and the step has navigateTo, auto-advance so the tour
-  // doesn't get stuck (e.g. mobile where the navbar button is hidden).
+  // Wait for the target (it may render after an async editor chunk loads).
+  // MutationObserver handles normal React mounts immediately; the interval
+  // keeps the wait reliable when an existing element only becomes available
+  // after a deferred render. Navigation steps still auto-advance after ~2s
+  // when their target is genuinely unavailable on this layout.
   useEffect(() => {
     if (!active || !currentStep?.target) return;
     let found = false;
-    let attempts = 0;
-    const maxAttempts = 120;
-    const poll = () => {
-      const el = document.querySelector(`[data-tour-id="${currentStep.target}"]`);
+    let settleTimer: number | undefined;
+    const findTarget = () => {
+      const el = findVisibleTourTarget(currentStep.target!);
       if (el) {
         found = true;
         measure();
+        // Start the settle window from discovery, not from step change,
+        // so targets that appear late (e.g. the Send button after the
+        // launch-view animation) still get re-measured to their final position.
+        if (settleTimer === undefined) {
+          settleTimer = window.setTimeout(() => window.clearInterval(interval), 700);
+        }
+        return true;
+      }
+      return false;
+    };
+
+    findTarget();
+    const observer = new MutationObserver(() => {
+      if (!found) findTarget();
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['inert'] });
+    const interval = window.setInterval(() => {
+      if (!found) {
+        findTarget();
         return;
       }
-      attempts += 1;
-      if (attempts < maxAttempts) {
-        rafRef.current = requestAnimationFrame(poll);
-      } else if (currentStep.navigateTo) {
-        next();
-      }
+      // The phone launch slot animates from collapsed to its final position.
+      // Keep measuring briefly after discovery so the spotlight follows the
+      // Send button instead of freezing at the transition's midpoint.
+      measure();
+    }, 100);
+    const fallbackTimer = currentStep.navigateTo
+      ? window.setTimeout(() => {
+          if (!found) next();
+        }, 2000)
+      : undefined;
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+      if (fallbackTimer !== undefined) window.clearTimeout(fallbackTimer);
     };
-    poll();
-    return () => { if (!found) cancelAnimationFrame(rafRef.current); };
   }, [active, currentStep, measure, next]);
 
   // Re-measure on scroll and resize.
@@ -236,7 +274,8 @@ export function TourOverlay() {
   // === Spotlight step ===
   const spot = targetRect && measuredStep === step ? clampToViewport(targetRect) : null;
   const extras = measuredStep === step ? extraRects.map(clampToViewport) : [];
-  const tp = spot ? tooltipPosition(spot, currentStep.placement as 'top' | 'bottom' | 'left' | 'right', tooltipH) : null;
+  const placement = (isPhone && currentStep.mobilePlacement) || currentStep.placement;
+  const tp = spot ? tooltipPosition(spot, placement as 'top' | 'bottom' | 'left' | 'right', tooltipH) : null;
 
   return (
     <>
