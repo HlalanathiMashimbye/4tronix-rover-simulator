@@ -225,7 +225,7 @@ def status():
 @app.route('/api/status', methods=['GET'])
 def api_status():
     from recording_cleanup import disk_stats
-    from recording_control import readiness
+    from recording_control import active_recordings, readiness
 
     satellite = {
         'hostname': socket.gethostname(),
@@ -261,13 +261,16 @@ def api_status():
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
-        # Same list, kept at the top level because the run station reads it
-        # there. It is the camera's business, so it lives in the snapshot too.
         # The top bar's upload chip, on every page. Read from the notes on the
         # card; nothing here goes out to the internet.
         'uploads': upload_summary(),
+        # Read now, not from the camera's snapshot. The snapshot is kept for
+        # up to four seconds to save probing the camera, and the run station
+        # takes this list's word for when a run has finished: a snapshot from
+        # before Send, without the new recording in it, read as the rover
+        # finishing a second after it set off. Reading a dict costs nothing.
         'recording': {
-            'active': camera['recording'],
+            'active': active_recordings(),
             'ready': recording_ready,
             'detail': recording_detail,
         },

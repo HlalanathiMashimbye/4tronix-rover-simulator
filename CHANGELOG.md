@@ -11,6 +11,31 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The run station says when it is recording, and says when the run is
+  done.** Both were small and grey. A recording was a 9px dot inside a grey
+  button and a grey tag, so a run being filmed looked like one that was not,
+  until the video turned up afterwards. The end of a run was a line of small
+  print under Send and Stop, gone in five seconds, pointing at a card called
+  "Save the video" that had since been renamed; the download itself was a
+  32px icon in the rail.
+
+  While the camera records, the picture carries a red REC badge with a clock
+  that runs, the way a camera says it, and a red edge. Until the satellite
+  has said yes it reads "Starting recording" on dark glass instead, so it
+  never claims a recording that has not begun. When the rover finishes, a
+  large "Mission complete" notice opens over the page with the mission's
+  name, the file and its size, and one button that downloads that run's
+  video, not whichever is newest on the card. It stays until it is answered,
+  and the tab's title says it too. Pressing Stop does not open it: that run
+  did not complete.
+
+  Making the notice that loud brought out a race that a line of small print
+  had hidden. `/api/status` read the list of recordings from the camera's
+  snapshot, which is kept for four seconds, so a status asked for just
+  before Send could come back without the new recording, and the station
+  took that as the run having finished. The list is now read live, and the
+  station only believes a status it asked for after the recording started.
+
 - **About is under Help.** It was a loose link beside the laptop's Home and
   My History pill, and on a phone it shared the top bar with the logo. The
   Help button, which only restarted the walkthrough, now opens a small menu
