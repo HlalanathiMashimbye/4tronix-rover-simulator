@@ -177,6 +177,11 @@ With a camera running:
    A file with no `moov` atom was never closed - that is the failure the
    watcher exists to prevent.
 
+   A mission id can start with a dash, and its recording is then a file that
+   starts with one. From inside `recordings/` a shell reads that name as
+   options, so write `./-BQw....mp4`, or keep the `recordings/` prefix as the
+   command above does.
+
 To exercise the watcher without a rover doing anything interesting, dispatch a
 mission id straight at the rover queue and watch the recording stop:
 
