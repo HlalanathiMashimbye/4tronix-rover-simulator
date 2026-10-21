@@ -56,6 +56,14 @@ hotspot always works.
 Keep `mars-relay-network` on **WPA2-PSK**, not WPA3 or WPA/WPA2 mixed: the
 rover is a Pi Zero W and cannot join WPA3.
 
+**Do not give the router's upstream the name `marsyard`.** The satellite and
+the rover keep `marsyard` saved as their fallback, and once on a network they
+stay on it. If the relay drops for a moment (the router restarts whenever WISP
+is saved), they fall onto a `marsyard` hotspot that is in range and stay there
+after the relay is back, on a different network from everything else. It
+happened at home on 21 October, where the phone hotspot feeding the router was
+called `marsyard`. Call that hotspot anything else.
+
 ### Putting the satellite and the rover on it
 
 The satellite was moved on 21 October 2026, and keeps `marsyard` as its

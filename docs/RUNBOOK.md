@@ -236,6 +236,16 @@ cd ~/4tronix-rover-simulator && git checkout -f HEAD && sync
 
 systemd brings both services back by itself within fifteen seconds.
 
+The same power cut can empty git's own files. On 21 October, four days later,
+`git pull` failed with `fatal: bad object refs/remotes/origin/...`: two
+remote-tracking refs had been left as empty files. They are git's copy of
+GitHub's branches, so deleting them loses nothing and the next fetch writes
+them again:
+
+```bash
+find .git/refs -type f -size 0 -print -delete && git pull
+```
+
 ### Restarting the satellite's services
 
 One command each, never both in one:
@@ -246,7 +256,8 @@ sudo systemctl restart satellite-camera
 ```
 
 No password once `/etc/sudoers.d/satellite` is in, which it has been since
-21 October 2026. To check, `sudo -n -l` must show the command after
+21 October 2026 (both restarts were done that way the same day, after pulling
+#320). To check, `sudo -n -l` must show the command after
 `NOPASSWD:`. Not `sudo -n -l <command>`, which says yes to anything `mars` may
 run at all once one entry is passwordless.
 [`yard/docs/satellite.md`](../yard/docs/satellite.md) has the rest.
