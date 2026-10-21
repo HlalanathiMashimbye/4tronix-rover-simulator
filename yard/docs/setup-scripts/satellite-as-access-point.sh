@@ -2,6 +2,11 @@
 #
 # Make the satellite serve the yard's wifi, instead of a laptop hotspot.
 #
+# RETIRED (21 October 2026). The yard's router serves mars-relay-network, the
+# satellite joins it (satellite-join-relay.sh), and marsyard is no longer
+# known to anything in the yard. Kept for the record of how the access point
+# had to be set up for the rover (PMF off), not to be run.
+#
 # The yard ran on a Windows laptop sharing "marsyard" over ICS: the laptop was
 # the access point, the DHCP server and the gateway, so nothing in the yard
 # worked unless somebody's laptop was open and in the room. This moves that job

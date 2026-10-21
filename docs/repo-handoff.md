@@ -184,6 +184,32 @@ If a secret is ever added, it cannot be copied like the variables: secrets are
 never readable back out of GitHub. Whoever holds the value creates it again on
 upstream.
 
+## The yard's hardware, which no merge moves
+
+The router and the two Pis are in a box, not in the repo, and what lets
+someone use them is passwords and a key that GitHub never sees. Hand each over
+in person, through the team's password manager once there is one (AB#429),
+never in a commit or a chat. Checked on 21 October 2026.
+
+- [ ] **The router**, a Cudy LT300. Its admin password for `http://cudy.net`
+      (set by Hlali on 21 October), and the password of the network it serves,
+      `mars-relay-network`. Which venue network it joins for the internet is
+      set on its own page and changed at each new place; see
+      [`yard/docs/yard-network.md`](../yard/docs/yard-network.md).
+- [ ] **The `mars` password on the satellite and on the rover.** The rover's
+      `mars` has passwordless sudo for everything. The satellite's needs the
+      password except for restarting its two services and powering off, which
+      `/etc/sudoers.d/satellite` allows (installed on 21 October).
+- [ ] **SSH keys on the satellite.** One key may log in as `mars`, from
+      Hlali's Mac. Add the new owner's to `~/.ssh/authorized_keys` and remove
+      the team's when the team stops working on it. The rover was not checked.
+- [ ] **The wifi passwords are in git history**, in `yard/docs/rover-server.md`
+      and elsewhere (AB#429). Changing them means changing the router and then
+      each Pi's saved profile, which on the rover can only be done over SSH
+      while it is still on the old network.
+- [ ] **Repoint the Pis' checkouts** as in step 7 above: on 21 October the
+      satellite still pulled from the fork.
+
 ## Deliberately left pointing at the fork
 
 The two `INF4027W_Team06_Iteration*_ReadMe2026.md` files link to the fork
