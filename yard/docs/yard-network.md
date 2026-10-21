@@ -17,137 +17,68 @@ satellite's access point stay, as the fallback when the router is missing.
 ## The router: mars-relay-network
 
 ```
-   venue wifi, 2.4GHz              SIM, 4G (optional backup)
-              \                    /
-               Cudy LT300, WISP mode
-        serves mars-relay-network (2.4GHz, WPA2-PSK)
-          DHCP, gateway, internet for the yard
+   whatever wifi is there               SIM (optional, 4G)
+              \                        /
+         Cudy LT300, WISP on, at http://cudy.net
+         serves mars-relay-network (2.4GHz, WPA2)
                        |
       +----------------+----------------+
-      |                |                |
-  satellite         rover           operator's
-  mro               curiosity       tablet or laptop
-  client            client          client
+  satellite         rover           tablets, laptop, TV
+  mro.local         curiosity.local
 ```
 
-What the internet buys the yard: the satellite's clock sets itself (the Pi
-has no clock battery, so offline it carries on from the last time it saved),
-`git pull` works in the room, and recordings can go to YouTube from where they
-were made. Nothing in a run needs it: if the venue's wifi drops, the rover,
-the satellite and the tablets carry on as before, on the router's own network.
+The router serves `mars-relay-network`, and the rover, the satellite and every
+tablet join that. It gets its internet by joining whatever wifi the venue has.
+Nothing in a run needs the internet; it is what lets the satellite set its
+clock, `git pull`, and upload recordings.
 
-### What the router has to be set to, and why
+### Joining a network for the internet
 
-1. **2.4GHz.** The LT300 is a 2.4GHz-only (N300) router, and the rover is a Pi
-   Zero W, which cannot see 5GHz at all. So the venue's network has to offer
-   2.4GHz too: a 5GHz-only venue network is one the router cannot join.
-2. **WPA2-PSK, not WPA3 and not WPA2/WPA3 mixed.** The rover's firmware cannot
-   negotiate WPA3 or Protected Management Frames, and is rejected before the
-   password is ever checked; see "Why the rover could not join at first"
-   below. It is the same reason the satellite's access point sets `pmf 1`.
-3. **AP isolation off, guest network off.** The devices find each other by
-   name (`mro.local`, `curiosity.local`) over multicast, which isolation stops.
-4. **A LAN address that is not the venue's.** Cudy's default is
-   `192.168.10.1`. If the venue's own network is also `192.168.10.x`, change
-   the router's LAN address (to `192.168.20.1`, say) or the two collide.
-5. **Its channel is the venue's.** One radio joins the venue and serves the
-   yard, so in WISP mode it cannot pick its own channel. That is fine for the
-   rover on any 2.4GHz channel, and it is why the venue's network decides
-   when the yard's wifi is crowded.
+From any device on `mars-relay-network`:
 
-### Setting it up
+1. Open `http://cudy.net` (the router, at `192.168.10.1`) and log in.
+2. **General Settings, WISP**: Enabled on, **Rescan**, **Connect** on the
+   network you want, type its password.
+3. If it asks for the router's own wifi name and password, leave them as they
+   are. Change those and the rover and the satellite lose the yard.
 
-The menu names are Cudy's WISP guide's, written for their routers generally;
-the LT300's may differ a little between hardware versions (2.0 and 3.0).
+About a minute later Connection Status says **Connected**. Done at home on
+21 October 2026 with a phone hotspot; at the science centre it is the same
+page with their network.
 
-1. Connect a laptop to the router, by cable to a LAN port or over its wifi,
-   and open `http://cudy.net` or `http://192.168.10.1`.
-2. **General Settings, WISP, Enable** (or Quick Setup, then WISP). Pick the
-   venue's network from the scan, type its password, and Save & Apply. It
-   reboots and takes about a minute to join.
-3. **Wireless:** name `mars-relay-network`, its existing password unchanged
-   (the rover and the satellite already have it), security **WPA2-PSK**, not
-   hidden. Guest network off, AP isolation off.
-4. **Check the LAN address** against the address the router was given by the
-   venue (on its status page). Change the LAN side if they share a range.
-5. **SIM, if there is one:** Cudy's failover order is cable, then WISP, then
-   cellular, so a SIM keeps the yard online when the venue's wifi drops. Mind
-   the data: a recording is about 10MB.
-6. **The test:** a laptop on `mars-relay-network` opens any website, and then
-   `http://mro.local:3001/` once the satellite has joined.
+It keeps one network at a time, so at each new place it is these three steps
+again. With a SIM in, it falls back to 4G by itself when there is no wifi.
 
-### At a new venue: change only where it gets its internet
+What will not work: a 5GHz-only network (the router is 2.4GHz only), and a
+network that needs a sign-in page or a username, like `eduroam`. A phone
+hotspot always works.
 
-The yard's side never changes: `mars-relay-network` and its password are what
-the rover and the satellite know, so they stay the same everywhere. Only the
-network the router joins changes, and that is done on its own page:
+Keep `mars-relay-network` on **WPA2-PSK**, not WPA3 or WPA/WPA2 mixed: the
+rover is a Pi Zero W and cannot join WPA3.
 
-1. Join a phone or laptop to `mars-relay-network` and open `http://cudy.net`.
-2. **General Settings, WISP**: scan, pick the venue's network, type its
-   password, Save & Apply. About a minute later the yard is online.
-3. **If the page also asks for the router's own wifi name and password, keep
-   them exactly as they are.** Change those and the rover and the satellite
-   lose the yard's network, and the rover has no screen to fix it from.
+### Putting the satellite and the rover on it
 
-Cudy's own firmware joins one network at a time; it does not keep a list and
-pick whichever is in range (asked for on Cudy's forum, not shipped as far as
-their pages show). A SIM in the router is what makes it work anywhere without
-anyone doing step 2: with no venue network it fails over to 4G by itself.
-
-Joining any of several saved networks automatically is what travel routers do,
-and on this hardware it means replacing Cudy's firmware with OpenWrt and its
-`travelmate` package. OpenWrt supports the LT300 v3.0 only (check the label),
-lists it as not recommended for future use because of its small flash and
-memory, and the replacement cannot be undone from the router's own page.
-Not worth it while a SIM does the job.
-
-### Ask the venue first
-
-- **Is there 2.4GHz?** See above.
-- **Is it a password, or a sign-in page?** WISP joins a network with a
-  password. A sign-in page (terms to accept, a voucher) has to be answered from
-  a laptop on `mars-relay-network`, because the page sees the router, and
-  again whenever it expires. Better: ask the venue to allow the router's MAC
-  address, which is on its status page. A username-and-password login
-  (WPA2-Enterprise) is not something the router's WISP mode is documented to
-  do; ask for a guest network with a plain password instead.
-- **Do they block devices behind another router?** Some venue networks do.
-
-### The satellite joins it
-
-On the satellite, with the router up:
+The satellite was moved on 21 October 2026, and keeps `marsyard` as its
+fallback. On a fresh satellite:
 
 ```bash
 sudo bash yard/docs/setup-scripts/satellite-join-relay.sh
 ```
 
-It asks for `mars-relay-network`'s password, writes a client profile for it,
-turns the satellite's own access point (`yard-ap`, `marsyard`) off without
-deleting it, and switches. Like the access point script, it arms a check that
-goes back only on real failure: if after three minutes the satellite has not
-joined, it serves `marsyard` again by itself.
+It writes the password onto the satellite before it switches, then goes back
+to `marsyard` by itself if it did not join. That order matters over SSH:
+`nmcli --ask device wifi connect` leaves the old network first, which cuts the
+session before its password prompt reaches you.
 
-Then, on the satellite: `nmcli -t -f NAME con show --active` lists
-`mars-relay-network`, and `timedatectl` says `System clock synchronized: yes`.
-
-### The rover joins it
-
-The rover keeps its `marsyard` profile and needs one for `mars-relay-network`
-as well. Look first, over ssh while it is still reachable on `marsyard`:
-
-```bash
-nmcli -t -f NAME,TYPE con show
-```
-
-If `mars-relay-network` is not listed, add it, with PMF off for the same
-reason as above:
+The rover needs a `mars-relay-network` profile beside its `marsyard` one.
+Check with `nmcli -t -f NAME con show` over SSH; if it is missing:
 
 ```bash
 sudo nmcli con add type wifi ifname wlan0 con-name mars-relay-network ssid mars-relay-network wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'THE-PASSWORD' 802-11-wireless-security.pmf 1 connection.autoconnect yes
 ```
 
-The rover has passwordless sudo. With both profiles it joins whichever network
-is up, which is what lets the satellite's `marsyard` stay as the fallback.
+`pmf 1` turns Protected Management Frames off, which the rover's firmware
+cannot do (see "Why the rover could not join at first", below).
 
 ## The fallback: the satellite serves marsyard
 

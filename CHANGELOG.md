@@ -11,19 +11,24 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **The yard's network is a router that reaches the internet.** The satellite
-  served `marsyard`, and one radio cannot be an access point and a client, so
-  the yard had no internet: no clock for the satellite, no `git pull` in the
-  room, no upload from where a video was made. A Cudy LT300 now joins the
-  venue's wifi in WISP mode and serves `mars-relay-network` from it, with a
-  SIM as the optional backup. `yard/docs/yard-network.md` says how to set it
-  up and why each setting is what it is (2.4GHz, WPA2-PSK and no WPA3 for the
-  Pi Zero W rover, isolation off for `.local` names, a LAN range that is not
-  the venue's), and what to ask the venue first. The satellite joins it with
-  `setup-scripts/satellite-join-relay.sh`, which asks for the password rather
-  than holding a copy, and goes back to serving `marsyard` by itself only if
-  it did not join. `marsyard` stays, as the fallback when the router is not
-  there.
+- **The yard's network is a router that reaches the internet, and the docs
+  say so.** The satellite served `marsyard`, and one radio cannot be an access
+  point and a client, so the yard had no internet: no clock for the satellite,
+  no `git pull` in the room, no upload from where a video was made. A Cudy
+  LT300 now serves `mars-relay-network` and joins whatever wifi is there for
+  the internet: WISP on, at `http://cudy.net`. Set up and working at home on
+  21 October 2026, with the satellite moved onto it and `marsyard` kept as its
+  fallback; `setup-scripts/satellite-join-relay.sh` does that move for a fresh
+  satellite.
+
+  The docs had gone on describing the yard as it was. `yard-network.md`, the
+  manual, `bring-up.md` and the rover's handover note describe the router;
+  the network diagram's writeup describes the yard without the Firestore
+  mirror and the signed-in console it still showed; `docs/repo-handoff.md`
+  lists the yard's hardware and its passwords and keys, which no merge moves;
+  the RUNBOOK covers a console that will not come up, restarting the
+  satellite's services and a yard with no internet; and `infra/README.md`
+  gives the three `terraform import`s the next apply needs first.
 
 - **The run station works on a phone.** Stacked, the rail took all the height
   its cards wanted before the live panel got any: 365px of an iPhone's 598.

@@ -26,7 +26,14 @@ The system is three devices:
 4. **Tablets** — open `http://mro.local:3001/code/` (or launch the installed
    PWA from the home screen).
 
-Everything must be on the same WiFi: **`marsyard`** or **`mars-relay-network`**.
+Everything must be on the same WiFi: **`mars-relay-network`**, from the yard's
+router (`marsyard` only when the router is not there).
+
+**Internet for the yard** (videos, the satellite's clock): on a phone on
+`mars-relay-network`, open `http://cudy.net`, then **General Settings, WISP**:
+turn it on, **Rescan**, **Connect** on the venue's wifi and type its password.
+Leave the router's own wifi name and password as they are. A session runs
+without internet; this is only needed once per venue.
 
 ### Check it's all up
 
