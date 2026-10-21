@@ -52,7 +52,7 @@ export const ACTIVE_STATUSES: MissionStatus[] = ['queued', 'processing'];
  * status exists and the notify endpoint accepts it, so a mission that arrives
  * with it must not silently disappear.
  */
-export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'cancelled'];
+export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'not_completed', 'cancelled'];
 
 /**
  * Upper bound on the listener.

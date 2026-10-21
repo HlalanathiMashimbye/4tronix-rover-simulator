@@ -223,7 +223,7 @@ export function decideRemoveVideo(snapshot: RunSnapshot): Decision {
  */
 export function decideFeedback(snapshot: RunSnapshot): Decision {
   const status = effectiveStatus(snapshot);
-  if (status !== 'completed' && status !== 'failed') {
+  if (status !== 'completed' && status !== 'failed' && status !== 'not_completed') {
     return {
       ok: false,
       error: 'Wait until the mission has run before leaving feedback on it.',

@@ -84,6 +84,7 @@ export function MissionSubmitBar({
           disabled={submitting || !hasCode || !missionName.trim() || !preFlight.ready}
           // The visible words shorten in a narrow column; the name does not.
           aria-label={submitting ? 'Sending' : 'Send to Mission Control'}
+          data-tour-id="tour-send-mission"
           // The chips and the line above say which check is holding it, but a
           // disabled control with no accessible reason is invisible to a
           // screen reader.

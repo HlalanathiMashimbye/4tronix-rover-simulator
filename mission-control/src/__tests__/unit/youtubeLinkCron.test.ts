@@ -8,10 +8,18 @@ const applyBookkeeping = jest.fn();
 const fetchRecentUploads = jest.fn();
 const notifyStatusChange = jest.fn();
 
-jest.mock('@/infrastructure/container.server', () => ({
-  adminMissionRepository: () => ({ findRuns, findById, applyBookkeeping }),
-  notificationService: () => ({ notifyStatusChange }),
-}));
+// The real linker on the doubles above, so these go on testing the rule the
+// route applies rather than a stand-in for it.
+jest.mock('@/infrastructure/container.server', () => {
+  const { VideoLinker } = jest.requireActual('@/core/application/services/VideoLinker');
+  return {
+    videoLinker: () => new VideoLinker(
+      { findRuns, findById, applyBookkeeping },
+      { notifyStatusChange },
+      () => 'new-run-id',
+    ),
+  };
+});
 
 jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
   readSetting: async () => '15',

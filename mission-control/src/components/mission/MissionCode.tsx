@@ -37,6 +37,7 @@ export function MissionCode({
   open = true,
   onToggle,
   footer,
+  tourId,
 }: {
   mission: Mission;
   highlight: CommandSource | null;
@@ -44,6 +45,7 @@ export function MissionCode({
   open?: boolean;
   onToggle?: () => void;
   footer?: ReactNode;
+  tourId?: string;
 }) {
   const [view, setView] = useState<'blocks' | 'python'>('blocks');
   const [copied, setCopied] = useState(false);
@@ -70,6 +72,7 @@ export function MissionCode({
       className="missionCode flex min-h-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60"
       data-collapsible={collapsible ? '' : undefined}
       data-open={shown ? '' : undefined}
+      data-tour-id={tourId}
     >
       <div className={`flex h-11 shrink-0 items-center gap-2 px-2.5 ${shown ? 'border-b border-border/50' : ''}`}>
         {collapsible ? (

@@ -256,10 +256,14 @@ def api_status():
     camera = snapshot()
 
     recording_ready, recording_detail = readiness()
+    from youtube_upload import summary as upload_summary
     response = jsonify({
         'satellite': satellite,
         'rover': rover,
         'camera': camera,
+        # The top bar's upload chip, on every page. Read from the notes on the
+        # card; nothing here goes out to the internet.
+        'uploads': upload_summary(),
         # Read now, not from the camera's snapshot. The snapshot is kept for
         # up to four seconds to save probing the camera, and the run station
         # takes this list's word for when a run has finished: a snapshot from
@@ -598,6 +602,7 @@ def api_recordings():
         except OSError:
             continue
         dl, dl_at = is_downloaded(path)
+        from youtube_upload import state_of as upload_state
         files.append({
             'name': name,
             'bytes': stat.st_size,
@@ -605,6 +610,7 @@ def api_recordings():
                 .isoformat().replace('+00:00', 'Z'),
             'downloaded': dl,
             'downloadedAt': dl_at.isoformat().replace('+00:00', 'Z') if dl_at else None,
+            'upload': upload_state(path),
         })
 
     files.sort(key=lambda f: f['modified'], reverse=True)

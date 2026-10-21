@@ -37,7 +37,8 @@ def api_tunables():
     try:
         tunables.save(data)
     except (TypeError, ValueError):
-        return jsonify({'error': 'Every value must be a number, except the camera host'}), 400
+        return jsonify({'error': 'Every value must be a number, except the camera host and the '
+                                 'closing time, which is a time of day like 16:30'}), 400
 
     return jsonify({'status': 'ok', 'values': tunables.operator_values(),
                     'limits': tunables.limits(), 'options': tunables.options()})

@@ -65,6 +65,7 @@ export function RunFeed({
   codeSlot,
   codeOpen = false,
   videosFoot,
+  tourId,
 }: {
   /** The rover's runs, newest first. Empty for a mission no rover has driven. */
   runs: RunOption[];
@@ -84,6 +85,7 @@ export function RunFeed({
   codeOpen?: boolean;
   /** What sits under the videos where they have a column to themselves. */
   videosFoot?: ReactNode;
+  tourId?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const muted = useSyncExternalStore(subscribeToSound, readStoredSound, serverSoundSnapshot);
@@ -187,6 +189,7 @@ export function RunFeed({
           tone="sim"
           icon={<MapIcon className="h-3.5 w-3.5" />}
           live={simRunning}
+          tourId={tourId}
           aside={
             <span className="font-mono text-[11px] text-muted-foreground" title="How long it runs">
               {simDuration}
@@ -293,6 +296,7 @@ function FeedTile({
   icon,
   live = false,
   aside,
+  tourId,
   children,
 }: {
   /** Its place in the feed, which is the order the tiles arrive in. */
@@ -304,6 +308,7 @@ function FeedTile({
   /** It is playing right now: the badge gets a dot. */
   live?: boolean;
   aside?: ReactNode;
+  tourId?: string;
   children: ReactNode;
 }) {
   const reduceMotion = useReducedMotion();
@@ -311,6 +316,7 @@ function FeedTile({
   return (
     <motion.section
       aria-label={`${label}: ${detail}`}
+      data-tour-id={tourId}
       className="runFeedTile clay overflow-hidden rounded-2xl border border-border/70 bg-card"
       // They arrive one after another, top first, so the eye is led down the
       // feed once: the order they land in is the order to watch them in.
