@@ -227,6 +227,30 @@ resource "google_project_iam_member" "runtime_firestore" {
   project  = var.project_id
   role     = "roles/datastore.user"
   member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
+
+  # An environment with a database of its own may reach only that database.
+  # Granted on the project, roles/datastore.user covers every database in it,
+  # which made "staging and prod are separate" a convention rather than a
+  # control (docs/plans/prod-staging-split.md). The condition makes it one.
+  #
+  # Not yet on an environment that uses (default), which today is staging and
+  # the live site: a mistake in the expression there would take the yard
+  # offline mid-apply. Prod proves the expression first, with no traffic on
+  # it; staging follows (docs/go-live.md, "After go-live").
+  dynamic "condition" {
+    for_each = each.value.firestore_database == "(default)" ? [] : [each.value.firestore_database]
+    content {
+      title       = "Only the ${condition.value} database"
+      description = "Mission Control ${each.key} reads and writes its own Firestore database and no other."
+      expression  = "resource.name == \"projects/${var.project_id}/databases/${condition.value}\""
+    }
+  }
+
+  # Adding a condition replaces the binding. Grant the new one before removing
+  # the old, so the service is never without access in between.
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # --- Operator authentication ---------------------------------------------
@@ -312,6 +336,51 @@ resource "google_secret_manager_secret_iam_member" "runtime_editable_write" {
   member    = "serviceAccount:${google_service_account.runtime[each.value.env].email}"
 }
 
+# --- Firestore: a database per environment ---------------------------------
+#
+# Prod has its own database so that it starts clean. (default) holds every test
+# mission since the pilot and stays with staging. One project with two
+# databases rather than a second project: a project would need its own billing
+# association, load balancer, certificate, DNS change and operator accounts,
+# and a database needs none of them. Operator roles are custom claims on Auth
+# users, which belong to the project, so operators carry over by themselves.
+#
+# (default) is not created here. It predates this configuration, and its
+# point-in-time recovery and delete protection were set on it by hand.
+locals {
+  created_databases = {
+    for env, cfg in var.environments : env => cfg.firestore_database
+    if cfg.firestore_database != "(default)"
+  }
+}
+
+resource "google_firestore_database" "environment" {
+  for_each = local.created_databases
+
+  project     = var.project_id
+  name        = each.value
+  location_id = var.firestore_location
+  type        = "FIRESTORE_NATIVE"
+
+  # Stated rather than left to the provider. Each matches (default) as it was
+  # read on 22 Oct 2026, and none is something to inherit by accident: an
+  # unset cpu_idle once became always-on CPU billing because the provider's
+  # default changes when a sibling block is set.
+  database_edition            = "STANDARD"
+  concurrency_mode            = "PESSIMISTIC"
+  app_engine_integration_mode = "DISABLED"
+
+  # What (default) has, from the first day rather than after an incident:
+  # seven days of point-in-time recovery, and a database that refuses to be
+  # deleted until this is switched off on purpose.
+  point_in_time_recovery_enablement = "POINT_IN_TIME_RECOVERY_ENABLED"
+  delete_protection_state           = "DELETE_PROTECTION_ENABLED"
+
+  # A destroy leaves the database and its data in place. Learner work is not
+  # something a `terraform destroy` should be able to take with it.
+  deletion_policy = "ABANDON"
+}
+
 resource "google_cloud_run_v2_service" "mission_control" {
   for_each = var.environments
 
@@ -347,6 +416,23 @@ resource "google_cloud_run_v2_service" "mission_control" {
           cpu    = "1"
           memory = "512Mi"
         }
+
+        # Bill for the time spent serving requests, not for every hour an
+        # instance is up (PR #240). The provider defaults cpu_idle to true only
+        # when `resources` is absent; setting limits, as above, silently flips
+        # it to always-allocated CPU. That is the whole Cloud Run overspend in
+        # docs/plans/prod-staging-split.md: about $68/mo against $4, half of it
+        # the prod placeholder kept awake by scanners, the rest staging kept
+        # awake by the 15-minute YouTube check.
+        #
+        # Safe for this app: no route does work after sending its response
+        # and nothing runs on a server-side timer, so throttling CPU between
+        # requests cuts nothing off. Rechecked when prod went live.
+        cpu_idle = true
+
+        # The trade cpu_idle makes is more cold starts. A boost on startup
+        # shortens them, and is billed only while an instance is starting.
+        startup_cpu_boost = true
       }
 
       dynamic "env" {
@@ -356,9 +442,14 @@ resource "google_cloud_run_v2_service" "mission_control" {
         # looking at. Runtime rather than NEXT_PUBLIC_ for the same reason as
         # APP_URL: prod promotes the image built during the staging deploy, so
         # a build-time value would label prod as staging.
+        #
+        # FIREBASE_DATABASE_ID is runtime for the same reason, and set on every
+        # environment, "(default)" included: the app refuses to run as prod
+        # without one, rather than quietly opening staging's database.
         for_each = merge(local.plain_env, {
-          APP_URL = local.app_urls[each.key]
-          APP_ENV = each.key
+          APP_URL              = local.app_urls[each.key]
+          APP_ENV              = each.key
+          FIREBASE_DATABASE_ID = each.value.firestore_database
         })
         content {
           name  = env.key
@@ -394,6 +485,9 @@ resource "google_cloud_run_v2_service" "mission_control" {
     google_secret_manager_secret_iam_member.runtime_secret_access,
     google_secret_manager_secret_version.seed,
     google_secret_manager_secret_version.youtube_upload_ingest_secret,
+    # A service pointed at a database that does not exist yet answers every
+    # Firestore call with NOT_FOUND.
+    google_firestore_database.environment,
   ]
 }
 

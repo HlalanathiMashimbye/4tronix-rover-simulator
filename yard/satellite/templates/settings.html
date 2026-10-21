@@ -68,6 +68,10 @@
            sudo rule it still opens, to say what setting it up takes, so it is
            never a button that silently does nothing. */
         .power-btn[data-ready="false"] { color: var(--text-faint); }
+        /* The whole address, not its last half: the box was the width of a
+           rover hostname, and "https://" pushed the part that matters off. */
+        #mcDialog .cfg-input { width: 100%; margin-bottom: 0.4rem; }
+        #mcDialog .save-status:empty { display: none; }
         .power-cmd { display: block; margin: 0.6rem 0 1.1rem; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg); background: var(--background); font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; color: var(--text); }
 
         /* Pointing at a rover: a switch, a finder, and a typed address, in
@@ -487,6 +491,13 @@
                 <span class="status-label grey" id="label-satellite">checking</span>
                 <span class="cat-detail" id="detail-satellite">Loading&hellip;</span>
             </span>
+            <!-- Which Mission Control this yard belongs to. A setting in a
+                 dialog rather than a card: it changes about once a year, and
+                 a card would push the recordings list for something nobody
+                 looks at in between. -->
+            <button class="iconbtn" id="mcBtn" type="button" aria-label="Mission Control address" title="Mission Control address">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            </button>
             <button class="iconbtn power-btn" id="powerBtn" type="button" aria-label="Shut down the satellite" title="Shut down the satellite">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
             </button>
@@ -698,6 +709,23 @@
                 </div>
             </div>
         </div>
+
+        <dialog class="modal" id="mcDialog" aria-labelledby="mcTitle">
+            <form class="modal-body" id="mcForm" method="dialog">
+                <h2 id="mcTitle">Mission Control address</h2>
+                <p>Where this yard's Mission Control link goes, and where its recordings upload
+                    once automatic upload is on. The live site is marsyard.sapient.rocks;
+                    marsyard.labs.ws is staging, with test missions.</p>
+                <input type="text" id="tunMissionControl" class="cfg-input" spellcheck="false"
+                       autocomplete="off" aria-label="Mission Control address"
+                       placeholder="marsyard.sapient.rocks">
+                <p class="save-status" id="mcMsg" role="status" aria-live="polite"></p>
+                <div class="modal-actions">
+                    <button class="btn quiet" type="button" id="mcCancel">Cancel</button>
+                    <button class="btn primary" type="submit" id="mcSave">Use</button>
+                </div>
+            </form>
+        </dialog>
 
         <div class="footer" id="footer" hidden></div>
     </main>
@@ -1832,6 +1860,57 @@
                 urlError.textContent = 'Save failed: ' + e.message;
             }
         }
+
+        // --- Mission Control address ----------------------------------------
+        // A tunable like the rest: stored on this satellite, read on every
+        // use, so the next page links to the new address with no restart.
+        (function () {
+            const dialog = document.getElementById('mcDialog');
+            const input = document.getElementById('tunMissionControl');
+            const msg = document.getElementById('mcMsg');
+
+            document.getElementById('mcBtn').addEventListener('click', async () => {
+                msg.textContent = '';
+                delete msg.dataset.tone;
+                try {
+                    const d = await fetch('/operator/api/config/tunables').then((r) => r.json());
+                    input.value = (d.values || {}).missionControlUrl || '';
+                } catch (e) { /* the box opens empty; Use still says what went wrong */ }
+                dialog.showModal();
+                input.select();
+            });
+            document.getElementById('mcCancel').addEventListener('click', () => dialog.close());
+
+            document.getElementById('mcForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                msg.textContent = 'Saving\u2026';
+                delete msg.dataset.tone;
+                try {
+                    const resp = await fetch('/operator/api/config/tunables', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ missionControlUrl: input.value }),
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok) {
+                        msg.dataset.tone = 'bad';
+                        msg.textContent = 'That is not a web address. Type one like marsyard.sapient.rocks.';
+                        return;
+                    }
+                    const now = data.values.missionControlUrl;
+                    // The bar on this page was drawn with the old address.
+                    document.querySelectorAll('.mc-back').forEach((link) => {
+                        link.href = now + '/operator';
+                        link.dataset.missionControl = now;
+                    });
+                    input.value = now;
+                    msg.dataset.tone = 'ok';
+                    msg.textContent = 'Saved. This yard now belongs to ' + now.replace(/^https?:\/\//, '') + '.';
+                } catch (e) {
+                    msg.dataset.tone = 'bad';
+                    msg.textContent = 'Could not reach the satellite to save it.';
+                }
+            });
+        })();
 
         document.getElementById('save-url-btn').addEventListener('click', () => saveUrl(urlInput.value, false));
         urlInput.addEventListener('keydown', (e) => {

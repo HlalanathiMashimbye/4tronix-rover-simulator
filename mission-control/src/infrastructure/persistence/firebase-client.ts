@@ -19,6 +19,10 @@
 import { initializeApp, getApps, FirebaseApp } from 'firebase/app';
 import { initializeFirestore, getFirestore, Firestore } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
+import {
+  browserFirestoreDatabaseId,
+  resolveFirestoreDatabaseId,
+} from '@/infrastructure/config/firestoreDatabase';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -72,14 +76,24 @@ export function getFirestoreClient(): Firestore {
     // the browser and "GrpcConnection RPC 'Listen' stream error" on the server.
     // Long polling gets through all of those; auto-detect still tries streaming
     // first and can fail to recover, so we force it.
+    //
+    // The database comes from the page in a browser and from the environment
+    // on a server, never from a NEXT_PUBLIC_ value: this image was built for
+    // staging, and on prod a baked-in id would be staging's.
+    const databaseId =
+      typeof window === 'undefined' ? resolveFirestoreDatabaseId() : browserFirestoreDatabaseId();
     try {
-      firestore = initializeFirestore(app, {
-        experimentalForceLongPolling: true,
-      });
+      firestore = initializeFirestore(
+        app,
+        {
+          experimentalForceLongPolling: true,
+        },
+        databaseId,
+      );
     } catch {
       // initializeFirestore throws if Firestore was already initialised for this
       // app (e.g. across HMR reloads) - fall back to the existing instance.
-      firestore = getFirestore(app);
+      firestore = getFirestore(app, databaseId);
     }
   }
   return firestore;

@@ -39,11 +39,12 @@ module "github_wif" {
 }
 
 module "mission_control" {
-  source       = "./modules/mission-control"
-  project_id   = var.project_id
-  region       = var.region
-  environments = var.environments
-  domains      = var.domains
+  source             = "./modules/mission-control"
+  project_id         = var.project_id
+  region             = var.region
+  environments       = var.environments
+  firestore_location = var.firestore_location
+  domains            = var.domains
 
   cron_environment  = var.cron_environment
   cron_region       = var.cron_region
@@ -62,6 +63,10 @@ module "firestore_backup" {
   project_id         = var.project_id
   cron_region        = var.cron_region
   firestore_location = var.firestore_location
+
+  # Every environment's database, so a database created for one is backed up
+  # from the apply that creates it rather than from whenever someone remembers.
+  database_ids = module.mission_control.firestore_databases
 
   schedule       = var.firestore_backup_schedule
   retention_days = var.firestore_backup_retention_days

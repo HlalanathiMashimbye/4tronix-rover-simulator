@@ -755,6 +755,7 @@ header.topbar .topnav a.active { color: var(--primary-foreground); background: v
    is a click on the backdrop and can close it; the padding is on its body. */
 .console dialog.modal { margin: auto; padding: 0; color: var(--text); max-height: calc(100dvh - 2rem); overflow: auto; }
 .console dialog.modal::backdrop { background: rgb(0 0 0 / 0.6); }
+.console dialog.modal > .modal-body { padding: 1.4rem; }
 
 /* ---- Announcement ------------------------------------------------------
    A modal for the one moment a page has to be noticed from across the room:

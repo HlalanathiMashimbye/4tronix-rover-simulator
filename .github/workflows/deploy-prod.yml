@@ -56,6 +56,25 @@ jobs:
           esac
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
+      # Prod has its own Firestore database, named on the service by
+      # Terraform. An image promoted before that apply would start, fail every
+      # page (the app refuses to run as prod without FIREBASE_DATABASE_ID), and
+      # the smoke check would only say so after it was serving. Ask first.
+      - name: Check prod names its own Firestore database
+        run: |
+          DATABASE=$(gcloud run services describe "${{ vars.PROD_SERVICE }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
+            --format=json \
+            | jq -r '.spec.template.spec.containers[0].env[]? | select(.name == "FIREBASE_DATABASE_ID") | .value')
+          case "$DATABASE" in
+            ""|"(default)")
+              echo "Prod's FIREBASE_DATABASE_ID is '${DATABASE}'. It must be prod's own database," >&2
+              echo "not staging's (default). Run terraform apply -var-file=impact.tfvars first (docs/go-live.md)." >&2
+              exit 1 ;;
+          esac
+          echo "Prod uses Firestore database: $DATABASE"
+          echo "DATABASE=$DATABASE" >> "$GITHUB_ENV"
+
       - name: Deploy Cloud Run prod
         run: |
           gcloud run deploy "${{ vars.PROD_SERVICE }}" \
@@ -77,4 +96,8 @@ jobs:
           # its own copy, which still asserted /operator was a 404 long after
           # the operator console shipped: the first promotion would have
           # deployed correctly and then gone red.
-          bash scripts/smoke-check.sh "$URL"
+          #
+          # With the database: the pages must point the browser at prod's own
+          # database, the one thing a promoted staging image could get wrong
+          # while every other check passes.
+          bash scripts/smoke-check.sh "$URL" "$DATABASE"

@@ -127,8 +127,10 @@ The app's OAuth settings are `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`,
 `YOUTUBE_UPLOAD_INGEST_SECRET`. The last value authenticates the satellite to
 Mission Control; it is not a YouTube token. Terraform generates and mounts it
 in Cloud Run. Copy that same value into `yard/satellite/.env` as
-`YOUTUBE_UPLOAD_INGEST_SECRET`, and set `MISSION_CONTROL_URL` to the matching
-staging or production origin. Keep both `.env` files out of version control.
+`YOUTUBE_UPLOAD_INGEST_SECRET`, and point the yard at the matching Mission
+Control on the satellite's Settings page (the link button beside power;
+`marsyard.sapient.rocks` unless changed). Keep both `.env` files out of
+version control.
 The client ID, client secret and refresh token are server-side only; in
 production they use the existing Secret Manager-backed admin settings. OAuth
 client ID/secret and upload privacy/kids settings must be provisioned in

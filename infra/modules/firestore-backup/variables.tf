@@ -8,10 +8,10 @@ variable "firestore_location" {
   type        = string
 }
 
-variable "database_id" {
-  description = "Firestore database to export. Mission Control uses the (default) database."
-  type        = string
-  default     = "(default)"
+variable "database_ids" {
+  description = "Firestore databases to export, each weekly into the same bucket. (default) is staging's; prod has its own."
+  type        = list(string)
+  default     = ["(default)"]
 }
 
 variable "cron_region" {

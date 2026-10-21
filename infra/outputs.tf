@@ -50,7 +50,7 @@ output "lb_ip_addresses" {
 output "firestore_backup" {
   value = {
     bucket          = module.firestore_backup.bucket
-    scheduler_job   = module.firestore_backup.job_name
+    scheduler_jobs  = module.firestore_backup.job_names
     service_account = module.firestore_backup.service_account_email
   }
 }

@@ -138,18 +138,11 @@ _restore_camera_index()
 # getter indirection means a rover path edited on Settings applies everywhere.
 app.config['ROVER_URL_GETTER'] = lambda: ROVER_URL
 import operator_console  # noqa: E402  (needs app + config above)
+import tunables  # noqa: E402
 app.register_blueprint(operator_console.operator_bp)
 
 # Request timeout for rover API calls
 ROVER_TIMEOUT = 5.0
-
-# Where the console's "Mission Control" link points and, when automatic
-# uploads are configured, where completed recordings are delivered. Env first
-# so a yard can pin it, then the config file, then the deployed hub.
-MISSION_CONTROL_URL = (os.environ.get('MISSION_CONTROL_URL')
-                       or _load_config().get('mission_control_url')
-                       or 'https://marsyard.labs.ws')
-
 
 @app.context_processor
 def _console_chrome():
@@ -158,11 +151,14 @@ def _console_chrome():
     A per-route render_template argument would have to be repeated in five
     places and forgotten in the sixth.
     """
+    # Read per page, like every tunable: a yard repointed on the Settings page
+    # links to the new Mission Control on its next page, not its next restart.
+    mission_control = tunables.get('missionControlUrl')
     return {
-        'mission_control_url': MISSION_CONTROL_URL,
+        'mission_control_url': mission_control,
         # The operator console, not the hub's home page: that is the learner
         # feed, and an operator pressing "back" was never there.
-        'mission_control_back_url': MISSION_CONTROL_URL.rstrip('/') + '/operator',
+        'mission_control_back_url': mission_control + '/operator',
     }
 
 

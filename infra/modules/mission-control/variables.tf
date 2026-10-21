@@ -12,10 +12,17 @@ variable "cron_region" {
 }
 
 variable "environments" {
+  description = "Cloud Run environments. firestore_database is the database each one reads and writes; see the root variable."
   type = map(object({
-    min_instances = number
-    max_instances = number
+    min_instances      = number
+    max_instances      = number
+    firestore_database = optional(string, "(default)")
   }))
+}
+
+variable "firestore_location" {
+  description = "Where a database this module creates is put. The location of the existing (default) database, so the weekly export can use the same bucket: a managed export refuses a bucket that is not near the database."
+  type        = string
 }
 
 variable "deploy_service_account_email" {
@@ -41,9 +48,10 @@ variable "cron_environment" {
   description = <<-EOT
     Which environment runs the YouTube auto-link schedule, or "" for none.
 
-    Only one may: staging and prod share a project and therefore a Firestore,
-    so two schedulers would race on the same runs. Defaults to none so the
-    unsafe state has to be asked for rather than arrived at.
+    One at most. The environments now have a database each, so two schedules
+    would no longer race on the same runs, but they read one YouTube channel:
+    the second would only attach the yard's real videos to test missions, or
+    to nothing. Defaults to none so a schedule has to be asked for.
   EOT
   type        = string
   default     = ""

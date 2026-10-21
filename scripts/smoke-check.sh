@@ -14,14 +14,21 @@
 # be run from any machine with curl:
 #
 #   scripts/smoke-check.sh https://marsyard.labs.ws
+#   scripts/smoke-check.sh https://marsyard.sapient.rocks prod
+#
+# The optional second argument is the Firestore database the pages must name.
+# Prod and staging are two databases in one project, and an image promoted
+# from staging that still pointed at staging's database would pass every other
+# check here: the pages serve, sign-in is sign-in, and the feed is full.
 #
 # Exits 0 when every assertion holds, 1 naming the first one that does not.
 
 set -euo pipefail
 
 URL="${1:-}"
+DATABASE="${2:-}"
 if [ -z "$URL" ]; then
-  echo "usage: $0 <base-url>" >&2
+  echo "usage: $0 <base-url> [firestore-database]" >&2
   exit 2
 fi
 URL="${URL%/}"
@@ -35,7 +42,19 @@ fail() {
 }
 
 # Learner home must serve via the load balancer.
-curl -sSf -o /dev/null "$URL/" || fail "$URL/ did not serve the learner home"
+curl -sSf -o "$page" "$URL/" || fail "$URL/ did not serve the learner home"
+
+# ...and tell the browser the database this deployment expects. Read from the
+# page, not from the service's settings, because the page is what the browser
+# acts on (FirestoreDatabaseMeta in the root layout).
+if [ -n "$DATABASE" ]; then
+  named="$(grep -oE '<meta[^>]*name="firestore-database"[^>]*>' "$page" | head -1 || true)"
+  [ -n "$named" ] || fail "the learner home does not say which Firestore database it uses"
+  case "$named" in
+    *"content=\"$DATABASE\""*) ;;
+    *) fail "the learner home names the wrong Firestore database: $named, expected $DATABASE" ;;
+  esac
+fi
 
 # The operator surface used to be asserted absent (404). It shipped in
 # AB#341/342, so that assertion went stale and staging went red on every

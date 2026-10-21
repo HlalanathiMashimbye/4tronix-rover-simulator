@@ -53,10 +53,10 @@ afterAll((done) => {
 });
 
 /** Runs the script against `routes` and resolves with its exit status. */
-function smokeCheck(routes: Routes, url = base): Promise<number> {
+function smokeCheck(routes: Routes, url = base, ...rest: string[]): Promise<number> {
   serving = routes;
   return new Promise((resolve, reject) => {
-    execFile('bash', [SCRIPT, url], (error) => {
+    execFile('bash', [SCRIPT, url, ...rest], (error) => {
       if (!error) return resolve(0);
       // A string code is the spawn failing (no bash), not the check failing.
       return typeof error.code === 'number' ? resolve(error.code) : reject(error);
@@ -114,5 +114,40 @@ suite('scripts/smoke-check.sh', () => {
 
   it('refuses to run without a URL, rather than checking nothing', async () => {
     expect(await smokeCheck(healthy, '')).toBe(2);
+  });
+});
+
+/**
+ * Prod and staging are two Firestore databases in one project, and the browser
+ * is told which by the page. A promoted image still pointing at staging's
+ * database serves, signs in and fills its feed, so nothing above would notice.
+ */
+suite('scripts/smoke-check.sh, given the database the pages must name', () => {
+  const home = (meta: string) => ({ status: 200, body: `<head>${meta}</head><h1>Missions</h1>` });
+  const naming = (database: string) =>
+    home(`<meta name="firestore-database" content="${database}"/>`);
+
+  it('passes a deployment whose pages name that database', async () => {
+    expect(await smokeCheck({ ...healthy, '/': naming('prod') }, base, 'prod')).toBe(0);
+  });
+
+  it('passes staging, whose database has brackets in its name', async () => {
+    expect(await smokeCheck({ ...healthy, '/': naming('(default)') }, base, '(default)')).toBe(0);
+  });
+
+  it("fails prod when its pages point at staging's database", async () => {
+    expect(await smokeCheck({ ...healthy, '/': naming('(default)') }, base, 'prod')).toBe(1);
+  });
+
+  it('fails when the pages do not say which database at all', async () => {
+    expect(await smokeCheck({ ...healthy, '/': home('') }, base, 'prod')).toBe(1);
+  });
+
+  it('fails on a database whose name only starts the same way', async () => {
+    expect(await smokeCheck({ ...healthy, '/': naming('prod-old') }, base, 'prod')).toBe(1);
+  });
+
+  it('asks nothing of the pages when no database is given', async () => {
+    expect(await smokeCheck({ ...healthy, '/': home('') })).toBe(0);
   });
 });

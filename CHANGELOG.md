@@ -11,6 +11,40 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Prod goes live on a database of its own.** The live site moves from
+  `marsyard.labs.ws`, the service called staging, to `marsyard.sapient.rocks`,
+  which served Google's placeholder page since August. Prod starts clean on a
+  new Firestore database, `prod`, in the same project; staging keeps
+  `(default)` with every mission since the pilot, and David's handpicked
+  missions are copied across (`scripts/copy-to-database.mjs`, no learner
+  records or email addresses). A database rather than a project, because a
+  project needs billing, a load balancer, a certificate, a DNS move and every
+  operator account made again. Operator roles live on Firebase Auth, which the
+  project shares, so operators carry over. Werner reviews and applies it in
+  one sitting: [docs/go-live.md](docs/go-live.md).
+
+  The database is read at runtime, by the server from `FIREBASE_DATABASE_ID`
+  and by the browser from a tag the server puts in every page, because prod
+  runs the image built for staging and a build-time value would be staging's.
+  Prod refuses to run without one rather than open staging's. Its service
+  account may reach only `prod`, an IAM condition, so the two are separate in
+  fact and not only by convention.
+
+  Found on the way, and fixed with it: both services billed CPU around the
+  clock, because setting memory limits silently flipped a provider default
+  (#240, about $63 of $87 a month); port 80 served the whole app over plain
+  HTTP, email addresses included, and now redirects; staging would have stayed
+  in search results next to prod; three hand-made YouTube secrets would have
+  failed the next apply; and `firebase deploy`, even with `--dry-run`, creates
+  a missing database by itself without Terraform's settings, so the rules
+  script refuses until Terraform has made it. The Firestore emulator cannot
+  load rules from a list of databases (it allows everything instead), so
+  prod's rules deploy from their own `firebase.prod.json`.
+
+  The yard's Mission Control address is a setting on the satellite's Settings
+  page now, not a line in a file, and the uploader reads the same one as the
+  console link. It defaults to prod.
+
 - **The run station says when it is recording, and says when the run is
   done.** Both were small and grey. A recording was a 9px dot inside a grey
   button and a grey tag, so a run being filmed looked like one that was not,

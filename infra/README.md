@@ -83,24 +83,22 @@ Two things mean stop rather than approve:
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
 
-### Before the next apply: three secrets made by hand
+### Prod's own database, and the secrets made by hand
 
-Automatic YouTube upload (#304) added six Secret Manager secrets to Terraform,
-and Terraform has not been applied since. Three of them were created by hand on
-11 October 2026 instead (`youtube-client-id`, `youtube-client-secret`,
-`youtube-refresh-token`; checked 21 October), so the apply fails on "already
-exists" until they are in Terraform's state. From `infra/`:
+Prod and staging each name a Firestore database in `impact.tfvars`
+(`environments.*.firestore_database`). `(default)` is staging's and exists
+already; any other name is created here with point-in-time recovery and delete
+protection, gets a weekly export, and is the only database its service account
+may reach. Going live on it is a sitting with Werner: [docs/go-live.md](../docs/go-live.md).
 
-```bash
-terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_client_id projects/bt-impact-academy/secrets/youtube-client-id
-terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_client_secret projects/bt-impact-academy/secrets/youtube-client-secret
-terraform import -var-file=impact.tfvars module.mission_control.google_secret_manager_secret.youtube_refresh_token projects/bt-impact-academy/secrets/youtube-refresh-token
-```
+Rules and indexes are not Terraform's: `scripts/deploy-firestore.sh` deploys
+them to every database, and refuses until Terraform has created the database,
+because `firebase deploy` would otherwise create it itself without these
+settings.
 
-Their values stay as they are: Terraform manages these secrets, not their
-versions. Then plan and apply as above. The apply also creates the ingest
-secret and mounts it in both Cloud Run services, which the satellite needs a
-copy of before it can upload.
+Three YouTube upload secrets (#304) were made by hand on 11 October 2026 before
+anyone applied their Terraform. `imports.tf` takes them into state during the
+next apply, values untouched; it can be deleted after that apply.
 
 ### After the apply
 
