@@ -157,3 +157,41 @@ class TestWhichWayUp:
         # borrow the first one's, or lose them for it.
         assert tunables.options()['cameraResolution']['labels'] == ['Standard', 'Sharp', 'Sharpest']
 
+
+
+class TestClosingTime:
+    """When the venue closes and the satellite goes off. The Recordings card
+    counts down to it and says, near it, what will become of videos not yet
+    uploaded."""
+
+    def test_the_science_centre_closes_at_half_past_four(self, monkeypatch):
+        monkeypatch.delenv('YARD_CLOSES_AT', raising=False)
+
+        assert tunables.get('yardClosesAt') == '16:30'
+        assert 'yardClosesAt' in tunables.operator_values()
+
+    def test_another_venue_sets_its_own(self):
+        assert tunables.save({'yardClosesAt': '17:05'})['yardClosesAt'] == '17:05'
+
+    def test_a_time_typed_without_its_leading_zero_is_still_the_time(self):
+        assert tunables.save({'yardClosesAt': '9:00'})['yardClosesAt'] == '09:00'
+
+    @pytest.mark.parametrize('nonsense', ['5pm', '25:00', '16:60', '', 'noon'])
+    def test_anything_but_a_time_of_day_is_refused_when_saved(self, nonsense):
+        with pytest.raises(ValueError):
+            tunables.save({'yardClosesAt': nonsense})
+
+    def test_a_hand_edited_nonsense_value_reads_as_the_default(self, monkeypatch):
+        monkeypatch.delenv('YARD_CLOSES_AT', raising=False)
+        _write_config(yard_closes_at='whenever')
+
+        assert tunables.get('yardClosesAt') == '16:30'
+
+    def test_the_settings_route_says_what_shape_it_wants(self):
+        import web_server
+        client = web_server.app.test_client()
+
+        resp = client.post('/operator/api/config/tunables', json={'yardClosesAt': '5pm'})
+
+        assert resp.status_code == 400
+        assert '16:30' in resp.get_json()['error']

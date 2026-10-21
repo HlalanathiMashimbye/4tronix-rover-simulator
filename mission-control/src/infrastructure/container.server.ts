@@ -31,6 +31,7 @@ import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { OperatorMissionCommands } from '@/core/application/services/OperatorMissionCommands';
+import { VideoLinker } from '@/core/application/services/VideoLinker';
 import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
@@ -67,4 +68,9 @@ export function notificationService(): MissionNotificationService {
 /** The operator's bookkeeping commands, on the privileged repository. */
 export function operatorMissionCommands(): OperatorMissionCommands {
   return new OperatorMissionCommands(adminMissionRepository(), notificationService(), nanoid);
+}
+
+/** A found or uploaded video, attached to its run: the linker and automatic upload both. */
+export function videoLinker(): VideoLinker {
+  return new VideoLinker(adminMissionRepository(), notificationService(), nanoid);
 }

@@ -17,6 +17,7 @@ that needs a restart is a setting nobody changes.
 """
 
 import json
+import re
 import os
 
 class Choices(tuple):
@@ -82,6 +83,14 @@ def resolution_size(value=None):
         return 640, 480
 
 
+def _clock_time(raw):
+    """'HH:MM' on a 24-hour clock, or ValueError. '9:00' comes back '09:00'."""
+    match = re.fullmatch(r'([01]?\d|2[0-3]):([0-5]\d)', str(raw).strip())
+    if not match:
+        raise ValueError(f'not a time of day: {raw!r}')
+    return f'{int(match.group(1)):02d}:{match.group(2)}'
+
+
 # name -> (config key, env var, default, cast, bounds or None)
 #
 # Bounds are enforced on both read and write: a hand-edited config file is as
@@ -108,6 +117,12 @@ TUNABLES = {
     'cleanupGracePeriod': ('cleanup_grace_hours', 'CLEANUP_GRACE_HOURS', 72.0, float, (1.0, 168.0)),
     'cleanupMaxAge': ('cleanup_max_days', 'CLEANUP_MAX_DAYS', 21.0, float, (1.0, 60.0)),
     'cleanupMinFreeGB': ('cleanup_min_free_gb', 'CLEANUP_MIN_FREE_GB', 2.0, float, (0.5, 16.0)),
+    # When the venue closes and the satellite is switched off: what the
+    # Recordings card counts down to, and when it starts saying what will
+    # become of videos still waiting to upload. The science centre closes at
+    # 16:30. It does not stop anything; a video not up by then goes up the
+    # next time the satellite is online.
+    'yardClosesAt': ('yard_closes_at', 'YARD_CLOSES_AT', '16:30', _clock_time, None),
 }
 
 

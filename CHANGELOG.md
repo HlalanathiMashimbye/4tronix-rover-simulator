@@ -48,6 +48,39 @@ which is often longer than the diff.
   the RUNBOOK covers a console that will not come up, restarting the
   satellite's services and a yard with no internet; and `infra/README.md`
   gives the three `terraform import`s the next apply needs first.
+- **Automatic uploads reach the run, and wait for a connection.** Two gaps
+  in the automatic YouTube upload (#304), found reviewing it on 20 October.
+  Kept on a branch, not merged: David has lowered auto-upload in priority.
+
+  The uploaded video never reached the learner's page. Its id went into a
+  ledger only operators read, and attaching it was left to the scheduled
+  linker, which reads the channel with an API key and cannot see a private
+  video; uploads are private by default. Now the upload attaches it through
+  the same linker, moved out of the cron route into one application service
+  both call, so it closes an open run and emails the learner exactly as a
+  found video does. Not for a run the rover reported as an error: whether that
+  counts is the operator's call.
+
+  And the satellite gave up after three tries in a few seconds. Serving the
+  yard's wifi, it has no internet, so in the yard as it is normally set up
+  every try failed and none came later. A note beside each recording now waits
+  until Mission Control has the video or has refused it for good, retried
+  every watcher pass when due, and written so that a power cut cannot leave it
+  half written. When the connection comes back, everything waiting goes within
+  a minute, rather than at the end of a half-hour back-off.
+
+  And the operator can see it. A chip in the top bar of every console page
+  says how many videos are waiting, the one going out and how far it has got,
+  or that all of them are on YouTube; below a laptop's width it comes down to
+  its icon and a number, and on an upright tablet the brand's name gives way
+  while it is up. The Recordings card on Settings gives each video its state
+  (uploading and its percentage, waiting, on YouTube with the link, or to
+  upload by hand and why) and the day's tally. It counts down to closing, a
+  setting that defaults to the science centre's 16:30, and from half an hour
+  before it says whether switching off loses anything: videos still waiting
+  go up by themselves next time the satellite is online. The video is now
+  sent as it is read off the card, so the percentage is real and a 30 MB file
+  is never held whole in the Pi's memory.
 - **The satellite shuts down from its Settings page, and restarts without a
   password.** It was switched off at the plug. On 17 October that emptied
   every file a `git pull` had written a few minutes before, 87 of them,
