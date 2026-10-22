@@ -1,5 +1,5 @@
 /**
- * The privacy page says what this deployment actually does.
+ * The privacy and terms page says what this deployment actually does.
  *
  * Two things on it change without a code change: who to contact, which is an
  * admin setting, and whether usage analytics run, which follows the PostHog
@@ -17,6 +17,11 @@ const readSetting = jest.fn<Promise<string | null>, [string]>();
 jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
   readSetting: (name: string) => readSetting(name),
 }));
+
+const redirectMock = jest.fn((url: string) => {
+  throw new Error(`NEXT_REDIRECT ${url}`);
+});
+jest.mock('next/navigation', () => ({ redirect: (url: string) => redirectMock(url) }));
 
 const ORIGINAL = { ...process.env };
 
@@ -62,5 +67,17 @@ describe('the privacy page', () => {
 
     expect(connectionMock).toHaveBeenCalled();
     expect(readSetting).toHaveBeenCalledWith('privacyContactEmail');
+  });
+});
+
+describe('/terms', () => {
+  it('lands on the terms half of the page, at an anchor the page has', async () => {
+    const { default: TermsPage } = await import('@/app/terms/page');
+    expect(() => TermsPage()).toThrow('NEXT_REDIRECT');
+
+    const target = redirectMock.mock.calls[0][0];
+    const [path, anchor] = target.split('#');
+    expect(path).toBe('/privacy');
+    expect(await renderPage()).toContain(`id="${anchor}"`);
   });
 });
