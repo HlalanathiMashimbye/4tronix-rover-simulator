@@ -67,6 +67,25 @@ class TestDownload:
         # a tab the operator then has to work out how to get a file out of.
         assert 'attachment' in resp.headers['Content-Disposition']
 
+    def test_a_recording_filed_under_a_leading_dash_is_saved_under_its_whole_name(
+            self, client, tmp_path):
+        """What the browser saves is what the operator uploads, and YouTube
+        titles the video with it. Mission Control reads the mission id out of
+        that title, so a dash at the front has to survive the trip off this
+        box as well as the trip onto its disk."""
+        from werkzeug.http import parse_options_header
+
+        name = '-BQwFDUWvyhpbQ4ZI8het__curiosity__20261010T124247Z.mp4'
+        _write(tmp_path, name, b'video-bytes')
+
+        resp = client.get(f'/api/recordings/{name}')
+
+        assert resp.status_code == 200
+        assert resp.data == b'video-bytes'
+        disposition, options = parse_options_header(resp.headers['Content-Disposition'])
+        assert disposition == 'attachment'
+        assert options['filename'] == name
+
     def test_missing_recording_is_a_404(self, client):
         assert client.get('/api/recordings/nope.mp4').status_code == 404
 
@@ -101,24 +120,66 @@ class TestRecordingACopyPasteRun:
         assert web_server._recording_name('../../etc/passwd') == 'etc-passwd'
         assert web_server._recording_name('   ') == ''
 
-    def test_a_leading_dash_goes_the_same_way_the_watcher_expects(self):
-        # The watcher reduces the rover's mission id with this same rule. The
-        # two disagreed once, and a recording ran for 126 minutes.
-        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == 'BQwFDUWvyhpbQ4ZI8het'
-        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == \
-            recording_control.recording_key('-BQwFDUWvyhpbQ4ZI8het')
+    def test_an_id_keeps_a_dash_at_either_end(self):
+        # Mission ids are nanoid's, and a dash is one of its characters. It
+        # used to be trimmed along with the dashes the reduction leaves
+        # behind, and the file was then named for a mission that does not
+        # exist.
+        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == '-BQwFDUWvyhpbQ4ZI8het'
+        assert web_server._recording_name('BQwFDUWvyhpbQ4ZI8he-') == 'BQwFDUWvyhpbQ4ZI8he-'
 
+    def test_a_name_already_reduced_is_not_reduced_again(self):
+        # Stop sends back the name start returned, and that name is reduced a
+        # second time on the way in. So reducing twice has to be reducing once.
+        # A long name cut at 60 on a dash was not: the second pass trimmed it
+        # to 59, and stop then looked for a recording nobody had started.
+        once = web_server._recording_name('a' * 59 + '!' + 'b')
+
+        assert len(once) == 60
+        assert web_server._recording_name(once) == once
+
+    def test_start_and_stop_file_an_id_with_a_leading_dash_whole(self, client, monkeypatch):
+        """The file name is what YouTube makes the title from, and the title is
+        what Mission Control reads the mission id out of, so the id has to
+        reach the file with every character it has. Stop then has to find the
+        recording under the name start handed back."""
+        from satellite_identity import yard_id
+
+        monkeypatch.setattr(recording_control, 'is_ready', lambda timeout=None: (True, None))
+        monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
+        for table in ('_writers', '_paths', '_started', '_dispatches'):
+            monkeypatch.setattr(recording_control, table, {})
+
+        started = client.post('/api/recording/start',
+                              json={'name': '-BQwFDUWvyhpbQ4ZI8het'}).get_json()
+
+        assert started['name'] == '-BQwFDUWvyhpbQ4ZI8het'
+        assert started['file'].startswith(f'-BQwFDUWvyhpbQ4ZI8het__{yard_id()}__')
+        assert recording_control.is_recording('-BQwFDUWvyhpbQ4ZI8het', yard_id())
+
+        client.post('/api/recording/stop', json={'name': started['name']})
+
+        assert not recording_control.is_recording('-BQwFDUWvyhpbQ4ZI8het', yard_id())
+
+    @pytest.mark.parametrize('sent, filed', [
+        ('-BQwFDUWvyhpbQ4ZI8het', '-BQwFDUWvyhpbQ4ZI8het'),
+        ("Thabo's square!", 'Thabo-s-square'),
+    ])
     def test_the_queue_proxy_tells_a_recording_which_dispatch_is_its_own(
-            self, client, monkeypatch):
+            self, client, monkeypatch, sent, filed):
         """The watcher stops a recording when its own dispatch finishes, so the
         rover's instruction id has to reach recording_control. This proxy is the
-        only place that sees it."""
+        only place that sees it.
+
+        Twice, because the dispatch carries whatever was put in the mission id
+        box and the recording is filed under that reduced. An id is filed as it
+        is, so only the hand-typed name shows a proxy that forgot to reduce."""
         from satellite_identity import yard_id
 
         monkeypatch.setattr(recording_control, '_ensure_consumer_started', lambda: None)
         for table in ('_writers', '_paths', '_started', '_dispatches'):
             monkeypatch.setattr(recording_control, table, {})
-        recording_control.start_recording('BQwFDUWvyhpbQ4ZI8het', yard_id())
+        recording_control.start_recording(filed, yard_id())
 
         class Reply:
             status_code = 200
@@ -126,18 +187,18 @@ class TestRecordingACopyPasteRun:
             def json(self):
                 return {'status': 'ok', 'instructions': [{
                     'id': 'run-7', 'cmd': 'run_python',
-                    'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het', 'code': 'rover.stop()'},
+                    'params': {'mission_id': sent, 'code': 'rover.stop()'},
                 }]}
 
         monkeypatch.setattr(web_server.requests, 'post', lambda *a, **k: Reply())
 
         resp = client.post('/api/queue/add', json=[{
             'cmd': 'run_python',
-            'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het', 'code': 'rover.stop()'},
+            'params': {'mission_id': sent, 'code': 'rover.stop()'},
         }])
 
         assert resp.status_code == 200
-        assert recording_control.dispatches_for('BQwFDUWvyhpbQ4ZI8het', yard_id()) == {'run-7'}
+        assert recording_control.dispatches_for(filed, yard_id()) == {'run-7'}
 
     def test_start_refuses_without_a_name(self, client):
         assert client.post('/api/recording/start', json={}).status_code == 400

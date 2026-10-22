@@ -73,8 +73,9 @@ def recording_key(raw):
     """The name a recording is filed and found under, from whatever names it.
 
     Letters, digits, dash and underscore survive; anything else becomes a dash,
-    and dashes at either end go, so an operator's "Thabo's square!" cannot walk
-    out of the recordings directory.
+    and the dashes that leaves at either end go, so an operator's
+    "Thabo's square!" is filed as Thabo-s-square and cannot walk out of the
+    recordings directory.
 
     ONE FUNCTION FOR BOTH SIDES, because both sides have to agree. The run
     station files a recording under the mission id, and the watcher finds it
@@ -82,9 +83,38 @@ def recording_key(raw):
     reduce the name and the watcher used the raw id, and Mission Control ids can
     start with a dash. So -BQwFDUWvyhpbQ4ZI8het was filed as
     BQwFDUWvyhpbQ4ZI8het, never matched, and recorded for 126 minutes.
+
+    A NAME THAT NEEDED NOTHING REPLACED IS LEFT WHOLE, dashes at its ends
+    included. Agreeing was half of it: the two sides then agreed on a name with
+    the dash gone, and there is a third reader. The file name becomes the
+    YouTube title of an unrenamed upload, and Mission Control reads the mission
+    id back out of that title (RECORDING_FILENAME_PATTERN in youtubeLinking.ts).
+    Mission ids are nanoid's, drawn from exactly the characters that survive
+    here, so about 3 in 100 start or end with a dash that is part of the id.
+    Filed without it, the title named a mission one character short of a real
+    one, the lookup found nothing, and the video would never have linked. No
+    pattern over there can put back a character that was removed here. Found by
+    running both halves on 10 October 2026, before it happened at a yard.
+
+    The trim only ever existed to tidy up after the replacement, and in an id
+    nothing is replaced. It was never what keeps a name inside the directory
+    either: that is the slash and the dot turning into dashes. A file that
+    starts with a dash is legal and is awkward only for a shell, which reads
+    `rm -BQw....mp4` as options (`rm ./-BQw....mp4` is the way round it), and
+    nothing on the satellite hands these names to a shell. The other way was to
+    escape the dash, or carry the id beside the name, and either one is a
+    second rule this file and Mission Control would have to keep in step, for
+    a character the title pattern already reads.
+
+    It also makes reducing a name twice the same as reducing it once, which
+    stop leans on: the page hands back the name start returned, and it comes
+    through here a second time.
     """
-    name = re.sub(r'[^A-Za-z0-9_-]+', '-', str(raw or '').strip()).strip('-')
-    return name[:60]
+    name = str(raw or '').strip()
+    reduced = re.sub(r'[^A-Za-z0-9_-]+', '-', name)
+    if reduced != name:
+        reduced = reduced.strip('-')
+    return reduced[:60]
 
 
 _lock = threading.Lock()

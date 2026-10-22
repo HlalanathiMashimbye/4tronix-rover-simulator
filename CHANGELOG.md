@@ -45,6 +45,19 @@ which is often longer than the diff.
   page now, not a line in a file, and the uploader reads the same one as the
   console link. It defaults to prod.
 
+- **A recording keeps every character of its mission's id.** Mission ids can
+  start or end with a dash, about 3 in 100 of them, and the satellite dropped
+  it when it named the recording: `-BQwFDUWvyhpbQ4ZI8het` was filed as
+  `BQwFDUWvyhpbQ4ZI8het`. An operator uploads that file to YouTube Studio, the
+  file name becomes the video's title, and Mission Control reads the mission id
+  back out of the title. One character short, it named no mission, and the
+  video never linked. A name that needs nothing replaced is now filed whole;
+  a name somebody typed, like "Thabo's square!", is still tidied to
+  `Thabo-s-square`. A 60-character name could also be shortened a second time
+  when Stop handed it back, so Stop looked for a recording nobody had started;
+  naming it twice is now the same as naming it once. Automatic upload was
+  never affected: it sends the mission id itself, not the file name.
+
 - **The run station says when it is recording, and says when the run is
   done.** Both were small and grey. A recording was a 9px dot inside a grey
   button and a grey tag, so a run being filmed looked like one that was not,

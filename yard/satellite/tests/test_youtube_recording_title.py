@@ -69,6 +69,31 @@ class TestRecordingTitleStillMatches:
         assert match.group(1) == 'm-7f3a91'
         assert match.group(2) == 'curiosity'
 
+    @pytest.mark.parametrize('mission_id', [
+        '-BQwFDUWvyhpbQ4ZI8het',    # a real mission's id
+        'BQwFDUWvyhpbQ4ZI8he-',     # the same thing at the other end
+    ])
+    def test_an_id_with_a_dash_at_either_end_comes_back_whole(
+            self, recording_filename_pattern, mission_id):
+        """The pattern was never the fault here, which is why the id goes
+        through recording_key before it is filed, as the web server does.
+
+        Mission ids are nanoid's and a dash is in its alphabet, so about 3 in
+        100 start or end with one. recording_key trimmed it, and the title
+        still matched: a perfectly good match on the id of a mission that does
+        not exist. Asserting only that it matches would have passed.
+        """
+        ok, path = recording_control.start_recording(
+            recording_control.recording_key(mission_id), 'curiosity')
+        assert ok
+
+        title = os.path.splitext(os.path.basename(path))[0]
+        match = recording_filename_pattern.match(title)
+
+        assert match, f'{title!r} does not match RECORDING_FILENAME_PATTERN'
+        assert match.group(1) == mission_id
+        assert match.group(2) == 'curiosity'
+
     def test_an_unstamped_title_still_matches(self, recording_filename_pattern):
         # The shape recordings had before the stamp was added, and what an
         # operator's already-uploaded videos are still titled.
