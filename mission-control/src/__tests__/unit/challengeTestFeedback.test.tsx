@@ -63,14 +63,13 @@ describe('what an open check says (AB#448)', () => {
   });
 
   it('a run that leaves the shape says so', () => {
-    // Right, not left: a left turn here drives into rock R4, which the
-    // feedback rightly reports as the rock instead.
     const ctx = context(rectangle, [f(3), right(), f(3)], 'for _ in range(2):');
     expect(feedback(rectangle, ctx)[1]).toBe('Part of your run goes off the target shape.');
   });
 
   it('a run into the wall names the wall', () => {
-    const ctx = context(rectangle, [f(20)], 'for _ in range(2):');
+    // Left, to the north wall: straight on from the start is rock R4.
+    const ctx = context(rectangle, [left(), f(20)], 'for _ in range(2):');
     expect(feedback(rectangle, ctx)[1]).toBe('Your rover hit the wall before it finished the shape.');
   });
 
@@ -165,8 +164,9 @@ describe('the rectangle test, as a learner sees it', () => {
   });
 });
 
-it('a sample-site run that turns into the rock says it hit a rock, before anything about the target', () => {
+it('a sample-site run that drives on into the rock says it hit a rock, before anything about the target', () => {
   const [check] = site.steps[0].checks;
-  const ctx = context(site, [f(3), left(), f(2)]);
+  // Straight on from the start, past the turn for the site, is rock R4.
+  const ctx = context(site, [f(13)]);
   expect(explainOpenCheck(check, ctx, evaluateCheck(check, ctx))).toBe('Your rover hit a rock before it reached the target.');
 });

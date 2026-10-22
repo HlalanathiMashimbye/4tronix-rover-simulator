@@ -41,6 +41,14 @@ import { Challenge, ChallengeId, ChallengeLevel } from '@/core/domain/entities/C
 import type { ChallengeKind } from '@/core/domain/services/scoreCalculation';
 import { spinSecondsForDegrees } from '@/lib/rover-physics';
 
+/**
+ * The sleep a quarter turn takes, as the lessons write it: the simulator's own
+ * figure, to one decimal place so a child can type it. Read from the physics
+ * rather than written in, because when #302 moved a quarter turn from 2s to
+ * 2.23s the square Level 3 taught at 2 drew a 318-degree spiral.
+ */
+const QUARTER_TURN = Math.round(spinSecondsForDegrees(90, 60) * 10) / 10;
+
 export const CHALLENGE_LEVELS: ChallengeLevel[] = [
   {
     id: 1,
@@ -494,10 +502,10 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'turn-a-corner',
         title: 'Turn a corner',
         instructions:
-          'Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(2)\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust 2 up or down until the corner looks square.',
+          `Turning uses the same shape: a spin command, then a sleep saying how long to spin for. Add these two lines after your first side, then Run and watch the corner:\n\nrover.spinRight(60)\ntime.sleep(${QUARTER_TURN})\n\nThere is no "turn 90 degrees" command - you choose the sleep. Adjust ${QUARTER_TURN} up or down until the corner looks square.`,
         hints: [
           'Too long and the rover over-turns; too short and the corner is shallow. Change one number, Run, look.',
-          'A quarter turn at speed 60 takes about 2 seconds - see spinSecondsForDegrees in lib/rover-physics.ts.',
+          `A quarter turn at speed 60 takes about ${QUARTER_TURN} seconds - see spinSecondsForDegrees in lib/rover-physics.ts.`,
         ],
         checks: [{ kind: 'trajectory-outcome', outcome: 'spun-right' }],
       },
@@ -505,7 +513,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         id: 'repeat-four-times',
         title: 'Four sides, four corners',
         instructions:
-          'A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(2)\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.',
+          `A square is one side and one corner, done four times. Wrap what you have in a loop:\n\nfor _ in range(4):\n    rover.forward(60)\n    time.sleep(2)\n    rover.spinRight(60)\n    time.sleep(${QUARTER_TURN})\n\nrover.stop()\n\nEverything inside the loop must be indented by four spaces. Press Run - the rover should end up roughly back where it started.`,
         hints: [
           'This is the same Repeat block from Level 2, written out by hand.',
           'If the shape does not close, your corner sleep is off - tune it and Run again.',
@@ -642,7 +650,7 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         title: 'Drive to the site',
         instructions:
           'The sample site is ahead and to the right. Drive forward, spin right a quarter turn, then drive forward again. Choose how long each part lasts so the rover stops on the site.\n\nrover.forward(60)\ntime.sleep(1)\nrover.spinRight(60)\ntime.sleep(1)\nrover.forward(60)\ntime.sleep(1)\nrover.stop()',
-        hints: ['A quarter turn at speed 60 takes about 2 seconds.', 'Change one number at a time and Run again.'],
+        hints: [`A quarter turn at speed 60 takes about ${QUARTER_TURN} seconds.`, 'Change one number at a time and Run again.'],
         checks: [{ kind: 'reaches-target' }],
       },
       {
@@ -689,9 +697,9 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
 
   /*
    * LEVEL 5, Hazard Avoidance (AB#445). PRIMM again (AB#453): the ready-made
-   * route turns towards the target and drives straight into rock R4, which
-   * sits just left of the start mark. The fix is a plan, not a sensor - go
-   * the long way round - which is how a drive is planned at JPL.
+   * route drives straight at rock R4, which is dead ahead of the start mark,
+   * and turns for the target too late. The fix is a plan, not a sensor - turn
+   * first, then drive - which is how a drive is planned at JPL.
    */
   'spot-the-hazard': {
     id: 'spot-the-hazard',
@@ -701,13 +709,14 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     workspaceKind: 'monaco-sim',
     outcomeIds: ['l5-hazard', 'l5-test'],
     starterCode:
-      '# The planned route to the target\nrover.spinLeft(60)\ntime.sleep(2)\nrover.forward(60)\ntime.sleep(5.5)\nrover.stop()\n',
+      `# The planned route to the target\nrover.forward(60)\ntime.sleep(13)\nrover.spinRight(60)\ntime.sleep(${QUARTER_TURN})\nrover.forward(60)\ntime.sleep(4)\nrover.stop()\n`,
     target: {
       description: 'Reach the target without touching a rock.',
       commands: [
-        { command: 'forward', speed: 60, duration: 5 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 4 },
         { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
-        { command: 'forward', speed: 60, duration: 5.5 },
+        { command: 'forward', speed: 60, duration: 13 },
       ],
       arriveWithinCm: 8,
     },
@@ -734,8 +743,8 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
         instructions:
           'Change the route so the rover goes around the rock and still stops on the target. You can move lines, add new ones, and change the numbers.',
         hints: [
-          'The rock is close on the left. What if the rover drove forward first, and turned later?',
-          'A quarter turn at speed 60 takes about 2 seconds.',
+          'The rock is straight ahead. What if the rover turned first, and drove forward later?',
+          `A quarter turn at speed 60 takes about ${QUARTER_TURN} seconds.`,
         ],
         checks: [{ kind: 'reaches-target' }, { kind: 'avoids-hazards' }],
       },
@@ -758,11 +767,12 @@ export const CHALLENGES: Record<ChallengeId, Challenge> = {
     target: {
       description: 'Reach the target on the far side of the rock, touching nothing.',
       commands: [
+        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
         { command: 'forward', speed: 60, duration: 4 },
-        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
-        { command: 'forward', speed: 60, duration: 6 },
-        { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
-        { command: 'forward', speed: 60, duration: 2.7 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 17 },
+        { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+        { command: 'forward', speed: 60, duration: 4 },
       ],
       arriveWithinCm: 8,
     },

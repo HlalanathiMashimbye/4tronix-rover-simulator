@@ -201,8 +201,16 @@ describe('a Python challenge (AB#446: code kept between tries)', () => {
 describe('the yard a run is simulated in', () => {
   it('is the yard the simulator draws, not the built-in one (AB#468)', () => {
     const { YARD } = jest.requireActual('@/lib/rover-physics');
-    // An edited yard with a rock straight ahead of the start mark.
-    const ahead = { x: YARD.start.x, y: YARD.start.y + 30, widthCm: 20, depthCm: 20, name: 'NEW' };
+    // An edited yard with a rock straight ahead of the start mark, whichever
+    // way the start faces (y grows to the south).
+    const facing = (YARD.start.facingDegrees * Math.PI) / 180;
+    const ahead = {
+      x: YARD.start.x + 30 * Math.sin(facing),
+      y: YARD.start.y - 30 * Math.cos(facing),
+      widthCm: 20,
+      depthCm: 20,
+      name: 'NEW',
+    };
     mockYardLayout = { ...YARD, rocks: [...YARD.rocks, ahead] };
     try {
       const onRun = jest.fn();

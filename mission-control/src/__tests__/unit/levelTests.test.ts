@@ -111,11 +111,11 @@ describe('the tests named in AB#446', () => {
       '    rover.forward(60)',
       '    time.sleep(3)',
       '    rover.spinRight(60)',
-      '    time.sleep(2)',
+      '    time.sleep(2.2)',
       '    rover.forward(60)',
       '    time.sleep(1.5)',
       '    rover.spinRight(60)',
-      '    time.sleep(2)',
+      '    time.sleep(2.2)',
       'rover.stop()',
     ].join('\n');
     expect(passes(test, runContext(test, parseRoverCode(code), code))).toBe(true);
@@ -184,10 +184,8 @@ describe('the levels after Level 3 (AB#445)', () => {
 
   it('does not pass the hazard test by driving straight at the target through the rock', () => {
     const test = CHALLENGES['hazard-test'];
-    const throughTheRock: SimulationCommand[] = [
-      { command: 'spinLeft', speed: 60, duration: 2 },
-      { command: 'forward', speed: 60, duration: 6 },
-    ];
+    // The target is straight ahead, past R4.
+    const throughTheRock: SimulationCommand[] = [{ command: 'forward', speed: 60, duration: 17 }];
     expect(passes(test, runContext(test, throughTheRock))).toBe(false);
   });
 
