@@ -196,7 +196,7 @@ export function Navbar() {
               Create Mission
             </Link>
 
-            {/* Help, on every size: the tour again, the privacy page, and
+            {/* Help, on every size: the tour again, privacy and terms, and
                 Sapient's About page. Not shown while a tour is running. */}
             {!tourActive && (
               <Menu
@@ -210,7 +210,7 @@ export function Navbar() {
                 </button>
                 <Link role="menuitem" href="/privacy" className={menuItemClass}>
                   <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                  Privacy
+                  Privacy and terms
                 </Link>
                 <a
                   role="menuitem"
