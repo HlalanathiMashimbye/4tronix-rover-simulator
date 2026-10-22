@@ -83,7 +83,7 @@ export function ParentRestore({ open, onClose }: Props) {
         setStep('prompt');
       }
     } catch {
-      setError('Sign-in was cancelled or failed. Please try again.');
+      setError('Sign-in did not finish. Please try again.');
       setStep('prompt');
     }
   }

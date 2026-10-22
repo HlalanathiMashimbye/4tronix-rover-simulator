@@ -33,9 +33,11 @@ jest.mock('@/contexts/SearchContext', () => ({ useSearch: () => ({ query: '', ac
 const completeChallenge = jest.fn().mockResolvedValue(null);
 jest.mock('@/hooks/useChallengeProgress', () => ({ useChallengeProgress: () => ({ completeChallenge }) }));
 jest.mock('@/infrastructure/browser/challengeHandoff', () => ({ writeChallengeHandoff: jest.fn() }));
+const VISITED = { visitedRoutes: ['/history', '/leaderboard'], missionCreated: true };
+let milestones = VISITED;
 jest.mock('@/infrastructure/browser/platformMilestones', () => ({
   ...jest.requireActual('@/infrastructure/browser/platformMilestones'),
-  readMilestones: () => ({ visitedRoutes: ['/history', '/leaderboard'], missionCreated: true }),
+  readMilestones: () => milestones,
 }));
 jest.mock('@/components/challenges/ChallengeCenterPanel', () => ({ ChallengeCenterPanel: () => null }));
 
@@ -56,6 +58,7 @@ beforeEach(() => {
   sessionStorage.clear();
   learner = 'learner-a';
   pathname = '/history';
+  milestones = VISITED;
 });
 
 describe('the record of the challenge in progress', () => {
@@ -99,6 +102,26 @@ describe('the persistent challenge panel', () => {
     expect(screen.queryByRole('heading')).not.toBeInTheDocument();
   });
 
+  it('moves on by itself a few seconds after the step turns done on the page', () => {
+    jest.useFakeTimers();
+    try {
+      // The learner opens History; MilestoneTracker records the visit just
+      // after the panel's first read, and its second read turns the check green.
+      milestones = { visitedRoutes: [], missionCreated: false };
+      recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
+      render(<PersistentChallengePanel />);
+      milestones = VISITED;
+      act(() => jest.advanceTimersByTime(50));
+      expect(readActiveChallenge()?.stepIndex).toBe(historyStep);
+
+      act(() => jest.advanceTimersByTime(3000));
+
+      expect(readActiveChallenge()?.stepIndex).toBe(historyStep + 1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('advances the step when Next is clicked', () => {
     recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
     render(<PersistentChallengePanel />);
@@ -121,6 +144,21 @@ describe('coming back', () => {
     recordActiveChallenge({ challengeId: 'platform-orientation', stepIndex: 1 });
     render(<ChallengeBriefingGate challenge={explore} />);
     expect(screen.getByRole('button', { name: /Start Mission/ })).toBeInTheDocument();
+  });
+
+  it('moves on by itself a few seconds after a step is done', () => {
+    jest.useFakeTimers();
+    try {
+      recordActiveChallenge({ challengeId: explore.id, stepIndex: historyStep });
+      render(<ChallengeWorkspace challenge={explore} />);
+      expect(readActiveChallenge()?.stepIndex).toBe(historyStep);
+
+      act(() => jest.advanceTimersByTime(3000));
+
+      expect(readActiveChallenge()?.stepIndex).toBe(historyStep + 1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('remembers each step as the learner moves on', () => {

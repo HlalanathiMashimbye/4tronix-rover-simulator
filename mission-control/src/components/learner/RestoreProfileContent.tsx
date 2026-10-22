@@ -117,7 +117,7 @@ export function RestoreProfileContent({
         );
       }
     } catch {
-      setError('Sign-in was cancelled or failed. Please try again.');
+      setError('Sign-in did not finish. Please try again.');
     } finally {
       setSubmitting(false);
     }

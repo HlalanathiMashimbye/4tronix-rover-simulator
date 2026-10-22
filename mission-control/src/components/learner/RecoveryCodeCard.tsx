@@ -16,7 +16,7 @@ interface Props {
 
 export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   const { generateRecoveryCode } = useLearner();
-  const [code, setCode] = useState<string | null>(null);
+  const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -29,7 +29,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
     try {
       const result = await generateRecoveryCode();
       if (result) {
-        setCode(result);
+        setRecoveryCode(result);
       } else {
         setError('Could not generate a recovery code. Please try again.');
       }
@@ -48,7 +48,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
     }
     setVisible(false);
     exitTimer.current = setTimeout(() => {
-      setCode(null);
+      setRecoveryCode(null);
       setCopied(false);
     }, EXIT_MS);
     return () => {
@@ -66,9 +66,9 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   if (!open && !visible) return null;
 
   const handleCopy = async () => {
-    if (!code) return;
+    if (!recoveryCode) return;
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(recoveryCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -77,8 +77,8 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   };
 
   const handleDownload = () => {
-    if (!code) return;
-    const text = `Mars Rover Mission Control — Recovery Code\n\n${code}\n\nEnter this code on any device to restore your missions and progress.\nKeep it somewhere safe. If you lose it, you can generate a new one from your history page.\n`;
+    if (!recoveryCode) return;
+    const text = `Mars Rover Mission Control — Recovery Code\n\n${recoveryCode}\n\nEnter this code on any device to restore your missions and progress.\nKeep it somewhere safe. If you lose it, you can generate a new one from your history page.\n`;
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -130,7 +130,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
             <p className="mt-4 text-center text-sm text-red-400">{error}</p>
           )}
 
-          {code && !loading && (
+          {recoveryCode && !loading && (
             <div
               className="mt-5 flex items-center gap-2 rounded-xl px-4 py-3"
               style={{
@@ -139,7 +139,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
               }}
             >
               <span className="min-w-0 flex-1 font-mono text-2xl font-bold tracking-[0.15em] text-white">
-                {code}
+                {recoveryCode}
               </span>
               <button
                 type="button"

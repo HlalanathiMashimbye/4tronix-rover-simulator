@@ -67,7 +67,7 @@ export function ParentLinkCard({ open, onClose }: Props) {
         setStep('consent');
       }
     } catch {
-      setError('Sign-in was cancelled or failed. Please try again.');
+      setError('Sign-in did not finish. Please try again.');
       setStep('consent');
     }
   }
@@ -94,7 +94,7 @@ export function ParentLinkCard({ open, onClose }: Props) {
         setStep('linked');
       }
     } catch {
-      setError('Sign-in was cancelled or failed. Please try again.');
+      setError('Sign-in did not finish. Please try again.');
       setStep('linked');
     }
   }

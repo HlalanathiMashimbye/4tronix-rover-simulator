@@ -19,9 +19,11 @@ jest.mock('@/infrastructure/browser/getLearnerID', () => ({
 jest.mock('@/components/learner/RecoveryCodeCard', () => ({
   RecoveryCodeCard: () => null,
 }));
-jest.mock('@/components/learner/RestoreFromCode', () => ({
-  RestoreFromCode: () => null,
+jest.mock('@/components/learner/RestoreProfileContent', () => ({
+  RestoreProfileContent: () => null,
 }));
+// The tour offer at the end opens the orientation challenge.
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 jest.mock('@/contexts/LearnerContext', () => ({
   useLearner: () => ({ learner: null, sessionId: 'learner-a', loading: false, updateProfile: jest.fn(async () => true) }),
 }));

@@ -14,7 +14,7 @@
  * /operator/* (an operator is not doing a challenge).
  */
 
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { CHALLENGES } from '@/infrastructure/config/challenges';
 import {
@@ -92,9 +92,10 @@ export function PersistentChallengePanel() {
   const hasChecks = step ? step.checks.length > 0 : false;
 
   const prevAllPassRef = useRef(allStepChecksPass);
-  const advanceRef = useRef<() => void>(() => {});
 
-  advanceRef.current = () => {
+  // An Effect Event, for the same reason as ChallengeWorkspace's: the timer
+  // runs the step that is current when it fires.
+  const advance = useEffectEvent(() => {
     if (!challenge || !active) return;
     if (isFinalStep) {
       if (finishing) return;
@@ -111,7 +112,7 @@ export function PersistentChallengePanel() {
       recordActiveChallenge({ challengeId: challenge.id, stepIndex: newIndex });
       setActive({ challengeId: challenge.id, stepIndex: newIndex });
     }
-  };
+  });
 
   useEffect(() => {
     prevAllPassRef.current = allStepChecksPass;
@@ -121,7 +122,7 @@ export function PersistentChallengePanel() {
     const wasComplete = prevAllPassRef.current;
     prevAllPassRef.current = allStepChecksPass;
     if (!allStepChecksPass || wasComplete || !hasChecks || !visible) return;
-    const timer = setTimeout(() => advanceRef.current(), 3000);
+    const timer = setTimeout(() => advance(), 3000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fires on the false→true transition only
   }, [allStepChecksPass, hasChecks, visible]);

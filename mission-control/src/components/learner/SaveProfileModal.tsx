@@ -107,7 +107,7 @@ export function SaveProfileModal({ open, onClose }: Props) {
           setError(result.error ?? 'Could not link your account.');
         }
       } catch {
-        setError('Sign-in was cancelled or failed. Please try again.');
+        setError('Sign-in did not finish. Please try again.');
       } finally {
         setLinking(false);
       }
