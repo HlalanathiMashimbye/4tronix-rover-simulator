@@ -19,7 +19,7 @@
  * harmless ones and a vault for the rest.
  */
 
-export type SettingGroup = 'email' | 'youtube';
+export type SettingGroup = 'email' | 'youtube' | 'privacy';
 
 export interface SettingSpec {
   /** Which card it belongs to. Five identical boxes in a row read as a form
@@ -141,6 +141,19 @@ export const SETTINGS: Record<string, SettingSpec> = {
     help: 'Whether automatic uploads are marked Made for Kids.',
     secret: false,
     validate: (v) => ['true', 'false'].includes(v.toLowerCase()) ? null : 'Use true or false.',
+  },
+  // Who /privacy names for questions and deletion requests. Sapient is the
+  // responsible party for learners' information, so this is David's to set;
+  // until someone does, the page tells people to ask an operator at the yard
+  // rather than naming nobody.
+  privacyContactEmail: {
+    group: 'privacy',
+    secretId: 'privacy-contact-email',
+    envVar: 'PRIVACY_CONTACT_EMAIL',
+    label: 'Privacy contact',
+    help: 'Shown on the privacy page as the address for questions and requests to see or delete information.',
+    secret: false,
+    validate: looksLikeEmail,
   },
 };
 

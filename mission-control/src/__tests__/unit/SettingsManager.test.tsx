@@ -113,3 +113,18 @@ describe('settings rows', () => {
     expect(await screen.findByText('A channel id starts with UC.')).toBeInTheDocument();
   });
 });
+
+describe('the privacy contact', () => {
+  it('has a card of its own, so an admin finds it under Privacy rather than in email', () => {
+    render(
+      <SettingsManager
+        initialSettings={[
+          setting({ name: 'privacyContactEmail', group: 'privacy', label: 'Privacy contact', configured: false, value: null }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Privacy page' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Privacy contact')).toHaveValue('');
+  });
+});

@@ -25,6 +25,7 @@ import {
   HelpCircle,
   Info,
   Compass,
+  ShieldCheck,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -195,8 +196,8 @@ export function Navbar() {
               Create Mission
             </Link>
 
-            {/* Help, on every size: the tour again, and Sapient's About page.
-                Not shown while a tour is running. */}
+            {/* Help, on every size: the tour again, the privacy page, and
+                Sapient's About page. Not shown while a tour is running. */}
             {!tourActive && (
               <Menu
                 label="Help"
@@ -207,6 +208,10 @@ export function Navbar() {
                   <Compass className="h-4 w-4 text-primary" />
                   Take the tour
                 </button>
+                <Link role="menuitem" href="/privacy" className={menuItemClass}>
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  Privacy
+                </Link>
                 <a
                   role="menuitem"
                   href="https://sapient.rocks/about/"

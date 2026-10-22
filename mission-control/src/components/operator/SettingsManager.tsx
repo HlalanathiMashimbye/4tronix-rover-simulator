@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Loader2, Mail, MonitorPlay } from 'lucide-react';
+import { Check, Loader2, Mail, MonitorPlay, ShieldCheck } from 'lucide-react';
 
 import type { SettingGroup, SettingStatus } from '@/core/domain/services/runtimeSettings';
 
@@ -28,6 +28,11 @@ const GROUPS: Record<SettingGroup, { title: string; blurb: string; Icon: typeof 
     title: 'Run videos',
     blurb: 'Finds uploads by the MissionID in their description and attaches them to the mission on their own.',
     Icon: MonitorPlay,
+  },
+  privacy: {
+    title: 'Privacy page',
+    blurb: 'Who /privacy names for questions about learners\' information, and for requests to see or delete it.',
+    Icon: ShieldCheck,
   },
 };
 

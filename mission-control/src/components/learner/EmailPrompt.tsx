@@ -84,6 +84,18 @@ export function EmailPrompt() {
         <h2 className="text-center text-lg font-bold">Stay in touch</h2>
         <p className="mt-2 text-center text-sm text-muted-foreground">
           Enter your email so we can send mission updates and completion notices. This is optional - you can skip it.
+          {/* Where the address is asked for is where to say what happens to
+              it. A new tab, so following the link does not lose what was
+              typed. */}{' '}
+          Under 18? Ask a parent or teacher first.{' '}
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noopener"
+            className="font-semibold text-foreground underline underline-offset-2"
+          >
+            How we use it
+          </a>
         </p>
 
         <label className="mt-4 block">
