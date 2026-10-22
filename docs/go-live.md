@@ -36,14 +36,17 @@ operator sign-in needs nothing from David.
 
 ## Before the sitting
 
-- [ ] **David** sends the ids of the missions to keep. The id is the last part
-      of a mission's address: `.../missions/zippy-peak-scanner-rc6LJe` is
-      mission `rc6LJehZ3ehLDfM6Fh5MU`; the operator console shows the full id.
-      Prod can go live with none and have them copied in later.
-- [ ] **Hlali** creates the GitHub `production` environment (Settings,
-      Environments, New environment), with required reviewers Hlali and
-      Werner and deployments limited to `main`. `deploy-prod.yml` waits on it;
-      without it the first run would create it unprotected.
+- [ ] **David** sends the ids of the missions to keep, when he has them: not
+      needed to go live (22 Oct). Prod goes live with none, and step 4 is run
+      again with his ids whenever they arrive. The id is the last part of a
+      mission's address: `.../missions/zippy-peak-scanner-rc6LJe` is mission
+      `rc6LJehZ3ehLDfM6Fh5MU`; the operator console shows the full id.
+- [x] **The GitHub `production` environment** exists (22 Oct): required
+      reviewers Hlali and Werner, deployments from `main` only.
+      `deploy-prod.yml` waits on it; without it the first run would have
+      created it unprotected. Either reviewer can approve, including the one
+      who started the run; turn on "Prevent self-review" in its settings to
+      make it always take the other.
 - [ ] **Werner** reads the `terraform-plan` comment on the PR. It should match
       the summary below.
 
@@ -110,8 +113,10 @@ Terraform's settings, and the apply then fails on "already exists".
    node scripts/copy-to-database.mjs --missions <ids from David> --apply
    ```
 
-   With no missions picked, run it with `--missions ""` so the yard and the
-   operators still go across.
+   With no missions picked yet, run it with `--missions ""` so the yard and
+   the operators still go across. David's missions follow with a second run,
+   `--missions <ids> --apply`, which adds them and leaves prod's own yard
+   record and operators as they are by then.
 
 5. **Hlali runs "Deploy prod"** (Actions, Deploy prod, Run workflow) and
    **Werner approves it.** It refuses to promote unless prod's service names

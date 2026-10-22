@@ -15,6 +15,14 @@
  *     sign-in. Roles themselves are custom claims on Firebase Auth users,
  *     which belong to the project, so they need no copying.
  *
+ * RUN IT AGAIN FOR MORE MISSIONS. Prod can go live before David has picked
+ * any, so the yard and the operators go across on the first run and his
+ * missions on a later one. The yard, users and invite documents are therefore
+ * only ever added, never overwritten: after the first run prod owns them, and
+ * a second run must not put staging's old yard record back over a change made
+ * on prod. Missions are the other way round: one already in prod stops the
+ * run unless --force says to overwrite it.
+ *
  * NOT LEARNERS. A copied mission keeps its learnerRef, so it still shows in
  * that learner's history, but no learner document and no email address is
  * copied: prod starts without children's addresses it was never given.
@@ -34,7 +42,7 @@
  *   --from <db>        source database, default (default)
  *   --to <db>          target database, default prod
  *   --apply            write; without it nothing is written
- *   --force            overwrite documents that already exist in the target
+ *   --force            overwrite picked missions that already exist in the target
  *
  * The target must already exist: Terraform creates it (docs/go-live.md).
  */
@@ -78,17 +86,21 @@ console.log(`to:      ${TO}`);
 console.log(APPLY ? 'MODE:    APPLY (writes to the target)' : 'MODE:    DRY RUN (writes nothing)');
 console.log('');
 
-/** [targetRef, data] pairs, gathered first so a dry run and an apply agree. */
+/**
+ * { ref, data, keep } entries, gathered first so a dry run and an apply agree.
+ * `keep` is true for documents prod owns once it has them (yard, users,
+ * invites): an existing one is left alone rather than overwritten.
+ */
 const writes = [];
 
 /** A document and everything under it, at the same path in the target. */
-async function gather(docRef, clean = (data) => data) {
+async function gather(docRef, { clean = (data) => data, keep = false } = {}) {
   const snap = await docRef.get();
   if (!snap.exists) return false;
-  writes.push([target.doc(docRef.path), clean({ ...snap.data() })]);
+  writes.push({ ref: target.doc(docRef.path), data: clean({ ...snap.data() }), keep });
   for (const sub of await docRef.listCollections()) {
     for (const child of (await sub.get()).docs) {
-      await gather(child.ref, clean);
+      await gather(child.ref, { clean, keep });
     }
   }
   return true;
@@ -102,7 +114,7 @@ const withoutEmail = (data) => {
 const missing = [];
 for (const id of MISSIONS) {
   const ref = source.collection('missions').doc(id);
-  if (!(await gather(ref, withoutEmail))) {
+  if (!(await gather(ref, { clean: withoutEmail }))) {
     missing.push(id);
     continue;
   }
@@ -118,12 +130,12 @@ if (missing.length) {
 
 for (const collection of ['yards', 'users', 'operatorInvites']) {
   for (const doc of (await source.collection(collection).get()).docs) {
-    await gather(doc.ref);
+    await gather(doc.ref, { keep: true });
   }
 }
 
 const counts = {};
-for (const [ref] of writes) {
+for (const { ref } of writes) {
   const top = ref.path.split('/')[0];
   counts[top] = (counts[top] ?? 0) + 1;
 }
@@ -137,23 +149,32 @@ if (!APPLY) {
   process.exit(0);
 }
 
-// Re-running over live data overwrites whatever prod has done since, so a
-// document already in the target stops the run unless that is meant.
-if (!FORCE) {
-  const existing = [];
-  for (const [ref] of writes) {
-    if ((await ref.get()).exists) existing.push(ref.path);
+// What the target already has: prod's own yard and operators are kept, and a
+// picked mission that is already there stops the run unless --force.
+const toWrite = [];
+const clashes = [];
+let kept = 0;
+for (const write of writes) {
+  if (!(await write.ref.get()).exists) {
+    toWrite.push(write);
+  } else if (write.keep) {
+    kept += 1;
+  } else if (FORCE) {
+    toWrite.push(write);
+  } else {
+    clashes.push(write.ref.path);
   }
-  if (existing.length) {
-    console.error(`\n${existing.length} of these already exist in ${TO}, e.g. ${existing.slice(0, 3).join(', ')}.`);
-    console.error('Refusing to overwrite. Pass --force if that is what you mean.');
-    process.exit(1);
-  }
+}
+if (clashes.length) {
+  console.error(`\n${clashes.length} picked document(s) already exist in ${TO}, e.g. ${clashes.slice(0, 3).join(', ')}.`);
+  console.error('Refusing to overwrite. Pass --force if that is what you mean. Nothing was written.');
+  process.exit(1);
 }
 
-for (let at = 0; at < writes.length; at += 400) {
+for (let at = 0; at < toWrite.length; at += 400) {
   const batch = target.batch();
-  for (const [ref, data] of writes.slice(at, at + 400)) batch.set(ref, data);
+  for (const { ref, data } of toWrite.slice(at, at + 400)) batch.set(ref, data);
   await batch.commit();
 }
-console.log(`\nWrote ${writes.length} document(s) to ${TO}.`);
+console.log(`\nWrote ${toWrite.length} document(s) to ${TO}.`);
+if (kept) console.log(`Left ${kept} yard, user or invite document(s) ${TO} already had.`);
