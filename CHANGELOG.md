@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The satellite's upload secret is set on its Settings page.** It was a line
+  in a `.env` on the Pi, the last setting that still needed one. It sits in the
+  Mission Control dialog now, with the address, and the page never shows it
+  back: only whether one is set, and for which address. The console has no
+  sign-in, so anyone on the yard's wifi could change the address, and a secret
+  that followed it would arrive at their server in the next upload's headers,
+  enough to post videos to the channel as this yard. So it is only ever sent to
+  the Mission Control it was entered for, and a new address asks for it again.
+  The runbook has how the team sets a value without being able to read
+  Terraform's.
+
 - **Prod goes live on a database of its own.** The live site moves from
   `marsyard.labs.ws`, the service called staging, to `marsyard.sapient.rocks`,
   which served Google's placeholder page since August. Prod starts clean on a

@@ -74,7 +74,7 @@ at all now, so **keep Firebase values out of `yard/satellite/.env`**: it needs
 | Where | Holds | Credential |
 |---|---|---|
 | `mission-control/.env` | `NEXT_PUBLIC_FIREBASE_*`, `FIREBASE_PROJECT_ID`; optionally `RESEND_*`, `YOUTUBE_*`, `CRON_SECRET` | ADC |
-| `yard/satellite/.env` | `YARD_ID`, ports if they differ, and optionally `YOUTUBE_UPLOAD_INGEST_SECRET` | shared upload-ingest credential only; no Firebase or YouTube OAuth credentials |
+| `yard/satellite/.env` | `YARD_ID` and ports if they differ. The Mission Control address and upload secret are set on the Settings page | shared upload-ingest credential only; no Firebase or YouTube OAuth credentials |
 | `yard/rover/.env` | `ROVER_SERVER_PORT`, `YARD_TYPE`, `POSTHOG_*` (optional) | none needed |
 | Cloud Run (staging/prod) | `FIREBASE_PROJECT_ID`; `CRON_SECRET` and `YOUTUBE_UPLOAD_INGEST_SECRET` mounted; Resend and YouTube settings read from Secret Manager per request, edited on `/operator/settings` | ADC via runtime service account |
 
@@ -101,12 +101,31 @@ secret. `infra/imports.tf` takes the three into state on the go-live apply
 ([docs/go-live.md](go-live.md)), which also creates the rest.
 
 Terraform also generates `YOUTUBE_UPLOAD_INGEST_SECRET` and mounts it into
-Cloud Run. The satellite needs the same value in `yard/satellite/.env`, and
-its Mission Control address set on its Settings page (the link button beside
-power; prod by default); do not put any YouTube
-OAuth credential on the satellite. Retrieve and transfer the ingest secret
-using the team's approved secret-handling process. It is used only to
-authenticate the satellite's closed-recording upload requests.
+Cloud Run. The satellite needs the same value, entered on its Settings page:
+the link button beside power opens the Mission Control dialog, with the
+address and the upload secret. The page never shows it back, and the
+satellite sends it only to the address it was entered for, so repointing the
+yard asks for it again. Do not put any YouTube OAuth credential on the
+satellite.
+
+The team's accounts can add a version of a secret but not read one, so the
+way to get a value for the satellite without asking Werner is to set a new
+one and give both sides the same:
+
+```bash
+VALUE=$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")
+printf %s "$VALUE" | gcloud secrets versions add youtube-upload-ingest-secret \
+  --project bt-impact-academy --data-file=-
+gcloud run services update mission-control-prod --project bt-impact-academy \
+  --region africa-south1 --revision-suffix=secret-$(date +%Y%m%d%H%M)
+echo "$VALUE"   # paste into the satellite's Settings, then clear your terminal
+```
+
+The update starts a new revision, which is what reads the new version: the
+service mounts `latest`, and a running revision keeps the value it started
+with. A revision suffix rather than a label or an environment variable,
+because those are Terraform's and would show up as drift in the next plan. It is used only to authenticate the satellite's closed-recording upload
+requests.
 
 ### Local setup from scratch
 

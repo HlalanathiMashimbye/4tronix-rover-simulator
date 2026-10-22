@@ -66,3 +66,73 @@ def test_escape_closes_it_without_saving(page: Page, live_server, monkeypatch):
     assert not page.is_visible('#mcDialog')
     page.reload()
     assert back_link(page) == 'https://marsyard.sapient.rocks/operator'
+
+
+# --- The upload secret, in the same dialog ----------------------------------
+
+SECRET = 'S' * 24 + 'x9Kq-Lw2_Zp7Rt4Vb8Nm3Jh6'
+
+
+@pytest.fixture
+def no_secret(monkeypatch):
+    import youtube_upload
+    monkeypatch.delenv('YOUTUBE_UPLOAD_INGEST_SECRET', raising=False)
+    monkeypatch.delenv('MISSION_CONTROL_URL', raising=False)
+    monkeypatch.setattr(youtube_upload, 'kick', lambda: None)
+
+
+def secret_state(page: Page):
+    return page.inner_text('#mcSecretState')
+
+
+def test_the_secret_is_set_here_and_never_shown_again(page: Page, live_server, no_secret):
+    open_dialog(page, live_server)
+    assert secret_state(page).startswith('Not set')
+
+    page.fill('#mcSecret', SECRET)
+    page.click('#mcSave')
+    page.wait_for_selector('#mcMsg[data-tone="ok"]')
+
+    assert secret_state(page) == 'Set for marsyard.sapient.rocks'
+    assert page.input_value('#mcSecret') == ''
+    page.reload()
+    open_dialog(page, live_server)
+    assert page.input_value('#mcSecret') == ''
+    assert secret_state(page) == 'Set for marsyard.sapient.rocks'
+    assert SECRET not in page.content()
+
+
+def test_a_new_address_asks_for_the_secret_again(page: Page, live_server, no_secret):
+    open_dialog(page, live_server)
+    page.fill('#mcSecret', SECRET)
+    page.click('#mcSave')
+    page.wait_for_selector('#mcMsg[data-tone="ok"]')
+
+    page.fill('#tunMissionControl', 'marsyard.labs.ws')
+    page.click('#mcSave')
+    page.wait_for_function("document.getElementById('mcSecretState').textContent.startsWith('Was for')")
+
+    assert 'marsyard.sapient.rocks' in secret_state(page)
+    assert page.get_attribute('#mcSecretState', 'data-tone') == 'warn'
+
+
+def test_a_wrong_secret_says_so_and_sets_nothing(page: Page, live_server, no_secret):
+    open_dialog(page, live_server)
+    page.fill('#mcSecret', 'too short')
+    page.click('#mcSave')
+    page.wait_for_selector('#mcMsg[data-tone="bad"]')
+
+    assert secret_state(page).startswith('Not set')
+
+
+def test_remove_turns_automatic_upload_off(page: Page, live_server, no_secret):
+    open_dialog(page, live_server)
+    assert page.is_hidden('#mcRemoveSecret')
+    page.fill('#mcSecret', SECRET)
+    page.click('#mcSave')
+    page.wait_for_selector('#mcRemoveSecret:not([hidden])')
+
+    page.click('#mcRemoveSecret')
+    page.wait_for_function("document.getElementById('mcSecretState').textContent.startsWith('Not set')")
+
+    assert page.is_hidden('#mcRemoveSecret')

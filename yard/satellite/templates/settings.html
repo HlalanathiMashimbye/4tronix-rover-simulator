@@ -72,6 +72,11 @@
            rover hostname, and "https://" pushed the part that matters off. */
         #mcDialog .cfg-input { width: 100%; margin-bottom: 0.4rem; }
         #mcDialog .save-status:empty { display: none; }
+        #mcDialog .mc-label { display: flex; justify-content: space-between; gap: 0.5rem; margin: 0.6rem 0 0.3rem;
+                              font-size: var(--fs-xs); font-weight: 600; color: var(--text-dim); }
+        #mcDialog .mc-secret-state { font-weight: 400; text-align: right; }
+        #mcDialog .mc-secret-state[data-tone="ok"] { color: var(--ok); }
+        #mcDialog .mc-secret-state[data-tone="warn"] { color: var(--warn); }
         .power-cmd { display: block; margin: 0.6rem 0 1.1rem; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg); background: var(--background); font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; color: var(--text); }
 
         /* Pointing at a rover: a switch, a finder, and a typed address, in
@@ -495,7 +500,7 @@
                  dialog rather than a card: it changes about once a year, and
                  a card would push the recordings list for something nobody
                  looks at in between. -->
-            <button class="iconbtn" id="mcBtn" type="button" aria-label="Mission Control address" title="Mission Control address">
+            <button class="iconbtn" id="mcBtn" type="button" aria-label="Mission Control address and upload secret" title="Mission Control address and upload secret">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
             </button>
             <button class="iconbtn power-btn" id="powerBtn" type="button" aria-label="Shut down the satellite" title="Shut down the satellite">
@@ -712,15 +717,23 @@
 
         <dialog class="modal" id="mcDialog" aria-labelledby="mcTitle">
             <form class="modal-body" id="mcForm" method="dialog">
-                <h2 id="mcTitle">Mission Control address</h2>
+                <h2 id="mcTitle">Mission Control</h2>
                 <p>Where this yard's Mission Control link goes, and where its recordings upload
                     once automatic upload is on. The live site is marsyard.sapient.rocks;
                     marsyard.labs.ws is staging, with test missions.</p>
+                <label class="mc-label" for="tunMissionControl">Address</label>
                 <input type="text" id="tunMissionControl" class="cfg-input" spellcheck="false"
-                       autocomplete="off" aria-label="Mission Control address"
-                       placeholder="marsyard.sapient.rocks">
+                       autocomplete="off" placeholder="marsyard.sapient.rocks">
+                <!-- Write-only. The page is told whether one is set and for
+                     which address, never what it is: there is no sign-in here,
+                     so anything this page can read, anyone on the wifi can. -->
+                <label class="mc-label" for="mcSecret">Upload secret
+                    <span class="mc-secret-state" id="mcSecretState"></span></label>
+                <input type="password" id="mcSecret" class="cfg-input" spellcheck="false"
+                       autocomplete="new-password" placeholder="Only for automatic upload">
                 <p class="save-status" id="mcMsg" role="status" aria-live="polite"></p>
                 <div class="modal-actions">
+                    <button class="btn quiet" type="button" id="mcRemoveSecret" hidden>Remove secret</button>
                     <button class="btn quiet" type="button" id="mcCancel">Cancel</button>
                     <button class="btn primary" type="submit" id="mcSave">Use</button>
                 </div>
@@ -1861,39 +1874,82 @@
             }
         }
 
-        // --- Mission Control address ----------------------------------------
-        // A tunable like the rest: stored on this satellite, read on every
-        // use, so the next page links to the new address with no restart.
+        // --- Mission Control: address and upload secret -----------------------
+        // The address is a tunable like the rest: stored on this satellite and
+        // read on every use, so the next page links to it with no restart. The
+        // secret is not, and never comes back to the page: see
+        // youtube_upload.save_secret for why it belongs to one address.
         (function () {
             const dialog = document.getElementById('mcDialog');
             const input = document.getElementById('tunMissionControl');
+            const secret = document.getElementById('mcSecret');
+            const state = document.getElementById('mcSecretState');
+            const remove = document.getElementById('mcRemoveSecret');
             const msg = document.getElementById('mcMsg');
+            const host = (url) => String(url || '').replace(/^https?:\/\//, '');
+
+            function say(text, tone) {
+                msg.textContent = text || '';
+                if (tone) msg.dataset.tone = tone; else delete msg.dataset.tone;
+            }
+
+            function paintSecret(status) {
+                remove.hidden = !(status && status.source === 'settings');
+                if (status && status.configured) {
+                    state.dataset.tone = 'ok';
+                    state.textContent = (status.source === 'environment' ? 'Set on this satellite for ' : 'Set for ')
+                        + host(status.issuedFor);
+                } else if (status && status.otherAddress) {
+                    state.dataset.tone = 'warn';
+                    state.textContent = 'Was for ' + host(status.issuedFor) + '. Enter it again for this address.';
+                } else {
+                    delete state.dataset.tone;
+                    state.textContent = 'Not set: automatic upload is off';
+                }
+            }
+
+            async function loadSecret() {
+                try {
+                    paintSecret(await fetch('/operator/api/config/upload-secret').then((r) => r.json()));
+                } catch (e) { paintSecret(null); }
+            }
 
             document.getElementById('mcBtn').addEventListener('click', async () => {
-                msg.textContent = '';
-                delete msg.dataset.tone;
+                say('');
+                secret.value = '';
                 try {
                     const d = await fetch('/operator/api/config/tunables').then((r) => r.json());
                     input.value = (d.values || {}).missionControlUrl || '';
                 } catch (e) { /* the box opens empty; Use still says what went wrong */ }
+                await loadSecret();
                 dialog.showModal();
                 input.select();
             });
             document.getElementById('mcCancel').addEventListener('click', () => dialog.close());
 
+            remove.addEventListener('click', async () => {
+                const resp = await fetch('/operator/api/config/upload-secret', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ secret: '' }),
+                }).catch(() => null);
+                if (!resp || !resp.ok) { say('Could not reach the satellite to remove it.', 'bad'); return; }
+                paintSecret(await resp.json());
+                say('Removed. Automatic upload is off on this satellite.', 'ok');
+            });
+
             document.getElementById('mcForm').addEventListener('submit', async (event) => {
                 event.preventDefault();
-                msg.textContent = 'Saving\u2026';
-                delete msg.dataset.tone;
+                say('Saving…');
                 try {
+                    // The address first: the secret is stored for whatever
+                    // address is in force when it is saved.
                     const resp = await fetch('/operator/api/config/tunables', {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ missionControlUrl: input.value }),
                     });
                     const data = await resp.json().catch(() => ({}));
                     if (!resp.ok) {
-                        msg.dataset.tone = 'bad';
-                        msg.textContent = 'That is not a web address. Type one like marsyard.sapient.rocks.';
+                        say('That is not a web address. Type one like marsyard.sapient.rocks.', 'bad');
                         return;
                     }
                     const now = data.values.missionControlUrl;
@@ -1903,11 +1959,26 @@
                         link.dataset.missionControl = now;
                     });
                     input.value = now;
-                    msg.dataset.tone = 'ok';
-                    msg.textContent = 'Saved. This yard now belongs to ' + now.replace(/^https?:\/\//, '') + '.';
+
+                    if (secret.value.trim()) {
+                        const sresp = await fetch('/operator/api/config/upload-secret', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ secret: secret.value }),
+                        });
+                        const sdata = await sresp.json().catch(() => ({}));
+                        if (!sresp.ok) {
+                            await loadSecret();
+                            say(sdata.error || 'That is not the upload secret.', 'bad');
+                            return;
+                        }
+                        secret.value = '';
+                        paintSecret(sdata);
+                    } else {
+                        await loadSecret();
+                    }
+                    say('Saved. This yard now belongs to ' + host(now) + '.', 'ok');
                 } catch (e) {
-                    msg.dataset.tone = 'bad';
-                    msg.textContent = 'Could not reach the satellite to save it.';
+                    say('Could not reach the satellite to save it.', 'bad');
                 }
             });
         })();
