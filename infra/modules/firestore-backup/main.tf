@@ -97,9 +97,30 @@ resource "google_storage_bucket_iam_member" "exporter_bucket" {
 
 # --- The schedule ----------------------------------------------------------
 
+# One job per database, into the one bucket. (default) keeps the name and the
+# bare-bucket prefix it has always had, so its job is not replaced and its
+# exports stay where any restore instructions already point. Every other
+# database writes under a prefix of its own name.
+locals {
+  export_prefixes = {
+    for database in var.database_ids : database => (
+      database == "(default)"
+      ? "gs://${google_storage_bucket.exports.name}"
+      : "gs://${google_storage_bucket.exports.name}/${database}"
+    )
+  }
+}
+
+moved {
+  from = google_cloud_scheduler_job.export
+  to   = google_cloud_scheduler_job.export["(default)"]
+}
+
 resource "google_cloud_scheduler_job" "export" {
-  name        = "firestore-export-weekly"
-  description = "Managed Firestore export to gs://${google_storage_bucket.exports.name}, retained ${var.retention_days} days."
+  for_each = local.export_prefixes
+
+  name        = each.key == "(default)" ? "firestore-export-weekly" : "firestore-export-weekly-${each.key}"
+  description = "Managed export of Firestore database ${each.key} to ${each.value}, retained ${var.retention_days} days."
   # Also not the deployment's region, for a different reason than the bucket:
   # Cloud Scheduler does not exist in africa-south1. The API rejects it
   # outright and ListLocations returns 30 regions, none of them in Africa, so
@@ -112,7 +133,7 @@ resource "google_cloud_scheduler_job" "export" {
 
   http_target {
     http_method = "POST"
-    uri         = "https://firestore.googleapis.com/v1/projects/${var.project_id}/databases/${var.database_id}:exportDocuments"
+    uri         = "https://firestore.googleapis.com/v1/projects/${var.project_id}/databases/${each.key}:exportDocuments"
 
     headers = {
       "Content-Type" = "application/json"
@@ -122,10 +143,10 @@ resource "google_cloud_scheduler_job" "export" {
     # a new collection is silently outside the backup until someone remembers
     # to add it, and forgetting is invisible until a restore.
     #
-    # outputUriPrefix is the bare bucket, so Firestore generates its own
-    # timestamped prefix per run and no two exports can collide.
+    # outputUriPrefix names no timestamp, so Firestore generates its own
+    # prefix per run under it and no two exports can collide.
     body = base64encode(jsonencode({
-      outputUriPrefix = "gs://${google_storage_bucket.exports.name}"
+      outputUriPrefix = each.value
     }))
 
     # OAuth, not OIDC. Targets on *.googleapis.com expect an access token; an

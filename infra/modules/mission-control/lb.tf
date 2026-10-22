@@ -64,11 +64,34 @@ resource "google_compute_url_map" "mission_control" {
 }
 
 # --- HTTP (always): IP-based demo access, and clear failures before DNS/cert ---
+#
+# Once an environment has a hostname, port 80 only redirects. It used to serve
+# the whole app, API included, so a learner who typed marsyard.labs.ws without
+# https:// filled in their email address over plain HTTP: the certificate was
+# there, and nothing sent anyone to it. Found 22 Oct 2026, before prod.
+#
+# A second URL map whose only job is the redirect is Google's documented shape
+# for this, and it leaves the managed certificate's provisioning untouched.
+
+resource "google_compute_url_map" "https_redirect" {
+  for_each = local.domains
+  name     = "mission-control-${each.key}-https-redirect"
+
+  default_url_redirect {
+    https_redirect         = true
+    redirect_response_code = "MOVED_PERMANENTLY_DEFAULT"
+    strip_query            = false
+  }
+}
 
 resource "google_compute_target_http_proxy" "mission_control" {
   for_each = var.environments
   name     = "mission-control-${each.key}"
-  url_map  = google_compute_url_map.mission_control[each.key].id
+  url_map = (
+    contains(keys(local.domains), each.key)
+    ? google_compute_url_map.https_redirect[each.key].id
+    : google_compute_url_map.mission_control[each.key].id
+  )
 }
 
 resource "google_compute_global_forwarding_rule" "http" {

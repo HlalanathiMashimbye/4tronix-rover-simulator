@@ -69,7 +69,7 @@ def test_the_console_links_back_to_mission_control(client):
     for path in ('/', '/run/', '/settings'):
         page = client.get(path).get_data(as_text=True)
         assert 'class="mc-back"' in page, path
-        assert 'https://marsyard.labs.ws' in page, path
+        assert 'https://marsyard.sapient.rocks' in page, path
 
 
 
@@ -458,6 +458,6 @@ def test_the_way_back_goes_to_the_operator_console_not_the_learner_feed(client):
     never been."""
     page = client.get('/run/').get_data(as_text=True)
     back = page.split('class="mc-back"', 1)[1].split('>', 1)[0]
-    assert 'href="https://marsyard.labs.ws/operator"' in back
-    assert 'data-mission-control="https://marsyard.labs.ws"' in back
+    assert 'href="https://marsyard.sapient.rocks/operator"' in back
+    assert 'data-mission-control="https://marsyard.sapient.rocks"' in back
     assert '/static/mc-return.js' in page

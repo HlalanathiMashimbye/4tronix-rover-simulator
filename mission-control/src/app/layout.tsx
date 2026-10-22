@@ -4,6 +4,8 @@ import Script from "next/script";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
 import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
+import { FirestoreDatabaseMeta } from "@/components/layout/FirestoreDatabaseMeta";
+import { SearchIndexingMeta } from "@/components/layout/SearchIndexingMeta";
 import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
@@ -160,6 +162,8 @@ export default function RootLayout({
                   while each page publishes what is searchable. */}
               <SearchProvider>
               <EnvironmentBanner />
+              <FirestoreDatabaseMeta />
+              <SearchIndexingMeta />
               <Navbar />
               {/* Keeps content clear of the fixed bottom tab bar. The same
                   token the full-height pages subtract, so the padding here and

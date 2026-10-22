@@ -101,6 +101,14 @@ jobs:
           fi
           echo "Staging URL: $URL"
 
+          # The database its pages must name: what Terraform set on the
+          # service, or (default) on a service from before it set one, which
+          # is where the app falls back to outside prod.
+          DATABASE=$(gcloud run services describe "${{ vars.STAGING_SERVICE }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}" --region "${{ vars.GCP_REGION }}" \
+            --format=json \
+            | jq -r '.spec.template.spec.containers[0].env[]? | select(.name == "FIREBASE_DATABASE_ID") | .value')
+
           # What is asserted, and why, is in the script. Prod runs the same
           # one, so the two cannot disagree about what a good deploy is.
-          bash scripts/smoke-check.sh "$URL"
+          bash scripts/smoke-check.sh "$URL" "${DATABASE:-(default)}"

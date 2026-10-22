@@ -359,11 +359,14 @@ describe('the deploy smoke check', () => {
   // Comments stripped: a workflow may explain the check, it may not make it.
   const steps = (name: string) => root(`.github/workflows/${name}`).replace(/^\s*#.*$/gm, '');
 
-  it('is one script, run by both deploy workflows against their own URL', () => {
+  it('is one script, run by both deploy workflows against their own URL and database', () => {
     expect(existsSync(join(SRC, '..', '..', SCRIPT))).toBe(true);
 
+    // The database argument is required, not optional: prod and staging are
+    // two databases in one project, and a promoted image pointing at the
+    // wrong one passes every other assertion in the script.
     const notRunningIt = workflows.filter(
-      (name) => !/^\s*bash scripts\/smoke-check\.sh "\$URL"\s*$/m.test(steps(name))
+      (name) => !/^\s*bash scripts\/smoke-check\.sh "\$URL" "[^"]+"\s*$/m.test(steps(name))
     );
 
     expect(notRunningIt).toEqual([]);

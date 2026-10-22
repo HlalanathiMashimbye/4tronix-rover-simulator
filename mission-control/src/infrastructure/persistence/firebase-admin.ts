@@ -27,6 +27,7 @@
 import { initializeApp, getApps, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
+import { resolveFirestoreDatabaseId } from '@/infrastructure/config/firestoreDatabase';
 
 let app: App | undefined;
 let firestoreInstance: Firestore | undefined;
@@ -139,8 +140,10 @@ export function getFirestoreInstance(): Firestore {
     return firestoreInstance;
   }
 
-  initializeFirebaseAdmin();
-  firestoreInstance = getFirestore();
+  // Named, not implied: prod and staging are two databases in one project, so
+  // "the project's database" no longer says which. See firestoreDatabase.ts.
+  const adminApp = initializeFirebaseAdmin();
+  firestoreInstance = getFirestore(adminApp, resolveFirestoreDatabaseId());
 
   return firestoreInstance;
 }

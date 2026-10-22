@@ -25,3 +25,11 @@ output "lb_ip_addresses" {
     for env, addr in google_compute_global_address.mission_control : env => addr.address
   }
 }
+
+output "firestore_databases" {
+  description = "Every database an environment uses, for the weekly export. Read from the created resources, so a backup of a new database waits for the database."
+  value = distinct(concat(
+    [for env, cfg in var.environments : cfg.firestore_database if cfg.firestore_database == "(default)"],
+    [for database in google_firestore_database.environment : database.name],
+  ))
+}

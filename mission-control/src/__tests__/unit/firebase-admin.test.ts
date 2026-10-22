@@ -132,3 +132,59 @@ describe('initializeFirebaseAdmin', () => {
     },
   );
 });
+
+describe('getFirestoreInstance', () => {
+  // Prod and staging are two databases in one project, so the server has to
+  // name which one it opens: getFirestore(app) alone is always (default),
+  // which is staging's.
+  const originalEnv = process.env;
+
+  async function openWith(env: Record<string, string>) {
+    jest.resetModules();
+    process.env = { ...originalEnv, FIREBASE_PROJECT_ID: 'bt-impact-academy', ...env };
+    delete process.env.FIREBASE_CLIENT_EMAIL;
+    delete process.env.FIREBASE_PRIVATE_KEY;
+    delete process.env.FIRESTORE_EMULATOR_HOST;
+    if (!('APP_ENV' in env)) delete process.env.APP_ENV;
+    if (!('FIREBASE_DATABASE_ID' in env)) delete process.env.FIREBASE_DATABASE_ID;
+
+    const app = { name: 'test-app' };
+    const getFirestore = jest.fn(() => ({}));
+    jest.doMock('firebase-admin/app', () => ({
+      applicationDefault: jest.fn(() => 'adc-credential'),
+      getApps: jest.fn(() => []),
+      initializeApp: jest.fn(() => app),
+    }));
+    jest.doMock('firebase-admin/firestore', () => ({ getFirestore }));
+
+    const { getFirestoreInstance } = await import('@/infrastructure/persistence/firebase-admin');
+    return { open: getFirestoreInstance, getFirestore, app };
+  }
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
+
+  it('opens the database the service names', async () => {
+    const { open, getFirestore, app } = await openWith({ APP_ENV: 'prod', FIREBASE_DATABASE_ID: 'prod' });
+
+    open();
+
+    expect(getFirestore).toHaveBeenCalledWith(app, 'prod');
+  });
+
+  it('opens (default) on staging and locally', async () => {
+    const { open, getFirestore, app } = await openWith({ APP_ENV: 'staging' });
+
+    open();
+
+    expect(getFirestore).toHaveBeenCalledWith(app, '(default)');
+  });
+
+  it('opens nothing on a prod that names no database', async () => {
+    const { open, getFirestore } = await openWith({ APP_ENV: 'prod' });
+
+    expect(() => open()).toThrow(/FIREBASE_DATABASE_ID/);
+    expect(getFirestore).not.toHaveBeenCalled();
+  });
+});

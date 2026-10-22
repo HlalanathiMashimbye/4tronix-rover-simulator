@@ -94,15 +94,16 @@ existing accessor/version-adder permissions. Configure the Google OAuth Web
 client redirect URIs as listed in
 [Mission Control's YouTube setup](../mission-control/README.md#youtube-upload-authorization-and-configuration).
 
-**Not applied yet (checked 21 October 2026).** `youtube-client-id`,
+**Not applied yet (checked 22 October 2026).** `youtube-client-id`,
 `youtube-client-secret` and `youtube-refresh-token` were made by hand on
 11 October, the other three do not exist, and Cloud Run mounts no ingest
-secret. The next `terraform apply` fails on the three that exist until they
-are imported; see [`infra/README.md`](../infra/README.md).
+secret. `infra/imports.tf` takes the three into state on the go-live apply
+([docs/go-live.md](go-live.md)), which also creates the rest.
 
 Terraform also generates `YOUTUBE_UPLOAD_INGEST_SECRET` and mounts it into
-Cloud Run. The satellite needs the same value in `yard/satellite/.env` plus
-`MISSION_CONTROL_URL` for the matching deployment; do not put any YouTube
+Cloud Run. The satellite needs the same value in `yard/satellite/.env`, and
+its Mission Control address set on its Settings page (the link button beside
+power; prod by default); do not put any YouTube
 OAuth credential on the satellite. Retrieve and transfer the ingest secret
 using the team's approved secret-handling process. It is used only to
 authenticate the satellite's closed-recording upload requests.
@@ -167,8 +168,14 @@ Both live in the repo (`firestore.rules`, `firestore.indexes.json`) and are
 
 ```bash
 firebase login:use your email
-firebase deploy --only firestore --project bt-impact-academy
+scripts/deploy-firestore.sh
 ```
+
+It deploys to both databases: `(default)`, staging's, from `firebase.json`,
+and `prod` from `firebase.prod.json`. Two files because the Firestore emulator
+cannot load rules from a list of databases: given one, it allows every read
+and write, and CI's rules tests would pass against nothing. A plain
+`firebase deploy --only firestore` reaches `(default)` only.
 
 Without `--force` it will create missing indexes and refuse to delete ones not
 in the repo, telling you how many it skipped. Read that number before reaching

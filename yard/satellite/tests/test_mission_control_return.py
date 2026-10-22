@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 from playwright.sync_api import Page
 
-OPERATOR = 'https://marsyard.labs.ws/operator'
+OPERATOR = 'https://marsyard.sapient.rocks/operator'
 
 
 def back_href(page: Page) -> str:

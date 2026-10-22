@@ -35,13 +35,24 @@ domains = {
   staging = "marsyard.labs.ws"
 }
 
-# Which environment runs the YouTube auto-link schedule. Exactly one may:
-# both environments point at this project and therefore share one Firestore,
-# so two schedulers would race to attach the same video to the same run.
+# Prod's own database. Prod starts clean on `prod`; staging keeps (default),
+# which holds every mission since the pilot, test runs included. The missions
+# worth keeping are copied across by hand (docs/go-live.md), not migrated.
 #
-# staging, because that is the environment actually serving learners; prod is
-# deliberately not deployed. Move this the day prod comes up, do not add to it.
-cron_environment = "staging"
+# min/max are the variable's defaults, restated because a map replaces the
+# default whole: leaving staging out here would delete the staging service.
+environments = {
+  staging = { min_instances = 0, max_instances = 2, firestore_database = "(default)" }
+  prod    = { min_instances = 0, max_instances = 10, firestore_database = "prod" }
+}
+
+# Which environment runs the YouTube auto-link schedule. One at most: there is
+# one YouTube channel, and a second schedule would only attach the yard's
+# videos to the other environment's missions.
+#
+# prod, from the day prod went live (docs/go-live.md). Until then it was
+# staging, because staging was the environment serving learners.
+cron_environment = "prod"
 
 # Email. The domain marsyard.sapient.rocks is verified in Resend (DKIM + SPF
 # MX/TXT + DMARC live in GoDaddy), so mail can now go to any learner address

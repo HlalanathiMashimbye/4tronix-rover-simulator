@@ -69,8 +69,8 @@ def _secret():
 
 
 def _endpoint():
-    base = (os.environ.get('MISSION_CONTROL_URL') or 'https://marsyard.labs.ws').rstrip('/')
-    return f'{base}/api/youtube-upload/recording'
+    import tunables
+    return f"{tunables.get('missionControlUrl')}/api/youtube-upload/recording"
 
 
 def _recordings_dir():
@@ -223,9 +223,9 @@ def _waiting_count():
 
 def check_connection(now=None):
     """Whether Mission Control answers at all. Any reply is a yes."""
-    base = (os.environ.get('MISSION_CONTROL_URL') or 'https://marsyard.labs.ws').rstrip('/')
+    import tunables
     try:
-        requests.head(base, timeout=(3, 3), allow_redirects=False)
+        requests.head(tunables.get('missionControlUrl'), timeout=(3, 3), allow_redirects=False)
     except requests.exceptions.RequestException:
         _saw(False, now)
         return False

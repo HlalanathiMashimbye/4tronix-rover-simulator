@@ -91,6 +91,24 @@ def _clock_time(raw):
     return f'{int(match.group(1)):02d}:{match.group(2)}'
 
 
+def _web_address(raw):
+    """An http(s) address with no trailing slash, or ValueError.
+
+    Typed by an operator, so a bare host is taken to mean https: the address
+    printed on a poster is marsyard.sapient.rocks, not https://.... Anything
+    with a path, a space or another scheme is refused rather than guessed at,
+    because a wrong one only shows up as uploads that never arrive.
+    """
+    text = str(raw).strip().rstrip('/')
+    if '://' not in text:
+        text = 'https://' + text
+    match = re.fullmatch(r'(https?)://([A-Za-z0-9.-]+(?::\d{1,5})?)', text, re.IGNORECASE)
+    host = match.group(2) if match else ''
+    if not match or ('.' not in host and not host.lower().startswith('localhost')):
+        raise ValueError(f'not a web address: {raw!r}')
+    return f'{match.group(1).lower()}://{match.group(2).lower()}'
+
+
 # name -> (config key, env var, default, cast, bounds or None)
 #
 # Bounds are enforced on both read and write: a hand-edited config file is as
@@ -123,6 +141,16 @@ TUNABLES = {
     # 16:30. It does not stop anything; a video not up by then goes up the
     # next time the satellite is online.
     'yardClosesAt': ('yard_closes_at', 'YARD_CLOSES_AT', '16:30', _clock_time, None),
+    # The Mission Control this yard belongs to: where the console's Mission
+    # Control link goes, and where automatic uploads are delivered. Prod since
+    # go-live (docs/go-live.md); staging, marsyard.labs.ws, was the live site
+    # before that and is still up, against test data. A Settings choice, not a
+    # code change, for the day the address moves again. Both halves read it
+    # here: the uploader used to read the environment alone, so a yard
+    # repointed in its config file linked to one Mission Control and uploaded
+    # to another.
+    'missionControlUrl': ('mission_control_url', 'MISSION_CONTROL_URL',
+                          'https://marsyard.sapient.rocks', _web_address, None),
 }
 
 
