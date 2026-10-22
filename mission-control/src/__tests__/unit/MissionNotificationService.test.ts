@@ -126,13 +126,14 @@ describe('MissionNotificationService', () => {
   });
 
   it('deep links the email to the mission that changed, not just the history list', async () => {
-    // David asked for /missions/<id> so a learner opens the run the email is
-    // about. The history link stays as the secondary way back in.
+    // David asked for a mission link so a learner opens the run the email is
+    // about, and later for it to read as the name (missionSlug). The history
+    // link stays as the secondary way back in.
     const service = new MissionNotificationService(new MockEmailSender(), composer, contactsOf(ADA).reader, APP_URL);
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
-    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/mission-42`);
+    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/orbital-nomad-missio`);
   });
 
   it('does not double up the slash when the app URL has a trailing one', async () => {
@@ -144,7 +145,7 @@ describe('MissionNotificationService', () => {
 
     await service.notifyStatusChange(makeMission({ id: 'mission-42' }), 'completed');
 
-    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/mission-42`);
+    expect(composerCalls[0].missionUrl).toBe(`${APP_URL}/missions/orbital-nomad-missio`);
     expect(composerCalls[0].missionUrl).not.toContain('//missions');
   });
 
@@ -219,5 +220,85 @@ describe('MissionNotificationService', () => {
 
     expect(sender.calls).toHaveLength(0);
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe('who a notification reaches (AB#470)', () => {
+  // The learner holds the key (their address, on their private record); the
+  // mission holds the hash of the address it was sent with.
+  const hashOf = async (email: string) =>
+    (await import('@/core/domain/services/learnerEmailHash')).hashLearnerEmail(email);
+
+  function serviceFor(contact: LearnerContact, excluded: string[] = []) {
+    const sender = new MockEmailSender();
+    const { reader, findByLearnerRef } = contactsOf(contact);
+    const service = new MissionNotificationService(sender, composer, reader, APP_URL, new Set(excluded));
+    return { sender, findByLearnerRef, service };
+  }
+
+  let warn: jest.SpyInstance;
+  let info: jest.SpyInstance;
+  beforeEach(() => {
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    info = jest.spyOn(console, 'info').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    warn.mockRestore();
+    info.mockRestore();
+  });
+
+  it("sends when the learner's address is the one the mission was sent with", async () => {
+    const { sender, service } = serviceFor(ADA);
+    const mission = makeMission({ learnerEmailHash: await hashOf(ADA.email) });
+
+    await expect(service.notifyStatusChange(mission, 'completed')).resolves.toEqual({ sent: true });
+    expect(sender.calls.map((c) => c.to)).toEqual([ADA.email]);
+  });
+
+  it('matches however the address is capitalised or spaced', async () => {
+    const { sender, service } = serviceFor({ ...ADA, email: '  Ada@School.EDU ' });
+    const mission = makeMission({ learnerEmailHash: await hashOf(ADA.email) });
+
+    await expect(service.notifyStatusChange(mission, 'completed')).resolves.toEqual({ sent: true });
+    expect(sender.calls).toHaveLength(1);
+  });
+
+  it("sends nothing when the mission was sent with someone else's address", async () => {
+    const { sender, service } = serviceFor(ADA);
+    const mission = makeMission({ learnerEmailHash: await hashOf('tester@example.com') });
+
+    await expect(service.notifyStatusChange(mission, 'completed')).resolves.toEqual({
+      sent: false,
+      reason: 'address-mismatch',
+    });
+    expect(sender.calls).toHaveLength(0);
+    // The address it did not send to is not written to the logs either.
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(ADA.email);
+  });
+
+  it('leaves a mission with no hash exactly as it was: it notifies its learner', async () => {
+    const { sender, service } = serviceFor(ADA);
+
+    await expect(service.notifyStatusChange(makeMission(), 'completed')).resolves.toEqual({ sent: true });
+    expect(sender.calls.map((c) => c.to)).toEqual([ADA.email]);
+  });
+
+  it('never notifies an excluded mission, and never reads its learner', async () => {
+    const { sender, findByLearnerRef, service } = serviceFor(ADA, ['mission-1']);
+    const mission = makeMission({ learnerEmailHash: await hashOf(ADA.email) });
+
+    await expect(service.notifyStatusChange(mission, 'completed')).resolves.toEqual({
+      sent: false,
+      reason: 'excluded',
+    });
+    expect(sender.calls).toHaveLength(0);
+    expect(findByLearnerRef).not.toHaveBeenCalled();
+  });
+
+  it('excluding one mission changes nothing for another', async () => {
+    const { sender, service } = serviceFor(ADA, ['some-other-mission']);
+
+    await expect(service.notifyStatusChange(makeMission(), 'completed')).resolves.toEqual({ sent: true });
+    expect(sender.calls).toHaveLength(1);
   });
 });

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Rocket, Star, Zap, Lightbulb } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
+import { missionSlug, parseMissionSlug, pickLinkedMission } from '@/core/domain/services/missionSlug';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
@@ -67,18 +68,32 @@ export default function MissionVideoClient({
     const fetchMission = async () => {
       try {
         const repository = browserMissionRepository();
-        const loadedMission = await repository.findById(missionId);
+        // The segment is either a full ID (every link shared before
+        // missionSlug existed) or name-plus-ID-prefix. Five candidates, not
+        // one: enough to tell a shared prefix apart by name.
+        const link = parseMissionSlug(missionId);
+        const loadedMission = link.kind === 'id'
+          ? await repository.findById(link.id)
+          : pickLinkedMission(link, await repository.findByIdPrefix(link.prefix, 5));
         if (!loadedMission) {
           setError('Mission not found');
           return;
         }
         setMission(loadedMission);
 
+        // Show the readable link in the address bar, so the one that gets
+        // copied and shared is the readable one. replaceState, not a
+        // navigation: nothing reloads and Back still leaves the page.
+        const slug = missionSlug(loadedMission);
+        if (slug !== missionId) {
+          window.history.replaceState(window.history.state, '', `/missions/${encodeURIComponent(slug)}${window.location.search}${window.location.hash}`);
+        }
+
         // Runs are a separate read, and a failure here is not a failure to
         // show the mission: the carousel falls back to the video on the mission
         // document, and worst case to the simulation alone.
         try {
-          setMissionRuns(await repository.findRuns(missionId));
+          setMissionRuns(await repository.findRuns(loadedMission.id));
         } catch (runError) {
           console.warn('Could not load runs for this mission:', runError);
         }

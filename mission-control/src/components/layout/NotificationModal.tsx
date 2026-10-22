@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, X } from 'lucide-react';
+import { missionSlug } from '@/core/domain/services/missionSlug';
 
 // Kept in sync with the transition durations below - see EmailPrompt for
 // why the exit needs this rather than an instant unmount.
@@ -153,7 +154,7 @@ export function NotificationModal({
                     navigated to is its own small bug. */}
                 {notification.type === 'completed' && (
                   <Link
-                    href={`/missions/${notification.id}`}
+                    href={`/missions/${missionSlug({ id: notification.id, name: notification.missionName })}`}
                     onClick={onClose}
                     className="flex items-center gap-2 bg-green-600/90 p-4 pr-10 text-white transition-colors hover:bg-green-600"
                   >

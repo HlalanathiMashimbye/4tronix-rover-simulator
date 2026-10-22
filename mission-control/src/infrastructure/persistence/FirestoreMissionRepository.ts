@@ -18,6 +18,7 @@ import { Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import {
   collection,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit,
@@ -26,6 +27,7 @@ import {
   startAfter,
   setDoc,
   updateDoc,
+  where,
   type Firestore as ClientFirestore,
 } from 'firebase/firestore';
 import { nanoid } from 'nanoid';
@@ -39,6 +41,7 @@ import {
 
 const MISSIONS_COLLECTION = 'missions';
 const RUNS_SUBCOLLECTION = 'runs';
+const IDEMPOTENCY_COLLECTION = 'idempotency_keys';
 
 type FirestoreLike = AdminFirestore | ClientFirestore;
 
@@ -84,6 +87,33 @@ export class FirestoreMissionRepository implements IMissionRepository {
     // A deleted mission reads as absent, so a shared link 404s rather than
     // showing work an operator removed.
     return mission.deleted ? null : mission;
+  }
+
+  async findByIdPrefix(prefix: string, max: number): Promise<Mission[]> {
+    // A range on the document ID uses the index every collection has, so this
+    // needs no composite index. '\uf8ff' sorts after every ID character.
+    const end = prefix + '\uf8ff';
+    let docs: MissionDocSnapshot[];
+    if (this.isAdminFirestore()) {
+      const snapshot = await this.adminDb()
+        .collection(MISSIONS_COLLECTION)
+        .where('__name__', '>=', prefix)
+        .where('__name__', '<', end)
+        .limit(max)
+        .get();
+      docs = snapshot.docs as unknown as MissionDocSnapshot[];
+    } else {
+      const snapshot = await getDocs(query(
+        collection(this.clientDb(), MISSIONS_COLLECTION),
+        where(documentId(), '>=', prefix),
+        where(documentId(), '<', end),
+        limit(max),
+      ));
+      docs = snapshot.docs as unknown as MissionDocSnapshot[];
+    }
+    return docs
+      .map((d) => this.fromFirestoreDoc(d.id, d.data()))
+      .filter((mission) => !mission.deleted);
   }
 
   async update(id: string, updates: Partial<Mission>): Promise<Mission | null> {
@@ -366,6 +396,53 @@ export class FirestoreMissionRepository implements IMissionRepository {
     }
 
     await batch.commit();
+  }
+
+  async checkIdempotency(missionId: string, idempotencyKey: string): Promise<string | null> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Idempotency check requires the Admin SDK.');
+    }
+
+    const doc = await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .collection(IDEMPOTENCY_COLLECTION)
+      .doc(idempotencyKey)
+      .get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data() as { runId?: string; expiresAt?: string } | undefined;
+    if (!data) {
+      return null;
+    }
+
+    const expiresAt = data.expiresAt ? new Date(data.expiresAt) : null;
+    if (expiresAt && expiresAt < new Date()) {
+      return null;
+    }
+
+    return data.runId ?? null;
+  }
+
+  async recordIdempotencyKey(
+    missionId: string,
+    idempotencyKey: string,
+    runId: string,
+    expiresAt: string,
+  ): Promise<void> {
+    if (!this.isAdminFirestore()) {
+      throw new Error('Recording idempotency key requires the Admin SDK.');
+    }
+
+    await this.adminDb()
+      .collection(MISSIONS_COLLECTION)
+      .doc(missionId)
+      .collection(IDEMPOTENCY_COLLECTION)
+      .doc(idempotencyKey)
+      .set({ runId, expiresAt });
   }
 
   /**

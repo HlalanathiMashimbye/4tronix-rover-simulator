@@ -31,6 +31,13 @@ jest.mock('@/infrastructure/persistence/operatorQueueService', () => ({
 // The preview plays the mission in the simulator; these tests are about the
 // lists and the record, so it stays out of the way like the viewer below.
 jest.mock('@/components/operator/MissionPreview', () => ({ MissionPreview: () => null }));
+// MissionDetail simulates the mission once for the preview and the feedback
+// bank, in the yard's layout. The layout request is not a send and not what
+// these tests are about, so it answers with the measured yard.
+jest.mock('@/hooks/useYardLayout', () => {
+  const { YARD } = jest.requireActual('@/lib/rover-physics');
+  return { useYardLayout: (yardId: string | undefined) => ({ yardId: yardId ?? 'curiosity', layout: YARD }) };
+});
 jest.mock('@/components/mission/BlocklyViewer', () => ({
   BlocklyViewer: () => <div data-testid="blockly" />,
 }));

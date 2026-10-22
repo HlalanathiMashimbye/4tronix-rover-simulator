@@ -34,7 +34,7 @@ describe('notifications deep link to their mission', () => {
 
     const link = screen.getByRole('link', { name: /Lunar Mapper/ });
 
-    expect(link).toHaveAttribute('href', '/missions/mission-abc');
+    expect(link).toHaveAttribute('href', '/missions/lunar-mapper-missio');
   });
 
   it('closes the panel on the way, so it is not left over the mission', () => {

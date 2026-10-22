@@ -8,6 +8,7 @@ import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/service
 import { MissionSimCover } from '@/components/MissionCard/MissionSimCover';
 import { missionCoverTrajectory } from '@/core/domain/services/missionCover';
 import { useYardLayout } from '@/hooks/useYardLayout';
+import { missionSlug } from '@/core/domain/services/missionSlug';
 
 function getYouTubeId(url: string | undefined): string | null {
   if (!url) return null;
@@ -120,7 +121,7 @@ export function MissionCard({ mission }: MissionCardProps) {
 
   return (
     <Link
-      href={`/missions/${mission.id}`}
+      href={`/missions/${missionSlug(mission)}`}
       // Hover lift/zoom/highlight are gated to devices that actually have a
       // mouse. Touch fires :hover on tap, so on the tablets this platform
       // runs on, tapping a card was lifting it, zooming its thumbnail, and

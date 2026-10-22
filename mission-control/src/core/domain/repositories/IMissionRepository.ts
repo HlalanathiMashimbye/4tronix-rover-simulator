@@ -30,6 +30,14 @@ export interface IMissionReader {
   findById(id: string): Promise<Mission | null>;
 
   /**
+   * Missions whose ID starts with `prefix`, at most `max`, deleted ones left
+   * out. What a /missions/<name>-<prefix> link resolves through; see
+   * services/missionSlug. Reads one document per match, so one for a link
+   * whose prefix is unique, the same as findById.
+   */
+  findByIdPrefix(prefix: string, max: number): Promise<Mission[]>;
+
+  /**
    * A page of recent missions, newest first. Reads `limit + 1` documents - no
    * queue-position aggregations, which the feed never shows.
    *
@@ -90,6 +98,33 @@ export interface IMissionBookkeeping {
       decidedAt: string;
       decidedBy: string;
     },
+  ): Promise<void>;
+
+  /**
+   * Check if this idempotency key has already been used to create a run,
+   * and if so, return the existing runId. Used to deduplicate concurrent
+   * or retried requests to start a mission.
+   *
+   * @param missionId - The mission being started
+   * @param idempotencyKey - Stable hash representing the start action
+   * @returns The existing runId if one was created for this key, or null
+   */
+  checkIdempotency(missionId: string, idempotencyKey: string): Promise<string | null>;
+
+  /**
+   * Record that this idempotency key was used to create a run. Called after
+   * a run is successfully created to prevent duplicate creation on retry.
+   *
+   * @param missionId - The mission being started
+   * @param idempotencyKey - Stable hash representing the start action
+   * @param runId - The runId created under this key
+   * @param expiresAt - When this entry should be cleaned up (ISO timestamp)
+   */
+  recordIdempotencyKey(
+    missionId: string,
+    idempotencyKey: string,
+    runId: string,
+    expiresAt: string,
   ): Promise<void>;
 
   /**

@@ -71,6 +71,10 @@ class MockMissionRepository implements IMissionReader, IMissionWriter {
   // so a mock of it no longer has to pretend to delete anything.
   async findRuns() { return []; }
 
+  async findByIdPrefix(prefix: string, max: number): Promise<Mission[]> {
+    return [...this.missions.values()].filter((m) => m.id.startsWith(prefix)).slice(0, max);
+  }
+
   async findRecent(limit: number, cursor?: MissionCursor): Promise<MissionPage> {
     const ordered = Array.from(this.missions.values()).sort((a, b) => {
       const byDate = b.submittedAt.localeCompare(a.submittedAt);
