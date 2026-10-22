@@ -53,7 +53,7 @@ operator sign-in needs nothing from David.
 ## What the apply changes
 
 From a read-only plan against the live project on 22 October 2026:
-**3 to import, 33 to add, 5 to change, 2 to destroy.**
+**3 to import, 38 to add, 5 to change, 2 to destroy.**
 
 | What | Why |
 |---|---|
@@ -65,6 +65,7 @@ From a read-only plan against the live project on 22 October 2026:
 | Port 80 redirects to HTTPS on both domains | It served the whole app over plain HTTP, learner email addresses included |
 | YouTube auto-link schedule moves from staging to prod | One channel, one schedule |
 | Six YouTube upload secrets and their IAM, three of them imported | From #304/#319, merged but never applied. Three were made by hand on 11 Oct; `infra/imports.tf` takes them into state so the apply does not fail on "already exists". Automatic upload stays off: two of its settings have no value yet |
+| The privacy contact setting's secret, empty, and its IAM | `/privacy` (#327) names whoever an admin sets; until David sets it there, the page says to ask an operator at the yard |
 
 Nothing is destroyed that holds data. The two destroys are staging's YouTube
 schedule (recreated as prod's) and prod's unconditioned Firestore grant
@@ -92,7 +93,7 @@ Terraform's settings, and the apply then fails on "already exists".
    ```
 
    Always `-var-file=impact.tfvars`: without it the plan destroys both
-   certificates and the HTTPS listeners. Check the plan says 3 / 33 / 5 / 2
+   certificates and the HTTPS listeners. Check the plan says 3 / 38 / 5 / 2
    before typing `yes`.
 
 3. **Hlali deploys rules and indexes** to both databases:

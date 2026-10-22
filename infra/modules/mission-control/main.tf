@@ -95,6 +95,18 @@ resource "google_secret_manager_secret" "youtube_made_for_kids" {
   }
 }
 
+# Who /privacy names for questions and deletion requests (privacyContactEmail
+# in runtimeSettings.ts). Created empty: it is David's address to give, set on
+# the Settings page, and the page says to ask an operator at the yard until
+# then. Not secret, but every admin setting lives in Secret Manager, so there
+# is one store and one IAM model.
+resource "google_secret_manager_secret" "privacy_contact_email" {
+  secret_id = "privacy-contact-email"
+  replication {
+    auto {}
+  }
+}
+
 # The shared secret Cloud Scheduler presents to /api/cron/youtube-link.
 #
 # GENERATED, not seeded with a placeholder. Both sides of this are Terraform's
@@ -200,6 +212,7 @@ locals {
     youtube_refresh_token  = google_secret_manager_secret.youtube_refresh_token
     youtube_upload_privacy = google_secret_manager_secret.youtube_upload_privacy
     youtube_made_for_kids  = google_secret_manager_secret.youtube_made_for_kids
+    privacy_contact_email  = google_secret_manager_secret.privacy_contact_email
   }
 
   # Non-secret runtime config. RESEND_SANDBOX_RECIPIENT is only emitted when

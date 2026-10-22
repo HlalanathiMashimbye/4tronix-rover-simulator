@@ -56,6 +56,11 @@ which is often longer than the diff.
   page now, not a line in a file, and the uploader reads the same one as the
   console link. It defaults to prod.
 
+  The apply also creates the privacy contact setting's secret for `/privacy`
+  (#327), and a test now checks every admin setting has a secret Terraform
+  creates and lets the app use: the YouTube upload settings had sat on the
+  Settings page with nowhere to be saved.
+
 - **A recording keeps every character of its mission's id.** Mission ids can
   start or end with a dash, about 3 in 100 of them, and the satellite dropped
   it when it named the recording: `-BQwFDUWvyhpbQ4ZI8het` was filed as
