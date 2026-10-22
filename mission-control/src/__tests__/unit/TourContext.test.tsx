@@ -68,6 +68,8 @@ function DelayedSendTarget() {
 
 it('advances once when Next clicks a target step', async () => {
   localStorage.clear();
+  localStorage.setItem('mars-rover-learner-id', 'test-learner');
+  localStorage.setItem('rover-platform-milestones:test-learner', JSON.stringify({ welcomeSeen: true }));
 
   render(
     <TourProvider>

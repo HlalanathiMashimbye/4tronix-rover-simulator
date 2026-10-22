@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { hasSeenWelcome } from '@/infrastructure/browser/platformMilestones';
 
 const COMPLETED_KEY = 'tour-completed';
 const STEP_KEY = 'tour-step';
@@ -166,7 +167,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
         if (saved !== null) {
           setActive(true);
           setStep(parseInt(saved, 10));
-        } else if (pathname === '/') {
+        } else if (pathname === '/' && hasSeenWelcome()) {
           setActive(true);
           setStep(0);
         }
