@@ -1,4 +1,4 @@
-import { spinDegreesPerSecond, spinSecondsForDegrees } from './rover-physics';
+import { spinDegreesForSeconds, spinSecondsForDegrees } from './rover-physics';
 
 /**
  * Shared rover Blockly definitions, toolbox, and generators.
@@ -430,7 +430,7 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_spin_left': {
         const deg = spinDegrees(block);
-        const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+        const t = spinSecondsForDegrees(deg, SPIN_SPEED, wheelsTurnedForSpin(block));
         lines.push(`${pad}# Turn left ${deg} degrees on the spot`);
         lines.push(`${pad}rover.stop()`);
         lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
@@ -445,7 +445,7 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_spin_right': {
         const deg = spinDegrees(block);
-        const t = spinSecondsForDegrees(deg, SPIN_SPEED);
+        const t = spinSecondsForDegrees(deg, SPIN_SPEED, wheelsTurnedForSpin(block));
         lines.push(`${pad}# Turn right ${deg} degrees on the spot`);
         lines.push(`${pad}rover.stop()`);
         lines.push(`${pad}# Turn the wheels sideways so the rover turns instead of driving`);
@@ -636,9 +636,41 @@ function spinDegrees(block: { getFieldValue: (name: string) => unknown }): numbe
 
   const legacySeconds = Number(block.getFieldValue('TIME'));
   if (Number.isFinite(legacySeconds) && legacySeconds > 0) {
-    return Math.round(legacySeconds * spinDegreesPerSecond(SPIN_SPEED));
+    return Math.round(spinDegreesForSeconds(legacySeconds, SPIN_SPEED));
   }
   return 90;
+}
+
+/** Blocks that leave the corner wheels wherever they are. */
+const LEAVES_WHEELS_ALONE = new Set([
+  'rover_stop',
+  'rover_wait',
+  'rover_led_one',
+  'rover_leds_all',
+  'rover_mast_turn',
+  'rover_read_distance',
+  'rover_distance',
+  'rover_take_photo',
+]);
+
+/**
+ * Whether a spin block starts with the wheels already turned out, because
+ * the last thing to move them was another spin.
+ *
+ * A spin from straight wheels is given a little longer (SPIN_START_UP_SECONDS
+ * in rover-physics.ts); one that follows a spin must not be, or it overshoots.
+ * The first block in a Repeat counts as starting straight even when the lap
+ * before ended on a spin: a loop body has one line of Python for every time
+ * round, so it cannot be right for both, and the simulator shows what that
+ * line really does.
+ */
+function wheelsTurnedForSpin(block: { getPreviousBlock?: () => unknown }): boolean {
+  type Linked = { type?: string; getPreviousBlock?: () => unknown };
+  let previous = block.getPreviousBlock?.() as Linked | null | undefined;
+  while (previous?.type && LEAVES_WHEELS_ALONE.has(previous.type)) {
+    previous = previous.getPreviousBlock?.() as Linked | null | undefined;
+  }
+  return previous?.type === 'rover_spin_left' || previous?.type === 'rover_spin_right';
 }
 
 /**
@@ -679,7 +711,7 @@ export function migrateSpinBlocks(serialised: string): string {
     ) {
       const seconds = Number(block.fields.TIME);
       if (Number.isFinite(seconds) && seconds > 0) {
-        block.fields.DEGREES = Math.round(seconds * spinDegreesPerSecond(SPIN_SPEED));
+        block.fields.DEGREES = Math.round(spinDegreesForSeconds(seconds, SPIN_SPEED));
         delete block.fields.TIME;
         changed = true;
       }
@@ -743,14 +775,14 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
         out.push({
           command: 'spinLeft',
           speed: SPIN_SPEED,
-          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED, wheelsTurnedForSpin(block)),
         });
         break;
       case 'rover_spin_right':
         out.push({
           command: 'spinRight',
           speed: SPIN_SPEED,
-          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED),
+          duration: spinSecondsForDegrees(spinDegrees(block), SPIN_SPEED, wheelsTurnedForSpin(block)),
         });
         break;
       case 'rover_steer_left':

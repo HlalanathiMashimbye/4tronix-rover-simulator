@@ -37,16 +37,48 @@ const MISSION_ID_PATTERN = /MissionID:\s*([A-Za-z0-9_-]+)/;
  * an operator who uploads the file exactly as they downloaded it has already
  * labelled it, without typing anything or knowing that they did. The stamp
  * (`recording_control.start_recording`'s UTC `%Y%m%dT%H%M%SZ`) is matched
- * literally rather than as a generic third segment, so a title that merely
- * happens to have two underscores in it still does not qualify.
+ * literally rather than as a generic third segment, so a third segment that
+ * is anything else is never taken for one: `m1__curiosity__draft` does not
+ * claim mission `m1`.
  *
  * The `__<yardId>` tail is what makes this safe to match on. A bare id in a
  * title would claim half the channel; this shape does not occur by accident.
  * And a false positive costs one Firestore read that finds no mission, so the
  * failure mode is a wasted lookup rather than a video attached to the wrong
  * child's work.
+ *
+ * THE ID MAY HOLD UNDERSCORES, SO THE SPLIT IS READ FROM THE RIGHT. Mission
+ * ids are nanoid's, whose alphabet is `A-Za-z0-9_-`, and about 28% of them
+ * have at least one underscore. This group used to refuse it, the one
+ * character MISSION_ID_PATTERN above allows and this did not, so
+ * `U3himA_pHY0Ragj_zGYag__curiosity__20261010T124247Z` matched nothing and
+ * the upload that costs the operator nothing never linked for more than a
+ * quarter of all missions.
+ *
+ * Letting `_` into the id means "split on the double underscore" no longer
+ * says where. An id can end in one, which puts three in a row in the title,
+ * or hold two side by side. What settles it is the tail, not the id: a yard
+ * id never contains an underscore (`yardIdComplaint` in entities/Yard, it is
+ * a hostname) and the stamp has exactly one shape. Reading from the end there
+ * is one place the yard can start, the `__` in front of it is the separator,
+ * and everything before that is the id, underscores included. So
+ * `abc___curiosity` is mission `abc_`, never mission `abc` at a yard that
+ * starts with an underscore.
+ *
+ * What that costs: `m1__curiosity__draft` used to match nothing, and now
+ * reads as a mission called `m1__curiosity` at a yard called `draft`, because
+ * an id with two underscores side by side looks exactly like that. No mission
+ * has that id, so it is the wasted lookup above, and the mission it must
+ * never claim, `m1`, it still does not.
+ *
+ * The id group is lazy on purpose. `a__b__<stamp>` has two readings: mission
+ * `a` at yard `b`, stamped, or mission `a__b` at a yard named after the
+ * stamp. A greedy group takes the second and swallows the real yard into the
+ * id on every stamped recording there is. Lazy takes the first, and that is
+ * the only right one, because no yard is called that: yard ids are lower case
+ * and the stamp carries a capital T and Z.
  */
-const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9-]+)__([A-Za-z0-9-]+)(?:__\d{8}T\d{6}Z)?$/;
+const RECORDING_FILENAME_PATTERN = /^([A-Za-z0-9_-]+?)__([A-Za-z0-9-]+)(?:__\d{8}T\d{6}Z)?$/;
 
 /** The yard, when the uploader said it explicitly rather than in a filename. */
 const YARD_PATTERN = /Yard:\s*([A-Za-z0-9-]+)/;
@@ -82,6 +114,16 @@ export interface VideoClaim {
    */
   yardId: string | null;
 }
+
+/**
+ * A claim, together with the upload that made it.
+ *
+ * The video id travels with the claim because deciding where a video goes
+ * needs to know WHICH video it is, not only which mission it names: the same
+ * upload is seen again on every poll for as long as it stays among the
+ * channel's recent uploads.
+ */
+export type ClaimedVideo = VideoClaim & { videoId: string };
 
 export function missionFromVideo(
   video: Pick<ChannelVideo, 'title' | 'description'>,
@@ -123,9 +165,9 @@ export function getYouTubeId(url: string | undefined | null): string | null {
  * video wins, because that is almost always why they did it, but two yards'
  * videos of the same mission are two different runs and both survive.
  */
-export function claimedMissions(videos: ChannelVideo[]): Array<VideoClaim & { videoId: string }> {
+export function claimedMissions(videos: ChannelVideo[]): ClaimedVideo[] {
   const seen = new Set<string>();
-  const claims: Array<VideoClaim & { videoId: string }> = [];
+  const claims: ClaimedVideo[] = [];
 
   for (const video of videos) {
     const claim = missionFromVideo(video);
@@ -183,6 +225,14 @@ export function runToLink(runs: MissionRun[]): MissionRun | null {
  * Cancelled and failed runs are left alone: a video does not overrule a person
  * who decided that attempt did not count.
  *
+ * ONE VIDEO, ONE RUN. A video already on any run of the mission is skipped
+ * before anything else is considered. "A run with no video" and "a run this
+ * video has not been given to" are different questions, and asking only the
+ * first let a single upload fill every waiting run of its mission, one per
+ * poll: a mission run twice and filmed once showed the same video on both
+ * runs (10 October 2026). The same gap would have closed a re-run still
+ * sitting in the queue with the footage of the run before it.
+ *
  * `mission` is `undefined` when it has not been read and `null` when it was
  * read and does not exist (or is deleted).
  */
@@ -194,10 +244,18 @@ export type VideoLinkPlan =
 const OPEN: readonly MissionStatus[] = ['queued', 'processing'];
 
 export function planVideoLink(
-  claim: VideoClaim,
+  claim: ClaimedVideo,
   runs: MissionRun[],
   mission: { status: MissionStatus; yardId: string } | null | undefined,
 ): VideoLinkPlan {
+  // Every run, not only the claimed yard's: a video an operator attached by
+  // hand at another yard is just as taken. Read with getYouTubeId rather than
+  // compared to watchUrl, because a pasted share or embed link holds the same
+  // video as the watch link this linker writes.
+  if (runs.some((r) => getYouTubeId(r.youtubeUrl) === claim.videoId)) {
+    return { kind: 'skip', reason: 'video already linked' };
+  }
+
   const candidates = claim.yardId ? runs.filter((r) => r.yardId === claim.yardId) : runs;
   const withoutVideo = candidates.filter((r) => !r.youtubeUrl);
 

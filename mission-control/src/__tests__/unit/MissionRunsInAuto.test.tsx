@@ -73,6 +73,42 @@ it('replaces and removes a wrong video', async () => {
   expect(postedBodies()).toEqual([expect.objectContaining({ action: 'remove-video', runId: 'r1' })]);
 });
 
+it('shows automatic upload status separately while keeping manual link controls', async () => {
+  global.fetch = jest.fn().mockImplementation((url: string) => Promise.resolve({
+    ok: true,
+    json: async () => url.includes('/youtube-upload/status')
+      ? {
+        success: true,
+        uploads: [{
+          missionId: 'm1',
+          dispatchId: 'rover-dispatch-1',
+          yardId: 'curiosity',
+          recordingName: 'm1__curiosity__20261011T102030Z.mp4',
+          status: 'uploaded',
+          attempts: 1,
+          url: 'https://www.youtube.com/watch?v=automatic123',
+          updatedAt: '2026-10-11T10:30:00.000Z',
+        }],
+      }
+      : { success: true },
+  }));
+
+  mount([{
+    runId: 'manual-run-1',
+    yardId: 'curiosity',
+    status: 'completed',
+    youtubeUrl: 'https://youtu.be/manual12345',
+  }]);
+
+  expect(await screen.findByText('Automatic YouTube uploads')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Watch automatic upload' })).toHaveAttribute(
+    'href',
+    'https://www.youtube.com/watch?v=automatic123',
+  );
+  expect(screen.getByRole('link', { name: 'Watch' })).toHaveAttribute('href', 'https://youtu.be/manual12345');
+  expect(screen.getByRole('button', { name: /replace/i })).toBeInTheDocument();
+});
+
 it('deletes a run, after asking', async () => {
   const onResult = mount([{ runId: 'r1', yardId: 'curiosity', status: 'completed' }]);
 

@@ -93,20 +93,25 @@ export interface Yard {
 export const YARD: Yard = {
   widthCm: 233,
   depthCm: 249,
-  // The middle of the seam between the two floor boards, facing the front wall.
-  start: { x: 116.5, y: 121, facingDegrees: 180 },
+  // On the seam, just inside the door, facing east along it (8 October 2026).
+  // It was the middle of the seam, on the southern mound's slope, which put
+  // every run on tilted ground and had the operator walking into the yard.
+  // Here it is flat and one reach through the door, and driving straight on
+  // meets the mound and R4, so a mission's first job is to steer round them.
+  start: { x: 25, y: 121, facingDegrees: 90 },
   rocks: [
     { name: 'R1', x: 62, y: 16, widthCm: 30, depthCm: 5 },
     { name: 'R2', x: 138, y: 25, widthCm: 13, depthCm: 17 },
     { name: 'R3', x: 206, y: 50, widthCm: 20, depthCm: 24 },
     { name: 'R4', x: 141, y: 133, widthCm: 23, depthCm: 23 },
   ],
-  // Rings round the two mound peaks, by eye from the floor photo. Only the
-  // peaks: the whole mound rises gently and the start is on it, and a run
-  // flagged before it has moved would teach a learner to ignore the flag.
+  // By eye from the floor photo. Yellow is the whole mound, to the edge of its
+  // cracked texture (David, 8 October 2026: anywhere not flat is
+  // unpredictable); orange and red ring each peak. Yellow was only round the
+  // peaks while the start was on the mound, since a flag that is up before
+  // the rover moves teaches a learner to ignore it. The start is off it now.
   zones: [
-    { level: 'yellow', x: 94, y: 94, rx: 26, ry: 26 },
-    { level: 'yellow', x: 84, y: 137, rx: 26, ry: 26 },
+    { level: 'yellow', x: 99, y: 122, rx: 48, ry: 58 },
     { level: 'orange', x: 94, y: 94, rx: 17, ry: 17 },
     { level: 'orange', x: 84, y: 137, rx: 17, ry: 17 },
     { level: 'red', x: 94, y: 94, rx: 8, ry: 8 },
@@ -141,29 +146,53 @@ const ROVER_HALF_LENGTH_CM = 10;
 const ROVER_HALF_WIDTH_CM = 9.25;
 
 /**
- * The rock, if any, that the rover's footprint overlaps at this pose.
- *
- * Each rock is a circle as wide as its largest measured side: rocks are
- * irregular and were measured as boxes from above, and a circle round the box
- * errs towards calling a near miss a crash, which is the side to err on when
- * the alternative is the operator rescuing a stuck rover.
+ * A rock as the physics sees it: a circle as wide as its largest measured
+ * side. Rocks are irregular and were measured as boxes from above, and a
+ * circle round the box errs towards calling a near miss a crash, which is the
+ * side to err on when the alternative is the operator rescuing a stuck rover.
  */
-export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+export function rockRadiusCm(rock: YardRock): number {
+  return Math.max(rock.widthCm, rock.depthCm) / 2;
+}
+
+/**
+ * How much wider than a rock its "reached" ring is.
+ *
+ * Rocks are where a mission goes, not only what it has to miss (David and
+ * Werner, 8 October 2026: "it's like a target, not an obstacle to avoid").
+ * Before this a rover could only get to a rock by touching it, and touching
+ * it is a crash, so the one way to arrive was the one way Send refused. A
+ * ring "like 20% bigger" than the rock gives the rover somewhere to stop that
+ * counts as there: bump the ring, you have reached the rock; hit the rock
+ * itself and it is still a crash, as it is in the yard.
+ */
+export const REACH_SCALE = 1.2;
+
+/** How far the rover's footprint is from a rock's centre, at a pose in its own frame. */
+function footprintToRockCm(x: number, y: number, heading: number, rock: YardRock, yard: Yard): number {
   const [cx, cy] = roverToYard(x, y, yard);
   const bearing = ((yard.start.facingDegrees + heading) * Math.PI) / 180;
-  for (const rock of yard.rocks) {
-    const east = rock.x - cx;
-    const north = cy - rock.y;
-    // The rock's centre in the rover's own axes: ahead of it, and to its right.
-    const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
-    const right = east * Math.cos(bearing) - north * Math.sin(bearing);
-    // The nearest point of the footprint to it.
-    const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
-    const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
-    const radius = Math.max(rock.widthCm, rock.depthCm) / 2;
-    if (Math.hypot(ahead - nearAhead, right - nearRight) < radius) return rock;
-  }
-  return null;
+  const east = rock.x - cx;
+  const north = cy - rock.y;
+  // The rock's centre in the rover's own axes: ahead of it, and to its right.
+  const ahead = east * Math.sin(bearing) + north * Math.cos(bearing);
+  const right = east * Math.cos(bearing) - north * Math.sin(bearing);
+  // The nearest point of the footprint to it.
+  const nearAhead = Math.max(-ROVER_HALF_LENGTH_CM, Math.min(ROVER_HALF_LENGTH_CM, ahead));
+  const nearRight = Math.max(-ROVER_HALF_WIDTH_CM, Math.min(ROVER_HALF_WIDTH_CM, right));
+  return Math.hypot(ahead - nearAhead, right - nearRight);
+}
+
+/** The rock, if any, that the rover's footprint overlaps at this pose. */
+export function rockTouching(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  return yard.rocks.find((rock) => footprintToRockCm(x, y, heading, rock, yard) < rockRadiusCm(rock)) ?? null;
+}
+
+/** The rock, if any, whose reached ring the rover's footprint is inside at this pose. */
+export function rockReached(x: number, y: number, heading: number, yard: Yard = YARD): YardRock | null {
+  return (
+    yard.rocks.find((rock) => footprintToRockCm(x, y, heading, rock, yard) < rockRadiusCm(rock) * REACH_SCALE) ?? null
+  );
 }
 
 /**
@@ -186,8 +215,7 @@ export function zoneAt(x: number, y: number, yard: Yard = YARD): ZoneLevel | nul
  * The zone the rover is on, at a pose in its own frame.
  *
  * Its centre, not its footprint as with rocks: a rock is hit by whichever
- * corner reaches it, but a slope matters once the rover is on it, and the
- * footprint would flag the start, which sits 35 cm from the nearer peak.
+ * corner reaches it, but a slope matters once the rover is on it.
  */
 export function zoneUnderRover(x: number, y: number, yard: Yard = YARD): ZoneLevel | null {
   const [cx, cy] = roverToYard(x, y, yard);
@@ -236,7 +264,9 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  *
  * Confirmed by prediction rather than by fitting: at this value a 90 degree
  * turn sleeps 1.987s, and four of them brought the rover back to its starting
- * heading. At the old value they overshot by 60 to 90 degrees.
+ * heading. At the old value they overshot by 60 to 90 degrees. (A quarter
+ * turn that follows a drive needs a little longer than that: see
+ * SPIN_START_UP_SECONDS.)
  *
  * IT IS ONE SURFACE AND ONE BATTERY STATE. Grip changes how much the tyres
  * slide, so a smooth floor will not give the same number. To recalibrate, spin
@@ -244,6 +274,54 @@ const WHEEL_DISTANCE_FROM_CENTRE_CM = Math.hypot(
  * (measured degrees per second) / 57.65.
  */
 export const SPIN_RATE_CALIBRATION = 0.7856;
+
+/**
+ * How long a spin runs before the rover starts to turn, when its wheels were
+ * pointing straight.
+ *
+ * A spin first swings the four corner wheels out to 50 degrees, and until
+ * they get there the motors mostly scrub. The six runs above could not see
+ * this: they spun for 5 to 41 seconds, where a fifth of a second is lost in
+ * the noise. A quarter turn is 2 seconds, and there it is a tenth of the turn.
+ *
+ * MEASURED ON THE ROVER IN THE YARD, 10 October 2026, speed 60, from the
+ * satellite camera's recordings of three laps round the yard (sixteen spins):
+ *
+ *     1.99s, wheels already turned from the spin before  ->  92, 90 deg
+ *     1.99s, wheels straight  ->  86, 82, 76, 80, 80, 82 deg   (mean 81)
+ *     2.18s, wheels straight  ->  92, 84, 80, 80 deg           (mean 84)
+ *     2.23s, wheels straight  ->  92, 92, 98, 90 deg           (mean 93)
+ *
+ * This is set so that the number a learner meets most, "turn 90", sleeps
+ * 2.23s: that quarter turn less the 1.987s the rate alone accounts for. 2.23s
+ * is a time the rover has actually driven, and the lap driven with it is the
+ * one that finished nearest the simulator:
+ *
+ *     lap driven with 1.99s spins  ->  finished 59cm from the simulator's end
+ *     lap driven with 2.18s spins  ->  52cm
+ *     lap driven with 2.23s spins  ->  26cm
+ *
+ * A straight-line fit through all sixteen spins agrees to a hundredth of a
+ * second: 45.6 deg/s, which is SPIN_RATE_CALIBRATION's 45.29 again, 0.24s
+ * lost at the start, and a quarter turn at 2.22s.
+ *
+ * IT WAS 0.19 FOR A FEW HOURS, fitted to the first twelve spins, which put a
+ * quarter turn at 2.18s and claimed a scatter of 3 degrees. The lap driven to
+ * check that is the 2.18s row above, and it came out worse than 2.23s. The
+ * spins inside one lap are not independent measurements: taken one lap at a
+ * time, the three laps put the start-up at 0.20, 0.33 and 0.18s, and that
+ * much difference is 7 degrees of a quarter turn.
+ *
+ * SO THIS IS THE MIDDLE OF WHAT THE ROVER DOES, to about 5 degrees on any one
+ * turn and about 7 from one lap to the next. Do not retune it from a single
+ * lap. One surface, one battery charge, speed 60 only, angles read off a
+ * camera to about 4 degrees, and taken before the rover was tightened up and
+ * its wheel servos re-zeroed (calibrateServos.py, yard/docs/rover-server.md),
+ * so measure again once that is done. To recalibrate, time quarter turns that
+ * each follow a straight drive, over more than one lap, and set this to
+ * (seconds that give 90 degrees) minus (90 / spinDegreesPerSecond).
+ */
+export const SPIN_START_UP_SECONDS = 0.243;
 
 /**
  * How much of the geometric turn the rover actually achieves when steering.
@@ -312,6 +390,15 @@ export interface RoverState {
 export class RoverPhysics {
   private state: RoverState;
   private lastUpdate: number;
+  /**
+   * Whether the corner wheels are out at the angle a spin needs. A spin puts
+   * them there and a drive brings them back; stopping leaves them where they
+   * are, as the rover's own library does, so a spin straight after a spin
+   * starts turning at once (SPIN_START_UP_SECONDS).
+   */
+  private wheelsTurnedForSpin = false;
+  /** Seconds of the current spin still to go before the rover starts to turn. */
+  private spinStartUpLeft = 0;
 
   /** The yard whose walls stop the rover. */
   constructor(private readonly yard: Yard = YARD) {
@@ -341,6 +428,7 @@ export class RoverPhysics {
     const steer = Math.abs(degrees ?? DEFAULT_STEER_DEGREES);
     switch (command) {
       case 'forward':
+        this.wheelsTurnedForSpin = false;
         this.state.servos[SERVO_FL] = 0;
         this.state.servos[SERVO_FR] = 0;
         this.state.servos[SERVO_RL] = 0;
@@ -350,6 +438,7 @@ export class RoverPhysics {
         break;
 
       case 'reverse':
+        this.wheelsTurnedForSpin = false;
         this.state.servos[SERVO_FL] = 0;
         this.state.servos[SERVO_FR] = 0;
         this.state.servos[SERVO_RL] = 0;
@@ -359,24 +448,19 @@ export class RoverPhysics {
         break;
 
       case 'spinLeft':
-        this.state.servos[SERVO_FL] = 50;
-        this.state.servos[SERVO_FR] = -50;
-        this.state.servos[SERVO_RL] = -50;
-        this.state.servos[SERVO_RR] = 50;
+        this.turnWheelsForSpin();
         this.state.speedL = -speed;
         this.state.speedR = speed;
         break;
 
       case 'spinRight':
-        this.state.servos[SERVO_FL] = 50;
-        this.state.servos[SERVO_FR] = -50;
-        this.state.servos[SERVO_RL] = -50;
-        this.state.servos[SERVO_RR] = 50;
+        this.turnWheelsForSpin();
         this.state.speedL = speed;
         this.state.speedR = -speed;
         break;
 
       case 'steerLeft':
+        this.wheelsTurnedForSpin = false;
         this.state.servos[SERVO_FL] = -steer;
         this.state.servos[SERVO_FR] = -steer;
         this.state.servos[SERVO_RL] = steer;
@@ -386,6 +470,7 @@ export class RoverPhysics {
         break;
 
       case 'steerRight':
+        this.wheelsTurnedForSpin = false;
         this.state.servos[SERVO_FL] = steer;
         this.state.servos[SERVO_FR] = steer;
         this.state.servos[SERVO_RL] = -steer;
@@ -482,7 +567,11 @@ export class RoverPhysics {
       const wheelSpeedCmPerSecond = (this.state.speedL / 100.0) * FULL_SPEED_CM_PER_SECOND;
       const radiansPerSecond =
         (wheelSpeedCmPerSecond / WHEEL_DISTANCE_FROM_CENTRE_CM) * SPIN_RATE_CALIBRATION;
-      const heading = this.state.heading + (radiansPerSecond * dt * 180) / Math.PI;
+      // The wheels swing out first, and the rover does not turn until they
+      // are there (SPIN_START_UP_SECONDS).
+      const startingUp = Math.min(dt, this.spinStartUpLeft);
+      this.spinStartUpLeft -= startingUp;
+      const heading = this.state.heading + (radiansPerSecond * (dt - startingUp) * 180) / Math.PI;
       // It cannot reach a wall without moving, and it did not move. It can
       // swing a corner into a rock beside it, though.
       this.state.hitWall = false;
@@ -541,6 +630,19 @@ export class RoverPhysics {
    * last given, so manual control and a replayed mission cannot disagree about
    * what the rover is doing.
    */
+  /**
+   * Swing the corner wheels out for a spin. If they were straight, the spin
+   * that follows spends its first moments getting them there.
+   */
+  private turnWheelsForSpin(): void {
+    this.state.servos[SERVO_FL] = 50;
+    this.state.servos[SERVO_FR] = -50;
+    this.state.servos[SERVO_RL] = -50;
+    this.state.servos[SERVO_RR] = 50;
+    if (!this.wheelsTurnedForSpin) this.spinStartUpLeft = SPIN_START_UP_SECONDS;
+    this.wheelsTurnedForSpin = true;
+  }
+
   private isSpinning(): boolean {
     return this.state.speedL !== 0 && this.state.speedL === -this.state.speedR;
   }
@@ -583,6 +685,8 @@ export function spinDegreesPerSecond(speed = 60): number {
 
   const probe = new RoverPhysics();
   probe.setCommand('spinRight', speed);
+  // Past the start-up first: this is the rate once the rover is turning.
+  probe.update(SPIN_START_UP_SECONDS);
   probe.update(1);
   const rate = Math.abs(probe.getState().heading);
 
@@ -597,9 +701,25 @@ export function spinDegreesPerSecond(speed = 60): number {
  * build a square should say "turn 90", not solve 90 / 32.9 with a number the
  * interface never told them. Rounded to 3dp because that is what ends up in
  * the generated time.sleep() a learner reads.
+ *
+ * A spin from straight wheels is given SPIN_START_UP_SECONDS on top, since
+ * that long passes before the rover turns at all. Say `wheelsTurnedForSpin`
+ * when the spin follows another spin with no drive between: the wheels are
+ * already out, and the extra would overshoot by about 11 degrees.
  */
-export function spinSecondsForDegrees(degrees: number, speed = 60): number {
+export function spinSecondsForDegrees(degrees: number, speed = 60, wheelsTurnedForSpin = false): number {
   const rate = spinDegreesPerSecond(speed);
-  if (rate <= 0) return 0;
-  return Math.round((Math.abs(degrees) / rate) * 1000) / 1000;
+  if (rate <= 0 || degrees === 0) return 0;
+  const startUp = wheelsTurnedForSpin ? 0 : SPIN_START_UP_SECONDS;
+  return Math.round((startUp + Math.abs(degrees) / rate) * 1000) / 1000;
+}
+
+/**
+ * The other way round: how far a spin of `seconds` turns the rover. For
+ * missions saved when the blocks asked for seconds, so a block shows the turn
+ * its stored time really makes.
+ */
+export function spinDegreesForSeconds(seconds: number, speed = 60, wheelsTurnedForSpin = false): number {
+  const startUp = wheelsTurnedForSpin ? 0 : SPIN_START_UP_SECONDS;
+  return Math.max(0, seconds - startUp) * spinDegreesPerSecond(speed);
 }

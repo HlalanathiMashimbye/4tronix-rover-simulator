@@ -97,7 +97,7 @@ export type { CreateMissionDto, UpdateMissionDto } from '@/core/application/dto/
  * Used by operator console and execution agent
  */
 export const updateMissionSchema = z.object({
-  status: z.enum(['queued', 'processing', 'completed', 'failed', 'cancelled']).optional(),
+  status: z.enum(['queued', 'processing', 'completed', 'failed', 'not_completed', 'cancelled']).optional(),
 
   executionResult: z.object({
     isSuccessful: z.boolean(),

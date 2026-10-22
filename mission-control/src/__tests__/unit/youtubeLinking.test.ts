@@ -5,10 +5,12 @@
 import {
   claimedMissions,
   missionFromVideo,
+  planVideoLink,
   runToLink,
   watchUrl,
 } from '@/core/domain/services/youtubeLinking';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { yardIdComplaint } from '@/core/domain/entities/Yard';
 
 function run(over: Partial<MissionRun> = {}): MissionRun {
   return { yardId: 'curiosity', status: 'completed', ...over } as MissionRun;
@@ -56,10 +58,21 @@ describe('the filename YouTube turns into a title', () => {
     expect(missionFromVideo({ title: 'm-7f3a91__curiosity', description: '' })?.missionId).toBe('m-7f3a91');
   });
 
-  it('rejects a stamp that is not the shape recording_control writes', () => {
-    // A third segment that is not the UTC stamp format must not qualify -
-    // otherwise any two-underscore title would claim a mission.
-    expect(missionFromVideo({ title: 'm1__curiosity__notastamp', description: '' })).toBeNull();
+  it('does not take a third segment for the stamp unless it is the shape recording_control writes', () => {
+    /**
+     * The stamp is matched by its shape, never as "whatever comes third". If
+     * it were, this title would claim mission m1 at curiosity, and a video
+     * somebody named by hand would land on a real learner's run.
+     *
+     * It is not null either, and cannot be. A mission id may hold two
+     * underscores side by side, so the one reading left is a mission called
+     * `m1__curiosity` at a yard called `notastamp`. Nothing has that id, which
+     * makes it the wasted lookup further down rather than a wrong link.
+     */
+    expect(missionFromVideo({ title: 'm1__curiosity__notastamp', description: '' })).toEqual({
+      missionId: 'm1__curiosity',
+      yardId: 'notastamp',
+    });
   });
 
   it('still works when the description was pasted as well', () => {
@@ -94,6 +107,103 @@ describe('the filename YouTube turns into a title', () => {
      * on a learner's page.
      */
     expect(missionFromVideo({ title: 'holiday__beach', description: '' })?.missionId).toBe('holiday');
+  });
+});
+
+describe('a mission id with underscores in it', () => {
+  /**
+   * Mission ids are nanoid's, and its alphabet is A-Za-z0-9_-. About 28% of
+   * 21-character ids hold at least one underscore, and the filename pattern
+   * used to refuse every one of them, so the unrenamed upload of those
+   * missions never linked. The first title here is a real recording from
+   * 10 October 2026 that did not match.
+   */
+  const STAMP = '20261010T124247Z';
+  const titled = (title: string) => missionFromVideo({ title, description: '' });
+
+  it('reads the real recording that never linked', () => {
+    expect(titled(`U3himA_pHY0Ragj_zGYag__curiosity__${STAMP}`)).toEqual({
+      missionId: 'U3himA_pHY0Ragj_zGYag',
+      yardId: 'curiosity',
+    });
+    expect(titled('U3himA_pHY0Ragj_zGYag__curiosity')).toEqual({
+      missionId: 'U3himA_pHY0Ragj_zGYag',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('reads an id with a single underscore', () => {
+    expect(titled(`rc6LJehZ3_hLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('rc6LJehZ3_hLDfM6Fh5MU');
+    expect(titled('rc6LJehZ3_hLDfM6Fh5MU__curiosity')?.missionId).toBe('rc6LJehZ3_hLDfM6Fh5MU');
+  });
+
+  it('still reads an id with a hyphen, alone or beside an underscore', () => {
+    expect(titled(`rc6LJehZ3-hLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('rc6LJehZ3-hLDfM6Fh5MU');
+    expect(titled('rc6LJehZ3-hLDfM6Fh5MU__curiosity')?.missionId).toBe('rc6LJehZ3-hLDfM6Fh5MU');
+    expect(titled(`V1StGXR8_Z5jdHi6B-myT__curiosity__${STAMP}`)?.missionId).toBe('V1StGXR8_Z5jdHi6B-myT');
+    expect(titled('V1StGXR8_Z5jdHi6B-myT__curiosity')?.missionId).toBe('V1StGXR8_Z5jdHi6B-myT');
+  });
+
+  it('gives an id that ends in an underscore its underscore back', () => {
+    /**
+     * Three in a row: the id's own, then the separator. A yard cannot start
+     * with an underscore, so it is the last two that separate, and reading it
+     * the other way would look up a mission one character short of its id.
+     */
+    expect(titled(`rc6LJehZ3ehLDfM6Fh5M___curiosity__${STAMP}`)).toEqual({
+      missionId: 'rc6LJehZ3ehLDfM6Fh5M_',
+      yardId: 'curiosity',
+    });
+    expect(titled('rc6LJehZ3ehLDfM6Fh5M___curiosity')).toEqual({
+      missionId: 'rc6LJehZ3ehLDfM6Fh5M_',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('reads an id that starts with an underscore', () => {
+    expect(titled(`_c6LJehZ3ehLDfM6Fh5MU__curiosity__${STAMP}`)?.missionId).toBe('_c6LJehZ3ehLDfM6Fh5MU');
+    expect(titled('_c6LJehZ3ehLDfM6Fh5MU__curiosity')?.missionId).toBe('_c6LJehZ3ehLDfM6Fh5MU');
+  });
+
+  it('keeps a double underscore that belongs to the id', () => {
+    // nanoid can put two side by side. The separator is the one in front of
+    // the yard, not the first one in the title.
+    expect(titled(`rc6LJehZ3__LDfM6Fh5MU__curiosity__${STAMP}`)).toEqual({
+      missionId: 'rc6LJehZ3__LDfM6Fh5MU',
+      yardId: 'curiosity',
+    });
+    expect(titled('rc6LJehZ3__LDfM6Fh5MU__curiosity')).toEqual({
+      missionId: 'rc6LJehZ3__LDfM6Fh5MU',
+      yardId: 'curiosity',
+    });
+  });
+
+  it('ignores a title that merely has underscores in it', () => {
+    // Single underscores are how people type spaces into a file name. Only
+    // the double one in front of a yard is ours.
+    expect(titled('mars_yard_open_day')).toBeNull();
+    expect(titled('rover_run_2_final')).toBeNull();
+    expect(titled('IMG_20261010_124247')).toBeNull();
+  });
+
+  it('needs a yard with no underscore in it after the separator', () => {
+    // These have the double underscore, and nothing after it that a yard id
+    // could be.
+    expect(titled('open_day__take_2')).toBeNull();
+    expect(titled('m1__curiosity_')).toBeNull();
+    expect(titled(`m1__curiosity_${STAMP}`)).toBeNull();
+  });
+
+  it('rests on a yard id never holding an underscore or looking like a stamp', () => {
+    /**
+     * The split is only unambiguous because of what a yard id cannot be, and
+     * that rule lives in entities/Yard, not here. If it is ever loosened this
+     * goes red, and the filename pattern has to be thought about again.
+     */
+    expect(yardIdComplaint('curiosity')).toBeNull();
+    expect(yardIdComplaint('cape_town')).not.toBeNull();
+    expect(yardIdComplaint('_curiosity')).not.toBeNull();
+    expect(yardIdComplaint(STAMP)).not.toBeNull();
   });
 });
 
@@ -254,5 +364,109 @@ describe('a mission run more than once at the same yard', () => {
     ];
 
     expect(runToLink(runs)).toBeNull();
+  });
+
+  describe('and filmed fewer times than it was run', () => {
+    /**
+     * Seen on the live site on 10 October 2026: a mission run twice, one
+     * video uploaded, and the learner's page showing that video on both runs.
+     * An upload stays among the channel's recent uploads for many polls, and
+     * each poll handed it to the next run still waiting.
+     */
+    const FILMED = 'wThPlyLSVmw';
+    const ANOTHER = 'secondRun02';
+
+    const claim = (videoId: string) => ({ missionId: 'm1', yardId: 'curiosity', videoId });
+
+    /** The runs as the next poll finds them, once a link has been written. */
+    const afterLinking = (runs: MissionRun[], runId: string, videoId: string): MissionRun[] =>
+      runs.map((r) => (r.runId === runId ? { ...r, youtubeUrl: watchUrl(videoId) } : r));
+
+    const twoRuns = [
+      run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z' }),
+      run({ runId: 'r2', completedAt: '2026-10-10T10:00:00Z' }),
+    ];
+
+    it('gives one video to one run, however many polls see it', () => {
+      const first = planVideoLink(claim(FILMED), twoRuns, undefined);
+      expect(first).toEqual({ kind: 'link', runId: 'r2', yardId: 'curiosity', completes: false });
+
+      const second = planVideoLink(claim(FILMED), afterLinking(twoRuns, 'r2', FILMED), undefined);
+      expect(second.kind).toBe('skip');
+    });
+
+    it('still gives a genuinely different video to the run left waiting', () => {
+      // The guard is about THIS video, not about the mission having a video.
+      const plan = planVideoLink(claim(ANOTHER), afterLinking(twoRuns, 'r2', FILMED), undefined);
+
+      expect(plan).toEqual({ kind: 'link', runId: 'r1', yardId: 'curiosity', completes: false });
+    });
+
+    it('knows its video in whatever form an operator pasted the link', () => {
+      // Attached by hand as a share link, which is not the url the linker writes.
+      const runs = [
+        twoRuns[0],
+        run({ ...twoRuns[1], youtubeUrl: `https://youtu.be/${FILMED}` }),
+      ];
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+    });
+
+    it('will not take a video that is already on another yard\'s run', () => {
+      const runs = [
+        run({ runId: 'r-dbn', yardId: 'durban', completedAt: '2026-10-10T10:00:00Z', youtubeUrl: watchUrl(FILMED) }),
+        run({ runId: 'r-ct', completedAt: '2026-10-10T09:00:00Z' }),
+      ];
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+    });
+
+    it('does not close a re-run still waiting with the video of the run before it', () => {
+      /**
+       * The same fault with a worse ending. The queued run has no video, so
+       * it was "the run to link", and linking an open run completes it and
+       * emails the learner about a drive the rover has not done yet.
+       */
+      const runs = [
+        run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z', youtubeUrl: watchUrl(FILMED) }),
+        run({ runId: 'r2', status: 'queued', startedAt: '2026-10-10T10:00:00Z' }),
+      ];
+      const mission = { status: 'queued' as const, yardId: 'curiosity' };
+
+      expect(planVideoLink(claim(FILMED), runs, undefined).kind).toBe('skip');
+      expect(planVideoLink(claim(FILMED), runs, mission).kind).toBe('skip');
+    });
+  });
+
+  describe('and re-uploaded', () => {
+    /**
+     * Unchanged by the one-video-one-run rule, and pinned here so it stays
+     * that way: a re-upload has a new id, so it is a new video as far as the
+     * linker can tell.
+     */
+    const ORIGINAL = 'wThPlyLSVmw';
+    const REUPLOAD = 'reUploaded3';
+
+    const upload = (videoId: string) => ({ videoId, title: 'm1__curiosity', description: '' });
+
+    it('does not replace the video a run already has', () => {
+      const runs = [run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z', youtubeUrl: watchUrl(ORIGINAL) })];
+      const [claim] = claimedMissions([upload(REUPLOAD), upload(ORIGINAL)]);
+
+      expect(claim.videoId).toBe(REUPLOAD);
+      expect(planVideoLink(claim, runs, undefined).kind).toBe('skip');
+    });
+
+    it('goes to a run that is still waiting, as any new video would', () => {
+      const runs = [
+        run({ runId: 'r1', completedAt: '2026-10-10T09:00:00Z' }),
+        run({ runId: 'r2', completedAt: '2026-10-10T10:00:00Z', youtubeUrl: watchUrl(ORIGINAL) }),
+      ];
+      const [claim] = claimedMissions([upload(REUPLOAD), upload(ORIGINAL)]);
+
+      expect(planVideoLink(claim, runs, undefined)).toEqual({
+        kind: 'link', runId: 'r1', yardId: 'curiosity', completes: false,
+      });
+    });
   });
 });

@@ -19,7 +19,7 @@
  * harmless ones and a vault for the rest.
  */
 
-export type SettingGroup = 'email' | 'youtube';
+export type SettingGroup = 'email' | 'youtube' | 'privacy';
 
 export interface SettingSpec {
   /** Which card it belongs to. Five identical boxes in a row read as a form
@@ -96,6 +96,64 @@ export const SETTINGS: Record<string, SettingSpec> = {
     help: 'The channel run videos are uploaded to. Starts with UC.',
     secret: false,
     validate: (v) => (v.startsWith('UC') ? null : 'A channel id starts with UC.'),
+  },
+  youtubeClientId: {
+    group: 'youtube',
+    secretId: 'youtube-client-id',
+    envVar: 'YOUTUBE_CLIENT_ID',
+    label: 'YouTube OAuth client ID',
+    help: 'Client ID for automatic uploads through the YouTube Data API.',
+    secret: false,
+  },
+  youtubeClientSecret: {
+    group: 'youtube',
+    secretId: 'youtube-client-secret',
+    envVar: 'YOUTUBE_CLIENT_SECRET',
+    label: 'YouTube OAuth client secret',
+    help: 'Client secret for automatic uploads through the YouTube Data API.',
+    secret: true,
+  },
+  youtubeRefreshToken: {
+    group: 'youtube',
+    secretId: 'youtube-refresh-token',
+    envVar: 'YOUTUBE_REFRESH_TOKEN',
+    label: 'YouTube refresh token',
+    help: 'Server-side OAuth token used to upload recordings automatically.',
+    secret: true,
+  },
+  youtubeUploadPrivacy: {
+    group: 'youtube',
+    secretId: 'youtube-upload-privacy',
+    envVar: 'YOUTUBE_UPLOAD_PRIVACY',
+    label: 'Automatic upload privacy',
+    help: 'Default privacy for newly uploaded videos: private, unlisted or public.',
+    secret: false,
+    validate: (v) => {
+      const allowed = ['private', 'unlisted', 'public'];
+      return allowed.includes(v.toLowerCase()) ? null : 'Use private, unlisted or public.';
+    },
+  },
+  youtubeMadeForKids: {
+    group: 'youtube',
+    secretId: 'youtube-made-for-kids',
+    envVar: 'YOUTUBE_MADE_FOR_KIDS',
+    label: 'Upload as made for kids',
+    help: 'Whether automatic uploads are marked Made for Kids.',
+    secret: false,
+    validate: (v) => ['true', 'false'].includes(v.toLowerCase()) ? null : 'Use true or false.',
+  },
+  // Who /privacy names for questions and deletion requests. Sapient is the
+  // responsible party for learners' information, so this is David's to set;
+  // until someone does, the page tells people to ask an operator at the yard
+  // rather than naming nobody.
+  privacyContactEmail: {
+    group: 'privacy',
+    secretId: 'privacy-contact-email',
+    envVar: 'PRIVACY_CONTACT_EMAIL',
+    label: 'Privacy contact',
+    help: 'Shown on the privacy page as the address for questions and requests to see or delete information.',
+    secret: false,
+    validate: looksLikeEmail,
   },
 };
 

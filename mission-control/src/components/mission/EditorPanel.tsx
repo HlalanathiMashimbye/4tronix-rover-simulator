@@ -28,9 +28,9 @@ export type EditorMode = 'manual' | 'blockly' | 'code';
 // The Python editor starts downloading on the first sign of interest in its
 // tab (see loadPythonEditor).
 const MODES: ModeOption<EditorMode>[] = [
-  { value: 'manual', label: 'Drive', Icon: Gamepad2 },
-  { value: 'blockly', label: 'Blocks', Icon: Blocks },
-  { value: 'code', label: 'Python', Icon: Code2, onIntent: prefetchPythonEditor },
+  { value: 'manual', label: 'Drive', Icon: Gamepad2, tourId: 'tour-manual-mode' },
+  { value: 'blockly', label: 'Blocks', Icon: Blocks, tourId: 'tour-blockly-mode' },
+  { value: 'code', label: 'Python', Icon: Code2, onIntent: prefetchPythonEditor, tourId: 'tour-python-mode' },
 ];
 
 /** Where each mode sits on the switch, left to right. */

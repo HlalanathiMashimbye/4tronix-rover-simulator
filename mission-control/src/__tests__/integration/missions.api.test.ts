@@ -17,8 +17,20 @@ type MissionRecord = Record<string, unknown>;
 const mockMissions = new Map<string, MissionRecord>();
 
 const mockFirestore = {
+  // The name counter (FirestoreMissionNameRegistry), for a mission whose own
+  // name cannot be claimed: empty, so it starts at the first number. Its own
+  // behaviour is tested in uniqueMissionNames.test.ts.
+  runTransaction: jest.fn(async (fn: (tx: unknown) => Promise<unknown>) =>
+    fn({
+      get: async () => ({ exists: false, data: () => undefined }),
+      set: () => undefined,
+      create: () => undefined,
+    }),
+  ),
   collection: jest.fn(() => ({
     doc: jest.fn((id?: string) => ({
+      // Claiming a rolled name: free, here, every time.
+      create: jest.fn(async () => Promise.resolve()),
       set: jest.fn(async (data: MissionRecord) => {
         const docId = id || `mock-${Date.now()}`;
         mockMissions.set(docId, data);
@@ -95,11 +107,32 @@ describe('POST /api/missions Integration Tests', () => {
       expect(data.mission.sessionId).toBe('test-session-123');
       expect(data.mission.code).toBe('rover.forward(100)\nrover.wait(2)');
       expect(data.mission.status).toBe('queued');
+      // "Red Explorer" is a name older missions carry, so it is not claimed:
+      // the mission gets the next free one (IMissionNameRegistry).
+      expect(data.mission.name).not.toBe('Red Explorer');
+      expect(data.mission.name.split(' ')).toHaveLength(3);
       // Deliberately NOT queuePosition/estimatedWait. Computing them cost a
       // COUNT aggregation on every submission and nothing has ever rendered
       // them. If a "you are 3rd in line" feature is wanted, getQueuedMissions
       // derives the position from an already-ordered result for free.
       expect(data.mission.queuePosition).toBeUndefined();
+    });
+
+    it('keeps the name the learner rolled when nobody has it', async () => {
+      const request = new NextRequest('http://localhost:3000/api/missions', {
+        method: 'POST',
+        body: JSON.stringify({
+          yardId: 'curiosity',
+          sessionId: 'test-session-123',
+          learnerId: 'test-learner',
+          name: 'Swift Comet Explorer',
+          code: 'rover.forward(100)\nrover.wait(2)',
+        }),
+      });
+
+      const data = await (await POST(request)).json();
+
+      expect(data.mission.name).toBe('Swift Comet Explorer');
     });
 
     it('should accept mission without optional challengeId', async () => {

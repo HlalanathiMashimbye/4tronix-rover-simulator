@@ -77,7 +77,7 @@ def _this_yard(yard_id):
 
 
 def finished_runs(rover_url):
-    """[(instruction_id, mission_id)] for every run the rover says has ended.
+    """[(instruction_id, mission_id, status)] for every run the rover says has ended.
 
     Completed and errored both count: a run the rover could not execute is
     still over. None when the rover could not be asked. Never raises: an
@@ -98,16 +98,21 @@ def finished_runs(rover_url):
             continue
         mission_id = _mission_id_of(entry)
         if mission_id:
-            runs.append((entry.get('id'), mission_id))
+            runs.append((entry.get('id'), mission_id, entry['status']))
     return runs
 
 
-def stop_finished_recordings(rover_url, yard_id=None):
+def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None):
     """Stop filming every run at this yard the rover says is over. Returns them.
 
     keep=True for errors as well as successes: a run the rover could not
     execute may still have filmed something worth seeing, and that judgement
     belongs to whoever watches it.
+
+    on_recording_ready gets the rover's status for the run as well, completed
+    or error, so the upload can say which: an uploaded video closes its run in
+    Mission Control, and a run the rover could not execute is not closed that
+    way.
     """
     yard_id = _this_yard(yard_id)
     runs = finished_runs(rover_url)
@@ -118,14 +123,22 @@ def stop_finished_recordings(rover_url, yard_id=None):
     for recording in recordings_at(yard_id):
         own = dispatches_for(recording, yard_id)
         if own:
-            over = any(instruction_id in own for instruction_id, _ in runs)
+            finished = [run for run in runs if run[0] in own]
+            over = bool(finished)
         else:
-            over = any(recording_key(mission_id) == recording for _, mission_id in runs)
+            finished = []
+            over = any(recording_key(mission_id) == recording for _, mission_id, _ in runs)
         if not over:
             continue
-        stop_recording(recording, yard_id, keep=True)
+        kept, path = stop_recording(recording, yard_id, keep=True)
         stopped.append(recording)
         print(f'[watcher] Rover finished {recording}; recording saved.')
+        if kept and path and finished and on_recording_ready:
+            instruction_id, mission_id, status = finished[0]
+            try:
+                on_recording_ready(mission_id, instruction_id, yard_id, path, status)
+            except Exception as error:
+                print(f'[watcher] Could not start automatic upload for {recording}: {type(error).__name__}.')
     return stopped
 
 
@@ -154,9 +167,19 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
         tick = 0
         while True:
             try:
-                stop_finished_recordings(rover_url_getter())
+                from youtube_upload import queue_upload
+                stop_finished_recordings(rover_url_getter(), on_recording_ready=queue_upload)
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
+
+            # Recordings still to be delivered, from this boot or one before
+            # it. Every pass, so a satellite that finds a connection sends
+            # them without waiting for another run to finish.
+            try:
+                from youtube_upload import tick as upload_tick
+                upload_tick()
+            except Exception as e:
+                print(f'[watcher] upload check failed: {type(e).__name__}')
 
             try:
                 stop_overdue_recordings()

@@ -14,6 +14,8 @@
 
 import { Mission } from '@/core/domain/entities/Mission';
 import { IMissionReader, IMissionWriter } from '@/core/domain/repositories/IMissionRepository';
+import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
+import { isNewMissionName } from '@/core/domain/services/missionNameGenerator';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { CreateMissionDto } from '@/core/application/dto/mission';
@@ -26,7 +28,10 @@ export interface SubmitMissionResult {
 
 export class MissionService {
   /** Reads and writes missions; never touches runs, so it is not given them. */
-  constructor(private readonly missionRepository: IMissionReader & IMissionWriter) {}
+  constructor(
+    private readonly missionRepository: IMissionReader & IMissionWriter,
+    private readonly missionNames: IMissionNameRegistry,
+  ) {}
 
   /**
    * Submit a new mission (anonymous - no authentication required)
@@ -49,12 +54,14 @@ export class MissionService {
       // world-readable document. Only the hash is.
       const learnerRef = await hashLearnerId(dto.learnerId);
 
+      const name = await this.uniqueName(dto.name);
+
       const mission = await this.missionRepository.create({
         yardId: dto.yardId,
         learnerRef,
         sessionId: dto.sessionId,
         learnerEmailHash,
-        name: dto.name,
+        name,
         code: dto.code,
         blocklyState: dto.blocklyState,
         origin: dto.origin,
@@ -74,6 +81,20 @@ export class MissionService {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       };
     }
+  }
+
+  /**
+   * The name the learner rolled, if it is theirs to take; otherwise the next
+   * one nobody has. Either way no other mission has it (IMissionNameRegistry).
+   *
+   * The roll is free and made in the browser, which cannot know what other
+   * missions are called, so this is the one place a clash can be settled. A
+   * name of only the original words is not claimed at all: an older mission
+   * may carry it, from before names were recorded.
+   */
+  private async uniqueName(rolled: string): Promise<string> {
+    if (isNewMissionName(rolled) && (await this.missionNames.claim(rolled))) return rolled;
+    return this.missionNames.takeNext();
   }
 
   /**

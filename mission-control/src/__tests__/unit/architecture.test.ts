@@ -40,6 +40,11 @@ function read(file: string): string {
   return readFileSync(join(SRC, file), 'utf8');
 }
 
+/** A file outside src, by its path from the repository root. */
+function root(name: string): string {
+  return readFileSync(join(SRC, '..', '..', name), 'utf8');
+}
+
 describe('the dependency rule', () => {
   it('core never imports a Firebase SDK', () => {
     /**
@@ -119,7 +124,7 @@ describe('src/lib stays small', () => {
       'roverSimRender', 'roverBlockly',
     ];
     const UI_HELPERS = ['easings', 'missionDuration', 'roverCommandHelp', 'missionRuns',
-                        'missionClipboard', 'yardConsole', 'appSurfaces'];
+                        'missionClipboard', 'yardConsole', 'appSurfaces', 'missionLayout'];
 
     const actual = sourceFiles('lib')
       .map((f) => f.replace(/\\/g, '/').replace(/^lib\//, '').replace(/\.tsx?$/, ''))
@@ -259,7 +264,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands)\(/.test(read(f)));
+      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands|VideoLinker)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });
@@ -306,8 +311,6 @@ describe('the agent instructions', () => {
    * one copy - a rule written in two places is the drift the file itself warns
    * about.
    */
-  const root = (name: string) => readFileSync(join(SRC, '..', '..', name), 'utf8');
-
   it('is reachable by Claude, Copilot and anything reading AGENTS.md', () => {
     expect(root('AGENTS.md')).toContain('core');
     // Claude Code reads CLAUDE.md; the @ syntax imports rather than copies.
@@ -331,6 +334,59 @@ describe('the agent instructions', () => {
       expect(agents).toContain(path.split('/').pop()!);
       expect(existsSync(join(SRC, '..', '..', path))).toBe(true);
     }
+  });
+});
+
+describe('the deploy smoke check', () => {
+  /**
+   * Prod promotes the image digest serving on staging, so "is this a good
+   * deploy" is one question with one answer. It had two. Each workflow carried
+   * its own copy of the check; staging's was corrected when the operator
+   * console shipped (AB#341/342) and prod's went on asserting that /operator
+   * was a 404. Nobody saw it, because that workflow is manual and had never
+   * been run: the first production deploy would have gone red on a correct
+   * deploy.
+   *
+   * Asserted here because nothing else reads these files. A workflow is not
+   * compiled, linted or exercised by any test, so a stale line in one waits
+   * for the day it runs. What the script itself catches is
+   * deploySmokeCheck.test.ts.
+   */
+  const SCRIPT = 'scripts/smoke-check.sh';
+  const workflows = ['deploy-staging.yml', 'deploy-prod.yml'];
+
+  // Comments stripped: a workflow may explain the check, it may not make it.
+  const steps = (name: string) => root(`.github/workflows/${name}`).replace(/^\s*#.*$/gm, '');
+
+  it('is one script, run by both deploy workflows against their own URL', () => {
+    expect(existsSync(join(SRC, '..', '..', SCRIPT))).toBe(true);
+
+    const notRunningIt = workflows.filter(
+      (name) => !/^\s*bash scripts\/smoke-check\.sh "\$URL"\s*$/m.test(steps(name))
+    );
+
+    expect(notRunningIt).toEqual([]);
+  });
+
+  it('is on the runner by the time it is called', () => {
+    /**
+     * deploy-prod builds nothing, so its checkout looks like the one step that
+     * could go. It is the only reason the script exists on that machine.
+     */
+    const offenders = workflows.filter((name) => {
+      const text = steps(name);
+      const checkout = text.indexOf('uses: actions/checkout@');
+      return checkout === -1 || checkout > text.indexOf(SCRIPT);
+    });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('is not restated in either workflow', () => {
+    // A workflow that curls the deployment itself is the second copy.
+    const offenders = workflows.filter((name) => /\bcurl\b/.test(steps(name)));
+
+    expect(offenders).toEqual([]);
   });
 });
 

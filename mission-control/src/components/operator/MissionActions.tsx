@@ -121,7 +121,7 @@ export function MissionActions({
   }
 
   return (
-    <div className="mt-3 space-y-2.5 border-t border-border/50 pt-3">
+    <div className="mt-3 space-y-2.5 rounded-2xl border border-border/50 bg-background/60 p-3 shadow-sm">
       {/* A flagged mission asks a question, so it gets asked first and on its
           own. The endpoint behind this has existed since recovery shipped with
           no way to reach it, so these flags have only ever been clearable by
@@ -156,8 +156,9 @@ export function MissionActions({
         {!settled && (
           <>
             <ActionButton
-              icon={<Check className="h-3 w-3" />}
+              icon={<Check className="h-3.5 w-3.5" />}
               label="Mark complete"
+              success
               busy={pending === 'complete'}
               disabled={confirmingComplete}
               title={completeIsOverride ? automatedReason('complete') : undefined}
@@ -166,7 +167,7 @@ export function MissionActions({
               }
             />
             <ActionButton
-              icon={<X className="h-3 w-3" />}
+              icon={<X className="h-3.5 w-3.5" />}
               label="Cancel"
               busy={pending === 'cancel'}
               onClick={() => run('cancel', 'cancel')}
@@ -186,7 +187,7 @@ export function MissionActions({
               </div>
             ) : (
               <ActionButton
-                icon={<Trash2 className="h-3 w-3" />}
+                icon={<Trash2 className="h-3.5 w-3.5" />}
                 label="Delete"
                 onClick={() => setConfirmingDelete(true)}
                 danger
@@ -303,6 +304,7 @@ function ActionButton({
   busy,
   disabled,
   danger,
+  success,
   title,
   onClick,
 }: {
@@ -311,6 +313,8 @@ function ActionButton({
   busy?: boolean;
   disabled?: boolean;
   danger?: boolean;
+  /** The one action that closes a mission, so it reads as the main one. */
+  success?: boolean;
   /** Why it is disabled, so a greyed control is not a dead end. */
   title?: string;
   onClick: () => void;
@@ -321,13 +325,15 @@ function ActionButton({
       onClick={onClick}
       title={title}
       disabled={busy || disabled}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        danger
-          ? 'border-destructive/40 text-destructive hover:border-destructive/70'
-          : 'border-border/60 text-foreground hover:border-primary/70'
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+        success
+          ? 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+          : danger
+            ? 'border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/15'
+            : 'border-border/60 bg-background/80 text-foreground hover:border-primary/70'
       }`}
     >
-      {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : icon}
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : icon}
       {label}
     </button>
   );

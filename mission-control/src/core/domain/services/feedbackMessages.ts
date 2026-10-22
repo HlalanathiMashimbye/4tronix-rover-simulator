@@ -86,7 +86,7 @@ export function fillFeedbackMessage(template: string, crash: Pick<Crash, 'into'>
  */
 export function suggestFeedbackOutcome(status: MissionStatus, crash: Pick<Crash, 'into'> | null): FeedbackOutcome {
   if (crash) return 'crash';
-  if (status === 'failed' || status === 'cancelled') return 'stopped';
+  if (status === 'failed' || status === 'not_completed' || status === 'cancelled') return 'stopped';
   return 'success';
 }
 

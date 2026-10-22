@@ -35,7 +35,7 @@ describe('building a link', () => {
 });
 
 describe('reading a link', () => {
-  it('round-trips every one of the 8,000 names', () => {
+  it('round-trips every name the vocabulary allows', () => {
     for (const name of NAMES) {
       const link = parseMissionSlug(missionSlug({ id: ID, name }));
       expect(link).toEqual({ kind: 'prefix', prefix: 'jLSLqP', name });

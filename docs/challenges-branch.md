@@ -1,14 +1,41 @@
-# Progressive Challenges and the leaderboard live on a branch
+# Prototypes: challenges, leaderboard, recovery codes and avatars
 
-`main` has no challenges and no leaderboard. The whole feature lives on
-`feat/challenges`, which is a real branch kept mergeable, not an archive.
+> **These are prototypes, not the product. Do not open a PR that brings any of
+> them into `main`.** If you have just picked this repository up: the work
+> that matters is the core loop, a learner somewhere sending a mission and
+> getting a video of the real rover back, with nobody from the team nudging it
+> along. Start there, not here.
+
+`main` has none of these. They live on branches, kept mergeable so they can
+be shown, not so they can be shipped:
+
+| Branch | What is on it |
+|---|---|
+| `feat/challenges` | Progressive Challenges (five levels, CAPS and CSTA standards), the leaderboard, the avatar picker and learner profile, recovery codes |
+| `feat/Recovery_Code` | an earlier cut of the recovery code on its own |
 
 ## Why
 
-David does not want the challenges in the product. The lecturers do want to see
-them working. Both are reasonable and they cannot both be true of one deployed
-site, so the feature is a branch you switch to for a demonstration and switch
-away from afterwards.
+David (the sponsor) does not want them in the product, and said why at the
+8 October 2026 standup:
+
+- **The system is mission-centred on purpose.** A mission has a name and a
+  badge; a person has no account. Profiles, avatars, progress and a
+  leaderboard bring learner accounts back in, which is the problem the design
+  set out to sidestep.
+- **A mission's name is its recovery code.** Type the three words and you are
+  back. A second code is another mechanism to maintain and to break, so the
+  fix is that no two missions may share a name.
+- **A learning pathway needs real pedagogy.** Which step comes first, and how
+  many tries it takes to click, is research - he suggested it as an honours
+  or masters project - not something to guess and ship. What fits the product
+  now is creative and open: predict, run, modify, make your own (PRIMM).
+
+The lecturers asked to see learning objectives and progression, so the
+prototypes show what that could look like. Both asks are reasonable, and
+they cannot both be true of one deployed site, so the prototypes are branches
+you switch to for a demonstration and switch away from afterwards. Label them
+as prototypes wherever they are shown.
 
 The alternatives were considered and rejected:
 

@@ -78,6 +78,74 @@ def test_a_run_the_rover_could_not_execute_still_keeps_its_film(monkeypatch, rec
     assert os.path.exists(path), 'the file must survive an errored run'
 
 
+def test_a_saved_recording_triggers_upload_with_the_exact_dispatch_id(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'completed',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+
+    stopped = mission_watcher.stop_finished_recordings(
+        'http://rover',
+        yard_id=YARD,
+        on_recording_ready=lambda *args: calls.append(args),
+    )
+
+    assert stopped == ['m1']
+    assert len(calls) == 1
+    assert calls[0][:3] == ('m1', 'dispatch-9', YARD)
+    assert calls[0][3].endswith('.mp4')
+    assert calls[0][4] == 'completed'
+
+
+def test_the_upload_is_told_when_the_rover_could_not_execute_the_run(monkeypatch, recorder):
+    """An uploaded video closes its run in Mission Control. A run the rover
+    reported as an error must reach it saying so, or it is closed as done."""
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'error', 'error': 'SyntaxError',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD,
+                                             on_recording_ready=lambda *args: calls.append(args))
+
+    assert [call[4] for call in calls] == ['error']
+
+
+def test_repeated_watcher_events_do_not_trigger_a_second_upload(monkeypatch, recorder):
+    _rover_says(monkeypatch, [{'id': 'dispatch-9', 'status': 'completed',
+                               'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+    recorder.note_dispatch('m1', YARD, 'dispatch-9')
+    calls = []
+    ready = lambda *args: calls.append(args)
+
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, on_recording_ready=ready)
+    mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, on_recording_ready=ready)
+
+    assert len(calls) == 1
+
+
+def test_every_pass_sends_recordings_still_waiting_to_be_delivered(monkeypatch, recorder):
+    """Not only when a run finishes: a satellite that was offline sends what
+    it has once it finds a way out, with no new run needed to set it off."""
+    import youtube_upload
+
+    class Stop(Exception):
+        pass
+
+    _rover_says(monkeypatch, [])
+    passes = []
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: passes.append(True))
+    monkeypatch.setattr(mission_watcher.time, 'sleep', lambda _s: (_ for _ in ()).throw(Stop()))
+
+    with pytest.raises(Stop):
+        mission_watcher.start_mission_watcher(lambda: 'http://rover')
+
+    assert passes == [True]
+
+
 def test_a_run_still_going_is_left_filming(monkeypatch, recorder):
     _rover_says(monkeypatch, [{'status': 'running', 'params': {'mission_id': 'm1'}}])
     recorder.start_recording('m1', YARD)
@@ -147,18 +215,37 @@ def test_a_non_200_from_the_rover_is_not_an_outcome(monkeypatch, recorder):
 def test_a_mission_id_starting_with_a_dash_still_finds_its_recording(monkeypatch, recorder):
     """15 September 2026: mission -BQwFDUWvyhpbQ4ZI8het recorded for 126 minutes.
 
-    The station files a recording under the id reduced for a path, which drops
-    a leading dash. The rover reports the id exactly as it was sent, dash and
-    all, so the watcher looked for a recording that was never filed under that
-    name and nothing ever stopped it.
+    The station filed a recording under the id reduced for a path, which
+    dropped a leading dash. The rover reports the id exactly as it was sent,
+    dash and all, so the watcher looked for a recording that was never filed
+    under that name and nothing ever stopped it.
+
+    The dash is kept now: it is part of the id, and the YouTube linker has to
+    read it back out of the file name. So the recording here is filed with it.
     """
     _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
                                'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het'}}])
-    recorder.start_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+    recorder.start_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
-        'BQwFDUWvyhpbQ4ZI8het']
-    assert not recorder.is_recording('BQwFDUWvyhpbQ4ZI8het', YARD)
+        '-BQwFDUWvyhpbQ4ZI8het']
+    assert not recorder.is_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
+
+
+def test_a_hand_typed_name_is_found_under_what_it_was_filed_as(monkeypatch, recorder):
+    """The case that still needs the watcher to reduce what the rover reports.
+
+    An id is filed as it is, so a watcher comparing raw ids would pass every
+    test with an id in it. A name somebody typed is not filed as it is: the
+    rover echoes "Thabo's square!" and the recording is Thabo-s-square.
+    """
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
+                               'params': {'mission_id': "Thabo's square!"}}])
+    recorder.start_recording('Thabo-s-square', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
+        'Thabo-s-square']
+    assert not recorder.is_recording('Thabo-s-square', YARD)
 
 
 def test_a_rerun_is_not_stopped_by_the_previous_run_of_the_same_mission(monkeypatch, recorder):

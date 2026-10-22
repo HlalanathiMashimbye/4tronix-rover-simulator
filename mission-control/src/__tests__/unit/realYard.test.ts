@@ -1,7 +1,7 @@
 /**
  * The simulator drives in the real yard (AB#464).
  *
- * The rover starts on the middle of the seam facing south, the front wall,
+ * The rover starts on the seam just inside the door, facing east along it,
  * and the yard is drawn north up. Getting either the size or the direction
  * wrong would still draw a convincing yard, so these drive into each wall and
  * check which one stops it, and when.
@@ -34,46 +34,47 @@ function nearWall(position: number, wall: number) {
 }
 
 describe('the rover in the real yard', () => {
-  it('starts on the middle of the seam', () => {
+  it('starts on the seam, just inside the door', () => {
     const [x, y] = endInYard(drive());
-    expect(x).toBeCloseTo(YARD.widthCm / 2, 6);
+    expect(x).toBeCloseTo(25, 6);
     expect(y).toBeCloseTo(121, 6);
   });
 
-  it('drives forward south, to the front wall, in the time the distance takes', () => {
+  it('drives forward east, along the seam, and meets R4 long before the east wall', () => {
+    // R4 is 12 cm south of the seam; the rover is 9.25 cm wide each side of
+    // its centre and R4 is 11.5 cm round, so a drive along the seam clips it.
     const run = drive({ command: 'forward', speed: 60, duration: 20 });
+    expect(run[run.length - 1].hitRock).toBe('R4');
+    const [x, y] = endInYard(run);
+    expect(y).toBeCloseTo(121, 6);
+    expect(x).toBeGreaterThan(YARD.start.x);
+    expect(x).toBeLessThan(YARD.rocks.find((rock) => rock.name === 'R4')!.x);
+  });
+
+  it('reverses west, to the door wall', () => {
+    const [x, y] = endInYard(drive({ command: 'reverse', speed: 60, duration: 20 }));
+    nearWall(x, 0);
+    expect(y).toBeCloseTo(121, 6);
+  });
+
+  it('turned right, heads south, to the front wall, in the time the distance takes', () => {
+    const turn = spinSecondsForDegrees(90, 60);
+    const run = drive({ command: 'spinRight', speed: 60, duration: turn }, { command: 'forward', speed: 60, duration: 20 });
     const [x, y] = endInYard(run);
     nearWall(y, YARD.depthCm);
-    expect(x).toBeCloseTo(YARD.widthCm / 2, 6);
+    expect(x).toBeCloseTo(25, 0);
     // 128 cm from the seam to the wall, less the rover's half length.
-    const expected = (YARD.depthCm - 121 - 12) / SPEED_60_CM_PER_SECOND;
+    const expected = turn + (YARD.depthCm - 121 - 12) / SPEED_60_CM_PER_SECOND;
     expect(Math.abs(secondsUntilWall(run) - expected)).toBeLessThan(0.2);
   });
 
-  it('reverses north, to the backdrop', () => {
-    const [x, y] = endInYard(drive({ command: 'reverse', speed: 60, duration: 20 }));
-    nearWall(y, 0);
-    expect(x).toBeCloseTo(YARD.widthCm / 2, 6);
-  });
-
-  it('turned right, heads west, towards the door', () => {
-    const turn = spinSecondsForDegrees(90, 60);
-    const [x, y] = endInYard(
-      drive({ command: 'spinRight', speed: 60, duration: turn }, { command: 'forward', speed: 60, duration: 20 }),
-    );
-    nearWall(x, 0);
-    expect(y).toBeCloseTo(121, 0);
-  });
-
-  it('turned left, heads east, and meets R4 long before the east wall', () => {
-    // R4 is 12 cm south of the seam; the rover is 9.25 cm wide each side of
-    // its centre and R4 is 11.5 cm round, so a drive along the seam clips it.
+  it('turned left, heads north, to the backdrop, west of every rock', () => {
     const turn = spinSecondsForDegrees(90, 60);
     const run = drive({ command: 'spinLeft', speed: 60, duration: turn }, { command: 'forward', speed: 60, duration: 20 });
-    expect(run[run.length - 1].hitRock).toBe('R4');
-    const [x] = endInYard(run);
-    expect(x).toBeGreaterThan(YARD.start.x);
-    expect(x).toBeLessThan(YARD.rocks.find((rock) => rock.name === 'R4')!.x);
+    const [x, y] = endInYard(run);
+    nearWall(y, 0);
+    expect(x).toBeCloseTo(25, 0);
+    expect(run.some((point) => point.hitRock)).toBe(false);
   });
 
   it('converts between the rover and the yard both ways', () => {
@@ -100,9 +101,9 @@ describe('the yard on screen', () => {
   });
 
   it('draws the rover pointing the way its trail runs on a stretched yard', () => {
-    // Stretched across: a rover heading south-west (clear of every rock)
+    // Stretched across: a rover heading south-east (clear of every rock)
     // moves more across than down on screen, and must be drawn turned that
-    // way, not at its compass bearing of 225 degrees.
+    // way, not at its compass bearing of 135 degrees.
     const wide = computeLayout(YARD.widthCm * 2, YARD.depthCm);
     const run = drive(
       { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(45, 60) },
@@ -114,20 +115,20 @@ describe('the yard on screen', () => {
     const trailAngle = (Math.atan2(bx - ax, -(by - ay)) * 180) / Math.PI;
     expect(drawnBearing(wide, b.heading)).toBeCloseTo(trailAngle, 3);
     expect(run.some((point) => point.hitRock || point.hitWall)).toBe(false);
-    expect(Math.abs(drawnBearing(wide, b.heading) - -135)).toBeGreaterThan(10);
+    expect(Math.abs(drawnBearing(wide, b.heading) - 135)).toBeGreaterThan(10);
   });
 
   it('puts the start where it is in the yard, with north at the top', () => {
     const [x, y] = worldToScreen(L, 0, 0);
-    expect(x).toBeCloseTo(116.5, 6);
+    expect(x).toBeCloseTo(25, 6);
     expect(y).toBeCloseTo(121, 6);
   });
 
-  it('draws forward as down the screen, because the rover starts facing south', () => {
+  it('draws forward as right across the screen, because the rover starts facing east', () => {
     const [x0, y0] = worldToScreen(L, 0, 0);
     const [x1, y1] = worldToScreen(L, 0, 10);
-    expect(x1).toBeCloseTo(x0, 6);
-    expect(y1).toBeCloseTo(y0 + 10, 6);
+    expect(x1).toBeCloseTo(x0 + 10, 6);
+    expect(y1).toBeCloseTo(y0, 6);
   });
 
   it('draws the start mark as a cross on the start spot, reaching past the rover on every side', () => {
@@ -144,10 +145,11 @@ describe('the yard on screen', () => {
     expect(right[1] + left[1]).toBeCloseTo(2 * centre[1], 6);
   });
 
-  it("draws the rover's right as screen left, west, for the same reason", () => {
-    const [x0] = worldToScreen(L, 0, 0);
-    const [x1] = worldToScreen(L, 10, 0);
-    expect(x1).toBeCloseTo(x0 - 10, 6);
+  it("draws the rover's right as down the screen, south, for the same reason", () => {
+    const [x0, y0] = worldToScreen(L, 0, 0);
+    const [x1, y1] = worldToScreen(L, 10, 0);
+    expect(x1).toBeCloseTo(x0, 6);
+    expect(y1).toBeCloseTo(y0 + 10, 6);
   });
 });
 
@@ -186,7 +188,10 @@ describe('the yard filling a wide panel', () => {
   });
 
   it('follows a trail to the back of the yard', () => {
-    const run = drive({ command: 'reverse', speed: 60, duration: 8 });
+    const run = drive(
+      { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(90, 60) },
+      { command: 'forward', speed: 60, duration: 8 },
+    );
     const L = computeFillLayout(W, H, run);
     for (const point of run) onCard(L, point.x, point.y);
   });

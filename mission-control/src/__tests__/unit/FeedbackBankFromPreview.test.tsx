@@ -34,8 +34,8 @@ function mount(code: string) {
 }
 
 it('suggests the crash group, naming the wall, for a mission that drives into it', () => {
-  // 20 seconds at full speed is 3m: far past the front wall from the start mark.
-  mount('rover.forward(100)\ntime.sleep(20)\nrover.stop()');
+  // Backwards from the start mark is the door wall, 25 cm behind it.
+  mount('rover.reverse(100)\ntime.sleep(20)\nrover.stop()');
 
   const picker = screen.getByRole('combobox', { name: 'Ready-written notes' });
   expect(within(picker).getAllByRole('group')[0]).toHaveAttribute('label', 'Hit something (suggested)');

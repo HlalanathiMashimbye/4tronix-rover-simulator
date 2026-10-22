@@ -11,11 +11,12 @@
  */
 
 export type MissionStatus =
-  | 'queued'      // Waiting to be executed
-  | 'processing'  // Currently being executed by rover
-  | 'completed'   // Successfully executed
-  | 'failed'      // Execution failed
-  | 'cancelled';  // Cancelled by operator or system
+  | 'queued'        // Waiting to be executed
+  | 'processing'    // Currently being executed by rover
+  | 'completed'     // Successfully executed
+  | 'failed'        // Execution failed (learner-facing: shown as pending)
+  | 'not_completed' // Real rover run did not finish successfully
+  | 'cancelled';    // Cancelled by operator or system
 
 export interface ExecutionResult {
   isSuccessful: boolean;
@@ -111,5 +112,5 @@ export function isActiveMission(mission: Mission): boolean {
  * Type guard to check if a mission is terminal (no further state changes)
  */
 export function isTerminalMission(mission: Mission): boolean {
-  return mission.status === 'completed' || mission.status === 'failed' || mission.status === 'cancelled';
+  return mission.status === 'completed' || mission.status === 'failed' || mission.status === 'not_completed' || mission.status === 'cancelled';
 }

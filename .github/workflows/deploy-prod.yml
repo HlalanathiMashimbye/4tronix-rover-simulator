@@ -32,6 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      # Only for scripts/smoke-check.sh. Nothing is built from this tree: the
+      # image is promoted by digest below, whatever commit this happens to be.
+      - uses: actions/checkout@v4
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -68,6 +72,9 @@ jobs:
             exit 1
           fi
           echo "Prod URL: $URL"
-          curl -sSf -o /dev/null "$URL/"
-          test "$(curl -s -o /dev/null -w '%{http_code}' "$URL/operator")" = "404"
-          echo "Smoke check passed"
+
+          # The same check staging ran on these bytes. This step used to carry
+          # its own copy, which still asserted /operator was a 404 long after
+          # the operator console shipped: the first promotion would have
+          # deployed correctly and then gone red.
+          bash scripts/smoke-check.sh "$URL"

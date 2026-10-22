@@ -1,4 +1,4 @@
-import { RoverPhysics, YARD, zoneUnderRover, type Yard, type ZoneLevel } from './rover-physics';
+import { RoverPhysics, YARD, rockReached, zoneUnderRover, type Yard, type ZoneLevel } from './rover-physics';
 import type { CommandSource, SimulationCommand } from './roverBlockly';
 
 export interface TrajectoryPoint {
@@ -17,6 +17,11 @@ export interface TrajectoryPoint {
    * this only records that from here the real run may not match.
    */
   zone?: ZoneLevel | null;
+  /**
+   * The rock whose reached ring the rover is inside at this frame, if any:
+   * close enough to count as there, short of touching it (REACH_SCALE).
+   */
+  reached?: string | null;
   /**
    * The four corner lamps at this moment, as 'r, g, b' or null for off.
    *
@@ -140,6 +145,7 @@ function toPoint(physics: RoverPhysics, yard: Yard, leds: (string | null)[], sou
     hitWall: s.hitWall,
     hitRock: s.hitRock,
     zone: zoneUnderRover(s.x, s.y, yard),
+    reached: rockReached(s.x, s.y, s.heading, yard)?.name ?? null,
     leds: [...leds],
     ...(source ? { source } : {}),
   };

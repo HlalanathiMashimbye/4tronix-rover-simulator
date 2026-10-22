@@ -428,6 +428,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
           )}
           <button
             onClick={handleRun}
+            data-tour-id="tour-run-mission"
             className="clay clay-press flex shrink-0 items-center gap-1.5 rounded-xl bg-buzz px-3 py-1.5 text-xs font-bold text-background md:px-3.5 md:py-2"
           >
             <Play className="h-3.5 w-3.5" fill="currentColor" />
@@ -458,7 +459,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
         </div>
       )}
 
-      <div className="panel-inner relative min-h-0 flex-1 overflow-hidden border-2 border-border bg-white">
+      <div data-tour-id="tour-blockly-editor" className="panel-inner relative min-h-0 flex-1 overflow-hidden border-2 border-border bg-white">
         <div
           ref={blocklyDivRef}
           // Scopes the phone toolbox rules in globals.css: the left-column

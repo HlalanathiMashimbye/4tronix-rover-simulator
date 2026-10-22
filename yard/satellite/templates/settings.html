@@ -64,6 +64,11 @@
         .sat-chip .stat-ic svg { width: 14px; height: 14px; }
         .cat-name { color: var(--text-dim); font-family: var(--mono); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
         .sat-chip .cat-detail { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* Beside the chip because it acts on what the chip names. Without the
+           sudo rule it still opens, to say what setting it up takes, so it is
+           never a button that silently does nothing. */
+        .power-btn[data-ready="false"] { color: var(--text-faint); }
+        .power-cmd { display: block; margin: 0.6rem 0 1.1rem; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg); background: var(--background); font-family: var(--mono); font-size: var(--fs-xs); overflow-wrap: anywhere; color: var(--text); }
 
         /* Pointing at a rover: a switch, a finder, and a typed address, in
            that order, as a two-row grid rather than a run of controls that
@@ -359,6 +364,36 @@
             border: 1px solid var(--border);
         }
 
+        /* What became of each video once automatic uploads are set up. In
+           words as well as colour, so amber and green read the same to
+           someone who cannot tell them apart. */
+        .up-badge {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.04em; padding: 0.1rem 0.45rem; border-radius: 999px;
+            margin-left: 0.4rem; vertical-align: middle; text-decoration: none; white-space: nowrap;
+            border: 1px solid var(--border); color: var(--text-dim); background: var(--surface-3);
+        }
+        .up-badge.waiting  { color: var(--warn);   background: color-mix(in oklab, var(--warn) 10%, transparent);   border-color: color-mix(in oklab, var(--warn) 30%, transparent); }
+        .up-badge.sending  { color: var(--signal); background: color-mix(in oklab, var(--signal) 10%, transparent); border-color: color-mix(in oklab, var(--signal) 30%, transparent); }
+        .up-badge.uploaded { color: var(--ok);     background: color-mix(in oklab, var(--ok) 10%, transparent);     border-color: color-mix(in oklab, var(--ok) 30%, transparent); }
+        .up-badge svg { width: 10px; height: 10px; }
+        .up-bar { display: block; width: 7rem; height: 3px; margin-top: 0.3rem; border-radius: 2px; background: var(--border); overflow: hidden; }
+        .up-bar > span { display: block; height: 100%; background: var(--signal); transition: width 0.4s var(--ease-out); }
+
+        /* The day at a glance, under the card's title, and near closing what
+           becomes of anything still waiting. */
+        .up-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 0.35rem 0.55rem; margin: 0.35rem 0 0.15rem; color: var(--text-dim); font-size: var(--fs-xs); }
+        .up-summary[hidden], .up-closing[hidden] { display: none; }
+        .up-pill { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.1rem 0.5rem; border-radius: 999px; border: 1px solid var(--border); font-size: var(--fs-2xs); white-space: nowrap; }
+        .up-pill[data-tone="warn"] { color: var(--warn); background: color-mix(in oklab, var(--warn) 10%, transparent); border-color: color-mix(in oklab, var(--warn) 35%, transparent); }
+        .up-pill[data-tone="ok"]   { color: var(--ok);   background: color-mix(in oklab, var(--ok) 10%, transparent);   border-color: color-mix(in oklab, var(--ok) 35%, transparent); }
+        .up-close input[type="time"] { min-height: 24px; padding: 0 0.3rem; font-size: var(--fs-2xs); }
+        .up-closing { margin: 0.25rem 0 0.4rem; padding: 0.5rem 0.65rem; border-radius: var(--radius-lg); font-size: var(--fs-xs); line-height: 1.45; border: 1px solid var(--border); }
+        .up-closing[data-tone="warn"] { color: var(--warn);   background: color-mix(in oklab, var(--warn) 10%, transparent);   border-color: color-mix(in oklab, var(--warn) 30%, transparent); }
+        .up-closing[data-tone="info"] { color: var(--signal); background: color-mix(in oklab, var(--signal) 10%, transparent); border-color: color-mix(in oklab, var(--signal) 30%, transparent); }
+        .up-closing[data-tone="ok"]   { color: var(--ok);     background: color-mix(in oklab, var(--ok) 10%, transparent);     border-color: color-mix(in oklab, var(--ok) 30%, transparent); }
+
         /* Recording management: toolbar, rows, delete bar. */
         .rec-toolbar {
             display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
@@ -452,6 +487,9 @@
                 <span class="status-label grey" id="label-satellite">checking</span>
                 <span class="cat-detail" id="detail-satellite">Loading&hellip;</span>
             </span>
+            <button class="iconbtn power-btn" id="powerBtn" type="button" aria-label="Shut down the satellite" title="Shut down the satellite">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg>
+            </button>
         </div>
 
         <!-- One card per category - rover, camera, storage, recordings - each
@@ -530,6 +568,19 @@
                         <div class="seg" id="tunResolution" role="radiogroup" aria-label="Picture quality"></div>
                     </div>
                     <div class="info-pop" id="tip-quality" role="tooltip">Sharper fills a big screen better and costs more bandwidth. Picking one saves and restarts the camera.</div>
+
+                    <!-- A camera goes where there is something to mount it
+                         on. Where that leaves the yard upside down against
+                         the simulator's map, this turns the picture rather
+                         than sending someone up a ladder. -->
+                    <div class="settings-divider"></div>
+                    <div class="sync-field num-field">
+                        <span class="sync-label">Which way up
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-rotation" aria-label="About which way up"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <div class="seg" id="tunRotation" role="radiogroup" aria-label="Which way up"></div>
+                    </div>
+                    <div class="info-pop" id="tip-rotation" role="tooltip">Turned round shows the picture half a turn over. Pick the one that puts the start spot where the simulator has it. New recordings follow; ones already made do not change.</div>
 
                     <div class="settings-divider"></div>
                     <label class="sync-field num-field">
@@ -615,6 +666,20 @@
                              open, so the refresh lives on it. -->
                         <button class="iconbtn" id="refreshBtn" type="button" aria-label="Refresh" title="Refresh health and recordings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
                     </div>
+                    <!-- Only once automatic uploads are set up on this
+                         satellite. The countdown is the tablet's clock, which
+                         is right even on a morning the satellite booted with
+                         no internet to set its own. -->
+                    <div class="up-summary" id="upSummary" hidden>
+                        <span id="upTally"></span>
+                        <span class="up-pill" id="upOnline" hidden></span>
+                        <label class="up-pill up-close">Yard closes
+                            <input type="time" id="tunClosesAt" step="300" aria-label="Yard closes at">
+                            <span id="upCountdown"></span>
+                        </label>
+                        <span class="save-status" id="closesMsg" role="status" aria-live="polite"></span>
+                    </div>
+                    <div class="up-closing" id="upClosing" role="status" hidden></div>
                     <div class="info-pop" id="tip-recordings" role="tooltip">Tap one to save it to this device, then upload it to YouTube. Comes off this satellite over the local network, so it works with no internet.</div>
                     <div class="rec-toolbar" id="recToolbar" hidden>
                         <label><input type="checkbox" id="recSelectAll"> Select all</label>
@@ -791,6 +856,10 @@
             cleanupMinFreeGB: 'tunMinFreeGB',
         };
 
+        const RECORDING_FIELDS = {
+            yardClosesAt: 'tunClosesAt',
+        };
+
         // Picture quality is a choice, not a number, so it renders as buttons
         // and saves on click. It is also the one tunable that does NOT take
         // effect on next use: the camera reads its resolution when it starts,
@@ -847,6 +916,48 @@
         let lastResolutionOptions = null;
         const tunMsg = document.getElementById('tunMsg');
 
+        // Which way up is a choice too, and unlike picture quality it needs
+        // no restart: the camera asks which way up on its way to each frame,
+        // so the picture turns within a second of the click.
+        let rotationChoice = null;
+        let lastRotationOptions = null;
+
+        function paintRotation(options, current) {
+            const box = document.getElementById('tunRotation');
+            if (!box || !options) return;
+            rotationChoice = current;
+            box.innerHTML = '';
+            options.values.forEach((value, i) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.setAttribute('role', 'radio');
+                b.dataset.value = value;
+                b.setAttribute('aria-checked', String(value === current));
+                b.textContent = options.labels[i];
+                b.addEventListener('click', () => chooseRotation(value));
+                box.appendChild(b);
+            });
+        }
+
+        async function chooseRotation(value) {
+            if (value === rotationChoice) return;
+            const before = rotationChoice;
+            paintRotation(lastRotationOptions, value);
+            setStatus(tunMsg, 'Saving\u2026');
+            try {
+                const resp = await fetch('/operator/api/config/tunables', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cameraRotation: value }),
+                });
+                if (!resp.ok) throw new Error('save failed');
+                flashSaved(document.getElementById('tunRotation'));
+                setStatus(tunMsg, 'Saved. The picture turns within a second.', 'ok', 6000);
+            } catch (e) {
+                paintRotation(lastRotationOptions, before);
+                setStatus(tunMsg, 'Could not turn the picture. It is as it was.', 'bad');
+            }
+        }
+
         // The slider's own readout, since a range input shows no number on
         // its own. Kept in sync on every drag and every time something
         // programmatic sets .value (page load, a save's repaint) - a range
@@ -870,10 +981,11 @@
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
-                for (const [name, id] of Object.entries(CLEANUP_FIELDS)) {
+                for (const [name, id] of Object.entries({ ...CLEANUP_FIELDS, ...RECORDING_FIELDS })) {
                     const el = document.getElementById(id);
                     if (el && d.values[name] !== undefined) el.value = d.values[name];
                 }
+                paintUploadSummary();
                 syncCamReadyVal();
                 // A range input silently clamps what it DISPLAYS, so a value
                 // set before this slider existed, or through the API, shows
@@ -887,6 +999,8 @@
                 }
                 lastResolutionOptions = (d.options || {}).cameraResolution || null;
                 paintResolution(lastResolutionOptions, d.values.cameraResolution);
+                lastRotationOptions = (d.options || {}).cameraRotation || null;
+                paintRotation(lastRotationOptions, d.values.cameraRotation);
             } catch (e) { /* offline: leave the fields as they are */ }
         }
 
@@ -940,7 +1054,8 @@
         const SAVE_DEBOUNCE_MS = 400;
 
         async function commit(name, el, statusEl) {
-            const value = Number(el.value);
+            // The closing time is a time of day; everything else is a number.
+            const value = el.type === 'time' ? el.value : Number(el.value);
             const seq = (saveSeq.get(name) || 0) + 1;
             saveSeq.set(name, seq);
             setStatus(statusEl, 'Saving\u2026');
@@ -958,7 +1073,7 @@
                 // typed is not always what is in force, and a number left on
                 // screen that is true nowhere else is worse than no number.
                 const inForce = (d.values || {})[name];
-                const adjusted = inForce !== undefined && Number(inForce) !== value;
+                const adjusted = inForce !== undefined && String(inForce) !== String(value);
                 if (inForce !== undefined) { el.value = inForce; syncCamReadyVal(); }
                 frameOf(el).classList.remove('save-failed');
                 flashSaved(frameOf(el));
@@ -993,6 +1108,8 @@
         }
         wireAutoSave(TUNABLE_FIELDS, tunMsg);
         wireAutoSave(CLEANUP_FIELDS, document.getElementById('cleanupMsg'));
+        wireAutoSave(RECORDING_FIELDS, document.getElementById('closesMsg'));
+        document.getElementById('tunClosesAt').addEventListener('change', () => paintUploadSummary());
 
         loadTunables();
 
@@ -1065,6 +1182,10 @@
             if (!box) return;
 
             result.hidden = true;
+            // Kept across a repaint: the list now redraws itself while videos
+            // upload, and a selection made for deleting must survive that.
+            var keep = {};
+            document.querySelectorAll('.rec-check:checked').forEach(function (cb) { keep[cb.dataset.name] = true; });
             selectAll.checked = false;
 
             if (!recData.length) {
@@ -1083,17 +1204,27 @@
             });
 
             box.innerHTML = sorted.map(function (r) {
-                var badge = r.downloaded
-                    ? '<span class="dl-badge yes">downloaded</span>'
-                    : '<span class="dl-badge no">not yet</span>';
+                // With automatic uploads, where the video has got to is the
+                // question, and "not yet downloaded" is noise: only a
+                // download actually made is still worth saying.
+                var badge = r.upload
+                    ? uploadBadge(r.upload) + (r.downloaded ? '<span class="dl-badge yes">downloaded</span>' : '')
+                    : (r.downloaded
+                        ? '<span class="dl-badge yes">downloaded</span>'
+                        : '<span class="dl-badge no">not yet</span>');
+                var bar = r.upload && r.upload.state === 'sending'
+                    ? '<span class="up-bar"><span style="width:' + Number(r.upload.percent || 0) + '%"></span></span>'
+                    : '';
                 return '<div class="rec-row">'
-                    + '<input type="checkbox" class="rec-check" data-name="' + r.name.replace(/"/g, '&quot;') + '">'
+                    + '<input type="checkbox" class="rec-check" data-name="' + r.name.replace(/"/g, '&quot;') + '"' + (keep[r.name] ? ' checked' : '') + '>'
                     + '<div class="rec-info">'
                     + '<a class="rec-name" download href="/api/recordings/' + encodeURIComponent(r.name) + '">' + r.name + '</a>'
                     + '<div class="rec-meta">'
                     + humanDate(r.modified) + ' &middot; ' + humanBytes(r.bytes) + ' ' + badge
-                    + '</div></div></div>';
+                    + '</div>' + bar + '</div></div>';
             }).join('');
+            var allBoxes = box.querySelectorAll('.rec-check');
+            selectAll.checked = allBoxes.length > 0 && box.querySelectorAll('.rec-check:checked').length === allBoxes.length;
 
             box.querySelectorAll('.rec-check').forEach(function (cb) {
                 cb.addEventListener('change', function () {
@@ -1106,6 +1237,120 @@
             updateDeleteBar();
         }
 
+        // ---- Uploads ----------------------------------------------------
+        // Why a manual one is manual, in the operator's words.
+        var MANUAL_REASONS = {
+            'too-large': 'too big to send',
+            'max-attempts': 'YouTube refused it',
+            'not-configured': 'uploads not set up',
+            'HTTP 401': 'not allowed',
+        };
+
+        function uploadBadge(u) {
+            if (u.state === 'uploaded' && u.url) {
+                return '<a class="up-badge uploaded" href="' + encodeURI(u.url) + '" target="_blank" rel="noopener noreferrer">On YouTube '
+                    + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg></a>';
+            }
+            if (u.state === 'uploaded') return '<span class="up-badge uploaded">On YouTube</span>';
+            if (u.state === 'sending') return '<span class="up-badge sending">Uploading ' + Number(u.percent || 0) + '%</span>';
+            if (u.state === 'manual') {
+                var why = MANUAL_REASONS[u.reason] || 'could not upload';
+                return '<span class="up-badge">Upload by hand &middot; ' + why + '</span>';
+            }
+            return '<span class="up-badge waiting">' + (lastUploads && lastUploads.online === false ? 'Waiting for internet' : 'Waiting to upload') + '</span>';
+        }
+
+        var lastUploads = null;
+        var lastUploadsKey = '';
+
+        function isToday(iso) {
+            var d = new Date(iso), now = new Date();
+            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        }
+
+        function minutesUntilClose() {
+            var value = document.getElementById('tunClosesAt').value || '16:30';
+            var parts = value.split(':');
+            var close = new Date();
+            close.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+            return Math.round((close - new Date()) / 60000);
+        }
+
+        function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+
+        function paintUploadSummary() {
+            var summary = document.getElementById('upSummary');
+            var closing = document.getElementById('upClosing');
+            var u = lastUploads;
+            if (!u || !u.configured) {
+                summary.hidden = true;
+                closing.hidden = true;
+                return;
+            }
+            summary.hidden = false;
+
+            var today = recData.filter(function (r) { return r.upload && isToday(r.modified); });
+            var count = function (state) { return today.filter(function (r) { return r.upload.state === state; }).length; };
+            var parts = [];
+            if (count('uploaded')) parts.push(count('uploaded') + ' on YouTube');
+            if (count('sending')) parts.push(count('sending') + ' uploading');
+            if (count('waiting')) parts.push(count('waiting') + ' waiting');
+            if (count('manual')) parts.push(count('manual') + ' by hand');
+            document.getElementById('upTally').textContent = parts.length
+                ? 'Today: ' + parts.join(', ')
+                : 'No videos today yet';
+
+            var online = document.getElementById('upOnline');
+            online.hidden = u.online === null || u.online === undefined;
+            online.dataset.tone = u.online ? 'ok' : 'warn';
+            online.textContent = u.online ? 'Online' : 'No internet';
+
+            var left = minutesUntilClose();
+            document.getElementById('upCountdown').textContent = left > 0
+                ? '\u00b7 ' + (left >= 60 ? Math.floor(left / 60) + ' h ' + (left % 60) + ' min' : left + ' min')
+                : '\u00b7 closed';
+
+            // Quiet for most of the day. From half an hour before closing it
+            // answers the question the operator has then: can I switch it off?
+            var waiting = u.waiting || 0;
+            if (left > 30 || (!today.length && !waiting)) {
+                closing.hidden = true;
+                return;
+            }
+            var text, tone;
+            if (u.sending) {
+                tone = 'info';
+                text = 'A video is uploading now. Leave the satellite on until it finishes, or switch off and it goes up next time the satellite is online.';
+            } else if (waiting) {
+                tone = 'warn';
+                text = plural(waiting, "video hasn't", "videos haven't") + ' gone up. Safe to switch off: they go up by themselves next time the satellite is online.';
+            } else {
+                tone = 'ok';
+                text = "Everything from today is on YouTube. Safe to switch off.";
+            }
+            if (count('manual')) text += ' ' + plural(count('manual'), 'needs', 'need') + ' uploading by hand.';
+            closing.dataset.tone = tone;
+            closing.textContent = text;
+            closing.hidden = false;
+        }
+
+        if (window.YardStatus) {
+            YardStatus.subscribe(function (data) {
+                lastUploads = data.uploads || null;
+                // The list redraws when something it shows has moved, not on
+                // every poll: a waiting count, a settled video, a percent.
+                var u = lastUploads || {};
+                var key = [u.waiting, u.uploaded, u.manual, u.online,
+                           u.sending ? u.sending.recording + Math.floor(100 * u.sending.sent / u.sending.total / 5) : ''].join('|');
+                if (key !== lastUploadsKey) {
+                    lastUploadsKey = key;
+                    if (u.configured) loadRecordings();
+                }
+                paintUploadSummary();
+            });
+        }
+        setInterval(paintUploadSummary, 30000);
+
         async function loadRecordings() {
             var box = document.getElementById('recordingsList');
             if (!box) return;
@@ -1116,6 +1361,7 @@
                 recData = data.recordings || [];
                 paintDiskBar(data.disk);
                 paintRecordings();
+                paintUploadSummary();
             } catch (e) {
                 box.innerHTML = '<div class="kv"><span class="k">Could not read recordings</span></div>';
             }
@@ -1129,6 +1375,102 @@
             el.hidden = false;
             setTimeout(function () { el.hidden = true; }, 6000);
         }
+
+        // ---- Shut down ------------------------------------------------------
+        // The satellite used to go off at the plug, which on 17 October left
+        // every file a git pull had just written empty, and leaves a recording
+        // still open unplayable. This is the clean way, from the page that is
+        // already open. What it does is satellite_power.py.
+        (function () {
+            var btn = document.getElementById('powerBtn');
+            var power = { canPowerOff: false, detail: '' };
+
+            fetch('/operator/api/satellite/power').then(function (r) { return r.json(); }).then(function (d) {
+                power = d;
+                btn.dataset.ready = d.canPowerOff ? 'true' : 'false';
+                btn.title = d.canPowerOff ? 'Shut down the satellite' : 'Shutting down needs a one-time setup';
+            }).catch(function () { btn.dataset.ready = 'false'; });
+
+            function dialog(title, lines, actions) {
+                var overlay = document.createElement('div');
+                overlay.className = 'modal-overlay';
+                overlay.id = 'powerDialog';
+                var box = document.createElement('div');
+                box.className = 'modal';
+                box.setAttribute('role', 'dialog');
+                box.setAttribute('aria-modal', 'true');
+                var h = document.createElement('h2');
+                h.textContent = title;
+                box.appendChild(h);
+                lines.forEach(function (line) { box.appendChild(line); });
+                if (actions.length) {
+                    var row = document.createElement('div');
+                    row.className = 'modal-actions';
+                    actions.forEach(function (a) { row.appendChild(a); });
+                    box.appendChild(row);
+                }
+                overlay.appendChild(box);
+                document.body.appendChild(overlay);
+                return overlay;
+            }
+            function para(text, cls) {
+                var p = document.createElement(cls === 'power-cmd' ? 'code' : 'p');
+                if (cls) p.className = cls;
+                p.textContent = text;
+                return p;
+            }
+            function button(label, cls, onClick) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'btn' + (cls ? ' ' + cls : '');
+                b.textContent = label;
+                b.addEventListener('click', onClick);
+                return b;
+            }
+
+            btn.addEventListener('click', function () {
+                if (!power.canPowerOff) {
+                    var lines = [para('Someone with the mars password runs this once on the Pi, and from then on this button works:'),
+                                 para('sudo bash yard/docs/setup-scripts/satellite-sudoers.sh', 'power-cmd')];
+                    var notSetUp = dialog('Shutting down needs a one-time setup', lines, [
+                        button('Close', '', function () { notSetUp.remove(); }),
+                    ]);
+                    return;
+                }
+
+                var latest = window.YardStatus && YardStatus.latest();
+                var filming = (latest && latest.recording && latest.recording.active) || [];
+                var lines = [para("The console, the camera and the yard's wifi go off.")];
+                if (filming.length) lines.push(para('A recording is running. It is stopped and kept first, so it plays.'));
+                lines.push(para('To turn it back on, unplug it and plug it in again.'));
+                var message = para('', 'url-error');
+                lines.push(message);
+
+                var confirm = dialog('Shut down the satellite?', lines, [
+                    button('Cancel', '', function () { confirm.remove(); }),
+                    button('Shut down', 'danger-solid', async function () {
+                        this.disabled = true;
+                        this.textContent = 'Shutting down…';
+                        try {
+                            var resp = await fetch('/operator/api/satellite/shutdown', { method: 'POST' });
+                            var data = await resp.json().catch(function () { return {}; });
+                            if (!resp.ok) throw new Error(data.error || 'The satellite could not shut down.');
+                            confirm.remove();
+                            // The last thing this page can say: the wifi goes
+                            // with the satellite, so nothing after it arrives.
+                            dialog('Shutting down', [
+                                para("It's safe to unplug once the Pi's green light has stopped flashing, in about 20 seconds."),
+                            ], []);
+                        } catch (e) {
+                            message.textContent = e.message;
+                            this.disabled = false;
+                            this.textContent = 'Shut down';
+                        }
+                    }),
+                ]);
+                confirm.addEventListener('click', function (e) { if (e.target === confirm) confirm.remove(); });
+            });
+        })();
 
         document.getElementById('recDeleteBtn').addEventListener('click', function () {
             var checked = document.querySelectorAll('.rec-check:checked');

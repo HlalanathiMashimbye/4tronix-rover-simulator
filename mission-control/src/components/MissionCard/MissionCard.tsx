@@ -80,6 +80,8 @@ interface MissionCardProps {
   mission: Mission;
   /** Show the learner identifier - intended for operator views */
   showLearnerId?: boolean;
+  /** Stable anchor for the platform tour overlay. */
+  tourId?: string;
 }
 
 /**
@@ -93,7 +95,7 @@ interface MissionCardProps {
  * sees their mission as "Failed"; links through to the full mission detail
  * page.
  */
-export function MissionCard({ mission }: MissionCardProps) {
+export function MissionCard({ mission, tourId }: MissionCardProps) {
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const videoUrl = mission.youtubeUrl || mission.videoUrl;
   const youtubeId = getYouTubeId(videoUrl);
@@ -122,6 +124,7 @@ export function MissionCard({ mission }: MissionCardProps) {
   return (
     <Link
       href={`/missions/${missionSlug(mission)}`}
+      data-tour-id={tourId}
       // Hover lift/zoom/highlight are gated to devices that actually have a
       // mouse. Touch fires :hover on tap, so on the tablets this platform
       // runs on, tapping a card was lifting it, zooming its thumbnail, and

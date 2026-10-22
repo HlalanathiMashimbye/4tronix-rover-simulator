@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm run *)",
-      "Bash(git show *)"
+      "Bash(git show *)",
+      "Bash(curl -sf http://localhost:3000)",
+      "Bash(curl -sf http://localhost:3000 -o /dev/null)"
     ]
   }
 }

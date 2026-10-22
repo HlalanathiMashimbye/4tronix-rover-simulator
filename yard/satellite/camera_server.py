@@ -289,6 +289,57 @@ def draw_detections(frame, detections):
     return frame
 
 
+# How long one reading of the "which way up" setting is trusted.
+_TURN_RECHECK_SECONDS = 1.0
+_turn_read = None   # (monotonic time it was read, the answer)
+
+
+def turned_round():
+    """Whether Settings says to show the picture half a turn round.
+
+    Read from the settings file, which is the only way this process hears of
+    a change: the Settings page belongs to web_server, and that is a different
+    process. Once a second rather than once a frame, so a change shows within
+    a second without fifteen reads of a file every second on a Pi.
+
+    Any failure means "as mounted". A camera that is the wrong way up is a
+    nuisance; one that stops because a settings file would not parse is a
+    yard with no picture.
+    """
+    global _turn_read
+    now = time.monotonic()
+    if _turn_read is not None and now - _turn_read[0] < _TURN_RECHECK_SECONDS:
+        return _turn_read[1]
+    try:
+        import tunables
+        turned = tunables.camera_turned_round()
+    except Exception:
+        turned = False
+    _turn_read = (now, turned)
+    return turned
+
+
+def turn_round(frame, detections=()):
+    """The frame half a turn round, and what was detected in it moved with it.
+
+    Before anything is drawn. A box and its label drawn first would be turned
+    with the picture, and the label would read upside down.
+
+    Done here, at the one place a frame is made, because everything that shows
+    or keeps the picture takes it from here: the monitor, the run station's
+    live view and the recording that goes to YouTube. Turning it any later
+    would be turning it three times.
+    """
+    import cv2
+
+    height, width = frame.shape[:2]
+    moved = []
+    for det in detections:
+        x, y, w, h = det['box']
+        moved.append({**det, 'box': (width - x - w, height - y - h, w, h)})
+    return cv2.rotate(frame, cv2.ROTATE_180), moved
+
+
 def capture_frame():
     """Capture a frame and encode as JPEG. Detections only on the IMX500."""
     import cv2
@@ -298,6 +349,8 @@ def capture_frame():
             ok, frame = webcam.read()
             if not ok:
                 return None
+            if turned_round():
+                frame, _ = turn_round(frame)
             _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             return base64.b64encode(buffer).decode('utf-8')
         except Exception as e:
@@ -328,6 +381,8 @@ def capture_frame():
 
         # Get and draw detections
         detections = parse_detections(metadata)
+        if turned_round():
+            frame, detections = turn_round(frame, detections)
         if detections:
             frame = draw_detections(frame, detections)
 

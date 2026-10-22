@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Loader2, Mail, MonitorPlay } from 'lucide-react';
+import { Check, Loader2, Mail, MonitorPlay, ShieldCheck } from 'lucide-react';
 
 import type { SettingGroup, SettingStatus } from '@/core/domain/services/runtimeSettings';
 
@@ -29,9 +29,20 @@ const GROUPS: Record<SettingGroup, { title: string; blurb: string; Icon: typeof 
     blurb: 'Finds uploads by the MissionID in their description and attaches them to the mission on their own.',
     Icon: MonitorPlay,
   },
+  privacy: {
+    title: 'Privacy page',
+    blurb: 'Who /privacy names for questions about learners\' information, and for requests to see or delete it.',
+    Icon: ShieldCheck,
+  },
 };
 
-export function SettingsManager({ initialSettings }: { initialSettings: SettingStatus[] }) {
+export function SettingsManager({
+  initialSettings,
+  youtubeOAuthResult,
+}: {
+  initialSettings: SettingStatus[];
+  youtubeOAuthResult?: string;
+}) {
   const [settings, setSettings] = useState(initialSettings);
 
   const onSaved = (saved: SettingStatus) =>
@@ -56,10 +67,75 @@ export function SettingsManager({ initialSettings }: { initialSettings: SettingS
               {rows.map((setting) => (
                 <SettingField key={setting.name} setting={setting} onSaved={onSaved} />
               ))}
+              {group === 'youtube' && (
+                <YouTubeAuthorization
+                  configured={rows.some((setting) => setting.name === 'youtubeClientId' && setting.configured) &&
+                    rows.some((setting) => setting.name === 'youtubeClientSecret' && setting.configured)}
+                  hasRefreshToken={rows.some((setting) => setting.name === 'youtubeRefreshToken' && setting.configured)}
+                  result={youtubeOAuthResult}
+                />
+              )}
             </div>
           </section>
         );
       })}
+    </div>
+  );
+}
+
+function YouTubeAuthorization({
+  configured,
+  hasRefreshToken,
+  result,
+}: {
+  configured: boolean;
+  hasRefreshToken: boolean;
+  result?: string;
+}) {
+  const resultText: Record<string, string> = {
+    authorized: 'YouTube authorization saved securely.',
+    'already-configured': 'An existing refresh token was kept. Use the explicit replacement action only when reauthorizing.',
+    'environment-token': 'The refresh token is supplied by the environment and was not replaced. Update that environment value deliberately.',
+    denied: 'YouTube consent was denied; the existing authorization was not changed.',
+    'invalid-state': 'Authorization could not be verified. Start again from this page.',
+    'invalid-callback': 'Google returned an incomplete authorization. Start again.',
+    'missing-configuration': 'The YouTube OAuth client settings are missing.',
+    'exchange-failed': 'Google could not complete authorization. Check the app settings and try again.',
+  };
+
+  return (
+    <div className="grid gap-2 rounded-xl border border-border/50 bg-background/50 p-3">
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Authorize the YouTube channel separately from Firebase operator sign-in. Google will grant the upload-only scope.
+      </p>
+      {configured ? (
+        <div className="flex flex-wrap gap-2">
+          <form action="/api/operator/youtube-oauth/start" method="post">
+            <button
+              type="submit"
+              className="inline-flex min-h-10 items-center rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground"
+            >
+              Authorize YouTube uploads
+            </button>
+          </form>
+          {hasRefreshToken && (
+            <form action="/api/operator/youtube-oauth/start" method="post">
+              <input type="hidden" name="reauthorize" value="1" />
+              <button
+                type="submit"
+                className="inline-flex min-h-10 items-center rounded-lg border border-border/60 px-3 text-xs font-semibold text-foreground"
+              >
+                Replace YouTube authorization
+              </button>
+            </form>
+          )}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Set the OAuth client ID and secret above to authorize uploads.</p>
+      )}
+      {result && resultText[result] && (
+        <p role="status" className="text-xs text-muted-foreground">{resultText[result]}</p>
+      )}
     </div>
   );
 }

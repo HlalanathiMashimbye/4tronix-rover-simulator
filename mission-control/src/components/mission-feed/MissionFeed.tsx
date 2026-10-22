@@ -340,7 +340,7 @@ export function MissionFeed({ onLoadMore, onFeedState }: MissionFeedProps) {
               skipEntrance={skipEntrance}
               reduceMotion={reduceMotion}
             >
-              <MissionCard mission={mission} />
+              <MissionCard mission={mission} tourId={index === 0 ? 'tour-first-mission' : undefined} />
             </StaggeredEntrance>
           ))}
         </div>

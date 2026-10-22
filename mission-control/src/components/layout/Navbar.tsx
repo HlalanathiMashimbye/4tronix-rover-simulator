@@ -6,6 +6,9 @@
  * Mobile (< md): top bar shows logo, theme toggle and bell; every destination
  * moves to a fixed bottom tab bar (kid-friendly, always visible, no hidden
  * hamburger menu).
+ * Both: the Help button opens a small menu with the tour and Sapient's About
+ * page. About is not a place in this app, so it is not in either bar: a tab
+ * that opens another website takes a learner out of Mission Control.
  */
 
 'use client';
@@ -22,18 +25,23 @@ import {
   Moon,
   Target,
   Trophy,
+  HelpCircle,
+  Info,
+  Compass,
+  ShieldCheck,
 } from 'lucide-react';
 import { useCallback, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
+import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useLearner } from '@/contexts/LearnerContext';
 import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
 import { useChallengeProgress } from '@/hooks/useChallengeProgress';
+import { useTour } from '@/contexts/TourContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
@@ -66,9 +74,9 @@ export function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
-  const { learner } = useLearner();
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
   const { completedCount, totalCount, loading: challengesLoading } = useChallengeProgress();
+  const { start: startTour, active: tourActive } = useTour();
 
   // What the open panel shows is captured when it opens, not read live.
   // Opening marks everything seen, so a live list would empty itself in front
@@ -212,17 +220,46 @@ export function Navbar() {
                   </span>
                 </Link>
               ))}
-
             </div>
 
             {/* Prominent primary action */}
             <Link
               href="/mission"
+              data-tour-id="tour-create-mission"
               className="clay clay-press hidden items-center gap-1.5 whitespace-nowrap rounded-full bg-gradient-mars px-4 py-2 text-sm font-bold text-primary-foreground md:flex"
             >
               <Plus className="h-4 w-4" strokeWidth={2.5} />
               Create Mission
             </Link>
+
+            {/* Help, on every size: the tour again, privacy and terms, and
+                Sapient's About page. Not shown while a tour is running. */}
+            {!tourActive && (
+              <Menu
+                label="Help"
+                icon={<HelpCircle className="h-5 w-5" />}
+                buttonClassName="block rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:p-2.5"
+              >
+                <button type="button" role="menuitem" onClick={startTour} className={menuItemClass}>
+                  <Compass className="h-4 w-4 text-primary" />
+                  Take the tour
+                </button>
+                <Link role="menuitem" href="/privacy" className={menuItemClass}>
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  Privacy and terms
+                </Link>
+                <a
+                  role="menuitem"
+                  href="https://sapient.rocks/about/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={menuItemClass}
+                >
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                  About Sapient.rocks
+                </a>
+              </Menu>
+            )}
 
             <button
               onClick={toggleTheme}
@@ -290,11 +327,13 @@ export function Navbar() {
       {/* Floating Create Mission button. Sits above and overlapping the tab
           bar rather than inside it - z-index above the bar, positioned so its
           bottom half rides over the bar's top edge, matching a standard FAB
-          rather than the row's flat tabs. */}
-      {!hideFAB && (
+          rather than the row's flat tabs. During the tour it also appears on
+          mission-view pages so the "Create Your Own!" step has a target. */}
+      {(!hideFAB || tourActive) && (
         <Link
           href="/mission"
           aria-label="Create Mission"
+          data-tour-id="tour-create-mission"
           className="clay clay-press fixed bottom-10 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
         >
           <Plus className="h-6 w-6" strokeWidth={2.5} />

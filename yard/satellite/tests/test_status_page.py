@@ -5,7 +5,7 @@ import os
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 # live_server comes from conftest.py: one session server shared with
 # test_blockly_codegen.py, on an ephemeral port.
@@ -257,6 +257,171 @@ def test_settings_is_two_stacks_on_a_wide_screen_and_one_column_on_a_phone(page:
     assert not list_scrolls_inside(page, '#recordingsList')
 
 
+# The chip at its widest in a working yard. Offline is its shortest wording,
+# and a bar measured only against that fits and then overflows the moment the
+# rover comes up.
+ROVER_ONLINE_WITH_A_QUEUE = {
+    'reachable': True, 'status': 'ok', 'driver': 'real', 'queue_size': 12, 'url': 'http://x',
+}
+
+# Edges, not styles: what the operator can reach without scrolling sideways.
+# The console's fonts swap in after first paint at other widths than the
+# fallback's, so a bar measured before they settle is a different bar.
+TOP_BAR = """async () => {
+    await document.fonts.ready;
+    const chip = document.getElementById('sysRover').getBoundingClientRect();
+    const dot = document.querySelector('#sysRover .sys-dot').getBoundingClientRect();
+    const txt = document.querySelector('#sysRover .sys-txt');
+    const menu = document.getElementById('navToggle').getBoundingClientRect();
+    const brand = document.querySelector('.topbar .brand').getBoundingClientRect();
+    const tile = document.querySelector('.topbar .brand-mark').getBoundingClientRect();
+    return {
+        viewport: window.innerWidth,
+        page: document.documentElement.scrollWidth,
+        chip_left: chip.left, chip_right: chip.right,
+        dot_left: dot.left, dot_right: dot.right, dot_width: dot.width,
+        menu_left: menu.left, menu_right: menu.right, menu_width: menu.width,
+        brand_width: brand.width, tile_left: tile.left, tile_width: tile.width,
+        text_cut: txt.scrollWidth > txt.clientWidth,
+        inter: [...document.fonts].some((f) => f.status === 'loaded' && f.family.replace(/['"]/g, '') === 'Inter'),
+    };
+}"""
+
+
+def top_bar(page, live_server, path, width, rover):
+    mock_status(page, rover=rover)
+    page.set_viewport_size({'width': width, 'height': 1024})
+    page.goto(f'{live_server}{path}')
+    page.wait_for_function(
+        "document.querySelector('#sysRover .sys-txt').textContent.includes('queue')"
+    )
+    return page.evaluate(TOP_BAR)
+
+
+@pytest.mark.parametrize('width', [768, 820, 1024])
+@pytest.mark.parametrize('path', ['/settings', '/', '/run/'])
+def test_the_top_bar_fits_a_tablet_with_the_rover_chip_on_screen(page: Page, live_server, path, width):
+    """The bar's only breakpoint was the phone's, at 760px, and laid out in
+    full it is about 950px wide. At 768, a tablet held upright, the rover chip
+    sat wholly past the right edge and every console page scrolled sideways.
+    1024 is here because that is where the full labels come back."""
+    bar = top_bar(page, live_server, path, width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['page'] <= bar['viewport'], bar
+    # Not scrolling is not enough: clipping the bar would pass that with the
+    # chip still out of sight.
+    assert 0 <= bar['chip_left'] and bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+
+
+@pytest.mark.parametrize('width', [768, 820, 1024])
+def test_a_tablet_shows_the_status_of_a_running_yard_whole(page: Page, live_server, width):
+    """Fitting by cutting the chip short passes the test above: with the
+    labels left on at 820 the chip is down to its dot and the page still does
+    not scroll. What a running yard shows has to be readable, queue and all."""
+    bar = top_bar(page, live_server, '/settings', width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    # The widths are counted in the console's own font. Run with no internet a
+    # fallback of other widths stands in, and what holds then is the test
+    # below, not this one.
+    if not bar['inter']:
+        pytest.skip('Inter did not load, and the bar is measured in it')
+    assert not bar['text_cut'], bar
+
+
+def test_a_status_too_long_for_the_bar_shortens_and_keeps_its_dot(page: Page, live_server):
+    """The chip's words come from the rover, so no counting of widths covers
+    them all. A queue this long stands in for any status longer than the bar
+    was measured for: the text gives, the page does not."""
+    rover = {**ROVER_ONLINE_WITH_A_QUEUE, 'queue_size': 10 ** 15}
+    bar = top_bar(page, live_server, '/settings', 768, rover)
+
+    # Without this the rest proves nothing: the status has to be one that
+    # cannot fit.
+    assert bar['text_cut'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+
+
+# A phone held upright, from the narrowest still in use to the widest common.
+PHONE_WIDTHS = [320, 360, 375, 390, 414]
+
+# The menu button's size as yard-base.css sets it, and the least a thumb
+# should be asked to hit.
+MENU_BUTTON = 40
+
+
+@pytest.mark.parametrize('width', PHONE_WIDTHS)
+@pytest.mark.parametrize('path', ['/settings', '/', '/run/'])
+def test_the_top_bar_fits_a_phone_with_the_menu_button_at_its_full_width(page: Page, live_server, path, width):
+    """With the rover online and a queue the phone's row was about 420px. At
+    375 and narrower every console page scrolled sideways. At 390 and 414 the
+    page did not scroll, and only because the menu button had been squashed to
+    22 and 35px, so "does not scroll" alone would have called those fixed."""
+    bar = top_bar(page, live_server, path, width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['page'] <= bar['viewport'], bar
+    assert 0 <= bar['chip_left'] and bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
+    assert 0 <= bar['menu_left'] and bar['menu_right'] <= bar['chip_left'], bar
+
+
+@pytest.mark.parametrize('width', PHONE_WIDTHS)
+def test_a_phone_shows_the_status_of_a_running_yard_whole(page: Page, live_server, width):
+    """Letting the chip shrink passes the test above by itself, with the
+    queue's number behind an ellipsis at 375. The room has to come from
+    somewhere else in the bar: on a phone the status is what is read."""
+    bar = top_bar(page, live_server, '/settings', width, ROVER_ONLINE_WITH_A_QUEUE)
+
+    if not bar['inter']:
+        pytest.skip('Inter did not load, and the bar is measured in it')
+    assert not bar['text_cut'], bar
+
+
+def test_on_a_phone_the_brand_is_its_tile_and_still_a_named_link_home(page: Page, live_server):
+    """Where the room comes from: the words "Mars Yard" go and the tile
+    stays, the same mark and the same link. In no font's measure, unlike the
+    test above, so it holds with the internet off too."""
+    bar = top_bar(page, live_server, '/settings', 375, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['tile_width'] > 0 and bar['tile_left'] >= 0, bar
+    assert bar['brand_width'] == bar['tile_width'], bar
+
+    # Hiding the words outright takes the link's name with them, and a screen
+    # reader is left announcing "link".
+    home = page.get_by_role('link', name='Mars Yard', exact=True)
+    assert home.count() == 1
+    home.click()
+    page.wait_for_url(f'{live_server}/')
+
+
+def test_a_bar_with_room_for_the_name_keeps_it(page: Page, live_server):
+    """The tile alone is for the widths that need it. A wide phone on its
+    side still has the menu button in the bar and room for all of it."""
+    bar = top_bar(page, live_server, '/settings', 480, ROVER_ONLINE_WITH_A_QUEUE)
+
+    assert bar['brand_width'] > bar['tile_width'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
+
+
+def test_on_a_phone_a_status_too_long_shortens_and_the_menu_button_does_not(page: Page, live_server):
+    """The same over-long status as on a tablet, where a phone has one more
+    thing in the row that could give. It must be the chip's words: the menu
+    button is the only way to the other pages."""
+    rover = {**ROVER_ONLINE_WITH_A_QUEUE, 'queue_size': 10 ** 15}
+    bar = top_bar(page, live_server, '/settings', 375, rover)
+
+    assert bar['text_cut'], bar
+    assert bar['page'] <= bar['viewport'], bar
+    assert bar['chip_right'] <= bar['viewport'], bar
+    assert bar['dot_width'] > 0 and bar['dot_left'] >= bar['chip_left'], bar
+    assert bar['menu_width'] >= MENU_BUTTON, bar
+
+
 def test_typing_an_address_still_works_as_the_fallback(page: Page, live_server):
     mock_status(page)
     posted = capture_save(page, 'http://newrover.local:8523')
@@ -299,15 +464,20 @@ def test_rover_url_edit_rejected_shows_error(page: Page, live_server):
 TUNABLE_VALUES = {
     'cameraReadyTimeout': 2.0,
     'cameraResolution': '640x480',
+    'cameraRotation': '0',
     'cleanupGracePeriod': 72.0,
     'cleanupMaxAge': 21.0,
     'cleanupMinFreeGB': 2.0,
 }
-RESOLUTION_OPTIONS = {
+CHOICE_OPTIONS = {
     'cameraResolution': {
         'values': ['640x480', '1280x960', '1920x1440'],
         'labels': ['Standard', 'Sharp', 'Sharpest'],
-    }
+    },
+    'cameraRotation': {
+        'values': ['0', '180'],
+        'labels': ['As mounted', 'Turned round'],
+    },
 }
 
 
@@ -324,7 +494,7 @@ def mock_tunables(page, clamp_to=None, fail=False):
         request = route.request
         if request.method != 'POST':
             route.fulfill(status=200, content_type='application/json', body=json.dumps(
-                {'values': TUNABLE_VALUES, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+                {'values': TUNABLE_VALUES, 'options': CHOICE_OPTIONS, 'limits': {}}))
             return
 
         body = json.loads(request.post_data)
@@ -338,7 +508,7 @@ def mock_tunables(page, clamp_to=None, fail=False):
         if clamp_to is not None:
             in_force.update(clamp_to)
         route.fulfill(status=200, content_type='application/json', body=json.dumps(
-            {'status': 'ok', 'values': in_force, 'options': RESOLUTION_OPTIONS, 'limits': {}}))
+            {'status': 'ok', 'values': in_force, 'options': CHOICE_OPTIONS, 'limits': {}}))
 
     page.route('**/api/config/tunables', handle)
     return posted
@@ -445,12 +615,72 @@ def test_a_value_above_the_slider_says_the_real_number(page: Page, live_server):
     page.route('**/api/config/tunables', lambda route: route.fulfill(
         status=200, content_type='application/json',
         body=json.dumps({'values': dict(TUNABLE_VALUES, cameraReadyTimeout=7.5),
-                         'options': RESOLUTION_OPTIONS, 'limits': {}})))
+                         'options': CHOICE_OPTIONS, 'limits': {}})))
     page.goto(f'{live_server}/status')
     wait_for_badge(page, 'satellite')
 
     page.wait_for_function(
         "document.getElementById('tunMsg').textContent.includes('In force: 7.5s')")
+
+
+# --- Which way up the camera's picture is ------------------------------------
+# The Cape Town camera films the yard half a turn round from the simulator's
+# map. Settings turns the picture, which is a choice like picture quality, and
+# unlike it needs no camera restart.
+
+def test_which_way_up_is_a_choice_that_starts_on_what_is_in_force(page: Page, live_server):
+    open_tuned_settings(page, live_server)
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    expect(choice.get_by_role('radio', name='As mounted')).to_have_attribute('aria-checked', 'true')
+    expect(choice.get_by_role('radio', name='Turned round')).to_have_attribute('aria-checked', 'false')
+
+
+def test_turning_the_picture_saves_on_the_click_and_does_not_restart_the_camera(page: Page, live_server):
+    posted = open_tuned_settings(page, live_server)
+    restarts = []
+    page.route('**/operator/api/camera/start', lambda route: (
+        restarts.append(1),
+        route.fulfill(status=200, content_type='application/json', body='{}')))
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    choice.get_by_role('radio', name='Turned round').click()
+
+    expect(choice.get_by_role('radio', name='Turned round')).to_have_attribute('aria-checked', 'true')
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent.startsWith('Saved')")
+    assert posted == [{'cameraRotation': '180'}]
+    # The camera asks which way up on its way to every frame. Taking it down
+    # and up again, as a change of quality has to, would blank the monitor
+    # for a setting that needed nothing of the kind.
+    assert restarts == []
+
+
+def test_a_turn_that_could_not_be_saved_goes_back_and_says_so(page: Page, live_server):
+    open_tuned_settings(page, live_server, fail=True)
+    choice = page.get_by_role('radiogroup', name='Which way up')
+
+    choice.get_by_role('radio', name='Turned round').click()
+
+    page.wait_for_function(
+        "document.getElementById('tunMsg').textContent.includes('Could not turn the picture')")
+    expect(choice.get_by_role('radio', name='As mounted')).to_have_attribute('aria-checked', 'true')
+
+
+def test_a_satellite_that_does_not_offer_the_choice_shows_no_broken_control(page: Page, live_server):
+    # An older web server answering a newer page, half way through a pull.
+    mock_status(page)
+    page.route('**/api/config/tunables', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps({'values': {k: v for k, v in TUNABLE_VALUES.items() if k != 'cameraRotation'},
+                         'options': {'cameraResolution': CHOICE_OPTIONS['cameraResolution']},
+                         'limits': {}})))
+    page.goto(f'{live_server}/status')
+    wait_for_badge(page, 'satellite')
+    page.wait_for_function("document.getElementById('tunGracePeriod').value === '72'")
+
+    expect(page.get_by_role('radiogroup', name='Which way up').get_by_role('radio')).to_have_count(0)
+    expect(page.get_by_role('radiogroup', name='Picture quality').get_by_role('radio')).to_have_count(3)
 
 
 # --- Camera picked by name ---------------------------------------------------
@@ -586,3 +816,73 @@ def test_a_list_that_arrives_after_the_status_opens_on_the_current_camera(page: 
     # Short timeout: the status poll repainting a few seconds later must not be
     # what makes this pass.
     page.wait_for_function("document.getElementById('camera-source').value === '1'", timeout=1000)
+
+
+# ---- Shut down ---------------------------------------------------------------
+
+def power(page, can_power_off=True):
+    """The power check, and every shutdown the page asks for."""
+    asked = []
+    page.route('**/operator/api/satellite/power', lambda route: route.fulfill(
+        status=200, content_type='application/json',
+        body=json.dumps({'canPowerOff': can_power_off, 'detail': None})))
+    page.route('**/operator/api/satellite/shutdown', lambda route: (asked.append(True), route.fulfill(
+        status=202, content_type='application/json',
+        body=json.dumps({'status': 'shutting-down', 'saved': []})))[1])
+    return asked
+
+
+def open_power_dialog(page):
+    page.wait_for_function("document.getElementById('powerBtn').dataset.ready !== undefined")
+    page.click('#powerBtn')
+    page.wait_for_selector('#powerDialog')
+    return page.inner_text('#powerDialog')
+
+
+def test_shutting_down_asks_first_and_then_says_when_to_unplug(page: Page, live_server):
+    """It used to go off at the plug, which on 17 October emptied every file
+    a git pull had just written. The page says when pulling it is safe."""
+    mock_status(page)
+    asked = power(page)
+    page.goto(f'{live_server}/settings')
+
+    text = open_power_dialog(page)
+    assert 'Shut down the satellite?' in text and "yard's wifi go off" in text
+    page.locator('#powerDialog').get_by_role('button', name='Cancel').click()
+    assert page.locator('#powerDialog').count() == 0
+    assert asked == [], 'Cancel shuts nothing down'
+
+    open_power_dialog(page)
+    page.locator('#powerDialog').get_by_role('button', name='Shut down', exact=True).click()
+    page.wait_for_selector('#powerDialog >> text=green light')
+    assert asked == [True]
+
+
+def test_without_the_sudo_rule_the_button_says_what_setting_it_up_takes(page: Page, live_server):
+    """Never a button that silently does nothing."""
+    mock_status(page)
+    asked = power(page, can_power_off=False)
+    page.goto(f'{live_server}/settings')
+
+    text = open_power_dialog(page)
+
+    assert 'one-time setup' in text
+    assert 'sudo bash yard/docs/setup-scripts/satellite-sudoers.sh' in text
+    assert page.locator('#powerDialog').get_by_role('button', name='Shut down', exact=True).count() == 0
+    assert asked == []
+
+
+def test_a_recording_still_running_is_mentioned_before_shutting_down(page: Page, live_server):
+    payload = {
+        'satellite': {'hostname': 'mro', 'ip': '1.2.3.4'},
+        'rover': {'reachable': False, 'driver': None, 'queue_size': None, 'url': 'http://x'},
+        'camera': {'reachable': True, 'port': 8890},
+        'recording': {'active': ['m1'], 'ready': True},
+    }
+    page.route('**/api/status', lambda route: route.fulfill(
+        status=200, content_type='application/json', body=json.dumps(payload)))
+    power(page)
+    page.goto(f'{live_server}/settings')
+    page.wait_for_function("window.YardStatus && YardStatus.latest()")
+
+    assert 'A recording is running' in open_power_dialog(page)

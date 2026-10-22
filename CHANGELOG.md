@@ -11,6 +11,306 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A privacy and terms page, linked from Help and from the email prompt.**
+  Mission Control collects learners' email addresses, and many learners are
+  children, and there was no page saying what happens to them, or what anyone
+  agrees to by sending a mission. `/privacy` has both. The privacy half says what is
+  kept and why (missions are public; the email is optional, kept where no web
+  page can read it, and only a scrambled form is on missions), who else
+  handles it (Google Cloud, Firebase, Resend, YouTube, and PostHog, mentioned
+  only when PostHog is actually running), how long, and how to see or delete
+  it. The terms half is short enough for a child to read: missions are
+  public, be kind, a real rover does not always match the simulator, your code
+  is yours but SAPIENT may show it, no promises, South African law. `/terms`
+  lands on that half. Written from the code, for children and their parents.
+  Google also requires both links before the YouTube sign-in can leave
+  testing. The contact is an
+  admin setting on the Settings page, for David to set; until then the page
+  says to ask an operator at the yard. The email prompt adds "Under 18? Ask a
+  parent or teacher first." and a link to the page in a new tab.
+
+- **A recording keeps every character of its mission's id.** Mission ids can
+  start or end with a dash, about 3 in 100 of them, and the satellite dropped
+  it when it named the recording: `-BQwFDUWvyhpbQ4ZI8het` was filed as
+  `BQwFDUWvyhpbQ4ZI8het`. An operator uploads that file to YouTube Studio, the
+  file name becomes the video's title, and Mission Control reads the mission id
+  back out of the title. One character short, it named no mission, and the
+  video never linked. A name that needs nothing replaced is now filed whole;
+  a name somebody typed, like "Thabo's square!", is still tidied to
+  `Thabo-s-square`. A 60-character name could also be shortened a second time
+  when Stop handed it back, so Stop looked for a recording nobody had started;
+  naming it twice is now the same as naming it once. Automatic upload was
+  never affected: it sends the mission id itself, not the file name.
+
+- **The run station says when it is recording, and says when the run is
+  done.** Both were small and grey. A recording was a 9px dot inside a grey
+  button and a grey tag, so a run being filmed looked like one that was not,
+  until the video turned up afterwards. The end of a run was a line of small
+  print under Send and Stop, gone in five seconds, pointing at a card called
+  "Save the video" that had since been renamed; the download itself was a
+  32px icon in the rail.
+
+  While the camera records, the picture carries a red REC badge with a clock
+  that runs, the way a camera says it, and a red edge. Until the satellite
+  has said yes it reads "Starting recording" on dark glass instead, so it
+  never claims a recording that has not begun. When the rover finishes, a
+  large "Mission complete" notice opens over the page with the mission's
+  name, the file and its size, and one button that downloads that run's
+  video, not whichever is newest on the card. It stays until it is answered,
+  and the tab's title says it too. Pressing Stop does not open it: that run
+  did not complete.
+
+  Making the notice that loud brought out a race that a line of small print
+  had hidden. `/api/status` read the list of recordings from the camera's
+  snapshot, which is kept for four seconds, so a status asked for just
+  before Send could come back without the new recording, and the station
+  took that as the run having finished. The list is now read live, and the
+  station only believes a status it asked for after the recording started.
+
+- **About is under Help.** It was a loose link beside the laptop's Home and
+  My History pill, and on a phone it shared the top bar with the logo. The
+  Help button, which only restarted the walkthrough, now opens a small menu
+  over the page with "Take the tour" and "About Sapient.rocks". About was not
+  made a tab or put in the pill: both bars are for places in Mission Control,
+  and About opens another website, so a tab there takes a learner out of the
+  app. The phone's bar keeps its three slots, and the fourth Challenges needs
+  when it comes back. The walkthrough's welcome shows the rover instead of a
+  rocket icon, and its text no longer uses dashes.
+
+- **Copy on the run station copies.** Every Copy button selected its text and
+  said "Ctrl-C", because the clipboard API it used only exists on HTTPS or
+  localhost, and the yard serves plain HTTP on a LAN address. The older
+  `document.execCommand('copy')` has no such rule and still works from a
+  button press in every browser, so that is the copy now. The selection and
+  the key are only left for a browser that refuses even that.
+
+  Paste cannot work the same way. No browser lets a plain HTTP page read the
+  clipboard, by any route, so the paste button still opens a box to paste
+  into. It now says the one gesture the device in hand has: "Press ⌘V" (or
+  Ctrl-V) on a laptop, "Press and hold here, then tap Paste" on a tablet.
+  Making paste one press would mean serving the satellite over HTTPS. Sending
+  the mission from Mission Control in Chrome needs no paste at all.
+- **The yard's network is a router that reaches the internet, and the docs
+  say so.** The satellite served `marsyard`, and one radio cannot be an access
+  point and a client, so the yard had no internet: no clock for the satellite,
+  no `git pull` in the room, no upload from where a video was made. A Cudy
+  LT300 now serves `mars-relay-network` and joins whatever wifi is there for
+  the internet: WISP on, at `http://cudy.net`. Set up and working at home on
+  21 October 2026, with the satellite moved onto it;
+  `setup-scripts/satellite-join-relay.sh` does that move for a fresh satellite.
+
+  `marsyard` is retired, for predictability: one name everywhere. A Pi that
+  joins a network stays on it, so with both saved, the satellite fell onto a
+  `marsyard` hotspot when the relay blipped and stayed there after it came
+  back. It is deleted from the satellite and from the rover. If the
+  router is missing, a phone hotspot called `mars-relay-network` with its
+  password stands in for everything.
+
+  The docs had gone on describing the yard as it was. `yard-network.md`, the
+  manual, `bring-up.md` and the rover's handover note describe the router;
+  the network diagram's writeup describes the yard without the Firestore
+  mirror and the signed-in console it still showed; `docs/repo-handoff.md`
+  lists the yard's hardware and its passwords and keys, which no merge moves;
+  the RUNBOOK covers a console that will not come up, restarting the
+  satellite's services and a yard with no internet; and `infra/README.md`
+  gives the three `terraform import`s the next apply needs first.
+- **Automatic uploads reach the run, and wait for a connection.** Two gaps
+  in the automatic YouTube upload (#304), found reviewing it on 20 October.
+  Kept on a branch, not merged: David has lowered auto-upload in priority.
+
+  The uploaded video never reached the learner's page. Its id went into a
+  ledger only operators read, and attaching it was left to the scheduled
+  linker, which reads the channel with an API key and cannot see a private
+  video; uploads are private by default. Now the upload attaches it through
+  the same linker, moved out of the cron route into one application service
+  both call, so it closes an open run and emails the learner exactly as a
+  found video does. Not for a run the rover reported as an error: whether that
+  counts is the operator's call.
+
+  And the satellite gave up after three tries in a few seconds. Serving the
+  yard's wifi, it has no internet, so in the yard as it is normally set up
+  every try failed and none came later. A note beside each recording now waits
+  until Mission Control has the video or has refused it for good, retried
+  every watcher pass when due, and written so that a power cut cannot leave it
+  half written. When the connection comes back, everything waiting goes within
+  a minute, rather than at the end of a half-hour back-off.
+
+  And the operator can see it. A chip in the top bar of every console page
+  says how many videos are waiting, the one going out and how far it has got,
+  or that all of them are on YouTube; below a laptop's width it comes down to
+  its icon and a number, and on an upright tablet the brand's name gives way
+  while it is up. The Recordings card on Settings gives each video its state
+  (uploading and its percentage, waiting, on YouTube with the link, or to
+  upload by hand and why) and the day's tally. It counts down to closing, a
+  setting that defaults to the science centre's 16:30, and from half an hour
+  before it says whether switching off loses anything: videos still waiting
+  go up by themselves next time the satellite is online. The video is now
+  sent as it is read off the card, so the percentage is real and a 30 MB file
+  is never held whole in the Pi's memory.
+- **The satellite shuts down from its Settings page, and restarts without a
+  password.** It was switched off at the plug. On 17 October that emptied
+  every file a `git pull` had written a few minutes before, 87 of them,
+  because the card had not been given their data yet, and the console never
+  came back up. A recording still open when the power goes does not play
+  either. The power button beside the Satellite chip now closes and keeps any
+  recording still running, then powers off cleanly, and says when it is safe
+  to unplug.
+
+  Shutting down needs root, and so did restarting the satellite's services
+  after a pull, which meant the `mars` password every time and no restart an
+  agent could do. `yard/deploy/satellite.sudoers` allows exactly those
+  commands with no password: restart `satellite-web` and `satellite-camera`,
+  stop the camera, and power off. Nothing broader, because the console has no
+  sign-in and anyone on the yard's wifi can press its buttons. A test fails if
+  the code asks sudo for a command the rule does not list, or the rule allows
+  one the code does not use. It is installed once on the Pi with
+  `sudo bash yard/docs/setup-scripts/satellite-sudoers.sh`; until then the
+  button says what setting it up takes.
+
+- **The run station works on a phone.** Stacked, the rail took all the height
+  its cards wanted before the live panel got any: 365px of an iPhone's 598.
+  The panel was left its 220px floor, and its header and controls alone are
+  257. So a phone showed no camera picture at all, and the foot of the panel
+  was cut off through the middle of Send and Stop. The panel now comes first:
+  it is as tall as a picture the width of the phone and the controls under
+  it, and the rail has the rest, never under 7rem, and scrolls inside itself.
+  To find the height, the sentence under the page's title is not shown on a
+  phone and the camera and rover checks sit side by side. On a short phone
+  (667 tall and under) the picture is fitted in what is left, about 150px,
+  with the start-mark reminder on one line and the two buttons at 48px. The
+  panel's bar no longer runs past its edge; "Start recording" was cut through
+  its last letter.
+
+- **The satellite can turn its camera's picture round.** The Cape Town camera
+  films the yard half a turn round from the simulator's map: the start spot is
+  on the right of the video and on the left of the simulation, and north is at
+  the bottom. Nobody noticed until a mission's page showed the two at the same
+  size, one above the other (13 October). Settings has a "Which way up" choice
+  now, "As mounted" or "Turned round". It saves on the click and the picture
+  turns within a second, with no camera restart. The turn is made where a
+  frame is made, so the monitor, the run station and the recording all follow,
+  and detection boxes are moved with the picture and drawn after it so their
+  labels stay the right way up. A yard that sets nothing is left as it was.
+  Recordings already made, and the videos already on YouTube, do not change.
+
+- **The TV monitor shows the whole of the camera's picture.** The camera is
+  4:3 and a television is 16:9. The monitor gave the camera two thirds of the
+  screen whatever its shape and drew the picture to that width, so on a 1080p
+  television the picture was taller than the screen and the bottom 130px of
+  the yard, its near wall, was off the foot of it. The camera's panel is now
+  as wide as a 4:3 picture is at the screen's full height, and the queue has
+  the width that leaves: the picture fills its panel, nothing is cut off and
+  nothing stands beside it. The two bars along the top were 71px and 49px tall
+  and are one height. The canvas also takes each frame's own size now. It was
+  a fixed 640 x 480 that every frame was drawn down to, so the two sharper
+  picture qualities on Settings changed nothing on the one screen they are
+  for; the run station's live view shares the fix.
+
+- **The run station's live view is the camera's picture, with no bars beside
+  it.** Its column was a fixed share of the window, wider at every laptop size
+  than a 4:3 picture as tall as the column left room for, so the picture sat
+  in the middle of its panel with a dark bar down each side: 118px of bar at
+  1366 x 768, while the rail beside it scrolled for want of width. The column
+  is now as wide as the picture. Its height is what the panel's header and
+  controls leave, which changes with a warning showing and with how the words
+  wrap, so the page measures it and refits when either changes. The rail has
+  the width the picture gave up (792px instead of 557 at that size). On an
+  upright tablet, where the width is the limit, the panel ends under its
+  buttons instead of stretching the view to the foot of the screen. Stacked
+  on a phone it is unchanged.
+- **The yard console's top bar fits a tablet and a phone.** Laid out in full the bar is
+  about 950px wide once the rover is online with a queue, and the only width
+  it changed at was the phone's, 760px. Everything between pushed the rover
+  chip past the right edge. On a tablet held upright, 768 wide, the chip was
+  wholly off screen on the hub, the run station and Settings, and each of
+  them scrolled sideways, which a console page is never to do. The breakpoint
+  is older than the way back to Mission Control at the front of the bar
+  (#216), and no test had measured the bar at any width.
+
+  Below 1000px the bar now gives up the two labels a phone already did, the
+  words on the back button and the line under "Mars Yard", and the page links
+  stay a row of pills set a little closer: an operator changes station more
+  often than they do anything else up there, and the phone's menu costs a tap
+  each time. At 768 the chip reads "Rover online · queue 12" whole. The chip
+  is also the one item in the bar allowed to shrink. Its words come from the
+  rover, so a status longer than the bar was counted for shortens to an
+  ellipsis beside its dot where it used to widen the page.
+
+  A phone's bar has no row of links to take room back from. With the rover
+  online and a queue its row is about 420px, so at 375 wide and under the page
+  scrolled sideways, and from there to 414 it fitted only because the menu
+  button had been squashed from 40px to as little as 22. What goes now, at
+  440px and under, is the name. The rover tile beside it is the same mark and
+  the same link home, and the status is what an operator opens the page to
+  read, so it stays whole from 320 wide up. Two other cuts were mocked up
+  beside it on 13 October, both keeping "Mars Yard" and taking the room out of
+  the status: shorter words ("Online · 12"), or the dot and the count alone,
+  which cannot tell offline from degraded. The menu button no longer shrinks
+  at any width, and with that settled the chip's ellipsis applies on a phone
+  too, as the last resort it is on a tablet. The name is clipped rather than
+  removed, so a screen reader still has a name for the link.
+
+- **A mission's page is a feed of everything there is to watch.** The
+  simulation and the rover's videos shared one frame with arrows, the rover
+  first and the simulation last, so a mission with a video hid its simulation.
+  David opened one on 10 October and could not find it. It was the second time
+  one of the two went missing behind a control (in August it was the rover,
+  behind a dropdown), so now nothing chooses: one tile each, the simulation
+  first and then every time a rover drove it, newest first. The feed is the
+  one thing on the page that scrolls.
+
+  Each tile is the shape of its picture: the simulation's is the yard's, a
+  video's is 4:3, which is what the yard's camera records. Two earlier cuts
+  put them in frames of other shapes and filled the difference, first with
+  black bars beside the yard and then with a card of small print. From a
+  tablet up the feed is a column as wide as the simulation and the first video
+  need to both be in view, the rule Create Mission's simulator column already
+  follows, and the code is beside it.
+
+  A laptop's window is short and wide, and that column made the pictures
+  thumbnails beside a thousand pixels of code. So where a window has the room
+  the page is three columns: the simulation as tall as the page, the rover's
+  videos in a column of their own that scrolls down, and the code. A first
+  answer laid the feed on its side, the simulation and the first video at one
+  height with more videos off to the right. A list that runs sideways is not
+  something a mouse wheel finds, and two pictures of fixed shape side by side
+  left a strip of nothing under them that grew with the window. A mission no
+  rover has driven was getting that layout too, and drew its one simulation at
+  half size in an empty column; it has the simulation at full height beside
+  the code now. `lib/missionLayout` decides which arrangement a window gets.
+
+  A pill says how many videos are still to come and takes the learner to the
+  next one. It is there for as long as there is one less than half in view,
+  and comes back when they scroll back; at first it went for good at the first
+  scroll. Where the feed is a column and there is more than one video, the
+  next one's caption shows under the first and the pill sits on it.
+
+  On a phone the code is a bar under the simulation, closed while there are
+  videos under it to find. Open, it takes the room the videos had and the
+  simulation holds still above the line it is running. With no video it starts
+  open, the other half of the screen as it always was.
+
+  "How did it go? Remix it to go further or fix it." was a full-width banner
+  above the player with the Remix button it was about at the far end of the
+  row above. The banner is gone. The operator's note and Remix are together,
+  in one of three places. On a phone, a bar at the foot of the page. From a
+  tablet up, the foot of the code's card, where the note is shown whole
+  however long it is. In three columns with one video, under that video: it
+  is all in view, and what is left of its column would otherwise be empty, so
+  the note takes it as a card with Remix inside. With several videos the
+  column is all videos and the two stay in the code's card. With no note yet
+  the slot says "No operator note yet" and then points at Remix, so it always
+  says whose it is.
+
+  On a phone the simulation's tile is the size of a video's, 4:3, so the two
+  can be held against each other one above the other. At the yard's own shape
+  it was half as tall again as the rover's video beneath it. The yard is
+  nearly square, so there it is drawn about 1.4 times as wide as it is; a
+  mission with no video keeps the yard's shape.
+
+  The dot on the simulation's badge while it plays no longer pushes the map
+  icon off the centre of its circle.
+
 - **David's MacBook satellite mode, merged from upstream.** His three commits
   (MacBook mode, the `mac-env/` ignore, and the bash 3.2 fix to
   `start-mac.sh`) are now in this fork's history, so handing the repo back is
@@ -48,6 +348,17 @@ which is often longer than the diff.
   timestamps into strings and references into maps, and its restore wrote them
   back that way, so a restore would have reported success and reshaped the
   schema. Restore procedure is in `docs/RUNBOOK.md` §8 and is still unproven.
+
+- **The prod smoke check asserts the operator boundary, from the same script
+  as staging** (`scripts/smoke-check.sh`). `deploy-prod.yml` had never been
+  run, and still ended by asserting that `/operator` was a 404, the line
+  staging dropped in #93 when the console shipped. Prod promotes the digest
+  serving on staging, so the first production deploy would have deployed
+  correctly and then gone red. The check lived in two workflows and only one
+  was fixed, so it now lives in one script both call, and
+  `architecture.test.ts` fails if either workflow grows its own again. The
+  script's failing paths are tested against a stub server for the first time:
+  until now nothing had ever shown it would notice a leaked console.
 
 ---
 

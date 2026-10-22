@@ -2,15 +2,11 @@
 
 Companion writeup for `Mission Control: Network Diagram` (August 2026).
 
-> **Out of date on the yard.** Zone A still holds. Zone B describes the
-> satellite's Firestore mirror, its sync worker, recovery and lease, and its
-> own operator console with `OPERATOR_AUTH=off`, none of which exists any
-> more; in zone C it is the run station, not a console, that sends a mission
-> to the rover. The satellite now holds no cloud credential and has no
-> sign-in, and an operator carries each mission across from Mission Control,
-> which is the only operator surface. See
-> [`docs/ARCHITECTURE.md`](../ARCHITECTURE.md) and
-> [`yard/docs/what-the-yard-no-longer-does.md`](../../yard/docs/what-the-yard-no-longer-does.md).
+> **The drawing is out of date on the yard; this text is not** (updated
+> 21 October 2026). The picture still shows the satellite's Firestore mirror,
+> its sync worker and its signed-in console, none of which exists any more.
+> Zone A still holds as drawn. Zones B and C below describe the yard as it is
+> now, on the router's network.
 
 Where the architecture diagram shows how the software is structured, this one
 shows where the network boundaries fall, what protocol crosses each one, and
@@ -31,39 +27,38 @@ through the application server would add cost and a failure point for no
 security gain. Private learner data (`learners/{id}/private`) is reachable only
 through the Admin SDK, server side.
 
-## B. Venue LAN, yard satellite (`mro.local`)
+## B. The yard's network (`mars-relay-network`)
 
 Below the trust boundary, and the label matters: this network is *frequently
 offline*, not occasionally. Everything here is designed to keep working when the
 arrow to the cloud goes dead.
 
-The satellite serves four browser surfaces: `/code/` on tablets, `/monitor/` on
-the TV, `/status` for config and health, and `/operator/` for the console. The
-console is a Flask blueprint using Firebase sign-in with custom claims, with
-`OPERATOR_AUTH=off` as a documented event-day bypass, because a login prompt
-failing in front of a queue of children is a worse outcome than an
-unauthenticated console on a private venue LAN.
+A Cudy LT300 router serves `mars-relay-network` to the satellite, the rover and
+every tablet, laptop and TV in the room. For the internet it joins whatever
+wifi the venue has, in WISP mode, or a SIM. How it is set up is
+[`yard/docs/yard-network.md`](../../yard/docs/yard-network.md). Before the
+router the satellite served the wifi itself and had no internet; that, and the
+`marsyard` name, were retired on 21 October 2026.
 
-Every console action reads and writes the **local SQLite mirror**, never
-Firestore. The mirror holds `mission_mirror` (with `lock_owner` and
-`lease_expires_at` for multi-satellite safety), plus `outbox`, `sync_meta` and
-`conflict_log`. Four background threads run asynchronously with nobody waiting
-on them:
+The satellite (`mro.local`, a Pi 5) serves the yard's pages: `/run/`, the run
+station where an operator sends a mission and films it; `/code/` on tablets;
+`/monitor/` on the TV; and `/settings`. None has a sign-in and none touches
+Firestore. A mission arrives from Mission Control's operator console in the
+handoff URL, or by paste. Two background jobs run with nobody waiting on them:
 
-- `sync_worker.py` is the *only* component in the yard that touches Firestore,
-  and it always pushes the outbox before pulling incrementally, so local truth
-  wins a race with a stale remote read.
-- `mission_watcher.py` polls the rover and completes only what it can confirm.
-- `recovery.py` cleans up missions interrupted by a restart.
-- `satellite_identity.py` holds this yard's mission lease.
-- `camera_control.py` starts and restarts the camera stream.
+- `mission_watcher.py` polls the rover and stops a recording when its run is
+  over.
+- `camera_server.py` streams the camera on 8890, to the run station and the
+  monitor, separately from the rover, so a rover fault does not blank either.
 
-The notify call back to the Hub is marked **best effort** deliberately. If it
-fails, the mission still completed.
+Outbound, through the router, everything is best effort and off the run path:
+the clock, `git pull`, and, once automatic upload is set up, a finished
+recording posted to Mission Control with a shared secret. If any of it fails,
+the mission still ran.
 
-## C. Rover (`marspi.local`) and hardware
+## C. Rover (`curiosity.local`) and hardware
 
-The console dispatches a mission over plain HTTP to `rover_server.py`, a Flask
+The run station dispatches a mission over plain HTTP to `rover_server.py`, a Flask
 app exposing `/queue/add`, `/queue/status`, `/queue/events` and `/photo`.
 `RoverQueueService` holds a FIFO queue with a single worker thread, running
 sandboxed Python under a wall-clock watchdog. It calls the abstract
@@ -93,13 +88,13 @@ One constraint drives all of it. *The rover must stay drivable when the venue's
 internet is down.* So the cloud owns storage, authentication and publication,
 while control, monitoring and execution stay on the venue LAN. Notice that no
 solid arrow crosses the trust boundary: every cloud dependency is dashed or best
-effort. An internet outage degrades sync and email. It does not stop a mission.
+effort. An internet outage degrades uploads and email. It does not stop a mission.
 
 ## Known caveats
 
-- `OPERATOR_AUTH=off` is a real bypass, shown on the diagram on purpose. The
-  defence is private LAN, physical access control, and event-day reliability.
-  Better owned than found.
-- "The only component that reaches Firestore from the yard" is a strong claim
-  and it currently holds. Keeping it true is what makes the offline story
-  auditable in one file.
+- **No sign-in on the yard's network.** Anyone on `mars-relay-network` can use
+  the satellite's pages and drive the rover. The defence is the wifi password
+  and the room, and the yard's passwords are still in git history (AB#429), so
+  the password is weaker than it looks until they move to a password manager.
+- The router joins one venue network at a time and is changed by hand at each
+  new place. Without a SIM, a new venue means no internet until someone does.

@@ -7,7 +7,7 @@ import { recordMissionCreated } from '@/infrastructure/browser/platformMilestone
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { useLearner } from '@/contexts/LearnerContext';
 import { validateMission } from '@/infrastructure/validation/schemas';
-import { generateRandomMissionName } from '@/core/domain/services/missionNameGenerator';
+import { rollMissionName } from '@/core/domain/services/missionNameGenerator';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { findSlope } from '@/core/domain/safety/slopeCheck';
 import { EditorPanel, type EditorMode } from '@/components/mission/EditorPanel';
@@ -19,6 +19,7 @@ import { PhoneWorkspace } from '@/components/mission/PhoneWorkspace';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { useYardLayout } from '@/hooks/useYardLayout';
+import { useTour } from '@/contexts/TourContext';
 import { simulateCommands, type TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource, SimulationCommand } from '@/lib/roverBlockly';
 import { resolveYardId } from '@/infrastructure/config/yard';
@@ -126,10 +127,18 @@ export function MissionWorkspace() {
    * until the browser is the only thing rendering.
    */
   const [missionName, setMissionName] = useState('');
+  /**
+   * What the mission just sent is called, for the confirmation. Usually the
+   * name the learner rolled; `renamed` when another mission took that name
+   * first and the server gave this one the next free name
+   * (IMissionNameRegistry). The roll is free and reserves nothing, so this is
+   * where a learner finds out.
+   */
+  const [sent, setSent] = useState<{ name: string; renamed: boolean } | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      setMissionName(generateRandomMissionName());
+      setMissionName(rollMissionName());
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -165,6 +174,19 @@ export function MissionWorkspace() {
       void loadRemixMission();
     }
   }, [remixFromId]);
+
+  const { currentStep: tourStep, active: tourActive } = useTour();
+  useEffect(() => {
+    if (!tourActive) return;
+    const id = tourStep?.id;
+    if (id === 'manual-mode' || id === 'drive-buttons') {
+      if (editorMode !== 'manual') setEditorMode('manual');
+    } else if (id === 'blockly-mode' || id === 'blockly-editor') {
+      if (editorMode !== 'blockly') setEditorMode('blockly');
+    } else if (id === 'python-mode' || id === 'code-instructions' || id === 'run-mission') {
+      if (editorMode !== 'code') setEditorMode('code');
+    }
+  }, [tourStep?.id, tourActive]); // eslint-disable-line react-hooks/exhaustive-deps -- only drives mode from tour steps
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const [manualResetVersion, setManualResetVersion] = useState(0);
@@ -368,7 +390,8 @@ export function MissionWorkspace() {
 
       setSubmitSuccess(true);
       setLaunchOpen(false);
-      setMissionName(generateRandomMissionName());
+      setSent(result.mission.name ? { name: result.mission.name, renamed: result.mission.name !== missionName } : null);
+      setMissionName(rollMissionName());
       // Offer notifications once the mission is in (never on landing), and only
       // if the learner has not already saved an email. The confirmation waits
       // for that answer rather than racing it: the prompt covers the whole
@@ -528,6 +551,8 @@ export function MissionWorkspace() {
         open={missionSentOpen}
         onClose={() => setMissionSentOpen(false)}
         email={learnerEmail}
+        name={sent?.name ?? null}
+        renamed={sent?.renamed ?? false}
       />
     </div>
   );

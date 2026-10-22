@@ -20,6 +20,7 @@ import 'server-only';
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { MissionService } from '@/core/application/services/MissionService';
 import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { FirestoreMissionNameRegistry } from '@/infrastructure/persistence/FirestoreMissionNameRegistry';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
 import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
@@ -36,6 +37,7 @@ import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { missionEmailComposer } from '@/infrastructure/email/missionStatusTemplates';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { OperatorMissionCommands } from '@/core/application/services/OperatorMissionCommands';
+import { VideoLinker } from '@/core/application/services/VideoLinker';
 import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
@@ -45,7 +47,7 @@ export function adminMissionRepository(): IMissionRepository {
 
 /** The application service, wired to the privileged repository. */
 export function missionService(): MissionService {
-  return new MissionService(adminMissionRepository());
+  return new MissionService(adminMissionRepository(), new FirestoreMissionNameRegistry(getFirestoreInstance()));
 }
 
 /** Privileged. Yards are world-readable but only ever written through here. */
@@ -87,4 +89,9 @@ export function adminRecoveryCodeRepository(): IRecoveryCodeRepository {
 /** Privileged. Parent links are never browser-accessible. */
 export function adminParentLinkRepository(): IParentLinkRepository {
   return new FirestoreParentLinkRepository(getFirestoreInstance());
+}
+
+/** A found or uploaded video, attached to its run: the linker and automatic upload both. */
+export function videoLinker(): VideoLinker {
+  return new VideoLinker(adminMissionRepository(), notificationService(), nanoid);
 }

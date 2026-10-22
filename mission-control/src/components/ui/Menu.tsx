@@ -28,12 +28,16 @@ export function Menu({
   icon,
   children,
   align = 'end',
+  buttonClassName = BUTTON_CLASS,
 }: {
   /** The button's accessible name. */
   label: string;
   icon: ReactNode;
   children: ReactNode;
   align?: 'start' | 'end';
+  /** For a button that has to match the bar it sits in, as the learner
+   *  navbar's Help does beside its round, bordered icon buttons. */
+  buttonClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -65,9 +69,7 @@ export function Menu({
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((v) => !v)}
-        // 44px: the smallest target Apple's guidelines call comfortable, and
-        // this sits in the corner a thumb reaches last.
-        className="inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-card/70 active:bg-card"
+        className={buttonClassName}
       >
         {icon}
       </button>
@@ -90,6 +92,11 @@ export function Menu({
     </div>
   );
 }
+
+// 44px: the smallest target Apple's guidelines call comfortable, and the
+// operator bar's menu sits in the corner a thumb reaches last.
+const BUTTON_CLASS =
+  'inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-colors hover:bg-card/70 active:bg-card';
 
 /**
  * The shared shape of an item, so a Link and a button in the same menu line

@@ -49,6 +49,10 @@
     <a href="/settings"{% if nav_active == 'status' %} class="active"{% endif %}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>Settings</a>
   </nav>
   <div class="topbar-right">
+    <a class="sys sys-up" id="sysUpload" href="/settings#recordingsSection" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 18a4.6 4.4 0 0 1 0-9 5 4.5 0 0 1 11 2h1a3.5 3.5 0 0 1 0 7h-1"/><polyline points="9 15 12 12 15 15"/><line x1="12" y1="12" x2="12" y2="21"/></svg>
+      <span class="sys-txt"></span><span class="sys-short" aria-hidden="true"></span>
+    </a>
     <span class="sys" id="sysRover"><span class="sys-dot"></span><span class="sys-txt">Rover&hellip;</span></span>
   </div>
 </header>
@@ -70,6 +74,11 @@ window.YardStatus = window.YardStatus || (function () {
     interval: 5000,
     maxInterval: 20000,
     fetchFn: function () {
+      // When the request left, handed to every subscriber. A request that was
+      // already on its way when something changed answers for the moment
+      // before the change, and the run station has to tell those apart from
+      // an answer that came after: see where it decides a run has finished.
+      var requestedAt = Date.now();
       return fetch('/api/status').then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
@@ -79,7 +88,8 @@ window.YardStatus = window.YardStatus || (function () {
         // Kept as its own key: the nav chip paints from it on every page,
         // including ones that never ask for the full snapshot.
         YardCache.write('roverStatus', data.rover || {});
-        listeners.forEach(function (fn) { try { fn(data); } catch (e) {} });
+        var meta = { requestedAt: requestedAt };
+        listeners.forEach(function (fn) { try { fn(data, meta); } catch (e) {} });
       });
     },
     onError: function (err) {
@@ -89,7 +99,9 @@ window.YardStatus = window.YardStatus || (function () {
 
   return {
     // fn is called with each snapshot, and once up front with the cached one
-    // if there is one, so callers never need their own cache-read path.
+    // if there is one, so callers never need their own cache-read path. The
+    // second argument says which: { cached, ts } for the cached one, and
+    // { requestedAt } for a fresh one.
     subscribe: function (fn) {
       listeners.push(fn);
       if (latest) { try { fn(latest, { cached: true, ts: cached && cached.ts }); } catch (e) {} }
@@ -113,12 +125,48 @@ window.YardStatus = window.YardStatus || (function () {
       txt.textContent = ok ? ('Rover online' + q) : (r.reachable ? 'Rover degraded' : 'Rover offline');
     }
 
+    var up = document.getElementById('sysUpload');
+    function paintUploads(u) {
+      if (!up) return;
+      var label, short, tone;
+      if (!u || !u.configured) {
+        up.hidden = true;
+        return;
+      }
+      if (u.sending) {
+        var pct = Math.min(100, Math.round(100 * u.sending.sent / u.sending.total));
+        // The one going out counts among the waiting until it lands.
+        var more = (u.waiting || 0) - 1;
+        label = (pct < 100 ? 'Uploading ' + pct + '%' : 'Uploading') + (more > 0 ? ' \u00b7 ' + more + ' more' : '');
+        short = pct + '%';
+        tone = 'info';
+      } else if (u.waiting) {
+        label = u.waiting + (u.waiting === 1 ? ' video' : ' videos') + ' waiting to upload';
+        short = String(u.waiting);
+        tone = 'warn';
+      } else if (u.uploaded) {
+        label = 'All on YouTube';
+        short = '';
+        tone = 'ok';
+      } else {
+        up.hidden = true;
+        return;
+      }
+      if (u.online === false && !u.sending) label += ' \u00b7 no internet';
+      up.hidden = false;
+      up.dataset.tone = tone;
+      up.querySelector('.sys-txt').textContent = label;
+      up.querySelector('.sys-short').textContent = short;
+      up.title = label;
+      up.setAttribute('aria-label', label + '. Details on Settings.');
+    }
+
     // Instant paint from the last known state so nav between pages doesn't
     // flash "Rover…" on every load while the fresh fetch happens in the background.
     var cachedRover = YardCache.read('roverStatus');
     if (cachedRover) paint(cachedRover.value);
 
-    YardStatus.subscribe(function (d) { paint(d.rover || {}); });
+    YardStatus.subscribe(function (d) { paint(d.rover || {}); paintUploads(d.uploads); });
     YardStatus.onError(function () {
       dot.className = 'sys-dot bad';
       txt.textContent = 'Rover offline';

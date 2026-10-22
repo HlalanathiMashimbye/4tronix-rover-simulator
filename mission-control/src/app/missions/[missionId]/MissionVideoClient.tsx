@@ -3,12 +3,11 @@
 import { PYTHON_DRAFT_KEY } from '@/infrastructure/browser/pythonDraft';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Rocket, Star, Zap, Lightbulb } from 'lucide-react';
+import { ArrowLeft, Rocket, Star } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { missionSlug, parseMissionSlug, pickLinkedMission } from '@/core/domain/services/missionSlug';
 import { Mission } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
-import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 import { useYardLayout } from '@/hooks/useYardLayout';
 import type { CommandSource } from '@/lib/roverBlockly';
@@ -17,11 +16,15 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
 import { durationLabel } from '@/lib/missionDuration';
-import { missionClipboardText } from '@/lib/missionClipboard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
-import { RunStackCarousel } from '@/components/mission/RunStackCarousel';
+import { RunFeed, yardShapeStyle } from '@/components/mission/RunFeed';
+import { MissionCode } from '@/components/mission/MissionCode';
+import { RemixButton } from '@/components/mission/RemixButton';
 import { OperatorFeedback } from '@/components/mission/OperatorFeedback';
-import { CodeLines } from '@/components/mission/CodeLines';
+import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
+import { useMissionLayout } from '@/hooks/useMissionLayout';
+import { missionLayoutStyle } from '@/lib/missionLayout';
+import { YARD } from '@/lib/rover-physics';
 
 
 export default function MissionVideoClient({
@@ -35,18 +38,20 @@ export default function MissionVideoClient({
   const searchParams = useSearchParams();
   const autoRemix = searchParams.get('autoRemix') === 'true';
   const [mission, setMission] = useState<Mission | null>(null);
-  // Every yard's attempt, so the carousel can show more than the one video the
+  // Every yard's attempt, so the feed can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
   const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  // Null until the mission loads, then the first run - which is the real one
-  // when there is one. A child opening their mission sees the rover, not a
-  // simulation they have already watched in the editor.
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [codeView, setCodeView] = useState<'blocks' | 'python'>('blocks');
-  const [copied, setCopied] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
+  // A phone has no room for the code beside the feed, so there it is a bar
+  // under the simulation that opens in place. Null on the server; nothing
+  // below renders until a mission has loaded, which is after the browser
+  // knows.
+  const isPhone = usePhoneLayout() ?? false;
+  // Whether the learner has opened or closed the phone's code. Until they do
+  // it follows what else there is to look at (below).
+  const [codeChoice, setCodeChoice] = useState<boolean | null>(null);
 
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
@@ -56,13 +61,26 @@ export default function MissionVideoClient({
   const simTrajectory = useMissionTrajectory(mission, yardLayout);
   /** What the simulation is running, lit up in the code like the editor (AB#450). */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
+  // How many times the simulation has played to its end. Each one is the
+  // moment a learner has something to change, so each one nudges Remix.
+  const [simsWatched, setSimsWatched] = useState(0);
+  const watchedSim = useCallback(() => setSimsWatched((n) => n + 1), []);
 
-  // Real runs come FIRST, which is the point: a child needs to see that an
-  // actual rover drove their code. See lib/missionRuns for the reasoning.
+  // The rover's runs. The simulation is not one of them: it is always on the
+  // page, first in the feed. See lib/missionRuns for the reasoning.
   const runs = useMemo<RunOption[]>(
     () => buildRunOptions(mission, missionRuns, yards),
     [mission, missionRuns, yards],
   );
+
+  // The measured yard until the configured one arrives, as the simulator draws.
+  const yard = yardLayout ?? YARD;
+  const yardAspect = yard.widthCm / yard.depthCm;
+  const hasVideo = runs.length > 0;
+  // One feed beside the code, or three columns where the window has the room
+  // (lib/missionLayout). A phone is never asked: its tree is its own.
+  const [bodyRef, roomFor] = useMissionLayout({ yardAspect, hasVideo });
+  const wide = !isPhone && roomFor.kind === 'wide';
 
   useEffect(() => {
     const fetchMission = async () => {
@@ -157,36 +175,42 @@ export default function MissionVideoClient({
   const missionName = mission.name || `Mission ${mission.id.slice(0, 8)}`;
   const starred = isFavorite(mission.id);
   const discoveryStatus = getDiscoveryStatus(mission.status);
-  const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0];
-  // Was mission.executionMetadata?.duration_ms - a key no mission document
-  // has ever carried, so this always read "Not yet", including under footage
-  // of a rover that had clearly finished. See lib/missionDuration.
-  const duration = durationLabel(simTrajectory, selectedRun);
+  const remixable = mission.status === 'completed';
+  // How long the program runs, which is what the simulation plays. Each
+  // rover's video says what its own run took (RunFeed).
+  const simDuration = durationLabel(simTrajectory);
   const dateLabel = new Date(mission.completedAt || mission.submittedAt).toLocaleDateString();
-  const hasBlocks = !!mission.blocklyState;
-  const showBlocks = hasBlocks && codeView === 'blocks';
-
-  const copyCode = async () => {
-    // The same payload the operator queue copies. This button used to write
-    // bare mission.code, which pasted into the run station as an anonymous
-    // block of Python: no name, no id, and so no run id for the recording.
-    try {
-      await navigator.clipboard.writeText(missionClipboardText(mission));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* clipboard unavailable */
-    }
-  };
+  // Closed while there are videos to find under the simulation, since the
+  // code open is what folds them away. With no video there is nothing under
+  // it to find, and the code is the other half of the screen as it always was.
+  const codeOpen = codeChoice ?? !hasVideo;
+  // What comes after watching: what the operator wrote back, and Remix. "How
+  // did it go?" was a banner of its own above the player, with Remix at the
+  // far end of the row above that; the note's slot carries the prompt now,
+  // until an operator's note takes its place (OperatorFeedback). Where the
+  // two go depends on the screen, below.
+  const remixButton = remixable && <RemixButton onRemix={remix} nudge={simsWatched} compact tourId="tour-remix" />;
+  const debrief = (
+    <>
+      <OperatorFeedback runs={missionRuns} ask={remixable} />
+      {remixButton}
+    </>
+  );
+  // Three columns, one video: the video is all in view and what is left of
+  // its column under it would be empty, so the note takes it, as a card with
+  // Remix inside ("a tonne of whitespace at the bottom of the video, that's
+  // where the comment should go", 13 October 2026). With more than one video
+  // that column is a list and every pixel of it is a video's, so the two stay
+  // in the code's card ("in the code part to make space for the videos", the
+  // same day).
+  const noteUnderTheVideo = wide && runs.length === 1;
 
   return (
     // Pinned to the viewport at every size, like Create Mission (AB#455). On a
-    // phone this used to stack the panels and scroll, with the tab bar and the
-    // floating button on top of the blocks. Now the player docks at the top
-    // and the code is below it, half each (.workspaceSplitGrid--fixed in
-    // globals.css).
-    // It once clipped the code entirely under overflow-hidden; the fix then
-    // was to let it scroll, the fix now is a layout that fits.
+    // phone this used to stack the panels and scroll the whole page, with the
+    // tab bar and the floating button on top of the blocks. Now the one thing
+    // that scrolls is the feed of pictures (.missionBody in globals.css), and
+    // on a phone the note and Remix stay put under it.
     <main data-surface="mission" className="h-page overflow-hidden px-3 py-2">
       <div className="mx-auto flex h-full min-h-0 max-w-page flex-col gap-2">
         {/* Header */}
@@ -230,140 +254,68 @@ export default function MissionVideoClient({
               {dateLabel}
             </span>
           </div>
-          {/* In the header, like Run in the editor: the one thing to do next
-              on this page. It was a card under the code, a whole row of a
-              phone screen. */}
-          {mission.status === 'completed' && (
-            <button
-              onClick={remix}
-              title="Tweak the code and run your own version"
-              className="clay clay-press inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-gradient-mars px-3 py-1.5 font-display text-xs font-bold text-primary-foreground md:text-sm"
-            >
-              <Zap className="h-3.5 w-3.5" fill="currentColor" />
-              {/* Words down to the narrowest phones; below 360px the bolt alone,
-                  named for screen readers by aria-label. */}
-              <span className="max-[359px]:sr-only">Remix</span>
-            </button>
+        </div>
+
+        {/* The feed of everything there is to watch, and the code.
+
+            This was two halves, a player and the code, and the player showed
+            one thing at a time: the rover's video, with the simulation behind
+            an arrow. David could not find the simulation (10 October 2026).
+            The feed shows all of it; RunFeed has the rest of the story. */}
+        <div
+          ref={bodyRef}
+          className="missionBody"
+          data-alone={hasVideo ? undefined : ''}
+          data-layout={wide ? 'wide' : undefined}
+          style={{ ...yardShapeStyle(yardAspect), ...(wide ? missionLayoutStyle(roomFor) : {}) }}
+        >
+          <RunFeed
+            runs={runs}
+            missionName={missionName}
+            trajectory={simTrajectory}
+            simDuration={simDuration}
+            onSimSourceChange={setRunningSource}
+            tourId="tour-mission-video"
+            onSimFinished={watchedSim}
+            yardId={mission.yardId}
+            codeOpen={isPhone && codeOpen}
+            videosFoot={
+              noteUnderTheVideo ? (
+                <OperatorFeedback runs={missionRuns} ask={remixable} roomy>
+                  {remixButton}
+                </OperatorFeedback>
+              ) : undefined
+            }
+            codeSlot={
+              isPhone ? (
+                <MissionCode
+                  mission={mission}
+                  highlight={runningSource}
+                  collapsible
+                  open={codeOpen}
+                  onToggle={() => setCodeChoice(!codeOpen)}
+                  tourId="tour-mission-code"
+                />
+              ) : null
+            }
+          />
+          {/* Beside the feed, or beside the videos' column, the note and
+              Remix are the foot of the code's card (MissionCode). Under the
+              one video of three columns, the code has its whole card. */}
+          {!isPhone && (
+            <MissionCode
+              mission={mission}
+              highlight={runningSource}
+              footer={noteUnderTheVideo ? undefined : debrief}
+              tourId="tour-mission-code"
+            />
           )}
         </div>
 
-        {mission.status === 'completed' && (
-          <div className="flex shrink-0 items-start gap-3 rounded-2xl border-2 border-amber-200/30 bg-gradient-to-br from-amber-50/50 to-orange-50/50 p-4 dark:border-amber-950/40 dark:from-amber-950/30 dark:to-orange-950/30">
-            <Lightbulb className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <h2 className="font-display font-semibold text-foreground">
-                How did it go?
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Remix it to go further or fix it.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Fixed at 60/40, video to code, and the number came from the
-            simulator's geometry rather than taste.
-        {/* Half each, video to code, beside each other on a laptop and one
-            above the other on a phone (6 Oct 2026, the user's call: the
-            player took 60% and squeezed the program).
-
-            It was 60/40, for the simulator's sake: the old 4:3 yard was
-            letterboxed inside its canvas, and a narrower panel left less grey
-            down its sides. Since AB#464 the yard is the measured one and is
-            stretched to fill the canvas (computeLayout), so no split leaves
-            bars beside it. A 16:9 video in a half that is taller than 16:9
-            sits centred on black, which is what every player does.
-
-            The 320px floor on the right track keeps the code readable on a
-            narrow laptop.
-
-            No height: the grid is a flexible track and takes what this flex
-            column has left, the same as Create Mission. */}
-        <div className="workspaceSplitGrid workspaceSplitGrid--fixed">
-          <div className="flex min-h-0 flex-col gap-2">
-            <RunStackCarousel
-              runs={runs}
-              selectedId={selectedRun.id}
-              onSelect={setSelectedRunId}
-              missionName={missionName}
-              trajectory={simTrajectory}
-              onSimSourceChange={setRunningSource}
-              yardId={mission.yardId}
-            />
-            {/* Under the player, where a learner looks after watching. One
-                line, so the leftover height goes to the player instead. */}
-            <OperatorFeedback runs={missionRuns} />
-          </div>
-          {/* Code (scrolls internally) + remix */}
-          <div className="flex min-h-0 flex-col gap-2">
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-border/60 bg-background/60">
-            <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
-              {hasBlocks ? (
-                <div
-                  // p-px, not p-0.5: rounded-lg is 14.4 and the buttons are
-                  // rounded-md at 12.4, so the track between them has to be 2px
-                  // (1px border + 1px padding) for the corners to stay
-                  // concentric. At p-0.5 it was a pixel out.
-                  className="inline-flex rounded-lg border border-border bg-card p-px text-xs font-semibold"
-                >
-                  <button
-                    onClick={() => setCodeView('blocks')}
-                    className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'bg-gradient-mars text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    Blocks
-                  </button>
-                  <button
-                    onClick={() => setCodeView('python')}
-                    className={`rounded-md px-3 py-1 transition-colors ${showBlocks ? 'text-muted-foreground hover:text-foreground' : 'bg-gradient-mars text-primary-foreground'}`}
-                  >
-                    Python
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-red-400/70" />
-                  <span className="h-2 w-2 rounded-full bg-amber-400/70" />
-                  <span className="h-2 w-2 rounded-full bg-green-400/70" />
-                  <span className="ml-1.5 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                    mission.py
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                {/* How long it runs, beside the code that decides it. Status
-                    and "built with" are already said by the badge and the
-                    Blocks/Python switch. */}
-                <span className="font-mono text-[11px] text-muted-foreground" title="How long it runs">
-                  {duration}
-                </span>
-                <button
-                  onClick={copyCode}
-                  className="rounded-md px-2 py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {copied ? 'Copied' : 'Copy'}
-                </button>
-              </div>
-            </div>
-            {showBlocks ? (
-              <div className="min-h-0 flex-1">
-                <BlocklyViewer
-                  state={mission.blocklyState!}
-                  highlight={runningSource}
-                  // The whole program, as big as reads well: centred at the
-                  // editor's zoom, a short one sat small in a big white
-                  // canvas and a long one ran off the bottom.
-                  fit
-                  maxFitScale={1.25}
-                  zoomControls
-                />
-              </div>
-            ) : (
-              <CodeLines code={mission.code} highlight={runningSource} />
-            )}
-          </div>
-
-          </div>
-        </div>
+        {/* A phone's code is a bar in the feed that is closed more often than
+            not, so there the two are a bar of their own that does not move,
+            at the bottom, where a thumb already is. */}
+        {isPhone && <div className="flex shrink-0 items-center gap-2">{debrief}</div>}
       </div>
     </main>
   );

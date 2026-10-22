@@ -53,8 +53,9 @@ describe('the simulator yard against yard-measurements.md', () => {
   });
 
   it('has every slope zone in the doc, where the doc puts it, at its size (AB#468)', () => {
-    const zones = [...DOC.matchAll(/^\| [^|]+ peak \| (yellow|orange|red) \| (\d+), (\d+) \| (\d+) \|$/gm)].map(
-      ([, level, x, y, r]) => ({ level, x: +x, y: +y, rx: +r, ry: +r }),
+    // A ring is one radius; an oval is "across x down".
+    const zones = [...DOC.matchAll(/^\| [^|]+ \| (yellow|orange|red) \| (\d+), (\d+) \| (\d+)(?: x (\d+))? \|$/gm)].map(
+      ([, level, x, y, rx, ry]) => ({ level, x: +x, y: +y, rx: +rx, ry: +(ry ?? rx) }),
     );
     expect(zones.length).toBeGreaterThan(0);
     const order = (z: { level: string; x: number }) => `${z.level}:${z.x}`;

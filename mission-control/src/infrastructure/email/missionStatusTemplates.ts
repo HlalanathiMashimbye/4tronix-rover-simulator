@@ -58,9 +58,14 @@ const STATUS_COPY: Record<MissionStatus, StatusCopy> = {
     },
   },
   failed: {
-    subjectPrefix: '⚠️ Mission Failed',
+    subjectPrefix: '⚠️ Mission Review Needed',
     headline: (missionName) =>
-      `Your mission <strong>${missionName}</strong> hit a problem during execution and didn't complete successfully. Check the console output for details.`,
+      `Your mission <strong>${missionName}</strong> needs a quick review. The operator has recorded what happened and can make it available to run again after it has been re-queued.`,
+  },
+  not_completed: {
+    subjectPrefix: '⚠️ Mission Not Completed',
+    headline: (missionName) =>
+      `Your mission <strong>${missionName}</strong> did not finish this time. The operator has recorded what happened and can make the mission available to run again after it has been re-queued.`,
   },
   cancelled: {
     subjectPrefix: '🛑 Mission Cancelled',

@@ -108,44 +108,90 @@ sudo systemctl restart satellite-web
 sudo systemctl restart satellite-camera
 ```
 
-**The restarts ask for the `mars` password.** This used to say the `mars`
-user had passwordless sudo for these two units. On the satellite as it is
-(checked 3 October 2026) it does not: `/etc/sudoers.d/` holds only the
-system's own files, and `sudo -n systemctl restart satellite-web` answers
-"a password is required", with or without `.service` on the end. So:
+**Restarts and shutting down need no password, once the rule is in.** The
+rule is [`yard/deploy/satellite.sudoers`](../deploy/satellite.sudoers): restart
+`satellite-web` and `satellite-camera`, stop the camera, and `systemctl
+poweroff`, for the `mars` user, and nothing else. Install it once, from the
+checkout on the Pi:
 
-- Run the restarts yourself, over an interactive `ssh` session. They cannot be
-  run from a script or by an agent, which cannot type the password.
-- sudo remembers the password for a few minutes, so the second restart
-  usually does not ask again.
-- Keep them as two commands anyway. If a per-unit rule is ever added (see
-  below), sudo matches the whole argument list, and `systemctl restart a b`
-  would match neither rule.
-
-**The Settings page cannot restart the camera either.** Its Restart camera
-button calls `systemctl restart satellite-camera`, which systemd refuses
-without a logged-in user ("Interactive authentication required"), then retries
-through `sudo -n`, which needs the password. The button reports that it cannot
-manage the unit; restart the camera over ssh instead.
-
-**To make restarts passwordless again** (a security setting on the Pi, so a
-deliberate decision, not a fix to apply in passing), add a sudoers file with
-`sudo visudo -f /etc/sudoers.d/satellite` containing exactly:
-
-```
-mars ALL=(root) NOPASSWD: /usr/bin/systemctl restart satellite-web, /usr/bin/systemctl restart satellite-camera
+```bash
+sudo bash yard/docs/setup-scripts/satellite-sudoers.sh
 ```
 
-Confirm the path first with `command -v systemctl` on the Pi; on its Debian it
-is `/usr/bin/systemctl`, but sudo compares full paths. Spelled exactly as above:
-sudo matches the argument list word for word, so
-`satellite-camera.service` would need its own entry (`camera_control.py` tries
-both spellings for this reason). Then update this section.
+That one sudo asks for the `mars` password; nothing after it does. The script
+checks the rule with `visudo` before it goes in, then reads back what `mars`
+may run with no password and says which commands are in it, and that `reboot`
+is not. It was installed on the satellite on 21 October 2026. Whether it is in
+on a given Pi:
+
+```bash
+sudo -n -l
+```
+
+lists the four commands, with both spellings, after `NOPASSWD:`. Without the
+rule it asks for a password instead, and then every restart does too, so an
+agent cannot do one and has to hand the two commands to a person.
+
+Not `sudo -n -l /usr/bin/systemctl poweroff`, which looks like the question
+and is not. Once any entry needs no password, sudo lists without asking for
+one, and naming a command only asks whether `mars` may run it at all. On the
+satellite it said yes to `systemctl reboot`, which still needs the password.
+
+- Keep restarts as two commands. sudo matches the whole argument list, so
+  `systemctl restart satellite-web satellite-camera` matches no rule.
+- Both spellings of each unit are in the rule, with and without `.service`,
+  because sudo treats them as different commands and `camera_control.py` tries
+  both. `test_satellite_power.py` fails if the code asks sudo for a command
+  the rule does not list, or the rule allows one the code does not use.
+- The path is `/usr/bin/systemctl`, which is where the satellite's Debian puts
+  it. sudo compares full paths, so the script refuses to install on a box
+  where `command -v systemctl` says otherwise.
+- To change what it allows, edit the file in the repo and run the script again.
+  Never edit `/etc/sudoers.d/satellite` on the Pi, where it drifts from here.
+
+**What uses it.** The Settings page's Restart camera and Stop buttons call
+`systemctl` for the camera unit; systemd refuses a service user directly
+("Interactive authentication required"), so they retry through `sudo -n`.
+The power button beside the Satellite chip shuts the satellite down: it closes
+and keeps any recording still open, so the file plays, then powers off
+cleanly. Unplug once the Pi's green light has stopped flashing. Pulling the
+plug instead is how 87 files came back empty on 17 October 2026, a few minutes
+after a git pull: see "Empty files after a power cut" below. Without the rule,
+the button says what setting it up takes rather than failing silently.
+
+Anyone on the yard's wifi can use those buttons: the console has no sign-in,
+because the yard works without internet. That is why the rule allows nothing
+beyond them.
 
 `git checkout -f` discards local edits to tracked files, which is the point.
 `satellite_config.json` and `recordings/` are gitignored, so the yard's own
 settings and its videos survive it. Do not reach for `git clean` - that is what
 would delete the recordings.
+
+### Empty files after a power cut
+
+The card is given a file's data some time after the file is written. Cut the
+power in between and the file is there with nothing in it. On 17 October 2026
+the satellite was switched off at the plug a few minutes after a `git pull`,
+and every file the pull had touched came back 0 bytes, `web_server.py` and
+`camera_server.py` among them.
+
+What it looks like: ssh works, ports 3001 and 8890 refuse connections, and
+`systemctl show satellite-web` says `Result=success`, `ExecMainStatus=0` with
+`NRestarts` climbing. Python ran an empty file and exited cleanly, and systemd
+restarted it every five seconds. `git status` lists the files as modified, and
+`git diff --stat` is all deletions.
+
+The fix, once `git cat-file -p HEAD:yard/satellite/web_server.py` shows the
+stored copy is whole:
+
+```bash
+cd ~/4tronix-rover-simulator && git checkout -f HEAD && sync
+```
+
+systemd starts both services again within fifteen seconds by itself; no
+restart, and no password, is needed. `satellite_config.json` and the
+recordings are gitignored and untouched.
 
 ### What you need
 - A laptop on the same WiFi network as the satellite (`marsyard` or `mars-relay-network`)
@@ -329,6 +375,27 @@ ws.onmessage = (event) => {
 - Supports multiple connected clients
 - Auto-reconnection handling
 
+### Which way up the picture is
+
+A camera goes where there is something to mount it on. If that leaves the
+yard half a turn round from the simulator's map, turn the picture rather than
+the camera: **Settings → Camera → Which way up → Turned round**. It saves on
+the click and the picture turns within a second, with no restart.
+
+The test is the start spot. The simulator draws north at the top, so the
+start spot is on the left of the map. Stand the camera's picture next to it
+(a mission's page in Mission Control shows the two together) and pick the
+setting that puts the start spot on the left of the video too. Cape Town's
+camera needs "Turned round"; that is how the setting came to exist.
+
+The turn is made in `camera_server.py`, where a frame is made, so the monitor,
+the run station's live view and the recording that goes to YouTube all get
+the same picture. Detection boxes are moved with it and drawn afterwards, so
+their labels still read the right way up. Recordings already made are not
+changed. `CAMERA_ROTATION=180` seeds it for a fresh box; the stored setting
+wins. Only `0` and `180` are accepted: a quarter turn would make the 4:3
+picture 3:4, and everything after the camera is 4:3.
+
 ## Tablet Interface (/code/)
 
 ### Tabs
@@ -399,14 +466,28 @@ const isSpyMode = urlParams.get('spy') === 'true' || urlParams.get('mock') === '
 ### Layout
 
 ```
-┌────────────────────────────┬──────────────┐
-│                            │   Current    │
-│                            │   Pending    │
-│      Camera Feed           │   History    │
-│        (2/3)               │    (1/3)     │
-│                            │              │
-└────────────────────────────┴──────────────┘
+┌─────────────────────────────┬─────────────┐
+│                             │   Current   │
+│                             │   Pending   │
+│      Camera Feed            │   History   │
+│   (4:3, the screen's        │  (the rest, │
+│    full height)             │  340px min) │
+└─────────────────────────────┴─────────────┘
 ```
+
+The camera's panel is as wide as a 4:3 picture is at the screen's full height,
+and the queue has what is left. On a 16:9 television that is a picture
+1344 x 1008 beside a queue 574 wide, with nothing cut off and nothing beside
+the picture. On a squarer screen the queue keeps its 340px and the picture is
+fitted in the space that leaves, with room above and below it.
+
+It used to be two thirds and one third whatever the screen's shape, with the
+picture drawn to the panel's width: on a 1080p television the bottom 130px of
+the yard was off the foot of the screen.
+
+The canvas takes each frame's own size, so "Sharp" and "Sharpest" on Settings
+really are sharper here. It was a fixed 640 x 480 that every frame was drawn
+down to.
 
 ### Features
 

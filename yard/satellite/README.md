@@ -5,21 +5,30 @@ override with `SATELLITE_PORT`). It serves the tablet Blockly interface, the TV
 monitor and the operator's run station, proxies API calls to the rover server,
 records runs, and works with no internet at all.
 
-It holds no cloud credential. It talks to the rover and the camera over the
-local network and to nothing else. See [../docs/satellite.md](../docs/satellite.md)
-for setup and [../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
+It holds no Firebase or YouTube OAuth credential. If automatic uploads are
+enabled, it uses the separate `YOUTUBE_UPLOAD_INGEST_SECRET` to deliver
+completed recordings to Mission Control; the rover run path remains local.
+Each one waits in a note beside the recording (`<file>.mp4.upload.json`) until
+it is delivered, so a satellite with no internet, which is what it is while it
+serves the yard's wifi, sends its videos once it has a way out
+(`youtube_upload.py`). The note keeps what happened, so the Recordings card on
+Settings shows each video's state and the day's tally, and the top bar of
+every console page says how the day's uploads are going.
+See [../docs/satellite.md](../docs/satellite.md) for setup and
+[../docs/what-the-yard-no-longer-does.md](../docs/what-the-yard-no-longer-does.md)
 for what the Firestore mirror used to do and why it went.
 
 | File | Role |
 |------|------|
 | `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
-| `operator_console.py` / `console/` | What is left of `/operator/`: camera control and the satellite's tunables. The mission queue, the login and the review flow went with the mirror. |
+| `operator_console.py` / `console/` | What is left of `/operator/`: camera control, the satellite's tunables, and shutting down. The mission queue, the login and the review flow went with the mirror. |
 | `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. Owns `recording_key()`, the one rule for turning a mission id into a recording name, and remembers which rover instructions each recording dispatched. |
 | `mission_watcher.py` | Polls the rover and releases the camera when a recording's own run finishes, not any run of that mission. Stops any recording older than ten minutes, for the rover that loses power mid-run. The only background thread. |
 | `camera_server.py` / `camera_control.py` | Pi camera stream for the monitor, and starting/stopping it. A viewer that stops reading is skipped and then disconnected, rather than freezing the stream for everyone. |
 | `camera_devices.py` | The cameras a Mac has, by name, for the Settings dropdown. None anywhere else, so the Pi shows no choice. Lists without opening a device, so it never fights the live stream. |
 | `start-mac.sh` | Runs the satellite on a MacBook: starts the web server, then asks it to start the camera so Settings can switch it. See `yard/MACBOOK_SETUP.md`. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
+| `satellite_power.py` | Shutting the satellite down from Settings: closes and keeps any recording still open, then powers off through the passwordless sudo rule in `yard/deploy/satellite.sudoers`, which it checks for first. |
 | `tunables.py` | Settings editable at `/settings` without a restart. |
 | `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. `static/camera-client.js` is the one camera-stream WebSocket client, shared by the monitor and the run station's live view. `static/yard-theme.css` is Mission Control's palette, generated from its `globals.css` by `npm run build:yard-theme` in `mission-control/` (never edit it by hand; CI fails if it drifts). `static/yard-theme-init.js` puts the console pages in Mission Control's light or dark theme; the kiosk pages (code, monitor) leave it out and stay dark. |
 | `tests/` | pytest. `pytest tests` from this directory. |
@@ -32,7 +41,7 @@ for what the Firestore mirror used to do and why it went.
 | `/run/` | The operator's station: watch the run live, stop it, take the video, hand it to YouTube. Pasting a mission in is the fallback for when Mission Control's handoff fails. |
 | `/code/` | The tablet's Blockly and Python editor |
 | `/monitor/` | The TV: camera feed and instruction queue |
-| `/settings` | Health, recordings, and the tunables |
+| `/settings` | Health, recordings, the tunables, and Shut down |
 
 ```bash
 # From the repo root

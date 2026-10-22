@@ -107,3 +107,91 @@ class TestReadersUseIt:
         _write_config(camera_ready_timeout=7.5)
 
         assert _ready_timeout() == 7.5
+
+
+class TestWhichWayUp:
+    """The camera's picture, half a turn round or as it is mounted.
+
+    The Cape Town camera films the yard upside down against the simulator's
+    map: the start spot on the right of the video and on the left of the
+    simulation. Turning the picture is a setting, so nobody has to go up a
+    ladder, and so a yard whose camera is the right way up is left alone.
+    """
+
+    def test_a_yard_that_has_set_nothing_is_left_as_mounted(self, monkeypatch):
+        monkeypatch.delenv('CAMERA_ROTATION', raising=False)
+
+        assert tunables.get('cameraRotation') == '0'
+        assert tunables.camera_turned_round() is False
+
+    def test_turned_round_once_the_settings_page_says_so(self):
+        tunables.save({'cameraRotation': '180'})
+
+        assert tunables.camera_turned_round() is True
+
+    def test_the_environment_can_seed_it_for_a_fresh_box(self, monkeypatch):
+        monkeypatch.setenv('CAMERA_ROTATION', '180')
+
+        assert tunables.camera_turned_round() is True
+
+    @pytest.mark.parametrize('nonsense', ['90', '270', 'upside-down', ''])
+    def test_anything_but_half_a_turn_is_no_turn(self, nonsense):
+        # A quarter turn would make the 4:3 picture 3:4, and everything after
+        # the camera is 4:3. A hand-edited file does not get to ask for one.
+        _write_config(camera_rotation=nonsense)
+
+        assert tunables.get('cameraRotation') == '0'
+        assert tunables.camera_turned_round() is False
+
+    def test_the_settings_page_is_given_it_as_a_choice_with_words_on_it(self):
+        options = tunables.options()
+
+        assert options['cameraRotation'] == {
+            'values': ['0', '180'],
+            'labels': ['As mounted', 'Turned round'],
+        }
+        assert 'cameraRotation' in tunables.operator_values()
+
+    def test_picture_quality_keeps_its_own_words(self):
+        # One table of labels served every choice; a second choice must not
+        # borrow the first one's, or lose them for it.
+        assert tunables.options()['cameraResolution']['labels'] == ['Standard', 'Sharp', 'Sharpest']
+
+
+
+class TestClosingTime:
+    """When the venue closes and the satellite goes off. The Recordings card
+    counts down to it and says, near it, what will become of videos not yet
+    uploaded."""
+
+    def test_the_science_centre_closes_at_half_past_four(self, monkeypatch):
+        monkeypatch.delenv('YARD_CLOSES_AT', raising=False)
+
+        assert tunables.get('yardClosesAt') == '16:30'
+        assert 'yardClosesAt' in tunables.operator_values()
+
+    def test_another_venue_sets_its_own(self):
+        assert tunables.save({'yardClosesAt': '17:05'})['yardClosesAt'] == '17:05'
+
+    def test_a_time_typed_without_its_leading_zero_is_still_the_time(self):
+        assert tunables.save({'yardClosesAt': '9:00'})['yardClosesAt'] == '09:00'
+
+    @pytest.mark.parametrize('nonsense', ['5pm', '25:00', '16:60', '', 'noon'])
+    def test_anything_but_a_time_of_day_is_refused_when_saved(self, nonsense):
+        with pytest.raises(ValueError):
+            tunables.save({'yardClosesAt': nonsense})
+
+    def test_a_hand_edited_nonsense_value_reads_as_the_default(self, monkeypatch):
+        monkeypatch.delenv('YARD_CLOSES_AT', raising=False)
+        _write_config(yard_closes_at='whenever')
+
+        assert tunables.get('yardClosesAt') == '16:30'
+
+    def test_the_settings_route_says_what_shape_it_wants(self):
+        import web_server
+        client = web_server.app.test_client()
+
+        resp = client.post('/operator/api/config/tunables', json={'yardClosesAt': '5pm'})
+
+        assert resp.status_code == 400
+        assert '16:30' in resp.get_json()['error']

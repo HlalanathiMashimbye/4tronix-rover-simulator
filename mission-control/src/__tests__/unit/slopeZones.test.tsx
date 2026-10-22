@@ -7,7 +7,7 @@
  * the two mound peaks.
  *
  * A zone is a warning and never a block. These drive the rover from the start
- * up onto the north peak, 35 cm away, and check that each ring is recorded as
+ * up onto the north peak, 74 cm away, and check that each ring is recorded as
  * it is crossed, that the physics drives on exactly as it would on the flat,
  * that the learner is warned and can still send, that the operator's preview
  * calls it something to look at rather than a stop, and that the simulator
@@ -27,13 +27,13 @@ import type { SimulationCommand } from '@/lib/roverBlockly';
 
 const NORTH_PEAK = { x: 94, y: 94 };
 
-// From the start, facing south, the north peak is 140 degrees round to the
-// right and 35 cm on.
+// From the start, facing east, the north peak is 21 degrees round to the left
+// and 74 cm on; 8 seconds stops just short of the top, inside the red ring.
 const toTheNorthPeak: SimulationCommand[] = [
-  { command: 'spinRight', speed: 60, duration: spinSecondsForDegrees(140, 60) },
-  { command: 'forward', speed: 60, duration: 4 },
+  { command: 'spinLeft', speed: 60, duration: spinSecondsForDegrees(21, 60) },
+  { command: 'forward', speed: 60, duration: 8 },
 ];
-const CODE = 'rover.spinRight(60)\ntime.sleep(1.6)\nrover.stop()\nrover.forward(60)\ntime.sleep(4)\nrover.stop()\n';
+const CODE = 'rover.spinLeft(60)\ntime.sleep(0.5)\nrover.stop()\nrover.forward(60)\ntime.sleep(8)\nrover.stop()\n';
 const climb = () => simulateCommands(toTheNorthPeak);
 const flat = () => simulateCommands([{ command: 'forward', speed: 60, duration: 2 }]);
 
@@ -42,7 +42,11 @@ describe('the zones in the yard', () => {
     expect(zoneAt(NORTH_PEAK.x, NORTH_PEAK.y)).toBe('red');
     expect(zoneAt(NORTH_PEAK.x + 12, NORTH_PEAK.y)).toBe('orange');
     expect(zoneAt(NORTH_PEAK.x + 22, NORTH_PEAK.y)).toBe('yellow');
-    expect(zoneAt(NORTH_PEAK.x + 30, NORTH_PEAK.y)).toBeNull();
+    // Yellow is the whole mound, not a ring round each peak...
+    expect(zoneAt(NORTH_PEAK.x + 30, NORTH_PEAK.y)).toBe('yellow');
+    // ...and the floor beyond its edge, the start included, is flat.
+    expect(zoneAt(NORTH_PEAK.x + 60, NORTH_PEAK.y)).toBeNull();
+    expect(zoneAt(YARD.start.x, YARD.start.y)).toBeNull();
   });
 
   it('reads an ellipse as wide as rx and as deep as ry', () => {

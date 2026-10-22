@@ -6,10 +6,108 @@ and the internet uplink all at once. Nothing in the yard worked unless somebody
 brought that laptop and opened it, and the demo depended on a machine that was
 never part of the design.
 
-The satellite serves the wifi now. It is the machine that is meant to be in the
-room anyway.
+Then the satellite served it, which took the laptop out but cost the yard its
+internet: one radio cannot be an access point and a client at once (below).
 
-## What talks to what
+Now the yard has a router of its own. A Cudy LT300 joins the venue's wifi and
+serves **`mars-relay-network`** from it, so the rover, the satellite and every
+tablet are on one network that also reaches the internet. `marsyard` was
+retired on 21 October 2026, for predictability: one name everywhere. If the
+router is ever missing, a phone hotspot called `mars-relay-network` with the
+same password stands in for it, for everything at once.
+
+## The router: mars-relay-network
+
+```
+   whatever wifi is there               SIM (optional, 4G)
+              \                        /
+         Cudy LT300, WISP on, at http://cudy.net
+         serves mars-relay-network (2.4GHz, WPA2)
+                       |
+      +----------------+----------------+
+  satellite         rover           tablets, laptop, TV
+  mro.local         curiosity.local
+```
+
+The router serves `mars-relay-network`, and the rover, the satellite and every
+tablet join that. It gets its internet by joining whatever wifi the venue has.
+Nothing in a run needs the internet; it is what lets the satellite set its
+clock, `git pull`, and upload recordings.
+
+### Joining a network for the internet
+
+From any device on `mars-relay-network`:
+
+1. Open `http://cudy.net` (the router, at `192.168.10.1`) and log in.
+2. **General Settings, WISP**: Enabled on, **Rescan**, **Connect** on the
+   network you want, type its password.
+3. If it asks for the router's own wifi name and password, leave them as they
+   are. Change those and the rover and the satellite lose the yard.
+
+About a minute later Connection Status says **Connected**. Done at home on
+21 October 2026 with a phone hotspot; at the science centre it is the same
+page with their network.
+
+It keeps one network at a time, so at each new place it is these three steps
+again. With a SIM in, it falls back to 4G by itself when there is no wifi.
+
+What will not work: a 5GHz-only network (the router is 2.4GHz only), and a
+network that needs a sign-in page or a username, like `eduroam`. A phone
+hotspot always works.
+
+Keep `mars-relay-network` on **WPA2-PSK**, not WPA3 or WPA/WPA2 mixed: the
+rover is a Pi Zero W and cannot join WPA3.
+
+**One name, on purpose.** The satellite and the rover know only
+`mars-relay-network`. They used to keep `marsyard` saved too, and a Pi that
+joins a network stays on it: when the relay dropped for a moment (the router
+restarts whenever WISP is saved), the satellite fell onto a `marsyard` hotspot
+in range and stayed there after the relay came back, on a different network
+from everything else (21 October, at home, where the phone hotspot feeding the
+router was called `marsyard`). So `marsyard` was deleted from them. A Pi with
+one network either is on the yard or visibly is not.
+
+If the router dies, a cable still reaches the satellite (it has a wired
+profile), and a phone hotspot named `mars-relay-network` with the relay's
+password becomes the yard for everything.
+
+### Putting the satellite and the rover on it
+
+The satellite was moved on 21 October 2026, and `marsyard` then deleted from
+it. On a fresh satellite:
+
+```bash
+sudo bash yard/docs/setup-scripts/satellite-join-relay.sh
+```
+
+It writes the password onto the satellite before it switches, then goes back
+to the network it was on by itself if it did not join. Once it is on the relay,
+delete the old network (`sudo nmcli con delete <name>`). That order matters over SSH:
+`nmcli --ask device wifi connect` leaves the old network first, which cuts the
+session before its password prompt reaches you.
+
+The rover was moved on 21 October 2026 too: it has a `mars-relay-network`
+profile and nothing else (its `marsyard` one, `preconfigured`, was deleted once
+it was on the relay). For a rover that only knows an old network, add the
+relay's beside it over SSH, switch with a way back, and delete the old one
+last: the rover has no screen, no ethernet and no serial console, so a wifi
+change that goes wrong cuts off the only way in.
+
+```bash
+sudo nmcli con add type wifi ifname wlan0 con-name mars-relay-network ssid mars-relay-network wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'THE-PASSWORD' 802-11-wireless-security.pmf 1 connection.autoconnect yes
+```
+
+`pmf 1` turns Protected Management Frames off, which the rover's firmware
+cannot do (see "Why the rover could not join at first", below).
+
+## History: when the satellite served marsyard
+
+Retired on 21 October 2026. Everything from here on describes the satellite as
+the access point, which is how the yard ran before the router. It stays
+because it explains how the rover and the Pis behave: why the rover needs PMF
+off, and why one radio cannot be an access point and a client.
+
+### What talks to what
 
 ```
         marsyard  (2.4GHz, WPA2, no PMF, channel 6)
@@ -28,7 +126,7 @@ The satellite is reachable at `http://mro.local:3001/`, or at
 own name, `curiosity.local`, which is why `rover_url` in
 `satellite_config.json` needed no change when the addressing moved.
 
-## One radio cannot be both
+### One radio cannot be both
 
 The satellite has one wifi interface. As an access point it is not also a
 client, so **it has no internet**, and neither does anything joined to it.
@@ -48,7 +146,7 @@ NetworkManager's shared mode routes the yard network out through it, so the
 access point keeps working and everything on it gets internet. That is the only
 change needed, and no configuration goes with it.
 
-## "marsyard" is a contract, not a device
+### "marsyard" is a contract, not a device
 
 The rover joins `marsyard` and does not care what is serving it. That is the
 whole design, and it is what keeps the rover reachable without ever reflashing
@@ -77,7 +175,7 @@ replacing the satellite's wifi would have stranded it, and it destroyed the
 property that makes the name worth having - that anything can serve it. The
 laptop being able to take over is a feature, not a bug to be designed out.
 
-## Currently unsolved: the rover will not join the satellite
+### Currently unsolved: the rover will not join the satellite
 
 The rover joins `marsyard` when a laptop serves it and not when the satellite
 does, and that is open. Do not start from scratch on it -
@@ -86,7 +184,7 @@ flight-recorder technique for observing a rover you cannot SSH into, and the
 discipline for switching between the two access points without confusing
 yourself.
 
-## Why the rover could not join at first
+### Why the rover could not join at first
 
 The access point came up correctly and the rover was still refused. It is worth
 recording exactly what that looked like, because it reads like a wrong password
@@ -112,7 +210,7 @@ made this look like a satellite-only fault.
 `802-11-wireless-security.pmf 1` (1 means disabled) on the access point profile
 is the fix, and the setup script sets it.
 
-## Making the switch
+### Making the switch
 
 On the satellite:
 
@@ -133,7 +231,7 @@ machine, so a healthy access point would be torn down by its own safety net.
 The check instead asks whether the access point actually came up and reverts
 only if it did not.
 
-## When it does not come up
+### When it does not come up
 
 Turn the laptop hotspot back on and wait three minutes. The satellite's check
 finds no access point running, disables its autoconnect and brings the client

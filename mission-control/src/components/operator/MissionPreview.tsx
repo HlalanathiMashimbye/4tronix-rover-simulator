@@ -20,8 +20,7 @@ import type { QueueMission } from '@/infrastructure/persistence/operatorQueueSer
  * what to look at worst first: problems in the code, a run over the limit,
  * the rover reaching the edge of the yard and when.
  *
- * Plays on open, because the operator opened the mission to see it. The code
- * beside it lights up as it runs (onSourceChange), as in the editor.
+ * Plays on open, because the operator opened the mission to see it.
  */
 export function MissionPreview({
   mission,
@@ -32,7 +31,7 @@ export function MissionPreview({
   mission: QueueMission;
   /** The yard the operator signed in at, whose queue this is (AB#468). */
   yardId: string;
-  onSourceChange: (source: CommandSource | null) => void;
+  onSourceChange?: (source: CommandSource | null) => void;
   /**
    * The run already simulated by the caller (MissionDetail shares one with
    * the feedback bank). Simulated here when not given.
