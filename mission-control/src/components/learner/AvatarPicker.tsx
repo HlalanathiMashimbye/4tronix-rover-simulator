@@ -171,7 +171,7 @@ export function AvatarPicker({
             onClick={onRestore}
             className="text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
-            I have a recovery code
+            I already have a profile
           </button>
         ) : <span />}
         <button

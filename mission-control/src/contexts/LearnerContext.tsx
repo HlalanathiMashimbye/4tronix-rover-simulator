@@ -26,6 +26,8 @@ interface LearnerContextType {
   openEmailPrompt: () => void;
   closeEmailPrompt: () => void;
   showEmailPrompt: boolean;
+  profileSaved: boolean;
+  markProfileSaved: () => void;
   generateRecoveryCode: () => Promise<string | null>;
   restoreFromCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   updateProfile: (displayName: string, avatar: LearnerAvatar) => Promise<boolean>;
@@ -95,6 +97,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [learnerEmail, setLearnerEmailState] = useState<string | null>(null);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/immutability -- initializeLearnerSession is a hoisted function declaration and this effect runs once after mount, so there is no window where it is genuinely undefined. Pre-existing; the compiler only began reporting it once updateDisplayName was removed and it could analyse this component through to the end.
@@ -112,6 +115,18 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       // localStorage unavailable - skip
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage
+      if (localStorage.getItem('rover-profile-saved') === 'true') setProfileSaved(true);
+    } catch {}
+  }, []);
+
+  function markProfileSaved() {
+    try { localStorage.setItem('rover-profile-saved', 'true'); } catch {}
+    setProfileSaved(true);
+  }
 
   /**
    * Save (or clear) the learner's email - persisted to localStorage and, if a
@@ -260,6 +275,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       setSessionId(null);
       setLoading(true);
       await initializeLearnerSession();
+      markProfileSaved();
       return { success: true };
     } catch {
       return { success: false, error: 'Something went wrong. Please try again.' };
@@ -327,6 +343,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setSessionId(null);
     setLoading(true);
     await initializeLearnerSession();
+    markProfileSaved();
   }
 
   /**
@@ -334,6 +351,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    */
   function resetSession() {
     clearLearnerID();
+    try { localStorage.removeItem('rover-profile-saved'); } catch {}
+    setProfileSaved(false);
     setLearner(null);
     setSessionId(null);
     setLoading(true);
@@ -352,6 +371,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         openEmailPrompt,
         closeEmailPrompt,
         showEmailPrompt,
+        profileSaved,
+        markProfileSaved,
         generateRecoveryCode,
         restoreFromCode,
         updateProfile,

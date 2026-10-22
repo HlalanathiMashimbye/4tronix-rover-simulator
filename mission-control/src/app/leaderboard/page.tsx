@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Trophy, LogIn, Pencil, Star, EyeOff } from 'lucide-react';
+import { Trophy, LogIn, Pencil, Star, EyeOff, CircleCheck } from 'lucide-react';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useLearner } from '@/contexts/LearnerContext';
 import { Avatar } from '@/components/learner/Avatar';
 import { AvatarPicker } from '@/components/learner/AvatarPicker';
+import { SaveProfileModal } from '@/components/learner/SaveProfileModal';
+import { RestoreProfileModal } from '@/components/learner/RestoreProfileModal';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 import type { LearnerAvatar } from '@/core/domain/entities/Learner';
 
@@ -20,8 +22,10 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showRestoreModal, setShowRestoreModal] = useState(false);
   const { status, optIn, optOut, refresh } = useLeaderboard();
-  const { learner, updateProfile } = useLearner();
+  const { learner, updateProfile, profileSaved } = useLearner();
 
   const handleProfileUpdate = useCallback(
     async (avatar: LearnerAvatar, displayName: string) => {
@@ -233,6 +237,50 @@ export default function LeaderboardPage() {
           </>
         )}
 
+        {/* Profile save status card */}
+        {status && status.optedIn && !profileSaved && (
+          <div
+            className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-[20px] border border-border/60 bg-muted px-5 py-4"
+          >
+            <div>
+              <p className="font-semibold text-foreground">Your profile isn&apos;t saved yet</p>
+              <p className="text-sm text-muted-foreground">Save it so you never lose your missions.</p>
+            </div>
+            <div className="flex shrink-0 gap-3">
+              <button
+                type="button"
+                onClick={() => setShowSaveModal(true)}
+                className="flex h-11 items-center rounded-full bg-foreground px-5 text-sm font-semibold text-background focus:outline-none focus:ring-2 focus:ring-foreground/20"
+              >
+                Save my profile
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowRestoreModal(true)}
+                className="flex h-11 items-center rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+              >
+                Restore a profile
+              </button>
+            </div>
+          </div>
+        )}
+
+        {status && status.optedIn && profileSaved && (
+          <div className="shrink-0 flex items-center justify-between gap-4 py-1">
+            <div className="flex items-center gap-2 text-sm">
+              <CircleCheck className="h-5 w-5 text-green-600" />
+              <span className="text-muted-foreground">Profile saved</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowRestoreModal(true)}
+              className="text-sm text-muted-foreground underline transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 rounded"
+            >
+              Restore a different profile
+            </button>
+          </div>
+        )}
+
         {/* Avatar / nickname picker modal */}
         {showPicker && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -337,6 +385,9 @@ export default function LeaderboardPage() {
           )}
         </div>
       </div>
+
+      <SaveProfileModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
+      <RestoreProfileModal open={showRestoreModal} onClose={() => setShowRestoreModal(false)} />
     </main>
   );
 }
