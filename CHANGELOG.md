@@ -61,6 +61,19 @@ which is often longer than the diff.
   creates and lets the app use: the YouTube upload settings had sat on the
   Settings page with nowhere to be saved.
 
+- **A privacy page, linked from Help and from the email prompt.** Mission
+  Control collects learners' email addresses, and many learners are children,
+  and there was no page saying what happens to them. `/privacy` says what is
+  kept and why (missions are public; the email is optional, kept where no web
+  page can read it, and only a scrambled form is on missions), who else
+  handles it (Google Cloud, Firebase, Resend, YouTube, and PostHog, mentioned
+  only when PostHog is actually running), how long, and how to see or delete
+  it. Written from the code, for children and their parents. Google also
+  requires it before the YouTube sign-in can leave testing. The contact is an
+  admin setting on the Settings page, for David to set; until then the page
+  says to ask an operator at the yard. The email prompt adds "Under 18? Ask a
+  parent or teacher first." and a link to the page in a new tab.
+
 - **A recording keeps every character of its mission's id.** Mission ids can
   start or end with a dash, about 3 in 100 of them, and the satellite dropped
   it when it named the recording: `-BQwFDUWvyhpbQ4ZI8het` was filed as

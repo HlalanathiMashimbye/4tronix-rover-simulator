@@ -59,7 +59,7 @@ it('opens to the tour and to Sapient\'s About page, in a new tab', () => {
 
   const menu = screen.getByRole('menu', { name: 'Help' });
   const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((item) => item.textContent);
-  expect(items).toEqual(['Take the tour', 'About Sapient.rocks']);
+  expect(items).toEqual(['Take the tour', 'Privacy', 'About Sapient.rocks']);
 
   const about = screen.getByRole('menuitem', { name: 'About Sapient.rocks' });
   expect(about).toHaveAttribute('href', 'https://sapient.rocks/about/');
@@ -82,4 +82,14 @@ it('is not there while the tour is running', () => {
   renderNavbar();
 
   expect(screen.queryByRole('button', { name: 'Help' })).not.toBeInTheDocument();
+});
+
+it('reaches the privacy page from Help, on every page, in the same tab', () => {
+  renderNavbar();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Help' }));
+  const privacy = screen.getByRole('menuitem', { name: 'Privacy' });
+
+  expect(privacy).toHaveAttribute('href', '/privacy');
+  expect(privacy).not.toHaveAttribute('target');
 });
