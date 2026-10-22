@@ -11,15 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **A privacy page, linked from Help and from the email prompt.** Mission
-  Control collects learners' email addresses, and many learners are children,
-  and there was no page saying what happens to them. `/privacy` says what is
+- **A privacy and terms page, linked from Help and from the email prompt.**
+  Mission Control collects learners' email addresses, and many learners are
+  children, and there was no page saying what happens to them, or what anyone
+  agrees to by sending a mission. `/privacy` has both. The privacy half says what is
   kept and why (missions are public; the email is optional, kept where no web
   page can read it, and only a scrambled form is on missions), who else
   handles it (Google Cloud, Firebase, Resend, YouTube, and PostHog, mentioned
   only when PostHog is actually running), how long, and how to see or delete
-  it. Written from the code, for children and their parents. Google also
-  requires it before the YouTube sign-in can leave testing. The contact is an
+  it. The terms half is short enough for a child to read: missions are
+  public, be kind, a real rover does not always match the simulator, your code
+  is yours but SAPIENT may show it, no promises, South African law. `/terms`
+  lands on that half. Written from the code, for children and their parents.
+  Google also requires both links before the YouTube sign-in can leave
+  testing. The contact is an
   admin setting on the Settings page, for David to set; until then the page
   says to ask an operator at the yard. The email prompt adds "Under 18? Ask a
   parent or teacher first." and a link to the page in a new tab.
