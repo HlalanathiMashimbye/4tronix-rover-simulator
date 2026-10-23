@@ -304,43 +304,50 @@ export default function LeaderboardPage() {
 
             {/* Mobile: preserved existing layout */}
             <div className="md:hidden shrink-0 space-y-3">
-              <div className="rounded-2xl border border-border bg-card p-4 clay">
+              <div className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4">
                 <div className="flex items-center gap-4">
-                  <Avatar avatar={learner?.avatar} size={48} />
+                  {learner?.avatar ? (
+                    <Avatar avatar={learner.avatar} size={48} />
+                  ) : (
+                    <InitialAvatar name={status.displayName} size={48} />
+                  )}
                   <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                    <p className="text-xs text-kid-muted-text uppercase tracking-wide font-semibold">
                       Your Rank
                     </p>
-                    <p className="text-2xl font-bold text-gradient-mars">
+                    <p className="text-2xl font-display font-bold text-lb-accent">
                       {learnerRank ? `#${learnerRank}` : '—'}
                     </p>
                   </div>
+                  <p className="ml-auto text-sm font-display font-bold text-foreground truncate">
+                    {status.displayName}
+                  </p>
                 </div>
-                <p className="mt-2 text-sm font-semibold text-foreground truncate">
-                  {status.displayName}
-                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-border bg-card p-4 clay">
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-mars/15">
-                    <Trophy className="h-5 w-5" style={{ color: 'var(--mars)' }} />
+                <div className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full border-b-4 bg-kid-orange border-kid-orange-edge">
+                    <Trophy className="h-5 w-5 text-kid-ink" />
                   </div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                  <p className="text-xs text-kid-muted-text uppercase tracking-wide font-semibold">
                     Challenges
                   </p>
-                  <p className="text-2xl font-bold text-foreground">
+                  <p className="text-2xl font-display font-bold text-foreground">
                     {status.completedChallenges}
+                    <span className="text-sm font-semibold text-kid-muted-text">
+                      {' '}of {TOTAL_CHALLENGES}
+                    </span>
                   </p>
                 </div>
-                <div className="rounded-2xl border border-border bg-card p-4 clay">
-                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                    <Star className="h-5 w-5 text-muted-foreground" />
+                <div className="rounded-2xl border-x-2 border-t-2 border-b-4 border-kid-panel-edge bg-kid-panel p-4">
+                  <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full border-b-4 bg-kid-panel-edge border-kid-panel-edge">
+                    <Star className="h-5 w-5 text-kid-muted-text" />
                   </div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                  <p className="text-xs text-kid-muted-text uppercase tracking-wide font-semibold">
                     Score
                   </p>
-                  <p className="text-2xl font-bold text-foreground">{status.score}</p>
+                  <p className="text-2xl font-display font-bold text-foreground">{status.score}</p>
                 </div>
               </div>
             </div>
