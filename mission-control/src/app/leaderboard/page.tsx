@@ -1,15 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { Trophy, LogIn, Pencil, Star, EyeOff, CircleCheck } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Trophy, LogIn, Star } from 'lucide-react';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useLearner } from '@/contexts/LearnerContext';
 import { Avatar } from '@/components/learner/Avatar';
-import { AvatarPicker } from '@/components/learner/AvatarPicker';
-import { SaveProfileModal } from '@/components/learner/SaveProfileModal';
-import { RestoreProfileModal } from '@/components/learner/RestoreProfileModal';
-import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
-import type { LearnerAvatar } from '@/core/domain/entities/Learner';
 
 interface LeaderboardEntry {
   displayName: string;
@@ -21,22 +16,8 @@ export default function LeaderboardPage() {
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showRestoreModal, setShowRestoreModal] = useState(false);
-  const { status, optIn, optOut, refresh } = useLeaderboard();
-  const { learner, updateProfile, profileSaved } = useLearner();
-
-  const handleProfileUpdate = useCallback(
-    async (avatar: LearnerAvatar, displayName: string) => {
-      const ok = await updateProfile(displayName, avatar);
-      if (ok) {
-        setShowPicker(false);
-        await refresh();
-      }
-    },
-    [updateProfile, refresh],
-  );
+  const { status, optIn } = useLeaderboard();
+  const { learner } = useLearner();
 
   const loadLeaderboard = async () => {
     try {
@@ -162,23 +143,6 @@ export default function LeaderboardPage() {
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">Score</p>
                     <p className="text-2xl font-bold text-foreground">{status.score}</p>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setShowPicker(true)}
-                      className="clay clay-press flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-card text-foreground hover:bg-muted/50"
-                      title="Change avatar and nickname"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={optOut}
-                      className="clay clay-press flex h-9 w-9 items-center justify-center rounded-xl border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20"
-                      title="Hide from leaderboard"
-                    >
-                      <EyeOff className="h-4 w-4" />
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -199,25 +163,6 @@ export default function LeaderboardPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setShowPicker(true)}
-                  className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50"
-                  title="Change avatar and nickname"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit
-                </button>
-                <button
-                  onClick={optOut}
-                  className="clay clay-press flex items-center justify-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm font-semibold text-destructive hover:bg-destructive/20"
-                  title="Hide from leaderboard"
-                >
-                  <EyeOff className="h-4 w-4" />
-                  Hide
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-border bg-card p-4 clay">
                   <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-mars/15">
                     <Trophy className="h-5 w-5" style={{ color: 'var(--mars)' }} />
@@ -235,72 +180,6 @@ export default function LeaderboardPage() {
               </div>
             </div>
           </>
-        )}
-
-        {/* Profile save status card */}
-        {status && status.optedIn && !profileSaved && (
-          <div
-            className="shrink-0 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 rounded-[20px] border border-border/60 bg-muted px-5 py-4"
-          >
-            <div>
-              <p className="font-semibold text-foreground">Your profile isn&apos;t saved yet</p>
-              <p className="text-sm text-muted-foreground">Save it so you never lose your missions.</p>
-            </div>
-            <div className="flex shrink-0 gap-3">
-              <button
-                type="button"
-                onClick={() => setShowSaveModal(true)}
-                className="flex h-11 items-center rounded-full bg-foreground px-5 text-sm font-semibold text-background focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              >
-                Save my profile
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowRestoreModal(true)}
-                className="flex h-11 items-center rounded-full border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              >
-                Restore a profile
-              </button>
-            </div>
-          </div>
-        )}
-
-        {status && status.optedIn && profileSaved && (
-          <div className="shrink-0 flex items-center justify-between gap-4 py-1">
-            <div className="flex items-center gap-2 text-sm">
-              <CircleCheck className="h-5 w-5 text-green-600" />
-              <span className="text-muted-foreground">Profile saved</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowRestoreModal(true)}
-              className="text-sm text-muted-foreground underline transition-colors hover:text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20 rounded"
-            >
-              Restore a different profile
-            </button>
-          </div>
-        )}
-
-        {/* Avatar / nickname picker modal */}
-        {showPicker && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-sm rounded-3xl border border-border bg-card p-6 clay">
-              <AvatarPicker
-                learnerId={getLearnerID()}
-                initialAvatar={learner?.avatar}
-                initialName={learner?.displayName}
-                onConfirm={handleProfileUpdate}
-                confirmLabel="Save"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPicker(false)}
-                className="mt-3 w-full text-center text-xs text-muted-foreground hover:text-foreground"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
         )}
 
         {/* Leaderboard Table */}
@@ -385,9 +264,6 @@ export default function LeaderboardPage() {
           )}
         </div>
       </div>
-
-      <SaveProfileModal open={showSaveModal} onClose={() => setShowSaveModal(false)} />
-      <RestoreProfileModal open={showRestoreModal} onClose={() => setShowRestoreModal(false)} />
     </main>
   );
 }

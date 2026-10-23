@@ -67,7 +67,7 @@ const NAV_ITEMS = [
   {
     href: '/leaderboard',
     label: 'Leaderboard',
-    mobileLabel: 'Leaderboard',
+    mobileLabel: 'Board',
     icon: Trophy,
   },
 ];
@@ -196,7 +196,7 @@ export function Navbar() {
                 priority
               />
             </div>
-            <div className="leading-tight">
+            <div className="hidden leading-tight sm:block">
               <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight text-foreground">
                 Mission Control
               </p>
@@ -296,6 +296,18 @@ export function Navbar() {
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
               )}
             </button>
+
+            <button
+              ref={profileBtnRef}
+              onClick={openProfile}
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-border/60 transition-colors hover:border-foreground/20 focus:outline-none focus:ring-2 focus:ring-foreground/20 md:h-11 md:w-11"
+              aria-label="Your profile"
+            >
+              <Avatar avatar={learner?.avatar} size={28} />
+              {!profileSaved && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background md:h-3 md:w-3" />
+              )}
+            </button>
           </div>
         </div>
       </nav>
@@ -361,6 +373,10 @@ export function Navbar() {
       />
 
       <EmailPrompt />
+
+      {profileMounted && (
+        <ProfileModal open={profileOpen} onClose={closeProfile} triggerRef={profileBtnRef} />
+      )}
     </>
   );
 }

@@ -265,13 +265,15 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
                     </p>
                   )}
                   <div className="mt-3 flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowSave(true)}
-                      className="flex h-11 flex-1 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background focus:outline-none focus:ring-2 focus:ring-foreground/20"
-                    >
-                      Save my profile
-                    </button>
+                    {!profileSaved && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSave(true)}
+                        className="flex h-11 flex-1 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                      >
+                        Save my profile
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowRestore(true)}
