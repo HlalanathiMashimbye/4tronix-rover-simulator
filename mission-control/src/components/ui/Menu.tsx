@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 /**
  * An overflow menu: one button, a list of actions underneath it.
@@ -43,6 +43,19 @@ export function Menu({
   const root = useRef<HTMLDivElement>(null);
   const id = useId();
 
+  const clampToViewport = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    el.style.transform = '';
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const margin = 8;
+    if (rect.right > vw - margin) {
+      el.style.transform = `translateX(${vw - margin - rect.right}px)`;
+    } else if (rect.left < margin) {
+      el.style.transform = `translateX(${margin - rect.left}px)`;
+    }
+  }, []);
+
   useEffect(() => {
     if (!open) return;
 
@@ -82,6 +95,7 @@ export function Menu({
           // Closing on any click inside is what a menu does: the item has
           // acted (navigated, signed out) and the list has no reason to stay.
           onClick={() => setOpen(false)}
+          ref={clampToViewport}
           className={`absolute top-full z-40 mt-1 min-w-56 overflow-hidden rounded-2xl border border-border/70 bg-popover p-1.5 shadow-card ${
             align === 'end' ? 'right-0' : 'left-0'
           }`}
