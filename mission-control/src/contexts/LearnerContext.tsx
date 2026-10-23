@@ -14,6 +14,7 @@ import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/bro
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { Learner, createAnonymousLearner, type LearnerAvatar } from '@/core/domain/entities/Learner';
+import { generateDisplayName } from '@/core/domain/services/displayNameGenerator';
 import { CURRENT_CONSENT_VERSION } from '@/core/domain/services/parentLink';
 
 interface LearnerContextType {
@@ -190,14 +191,27 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       if (learnerSnap.exists()) {
         const existingLearner = learnerSnap.data() as Learner;
 
-        await updateDoc(learnerRef, {
+        const updates: Record<string, unknown> = {
           lastActiveAt: new Date().toISOString(),
           learnerRef: learnerRefHash,
-        });
+        };
 
-        setLearner({ ...existingLearner, lastActiveAt: new Date().toISOString() });
+        if (!existingLearner.displayName) {
+          updates.displayName = generateDisplayName();
+        }
+
+        await updateDoc(learnerRef, updates);
+
+        setLearner({
+          ...existingLearner,
+          lastActiveAt: new Date().toISOString(),
+          displayName: existingLearner.displayName || (updates.displayName as string),
+        });
       } else {
-        const newLearner = createAnonymousLearner(learnerId);
+        const newLearner = {
+          ...createAnonymousLearner(learnerId),
+          displayName: generateDisplayName(),
+        };
 
         await setDoc(learnerRef, {
           ...newLearner,
@@ -210,7 +224,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.warn('Firestore learner init unavailable, using local session fallback:', error);
-      setLearner(createAnonymousLearner(learnerId));
+      setLearner({ ...createAnonymousLearner(learnerId), displayName: generateDisplayName() });
     } finally {
       setLoading(false);
     }

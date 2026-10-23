@@ -9,7 +9,7 @@ import { AvatarRenderer } from './AvatarRenderer';
 import { SaveProfileModal } from './SaveProfileModal';
 import { RestoreProfileModal } from './RestoreProfileModal';
 import { buildGrid } from './AvatarPicker';
-import { generateDisplayName } from '@/core/domain/services/displayNameGenerator';
+import { generateDisplayName, isGeneratedDisplayName } from '@/core/domain/services/displayNameGenerator';
 import type { LearnerAvatar } from '@/core/domain/entities/Learner';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
 
@@ -32,6 +32,7 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
 
   const { learner, updateProfile, profileSaved } = useLearner();
   const { status, optIn, optOut, refresh } = useLeaderboard();
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const learnerId = getLearnerID();
   const [editPage, setEditPage] = useState(0);
@@ -108,11 +109,13 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
   }, [onClose, triggerRef]);
 
   const openEdit = useCallback(() => {
-    setEditName(learner?.displayName || generateDisplayName());
+    const knownName = learner?.displayName || status?.displayName;
+    setEditName(knownName && isGeneratedDisplayName(knownName) ? knownName : generateDisplayName());
     setEditAvatar(learner?.avatar ?? null);
     setEditPage(0);
+    setSaveError(null);
     setScreen('edit');
-  }, [learner]);
+  }, [learner, status]);
 
   const handleShuffle = useCallback(() => setEditPage((p) => p + 1), []);
 
@@ -137,10 +140,13 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
 
   const handleEditSave = useCallback(async () => {
     if (!editAvatar) return;
+    setSaveError(null);
     const ok = await updateProfile(editName, editAvatar);
     if (ok) {
       await refresh();
       setScreen('profile');
+    } else {
+      setSaveError('Could not save — please try again.');
     }
   }, [editAvatar, editName, updateProfile, refresh]);
 
@@ -205,7 +211,7 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
                       Astronaut ID
                     </div>
                     <div className="truncate font-display text-base font-bold text-foreground">
-                      {learner?.displayName || 'Unnamed'}
+                      {learner?.displayName || status?.displayName || 'Unnamed'}
                     </div>
                   </div>
                   <button
@@ -402,6 +408,12 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
                     </button>
                   </div>
                 </div>
+
+                {saveError && (
+                  <p className="mt-4 text-center text-sm font-semibold text-destructive">
+                    {saveError}
+                  </p>
+                )}
 
                 <div className="mt-6 flex gap-3">
                   <button

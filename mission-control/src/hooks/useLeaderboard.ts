@@ -84,7 +84,7 @@ export function useLeaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatus]);
+  }, [loadStatus, learner?.displayName]);
 
   const optOut = useCallback(async () => {
     try {
