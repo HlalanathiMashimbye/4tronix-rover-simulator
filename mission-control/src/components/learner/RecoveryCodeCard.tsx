@@ -117,7 +117,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
           </h2>
 
           <p className="mt-2 text-center text-sm text-muted-foreground">
-            Save this code — it&apos;s your pass to pick up your missions on any device.
+            Save this code to pick up your missions on any device.
           </p>
 
           {loading && (
