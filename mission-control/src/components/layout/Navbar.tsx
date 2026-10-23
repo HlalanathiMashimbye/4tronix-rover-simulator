@@ -30,13 +30,16 @@ import {
   Compass,
   ShieldCheck,
 } from 'lucide-react';
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useRef, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
+import { Avatar } from '@/components/learner/Avatar';
+import { ProfileModal } from '@/components/learner/ProfileModal';
+import { useLearner } from '@/contexts/LearnerContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
@@ -74,9 +77,19 @@ export function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
+  const { learner, profileSaved } = useLearner();
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
   const { completedCount, totalCount, loading: challengesLoading } = useChallengeProgress();
   const { start: startTour, active: tourActive } = useTour();
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMounted, setProfileMounted] = useState(false);
+  const profileBtnRef = useRef<HTMLButtonElement>(null);
+  const openProfile = useCallback(() => {
+    setProfileMounted(true);
+    setProfileOpen(true);
+  }, []);
+  const closeProfile = useCallback(() => setProfileOpen(false), []);
 
   // What the open panel shows is captured when it opens, not read live.
   // Opening marks everything seen, so a live list would empty itself in front

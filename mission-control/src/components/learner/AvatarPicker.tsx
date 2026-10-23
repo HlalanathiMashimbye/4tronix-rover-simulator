@@ -10,12 +10,12 @@ import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
 const GRID_SIZE_SM = 9;
 const GRID_SIZE_LG = 12;
 
-interface AvatarOption {
+export interface AvatarOption {
   avatar: LearnerAvatar;
   key: string;
 }
 
-function buildGrid(learnerId: string, page: number, size: number): AvatarOption[] {
+export function buildGrid(learnerId: string, page: number, size: number): AvatarOption[] {
   const options: AvatarOption[] = [];
   const stylesPerSlot = Math.ceil(size / AVATAR_STYLES.length);
 
