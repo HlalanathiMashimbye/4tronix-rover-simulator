@@ -281,6 +281,73 @@
   --kid-green-text: #047857;
 }
 
+/*
+ * The Leaderboard surface: the same rounded, toy-like treatment as Challenges,
+ * with its own accent colours for medals, scores and row tints. Scoped by
+ * data-surface="leaderboard" set by app/leaderboard/layout.tsx.
+ *
+ * Reuses the kid palette's structural tokens (panel, ink, blue/orange/green)
+ * because the two surfaces share the same visual language. Leaderboard-specific
+ * colours (lb-*) exist for rows, score pills and medal ranks only.
+ */
+[data-surface="leaderboard"] {
+  --kid-blue: #4C97FF;
+  --kid-blue-edge: #3373CC;
+  --kid-orange: #FFAB19;
+  --kid-orange-edge: #CF8B17;
+  --kid-green: #10B981;
+  --kid-green-edge: #0B8A60;
+  --kid-ink: #14213D;
+
+  --kid-panel: #111A3A;
+  --kid-panel-edge: #232F5C;
+  --kid-muted-text: #A9B5DA;
+  --kid-blue-text: #4C97FF;
+  --kid-orange-text: #FFAB19;
+  --kid-green-text: #10B981;
+
+  --lb-row: #162247;
+  --lb-row-edge: #26346A;
+  --lb-score-bg: #3A2315;
+  --lb-score-text: #FFA066;
+  --lb-score-edge: #7A4220;
+  --lb-accent: #FF8A4C;
+
+  --lb-gold: #FFD700;
+  --lb-gold-edge: #B8960B;
+  --lb-silver: #C0C0C0;
+  --lb-silver-edge: #808080;
+  --lb-bronze: #CD7F32;
+  --lb-bronze-edge: #8B5A2B;
+  --lb-rank: #2B3570;
+  --lb-rank-edge: #1A2550;
+
+  --lb-row-gold: color-mix(in oklab, var(--lb-gold) 10%, var(--lb-row));
+  --lb-row-silver: color-mix(in oklab, var(--lb-silver) 8%, var(--lb-row));
+  --lb-row-bronze: color-mix(in oklab, var(--lb-bronze) 8%, var(--lb-row));
+
+  font-family: var(--font-rounded), var(--font-sans);
+  line-height: 1.6;
+}
+
+[data-theme="light"] [data-surface="leaderboard"] {
+  --kid-panel: #FFFFFF;
+  --kid-panel-edge: #DCE6F7;
+  --kid-muted-text: #4A5878;
+  --kid-blue-text: #1F5FCC;
+  --kid-orange-text: #A35C00;
+  --kid-green-text: #047857;
+
+  --lb-row: #F5F8FF;
+  --lb-row-edge: #E3EAFB;
+  --lb-score-bg: #FFF1D6;
+  --lb-score-text: #8A4A00;
+  --lb-score-edge: #FFD58A;
+  --lb-accent: #B45F06;
+  --lb-rank: #C8D4EB;
+  --lb-rank-edge: #A8B8D4;
+}
+
 @theme inline {
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -344,6 +411,25 @@
   --color-kid-blue-text: var(--kid-blue-text);
   --color-kid-orange-text: var(--kid-orange-text);
   --color-kid-green-text: var(--kid-green-text);
+
+  /* Leaderboard surface palette */
+  --color-lb-row: var(--lb-row);
+  --color-lb-row-edge: var(--lb-row-edge);
+  --color-lb-score-bg: var(--lb-score-bg);
+  --color-lb-score-text: var(--lb-score-text);
+  --color-lb-score-edge: var(--lb-score-edge);
+  --color-lb-accent: var(--lb-accent);
+  --color-lb-gold: var(--lb-gold);
+  --color-lb-gold-edge: var(--lb-gold-edge);
+  --color-lb-silver: var(--lb-silver);
+  --color-lb-silver-edge: var(--lb-silver-edge);
+  --color-lb-bronze: var(--lb-bronze);
+  --color-lb-bronze-edge: var(--lb-bronze-edge);
+  --color-lb-rank: var(--lb-rank);
+  --color-lb-rank-edge: var(--lb-rank-edge);
+  --color-lb-row-gold: var(--lb-row-gold);
+  --color-lb-row-silver: var(--lb-row-silver);
+  --color-lb-row-bronze: var(--lb-row-bronze);
 
   /* Page-content ceiling. One token instead of max-w-6xl/7xl repeated
      across five files - a monitor wider than 1280px was leaving dead
