@@ -6,6 +6,7 @@ import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { useLearner } from '@/contexts/LearnerContext';
 import { Avatar } from '@/components/learner/Avatar';
 import { CHALLENGE_LEVELS } from '@/infrastructure/config/challenges';
+import type { LearnerAvatar } from '@/core/domain/entities/Learner';
 
 interface LeaderboardEntry {
   displayName: string;
@@ -92,11 +93,13 @@ function LeaderboardRow({
   rank,
   isCurrentUser,
   highlighted,
+  avatar,
 }: {
   entry: LeaderboardEntry;
   rank: number;
   isCurrentUser?: boolean;
   highlighted?: boolean;
+  avatar?: LearnerAvatar;
 }) {
   return (
     <div
@@ -109,7 +112,11 @@ function LeaderboardRow({
         {rank}
       </span>
 
-      <InitialAvatar name={entry.displayName} size={36} />
+      {avatar ? (
+        <Avatar avatar={avatar} size={36} />
+      ) : (
+        <InitialAvatar name={entry.displayName} size={36} />
+      )}
 
       <span className="min-w-0 flex-1 truncate font-display font-bold text-foreground text-sm sm:text-base">
         {entry.displayName}
@@ -393,16 +400,18 @@ export default function LeaderboardPage() {
               </header>
 
               <div className="space-y-2" role="list">
-                {visibleEntries.map((entry, index) => (
-                  <LeaderboardRow
-                    key={entry.displayName}
-                    entry={entry}
-                    rank={index + 1}
-                    isCurrentUser={
-                      !!(status?.optedIn && entry.displayName === status?.displayName)
-                    }
-                  />
-                ))}
+                {visibleEntries.map((entry, index) => {
+                  const isSelf = !!(status?.optedIn && entry.displayName === status?.displayName);
+                  return (
+                    <LeaderboardRow
+                      key={entry.displayName}
+                      entry={entry}
+                      rank={index + 1}
+                      isCurrentUser={isSelf}
+                      avatar={isSelf ? learner?.avatar : undefined}
+                    />
+                  );
+                })}
 
                 {userEntry && learnerRank && (
                   <>
@@ -417,6 +426,7 @@ export default function LeaderboardPage() {
                       rank={learnerRank}
                       isCurrentUser
                       highlighted
+                      avatar={learner?.avatar}
                     />
                   </>
                 )}
