@@ -2,8 +2,8 @@
  * POST /api/learners/[id]/recovery-code
  *
  * Generates a new recovery code for a learner. The plaintext is returned
- * exactly once; only the SHA-256 hash is stored. If the learner already
- * has a code, the old one is retired first — one active code per learner.
+ * exactly once; only the SHA-256 hash is stored. Previous codes remain
+ * valid — all codes for a learner resolve to the same identity.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -41,7 +41,6 @@ export async function POST(
     const codeHash = await hashRecoveryCode(code);
 
     const repo = adminRecoveryCodeRepository();
-    await repo.retireByLearnerRef(learnerRef);
     await repo.storeCodeHash(id, learnerRef, codeHash);
 
     return NextResponse.json({

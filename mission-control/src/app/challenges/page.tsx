@@ -1,5 +1,4 @@
 import { ChallengesHub } from '@/components/challenges/ChallengesHub';
-import { ProfileSaveBanner } from '@/components/learner/ProfileSaveBanner';
 
 export default function ChallengesPage() {
   return (
@@ -14,7 +13,6 @@ export default function ChallengesPage() {
               Learn the platform, then build a real rover mission out of blocks.
             </p>
           </div>
-          <ProfileSaveBanner />
         </div>
       </header>
 
