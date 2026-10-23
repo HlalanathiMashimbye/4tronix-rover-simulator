@@ -127,7 +127,17 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
           )}
 
           {error && (
-            <p className="mt-4 text-center text-sm text-red-400">{error}</p>
+            <div className="mt-4 text-center">
+              <p className="text-sm text-red-400">{error}</p>
+              <button
+                type="button"
+                onClick={generate}
+                disabled={loading}
+                className="mt-2 text-sm font-medium text-muted-foreground underline underline-offset-2 transition-colors hover:text-foreground"
+              >
+                Try again
+              </button>
+            </div>
           )}
 
           {recoveryCode && !loading && (

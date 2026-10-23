@@ -27,11 +27,12 @@ export async function POST(
 
   try {
     const firestore = getFirestoreInstance();
-    const learnerSnap = await firestore.collection('learners').doc(id).get();
+    const learnerRef$ = firestore.collection('learners').doc(id);
+    const learnerSnap = await learnerRef$.get();
     if (!learnerSnap.exists) {
-      return NextResponse.json(
-        { success: false, error: 'Learner not found' },
-        { status: 404 }
+      await learnerRef$.set(
+        { createdAt: new Date().toISOString() },
+        { merge: true },
       );
     }
 
