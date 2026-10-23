@@ -32,8 +32,13 @@ afterEach(() => {
 });
 
 function TourState() {
-  const { currentStep } = useTour();
-  return <span data-testid="tour-step">{currentStep?.id ?? 'inactive'}</span>;
+  const { currentStep, start } = useTour();
+  return (
+    <>
+      <span data-testid="tour-step">{currentStep?.id ?? 'inactive'}</span>
+      <button data-testid="start-tour" onClick={start}>Start</button>
+    </>
+  );
 }
 
 function ClickableMission() {
@@ -79,6 +84,7 @@ it('advances once when Next clicks a target step', async () => {
     </TourProvider>,
   );
 
+  fireEvent.click(screen.getByTestId('start-tour'));
   await waitFor(() => expect(screen.getByTestId('tour-step')).toHaveTextContent('welcome'));
   fireEvent.click(screen.getByRole('button', { name: 'Explore the Platform' }));
   await waitFor(() => expect(screen.getByTestId('tour-step')).toHaveTextContent('first-mission'));
@@ -91,6 +97,8 @@ it('advances once when Next clicks a target step', async () => {
 it('keeps waiting for a delayed editor target after the initial wait', async () => {
   jest.useFakeTimers();
   localStorage.clear();
+  localStorage.setItem('mars-rover-learner-id', 'test-learner');
+  localStorage.setItem('rover-platform-milestones:test-learner', JSON.stringify({ welcomeSeen: true }));
   localStorage.setItem('tour-step', '8');
 
   render(
@@ -110,6 +118,8 @@ it('keeps waiting for a delayed editor target after the initial wait', async () 
 it('waits for the mobile send target to leave the collapsed launch view', async () => {
   jest.useFakeTimers();
   localStorage.clear();
+  localStorage.setItem('mars-rover-learner-id', 'test-learner');
+  localStorage.setItem('rover-platform-milestones:test-learner', JSON.stringify({ welcomeSeen: true }));
   localStorage.setItem('tour-step', '12');
 
   render(
@@ -130,6 +140,8 @@ it('waits for the mobile send target to leave the collapsed launch view', async 
 it('keeps the final mobile spotlight aligned while the launch slot animates', async () => {
   jest.useFakeTimers();
   localStorage.clear();
+  localStorage.setItem('mars-rover-learner-id', 'test-learner');
+  localStorage.setItem('rover-platform-milestones:test-learner', JSON.stringify({ welcomeSeen: true }));
   localStorage.setItem('tour-step', '12');
 
   render(
