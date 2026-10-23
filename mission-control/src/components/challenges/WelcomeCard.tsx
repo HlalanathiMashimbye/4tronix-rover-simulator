@@ -51,6 +51,13 @@ export function WelcomeCard() {
     if (exitTimer.current) clearTimeout(exitTimer.current);
   }, []);
 
+  const dismiss = useCallback(() => {
+    recordWelcomeSeen();
+    setShowRestoreInline(false);
+    setVisible(false);
+    exitTimer.current = setTimeout(() => setOpen(false), EXIT_MS);
+  }, []);
+
   const close = useCallback(() => {
     recordWelcomeSeen();
     setShowRestoreInline(false);
@@ -68,13 +75,13 @@ export function WelcomeCard() {
         if (showRestoreInline) {
           setShowRestoreInline(false);
         } else {
-          close();
+          dismiss();
         }
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, close, showRestoreInline]);
+  }, [open, dismiss, showRestoreInline]);
 
   const handleConfirm = useCallback(
     async (avatar: LearnerAvatar, displayName: string) => {
@@ -127,7 +134,7 @@ export function WelcomeCard() {
         >
           <div
             className={`absolute inset-0 bg-black/70 transition-opacity duration-200 motion-reduce:transition-none ${visible ? 'opacity-100' : 'opacity-0'}`}
-            onClick={showRestoreInline ? () => setShowRestoreInline(false) : close}
+            onClick={showRestoreInline ? () => setShowRestoreInline(false) : dismiss}
           />
 
           <div
@@ -139,7 +146,7 @@ export function WelcomeCard() {
             <div className={showRestoreInline ? 'hidden' : ''}>
               <button
                 type="button"
-                onClick={close}
+                onClick={dismiss}
                 className="absolute right-4 top-4 z-10 text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Close"
               >
