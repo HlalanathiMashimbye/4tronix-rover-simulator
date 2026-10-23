@@ -14,7 +14,7 @@ export function ProfileSaveBanner() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 rounded-[20px] border border-border/60 bg-muted px-5 py-4 sm:flex-row sm:items-center">
+      <div className="hidden flex-col gap-3 rounded-[20px] border border-border/60 bg-muted px-5 py-4 sm:flex sm:flex-row sm:items-center">
         <div className="min-w-0 shrink-0">
           <p className="font-semibold text-foreground">Profile not saved yet</p>
           <p className="text-sm text-muted-foreground">
