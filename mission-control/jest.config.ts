@@ -15,6 +15,8 @@ const config: Config = {
     // firebase-admin/auth transitively requires jose (pure ESM); see
     // firebaseAdminAuthMock.ts for why this is safe to stub globally.
     '^firebase-admin/auth$': '<rootDir>/test-utils/firebaseAdminAuthMock.ts',
+    // DiceBear v9 is ESM-only too; see dicebearMock.ts.
+    '^@dicebear/(core|bottts|identicon|shapes)$': '<rootDir>/test-utils/dicebearMock.ts',
   },
   testMatch: [
     '**/__tests__/**/*.test.ts',

@@ -23,6 +23,11 @@ jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }
 jest.mock('@/contexts/LearnerContext', () => ({
   useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
 }));
+// The navbar's challenge count reads Firestore. Left real, loading it stalled
+// this file for over a second, long enough to time out the Blockly wait below.
+jest.mock('@/hooks/useChallengeProgress', () => ({
+  useChallengeProgress: () => ({ completedCount: 0, totalCount: 0, loading: false }),
+}));
 
 // A headless Blockly that yields one tagged command, so the hook's
 // "from the blocks" branch can be seen.
