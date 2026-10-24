@@ -372,11 +372,17 @@ def kick():
 
 
 def state_of(recording_path):
-    """What the Settings page shows for one recording, or None if it has no note."""
+    """What Settings and the run station show for one recording, or None if it
+    has no note.
+
+    `outcome` is there for the run station: a video of a run the rover
+    reported as an error goes to YouTube but not onto its run, which leaves
+    the operator something to decide.
+    """
     note = _read_note(recording_path + NOTE_SUFFIX)
     if note is None:
         return None
-    view = {key: note.get(key) for key in ('url', 'reason', 'attempts', 'nextTryAt', 'lastError', 'settledAt')}
+    view = {key: note.get(key) for key in ('url', 'reason', 'attempts', 'nextTryAt', 'lastError', 'settledAt', 'outcome')}
     view['state'] = _state(note)
     if _sending.get('recording') == os.path.basename(recording_path) and _sending.get('total'):
         view['state'] = 'sending'
