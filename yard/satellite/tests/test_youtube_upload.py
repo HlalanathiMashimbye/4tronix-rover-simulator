@@ -119,6 +119,18 @@ def test_a_finished_run_is_sent_with_its_dispatch_its_yard_and_what_the_rover_sa
     assert not youtube_upload.has_due(now=NOW + 3600), 'and never sent again'
 
 
+@pytest.mark.parametrize('outcome', ['completed', 'error'])
+def test_a_videos_state_says_what_the_rover_reported(monkeypatch, yard, outcome):
+    """The run station tells the operator an errored run's video is not on
+    its mission, so it has to know which kind of run this was."""
+    answer(monkeypatch, Reply(body={'status': 'uploaded', 'url': 'https://www.youtube.com/watch?v=abcdefghijk'}))
+
+    youtube_upload.queue_upload('m1', 'dispatch-1', 'curiosity', str(yard), outcome)
+    youtube_upload.deliver_due(now=NOW)
+
+    assert youtube_upload.state_of(str(yard))['outcome'] == outcome
+
+
 def test_without_the_credential_nothing_is_noted_and_nothing_is_sent(monkeypatch, yard):
     monkeypatch.delenv('YOUTUBE_UPLOAD_INGEST_SECRET')
     calls = answer(monkeypatch, Reply())

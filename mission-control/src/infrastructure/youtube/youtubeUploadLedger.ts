@@ -127,6 +127,8 @@ export async function runAutomaticUpload(
     dispatchId: string;
     yardId: string;
     recordingName: string;
+    /** Without one, the recording's file name, which is what it used to be. */
+    title?: string;
     file: Uint8Array;
   },
   dependencies = {
@@ -149,7 +151,7 @@ export async function runAutomaticUpload(
       missionId: input.missionId,
       runId: input.dispatchId,
       yardId: input.yardId,
-      title: input.recordingName.replace(/\.mp4$/i, ''),
+      title: input.title ?? input.recordingName.replace(/\.mp4$/i, ''),
       file: input.file,
     });
     if (result.status !== 'uploaded' || !result.videoId || !result.url) {
