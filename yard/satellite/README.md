@@ -6,8 +6,9 @@ monitor and the operator's run station, proxies API calls to the rover server,
 records runs, and works with no internet at all.
 
 It holds no Firebase or YouTube OAuth credential. If automatic uploads are
-enabled, it uses the separate `YOUTUBE_UPLOAD_INGEST_SECRET` to deliver
-completed recordings to Mission Control; the rover run path remains local.
+enabled, it uses a separate upload secret, entered on the Settings page and
+sent only to the Mission Control it was entered for, to deliver completed
+recordings; the rover run path remains local.
 Each one waits in a note beside the recording (`<file>.mp4.upload.json`) until
 it is delivered, so a satellite with no internet, which is what it is while it
 serves the yard's wifi, sends its videos once it has a way out

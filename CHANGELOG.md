@@ -11,6 +11,24 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A satellite that uploads keeps a clean `git status`.** Each video's
+  upload note (`<name>.mp4.upload.json`) was not ignored, so after its first
+  automatic upload on 24 October the Pi showed untracked files, and an empty
+  `git status` is how the runbook tells a Pi serving stale code from one that
+  is not. The whole `yard/satellite/recordings/` folder is ignored now, so the
+  next kind of file written there cannot do it again.
+
+- **The satellite's upload secret is set on its Settings page.** It was a line
+  in a `.env` on the Pi, the last setting that still needed one. It sits in the
+  Mission Control dialog now, with the address, and the page never shows it
+  back: only whether one is set, and for which address. The console has no
+  sign-in, so anyone on the yard's wifi could change the address, and a secret
+  that followed it would arrive at their server in the next upload's headers,
+  enough to post videos to the channel as this yard. So it is only ever sent to
+  the Mission Control it was entered for, and a new address asks for it again.
+  The runbook has how the team sets a value without being able to read
+  Terraform's.
+
 - **An automatic upload is titled after its mission, and Mission complete
   says whose move it is.** The first automatic upload, on 24 October, worked
   end to end and was called `zAHtPQvGW-_upbuw9NAeh__curiosity__20261024T141312Z`,

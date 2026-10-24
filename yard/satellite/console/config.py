@@ -44,3 +44,26 @@ def api_tunables():
 
     return jsonify({'status': 'ok', 'values': tunables.operator_values(),
                     'limits': tunables.limits(), 'options': tunables.options()})
+
+
+@operator_bp.route('/api/config/upload-secret', methods=['GET', 'POST'])
+def api_upload_secret():
+    """The automatic-upload secret: set, replaced or removed, never read back.
+
+    Not a tunable, because tunables are served back to the page whole, and
+    this page has no sign-in: whatever it can GET, anyone on the yard's wifi
+    can. So this answers only whether a secret is set and which Mission
+    Control it is for (youtube_upload.save_secret has why that matters).
+    """
+    import youtube_upload
+
+    if request.method == 'GET':
+        return jsonify(youtube_upload.secret_status())
+
+    data = request.get_json(silent=True) or {}
+    try:
+        status = youtube_upload.save_secret(data.get('secret', ''))
+    except ValueError:
+        return jsonify({'error': 'That is not the upload secret: it is a long string with no '
+                                 'spaces, from whoever set up automatic upload.'}), 400
+    return jsonify(status)
