@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Dices, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, Dices, LogOut, RefreshCw, X } from 'lucide-react';
 import { useLearner } from '@/contexts/LearnerContext';
 import { useLeaderboard } from '@/hooks/useLeaderboard';
 import { Avatar } from './Avatar';
@@ -30,7 +30,7 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
   const modalRef = useRef<HTMLDivElement>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { learner, updateProfile, profileSaved } = useLearner();
+  const { learner, updateProfile, profileSaved, signOut } = useLearner();
   const { status, optIn, optOut, refresh } = useLeaderboard();
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -271,7 +271,19 @@ export function ProfileModal({ open, onClose, triggerRef }: Props) {
                     </p>
                   )}
                   <div className="mt-3 flex gap-3">
-                    {!profileSaved && (
+                    {/* Sign out only once saved: an unsaved profile has no
+                        recovery code or parent link, so signing out would
+                        lose it for good. */}
+                    {profileSaved ? (
+                      <button
+                        type="button"
+                        onClick={signOut}
+                        className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-border bg-card text-sm font-semibold text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign out
+                      </button>
+                    ) : (
                       <button
                         type="button"
                         onClick={() => setShowSave(true)}

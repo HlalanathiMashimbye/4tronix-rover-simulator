@@ -21,7 +21,7 @@ interface LearnerContextType {
   learner: Learner | null;
   sessionId: string | null;
   loading: boolean;
-  resetSession: () => void;
+  signOut: () => void;
   learnerEmail: string | null;
   setLearnerEmail: (email: string | null) => Promise<void>;
   openEmailPrompt: () => void;
@@ -361,16 +361,28 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   }
 
   /**
-   * Reset session and create new learner identity
+   * Forget this learner on this device, so the next child at a shared machine
+   * starts as a new learner. Only offered once the profile is saved: an
+   * unsaved learner has no recovery code or parent link, so signing out would
+   * lose their missions for good.
+   *
+   * The email and latest mission go too. Left behind, the next learner's
+   * email prompt would show this learner's address, and saving one would
+   * stamp it onto this learner's mission.
+   *
+   * A full page load rather than resetting state in place: the history page
+   * and the leaderboard toggle each read the learner id once when they mount,
+   * and would go on showing this learner's missions to the next one.
    */
-  function resetSession() {
+  function signOut() {
     clearLearnerID();
-    try { localStorage.removeItem('rover-profile-saved'); } catch {}
-    setProfileSaved(false);
-    setLearner(null);
-    setSessionId(null);
-    setLoading(true);
-    initializeLearnerSession();
+    try {
+      localStorage.removeItem('rover-profile-saved');
+      localStorage.removeItem('learnerEmail');
+      localStorage.removeItem(LATEST_MISSION_KEY);
+    } catch {}
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- router.push keeps this provider and every mounted page's state, which is the stale learner described above
+    window.location.assign('/');
   }
 
   return (
@@ -379,7 +391,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         learner,
         sessionId,
         loading,
-        resetSession,
+        signOut,
         learnerEmail,
         setLearnerEmail,
         openEmailPrompt,
