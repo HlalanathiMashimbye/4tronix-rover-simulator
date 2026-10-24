@@ -22,6 +22,25 @@ which is often longer than the diff.
   The runbook has how the team sets a value without being able to read
   Terraform's.
 
+- **An automatic upload is titled after its mission, and Mission complete
+  says whose move it is.** The first automatic upload, on 24 October, worked
+  end to end and was called `zAHtPQvGW-_upbuw9NAeh__curiosity__20261024T141312Z`,
+  its recording's file name. It is now `Cheerful Pebble Ranger · Mars Yard
+  rover run`, the title the run station already suggests for a manual
+  upload, read by Mission Control from the mission; a test holds the two
+  wordings together. A name a child typed stays off YouTube, as it stays out
+  of links. Nothing finds a video by its title, so linking is unchanged.
+
+  The run station's Mission complete notice had one button, Download,
+  whether or not the satellite was about to upload the video by itself, so
+  an operator could not tell whether to step in. Now, with the video
+  uploading by itself, it says there is nothing to do, its button is OK, and
+  it follows the upload to the YouTube link. With automatic upload off, or
+  an upload that could not happen, it says so and its button downloads the
+  video for YouTube Studio, as before. A run the rover reported as an error
+  is uploaded but left off the mission, and the notice sends the operator to
+  Mission Control to decide whether it counts.
+
 - **Prod goes live on a database of its own.** The live site moves from
   `marsyard.labs.ws`, the service called staging, to `marsyard.sapient.rocks`,
   which served Google's placeholder page since August. Prod starts clean on a

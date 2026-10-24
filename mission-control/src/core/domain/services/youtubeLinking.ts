@@ -1,5 +1,6 @@
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
+import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
 
 /**
  * Matching an uploaded video back to the mission it shows.
@@ -142,6 +143,28 @@ export function missionFromVideo(
 
 export function watchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+/** What every run's video is called after its mission's name. */
+export const MISSION_VIDEO_TITLE_SUFFIX = ' · Mars Yard rover run';
+
+/**
+ * An automatic upload's title: "Cheerful Pebble Ranger · Mars Yard rover run".
+ *
+ * The words the run station suggests for a manual upload (`paintYouTube` in
+ * yard/satellite/templates/run.html, held to these by a test), so the channel
+ * reads the same whichever way a video got there. It used to be the
+ * recording's file name, which nobody can read.
+ *
+ * Only a generated name goes on YouTube. Early missions carry names a child
+ * typed, and missionSlug.ts keeps those out of links for the same reason: a
+ * video is shared further than a card is ever seen. They get the run
+ * station's stand-in. The video still finds its mission, because the
+ * description carries the `MissionID:` line, not the title.
+ */
+export function missionVideoTitle(name: string | null | undefined): string {
+  const shown = name && isGeneratedMissionName(name) ? name : 'Rover mission';
+  return `${shown}${MISSION_VIDEO_TITLE_SUFFIX}`;
 }
 
 /**

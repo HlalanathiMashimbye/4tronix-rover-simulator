@@ -3,7 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import type { VideoLinkResult } from '@/core/application/services/VideoLinker';
-import { videoLinker } from '@/infrastructure/container.server';
+import { missionVideoTitle } from '@/core/domain/services/youtubeLinking';
+import { adminMissionRepository, videoLinker } from '@/infrastructure/container.server';
 import { isAutoUploadConfigured } from '@/infrastructure/youtube/youtubeUpload';
 import {
   recordAutomaticUploadFailure,
@@ -52,6 +53,22 @@ function validIngestSecret(supplied: string | null): boolean {
   const expectedDigest = createHmac('sha256', 'youtube-upload-ingest').update(expected).digest();
   const suppliedDigest = createHmac('sha256', 'youtube-upload-ingest').update(supplied).digest();
   return timingSafeEqual(expectedDigest, suppliedDigest);
+}
+
+/**
+ * The video's title, from its mission's name.
+ *
+ * Read here rather than sent by the satellite: Mission Control owns the name,
+ * and a satellite from before this change would have nothing to send. A
+ * mission that cannot be read still uploads, under the stand-in, because
+ * nothing finds a video by its title: the description names the mission.
+ */
+async function titleFor(missionId: string): Promise<string> {
+  try {
+    return missionVideoTitle((await adminMissionRepository().findById(missionId))?.name);
+  } catch {
+    return missionVideoTitle(null);
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -107,6 +124,7 @@ export async function POST(request: NextRequest) {
       dispatchId: parsed.data.runId,
       yardId: parsed.data.yardId,
       recordingName: parsed.data.recordingName,
+      title: await titleFor(parsed.data.missionId),
       file: new Uint8Array(await file.arrayBuffer()),
     });
     if (result.kind === 'failed') {

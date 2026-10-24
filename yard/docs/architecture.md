@@ -229,14 +229,19 @@ through.
                     │
                     ▼
 6. /run/ sees the recording drop out of /api/status, in a status it asked
-   for after the recording started, and says "Mission complete" with one
-   button for the file this run wrote
-   GET /api/recordings, then GET /api/recordings/<name> to download it
+   for after the recording started, and says "Mission complete", and
+   whether the video is the operator's to upload
+   GET /api/recordings, whose `upload` says where each video has got to
                     │
                     ▼
-7. Operator uploads it to YouTube with the description /run/ writes
-   ("MissionID: <id>" and "Yard: <yard>"), and marks the run complete in
-   Mission Control, whose linker then attaches the video to the run
+7. With automatic upload set up, nothing: the satellite sends the video to
+   Mission Control, which uploads it titled after the mission and attaches
+   it to the run (youtube_upload.py). Otherwise, or when that upload could
+   not happen, the notice's button downloads it
+   (GET /api/recordings/<name>), and the operator uploads it to YouTube with
+   the description /run/ writes ("MissionID: <id>" and "Yard: <yard>"), and
+   marks the run complete in Mission Control, whose linker then attaches
+   the video to the run
 ```
 
 Stop on the run station clears the rover's queue and closes the recording
