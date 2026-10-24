@@ -22,6 +22,10 @@ export interface LeaderboardStatus {
 
 export function useLeaderboard() {
   const { learner } = useLearner();
+  // Read out here, not as learner?.displayName inside optIn: the React
+  // Compiler infers the whole `learner` as that callback's dependency, which
+  // does not match its list, and the mismatch is a lint error that fails CI.
+  const displayName = learner?.displayName;
   const [status, setStatus] = useState<LeaderboardStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +73,7 @@ export function useLeaderboard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
           action: 'opt-in',
-          displayName: learner?.displayName,
+          displayName,
         }),
         }
       );
@@ -84,7 +88,7 @@ export function useLeaderboard() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatus, learner?.displayName]);
+  }, [loadStatus, displayName]);
 
   const optOut = useCallback(async () => {
     try {
