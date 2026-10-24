@@ -11,6 +11,13 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A satellite that uploads keeps a clean `git status`.** Each video's
+  upload note (`<name>.mp4.upload.json`) was not ignored, so after its first
+  automatic upload on 24 October the Pi showed untracked files, and an empty
+  `git status` is how the runbook tells a Pi serving stale code from one that
+  is not. The whole `yard/satellite/recordings/` folder is ignored now, so the
+  next kind of file written there cannot do it again.
+
 - **The satellite's upload secret is set on its Settings page.** It was a line
   in a `.env` on the Pi, the last setting that still needed one. It sits in the
   Mission Control dialog now, with the address, and the page never shows it
