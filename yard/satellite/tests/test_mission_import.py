@@ -15,6 +15,7 @@ the subset of syntax both engines share.
 import re
 
 import pytest
+from tests.page_source import page_source
 
 
 def _js_regex(page, name):
@@ -41,7 +42,7 @@ def page():
 
     web_server.app.config['TESTING'] = True
     with web_server.app.test_client() as client:
-        return client.get('/run/').get_data(as_text=True)
+        return page_source(client, '/run/')
 
 
 class TestClipboardHeaderContract:

@@ -14,6 +14,7 @@ import routes.rover
 import routes.pages
 import routes.network
 import satellite_identity
+from tests.page_source import page_source
 
 
 @pytest.fixture
@@ -198,13 +199,13 @@ def test_the_monitor_does_not_hardcode_the_camera_host(client):
     the monitor by IP - or on any dev machine - left it dialling a host that
     does not resolve, sitting on "Connecting..." forever with nothing in the
     UI to say why."""
-    page = client.get('/monitor/').get_data(as_text=True)
+    page = page_source(client, '/monitor/')
 
     assert 'mro.local:8890' not in page, 'the camera host must not be pinned'
     # Derived from wherever the page was served: the camera always runs on the
     # same machine as this web server, on the Pi and in development alike.
-    assert 'window.location.hostname' in page
-    assert f':{routes.network.CAMERA_PORT}`' in page
+    assert 'ws://${window.location.hostname}:${PAGE.cameraPort}' in page
+    assert f'data-camera-port="{routes.network.CAMERA_PORT}"' in page
 
 
 def test_the_monitor_uses_the_configured_camera_port(client, monkeypatch):
@@ -212,9 +213,9 @@ def test_the_monitor_uses_the_configured_camera_port(client, monkeypatch):
     silently ignore it."""
     monkeypatch.setattr(routes.pages, 'CAMERA_PORT', 9999)
 
-    page = client.get('/monitor/').get_data(as_text=True)
+    page = page_source(client, '/monitor/')
 
-    assert 'ws://${window.location.hostname}:9999' in page
+    assert 'data-camera-port="9999"' in page
 
 
 class TestNoSignInDeadEnds:
@@ -229,13 +230,13 @@ class TestNoSignInDeadEnds:
     """
 
     def test_settings_offers_no_link_to_a_login(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'href="/operator/login"' not in page
         assert 'sign-in required' not in page.lower()
 
     def test_settings_does_not_ask_for_a_login_to_run_the_camera(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'sign in on the operator console' not in page.lower()
 
@@ -247,7 +248,7 @@ class TestNoSignInDeadEnds:
         no longer is: every endpoint Settings reads is open, so any sign-in
         prompt left here would point at a door that is not locked.
         """
-        page = client.get('/settings').get_data(as_text=True).lower()
+        page = page_source(client, '/settings').lower()
 
         assert 'sign in' not in page
         assert 'sign-in required' not in page
@@ -264,7 +265,7 @@ class TestNoSignInDeadEnds:
 
     def test_settings_still_reports_a_refused_save(self, client):
         """Dropping the branch must not drop the error handling with it."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert "data.error || 'Save failed'" in page
 
@@ -282,7 +283,7 @@ class TestConsoleDesignSystem:
         every amber warning. A call to action and a warning strip read as the
         same thing, so neither won. Actions are the teal signal now; orange
         stays on brand chrome."""
-        css = client.get('/static/yard-base.css').get_data(as_text=True)
+        css = page_source(client, '/static/yard-base.css')
 
         assert '--signal:' in css
         assert '--ok-weak:' in css and '--warn-weak:' in css and '--bad-weak:' in css
@@ -292,7 +293,7 @@ class TestConsoleDesignSystem:
         on the page, in Mission Control's ready-to-send green; Import,
         Download and Copy description are Mission Control's plain button."""
         import re
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert re.search(r'\.btn\.run-primary\s*\{[^}]*background:\s*var\(--gradient-buzz\)', page)
         assert re.search(r'\.run-desk \.btn\.primary\s*\{[^}]*background:\s*var\(--background\)', page)
@@ -301,7 +302,7 @@ class TestConsoleDesignSystem:
         """It used to stay enabled while the warning underneath said not to
         run, which is the console contradicting itself at the one moment an
         operator is moving fast."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'function paintGate()' in page
         assert "$('runBtn').disabled = !ready" in page
@@ -313,7 +314,7 @@ class TestConsoleDesignSystem:
         page, Stop is always on screen, and pasting is an icon-sized fallback
         that still names itself for hover and screen readers."""
         import re
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'class="spine"' not in page
         assert 'live-panel' in page
@@ -325,7 +326,7 @@ class TestConsoleDesignSystem:
         """The live view is the shared camera client dialling the camera port
         the server rendered, with the simulator taking the canvas over on a
         fake-rover yard - the monitor's behaviour, not a parallel one."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert '/static/camera-client.js' in page
         assert 'new CameraClient' in page
@@ -339,7 +340,7 @@ class TestConsoleDesignSystem:
         operator has to type one into Studio either way. The field was built
         and then hidden; now it is a copyable row like the run id."""
         import re
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         title = re.search(r'<input[^>]*id="ytTitle"[^>]*>', page).group(0)
         assert 'hidden' not in title
@@ -351,7 +352,7 @@ class TestConsoleDesignSystem:
         controls two cards away; a category owns its status AND its controls
         now, and the card's head is its health row. The satellite itself is
         identity, not a setting, so it is a chip on the page header."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         for card in ('id="card-rover"', 'id="card-camera"',
                      'id="cleanupSection"', 'id="recordingsSection"'):
@@ -367,7 +368,7 @@ class TestConsoleDesignSystem:
         button called Change. The three ways to point at a rover are flat on
         the card now, in the order they are reached for: the simulator
         toggle, auto-find, and a typed address as the fallback."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         card = page[page.index('id="card-rover"'):page.index('id="card-camera"')]
         assert 'id="simToggle"' in card
@@ -388,7 +389,7 @@ class TestConsoleDesignSystem:
         click - and the rest of the page works that way now, which means the
         buttons are gone and each card has a line that speaks instead.
         """
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'id="tunSave"' not in page
         assert 'id="cleanupSave"' not in page
@@ -402,7 +403,7 @@ class TestConsoleDesignSystem:
         Pins the event, because the difference is invisible until someone
         types a two-digit number into a box whose floor is above one digit.
         """
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
         body = page[page.index('function wireAutoSave'):]
         wiring = body[:body.index('wireAutoSave(TUNABLE_FIELDS')]
 
@@ -415,7 +416,7 @@ class TestConsoleDesignSystem:
         extra steps. Refresh survives as an icon on the recordings card - the
         one thing on the page that only loads on open - rather than a card of
         pill-sized buttons."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'clearCacheBtn' not in page
         assert 'Quick actions' not in page
@@ -426,7 +427,7 @@ class TestConsoleDesignSystem:
         """The page is fixed to the viewport like the run station; the
         recordings list is the only thing that grows without bound, so it is
         the only scroll container at desktop widths."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'class="console fixed-shell"' in page
         rec_rule = page[page.index('#recordingsList'):]
@@ -436,7 +437,7 @@ class TestConsoleDesignSystem:
         """The yard is operated from a tablet and these were tuned by eye on a
         laptop: 26px Copy buttons, a 28px Start camera, a 36px select."""
         for path in ('/run/', '/settings'):
-            page = client.get(path).get_data(as_text=True)
+            page = page_source(client, path)
             assert '@media (pointer: coarse)' in page, path
             assert 'min-height: 44px' in page, path
 
@@ -444,14 +445,14 @@ class TestConsoleDesignSystem:
         """Every component sets an explicit display, which beats the UA
         stylesheet's [hidden] rule, so el.hidden = true changed nothing and the
         Start camera button sat there on a primed camera."""
-        css = client.get('/static/yard-base.css').get_data(as_text=True)
+        css = page_source(client, '/static/yard-base.css')
 
         assert '[hidden] { display: none !important; }' in css
 
     def test_neither_page_uses_an_em_dash(self, client):
         """A standing rule on this project."""
         for path in ('/run/', '/settings'):
-            page = client.get(path).get_data(as_text=True)
+            page = page_source(client, path)
             body = page.replace("(value ?? '—')", '')   # the no-value placeholder
             assert '—' not in body, path
             assert '&mdash;' not in body, path
@@ -467,7 +468,7 @@ class TestCameraHostIsNotAnOperatorSetting:
     """
 
     def test_it_is_not_on_the_settings_page(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'tunCameraHost' not in page
         assert 'Camera host' not in page
@@ -506,7 +507,7 @@ class TestSettingsHasNoOrphanedControls:
     """
 
     def test_the_session_inputs_are_gone_with_their_settings(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'tunSessionMaxAge' not in page
         assert 'tunSessionRecheck' not in page
@@ -514,7 +515,7 @@ class TestSettingsHasNoOrphanedControls:
     def test_every_input_on_the_page_has_a_label(self, client):
         """The general form of the same bug: an input nobody can name."""
         import re
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
         body = page[page.index('<body'):]
         ids = set(re.findall(r'<input[^>]*\bid="([^"]+)"', body))
         labelled = set(re.findall(r'\bfor="([^"]+)"', body))
@@ -540,7 +541,7 @@ class TestMonitorBacklog:
     """
 
     def test_the_backlog_fetch_is_retried(self, client):
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
 
         assert 'function loadBacklog(attempt)' in page
         assert 'loadBacklog(attempt + 1)' in page
@@ -548,14 +549,14 @@ class TestMonitorBacklog:
     def test_refresh_reports_failure_so_the_retry_can_see_it(self, client):
         """It used to swallow the error, which left the caller unable to tell a
         successful load from a failed one."""
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
         body = page[page.index('async refresh()'):]
         body = body[:body.index('updateUI(data) {')]
 
         assert 'throw e;' in body
 
     def test_a_slow_poll_backs_the_stream_up(self, client):
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
 
         assert 'setInterval(function () { queue.refresh(); }, 15000)' in page
 
@@ -573,7 +574,7 @@ class TestMonitorSimFeed:
         """The sim awaits /api/status before it subscribes, so by the time it
         registered, the one snapshot carrying the backlog had already been
         dispatched and it had nothing to replay."""
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
 
         assert 'onQueueEvent: (fn) => {' in page
         assert 'if (lastStatus) {' in page
@@ -581,7 +582,7 @@ class TestMonitorSimFeed:
     def test_a_fetched_snapshot_reaches_the_same_subscribers_as_a_pushed_one(self, client):
         """refresh() went straight to updateUI, so the load-time snapshot was
         seen by the queue display and by nothing else."""
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
 
         assert 'function dispatchStatus(status)' in page
         assert 'queue.onStatus = dispatchStatus;' in page
@@ -590,14 +591,14 @@ class TestMonitorSimFeed:
     def test_the_dispatcher_is_ready_before_the_backlog_is_fetched(self, client):
         """Ordering is the whole fix: a dispatcher installed after the fetch
         would miss exactly the snapshot that matters."""
-        page = client.get('/monitor/').get_data(as_text=True)
+        page = page_source(client, '/monitor/')
 
         assert page.index('queue.onStatus = dispatchStatus;') < page.index('function loadBacklog(attempt)')
 
     def test_the_sim_falls_back_to_the_last_finished_run(self, client):
         """`current` is empty once a run ends, which is the normal state of a
         yard someone has just walked up to."""
-        js = client.get('/static/sim-monitor.js').get_data(as_text=True)
+        js = page_source(client, '/static/sim-monitor.js')
 
         assert 'function lastRunFrom(status)' in js
         assert "entry.cmd === 'run_python'" in js
@@ -606,7 +607,7 @@ class TestMonitorSimFeed:
     def test_the_fallback_only_applies_to_the_first_snapshot(self, client):
         """Otherwise every idle poll would restart the last run, and the yard
         would loop one mission forever."""
-        js = client.get('/static/sim-monitor.js').get_data(as_text=True)
+        js = page_source(client, '/static/sim-monitor.js')
 
         assert 'let seenAnything = false;' in js
         assert 'if (!seenAnything) {' in js
@@ -618,7 +619,7 @@ class TestFooterSpeaksOnlyOnTrouble:
     the eye to skip the one line that carries the failures."""
 
     def test_it_starts_hidden(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert '<div class="footer" id="footer" hidden></div>' in page
 
@@ -629,8 +630,7 @@ class TestFooterSpeaksOnlyOnTrouble:
         which mentions the old "Last checked" text - the same trap as asserting
         a removed field by its label. Look at what the code does.
         """
-        page = client.get('/settings').get_data(as_text=True)
-        script = page[page.index('<script>'):]
+        script = client.get('/static/pages/settings.js').get_data(as_text=True)
 
         assert "setFooter('')" in script
         assert "textContent =\n                    'Last checked" not in script
@@ -638,7 +638,7 @@ class TestFooterSpeaksOnlyOnTrouble:
 
     def test_failures_and_staleness_still_show(self, client):
         """Quieting it must not silence it. These are the states worth a line."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'Showing cached status' in page
         assert 'Fetch failed' in page
@@ -703,12 +703,11 @@ class TestOneCameraTruth:
         assert camera_state._cache['snapshot'] is None
 
     def test_no_page_polls_the_camera_on_its_own(self, client):
-        page = client.get('/run/').get_data(as_text=True)
-        script = page[page.index('<script>'):]
+        script = client.get('/static/pages/run.js').get_data(as_text=True)
         # The only remaining mention is the comment explaining why it stopped.
         assert "fetch('/api/camera/ready')" not in script
 
-        settings = client.get('/settings').get_data(as_text=True)
+        settings = page_source(client, '/settings')
         assert 'setInterval(loadCamera' not in settings
 
 
@@ -718,7 +717,7 @@ class TestSettingsIsQuietWhenNothingIsWrong:
     trains the eye to skip the region that carries the real message."""
 
     def test_the_camera_message_strip_is_hidden_until_there_is_a_message(self, client):
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert 'id="camera-msg-panel" hidden' in page
         assert 'panel.hidden = !text' in page
@@ -726,7 +725,7 @@ class TestSettingsIsQuietWhenNothingIsWrong:
     def test_who_manages_the_camera_sits_with_the_camera_controls(self, client):
         """It was adrift in its own strip under the whole module, describing a
         row two rows above it."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
         row = page[page.index('id="card-camera"'):page.index('id="camera-msg-panel"')]
 
         assert 'id="camera-managed"' in row
@@ -734,7 +733,7 @@ class TestSettingsIsQuietWhenNothingIsWrong:
     def test_the_quality_buttons_carry_their_own_dimensions(self, client):
         """The 4:3 was a line of grey prose repeating what 640 x 480 and
         1280 x 960 already say on the buttons themselves."""
-        page = client.get('/settings').get_data(as_text=True)
+        page = page_source(client, '/settings')
 
         assert '4:3 like the camera' in page          # on the button, as a title
         assert 'The camera is 4:3 at every setting' not in page
@@ -751,7 +750,7 @@ class TestSettingsSpeaksTheConsoleLanguage:
         import web_server
         web_server.app.config['TESTING'] = True
         with web_server.app.test_client() as client:
-            return client.get(path).get_data(as_text=True)
+            return page_source(client, path)
 
     def test_it_has_the_same_page_header_as_the_run_station(self):
         """The two fixed-shell pages spend one line on their header - the
@@ -796,7 +795,7 @@ class TestSettingsSpeaksTheConsoleLanguage:
         import web_server
         web_server.app.config['TESTING'] = True
         with web_server.app.test_client() as client:
-            css = client.get('/static/yard-base.css').get_data(as_text=True)
+            css = page_source(client, '/static/yard-base.css')
         assert re.search(r'\.console\s+\.card-title\s*\{', css), \
             'yard-base.css no longer defines the shared card-title'
 

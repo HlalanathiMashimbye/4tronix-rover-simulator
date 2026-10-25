@@ -2,9 +2,9 @@
 /**
  * Bumped whenever the asset list changes, so an install with the old list is
  * discarded rather than reused. v2 dropped a CDN URL no page ever requested;
- * v3 added yard-theme.css.
+ * v3 added yard-theme.css; v4 the page's own script, moved out of the HTML.
  */
-const CACHE_NAME = 'rover-code-v3';
+const CACHE_NAME = 'rover-code-v4';
 
 /**
  * Everything /code/ needs to open with no connection.
@@ -17,6 +17,7 @@ const CACHE_NAME = 'rover-code-v3';
  */
 const STATIC_ASSETS = [
     '/code/',
+    '/static/pages/code.js',
     '/static/yard-base.css',
     // yard-base.css imports the palette from here. Without it an offline
     // tablet gets the layout with none of the colours.
