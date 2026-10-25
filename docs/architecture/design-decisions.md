@@ -194,9 +194,11 @@ targeted guess, no against enumeration, and enumeration was the real risk".
 **The address itself** lives in `learners/{id}/private/contact`, a subcollection
 browsers are denied entirely and only the Admin SDK reaches.
 
-**Limitation, and it is in the rules file as a comment.** These rules stop the
-bulk read. They cannot stop a forged write, because learner ids are still public
-on older documents. Closing that needs ids to stop being published at all.
+**The limitation this left has since closed.** These rules stopped the bulk read
+but not a write to another learner's record, while learner ids were still
+printed on mission documents. Missions now carry `learnerRef`, a one-way hash,
+and `mission-control/scripts/backfill-learner-refs.mjs` removed `learnerId` from every existing
+mission, so an id is known only to its learner's own browser.
 
 ### Who a notification reaches (AB#470)
 

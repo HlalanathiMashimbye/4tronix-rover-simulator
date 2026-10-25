@@ -110,9 +110,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setShowEmailPrompt(false);
 
     // Written server-side, not from here. The learner document is readable by
-    // exact id and those ids are published on public mission documents, so an
-    // address stored on it could be harvested in bulk from the feed. The route
-    // puts it in a subcollection browsers cannot read at all - see
+    // exact id, so the route puts the address in a subcollection browsers
+    // cannot read at all, and it stays private even if an id ever leaks - see
     // core/domain/services/learnerContact.ts.
     //
     // Order still matters: backfillLatestMissionEmail triggers a notify that

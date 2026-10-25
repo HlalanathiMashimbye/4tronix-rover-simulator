@@ -18,16 +18,11 @@
  * (which bypasses rules) can reach it. The public learner document keeps the
  * harmless profile fields.
  *
- * KNOWN LIMITATION, deliberately not solved here: `learnerId` is still
- * published on public mission documents, so it is not a secret and this route
- * cannot prove the caller owns the learner it names. That means someone can
- * still WRITE an address onto another learner's record - exactly as they
- * could before this change, since the old browser-side rule was equally
- * unauthenticated. This change closes the bulk-read exposure only. The root
- * fix is to stop publishing learnerId (carry a one-way hash on missions, the
- * same trick already used for the address itself) so possession of the id
- * means something; that needs a backfill of existing mission documents and is
- * tracked separately.
+ * Holding the learner id is what this route accepts as being that learner.
+ * That only means something because the id is no longer published: missions
+ * carry learnerRef, a one-way hash, and scripts/backfill-learner-refs.mjs
+ * removed learnerId from every existing mission. The id lives in the
+ * learner's own browser.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
