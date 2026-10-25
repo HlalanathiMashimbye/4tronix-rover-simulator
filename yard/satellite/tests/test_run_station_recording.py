@@ -31,23 +31,36 @@ class FakeSatellite:
     was already on its way when something changed.
     """
 
-    def __init__(self, page: Page, hold_start=False):
+    def __init__(self, page: Page, hold_start=False, uploads=None, verified=False):
         self.page = page
+        # What the satellite says about the handoff's signature, and what the
+        # page asked it to check.
+        self.verified = verified
+        self.verify_asks = []
         self.filming = []
+        # The satellite's automatic upload, as /api/status sums it up, and
+        # this run's video's note, as /api/recordings reports it. None is a
+        # satellite without uploads set up, and a video with no note.
+        self.uploads = uploads
+        self.upload = None
         self.hold_start = hold_start
         self.hold_status = False
         self.held_starts = []
         self.held_statuses = []
+        self.sent = []
+        self.starts = 0
         page.route('**/api/status', self._status)
         page.route('**/api/recording/start', self._start)
         page.route('**/api/recording/stop', self._stop)
-        page.route('**/api/queue/add', lambda route: route.fulfill(json={'status': 'ok'}))
+        page.route('**/api/queue/add', self._add)
+        page.route('**/api/handoff/verify', self._verify)
         page.route('**/api/queue/clear', lambda route: route.fulfill(json={'status': 'ok'}))
         # Newest first, as the satellite lists them, and something newer than
         # this run on the card: a recording somebody started by hand.
         page.route('**/api/recordings', lambda route: route.fulfill(json={'recordings': [
             {'name': NEWER, 'bytes': 2_000_000, 'modified': '2026-10-17T12:02:10Z', 'downloaded': False},
-            {'name': FILE, 'bytes': SIZE, 'modified': '2026-10-17T12:01:30Z', 'downloaded': False},
+            {'name': FILE, 'bytes': SIZE, 'modified': '2026-10-17T12:01:30Z', 'downloaded': False,
+             'upload': self.upload},
             {'name': 'm0__curiosity__20261016T090000Z.mp4', 'bytes': 1_000_000,
              'modified': '2026-10-16T09:01:00Z', 'downloaded': True},
         ]}))
@@ -62,6 +75,7 @@ class FakeSatellite:
                       'url': 'http://curiosity.local:8523'},
             'camera': {'listening': True, 'ready': True, 'recording': list(self.filming)},
             'recording': {'active': list(self.filming), 'ready': True},
+            **({'uploads': self.uploads} if self.uploads else {}),
         }
 
     def _status(self, route):
@@ -71,7 +85,16 @@ class FakeSatellite:
             return
         route.fulfill(json=self.payload())
 
+    def _verify(self, route):
+        self.verify_asks.append(route.request.post_data_json)
+        route.fulfill(json={'verified': self.verified, 'reason': None if self.verified else 'signature does not match'})
+
+    def _add(self, route):
+        self.sent.append(route.request.post_data_json)
+        route.fulfill(json={'status': 'ok'})
+
     def _start(self, route):
+        self.starts += 1
         if self.hold_start:
             self.held_starts.append(route)
             return
@@ -101,18 +124,80 @@ class FakeSatellite:
         self.page.evaluate('() => { YardStatus.refreshNow(); }')
 
 
-def handoff(live_server):
-    """Mission Control's Send to Rover: the page runs the mission by itself
-    once the camera and the rover are ready."""
+def handoff(live_server, signed=False):
+    """Mission Control's Send to Rover: the page opens with the mission filled in."""
     from satellite_identity import yard_id
     params = {'handoff': 'automatic', 'yardId': yard_id(), 'missionId': 'm1',
               'missionName': 'Rock Lover', 'code': 'rover.forward(60)\ntime.sleep(1)\nrover.stop()'}
+    if signed:
+        params.update(expires='1793000000', signature='ab' * 32)
     return f'{live_server}/run/?{urlencode(params)}'
 
 
-def open_run(page: Page, live_server, width=1366, height=768):
+def load_handoff(page: Page, live_server, width=1366, height=768):
     page.set_viewport_size({'width': width, 'height': height})
     page.goto(handoff(live_server))
+    page.wait_for_function("!document.getElementById('runBtn').disabled")
+
+
+def open_run(page: Page, live_server, width=1366, height=768):
+    """The handoff, then the operator's press of Send."""
+    load_handoff(page, live_server, width, height)
+    page.click('#runBtn')
+
+
+def test_a_handoff_fills_the_run_station_and_waits_for_send(page: Page, live_server):
+    """A link can come from any page a yard browser opens, so arriving with a
+    mission in the address must not move the rover or start filming."""
+    fake = FakeSatellite(page)
+    load_handoff(page, live_server)
+    page.wait_for_timeout(1500)
+
+    assert fake.sent == [] and fake.starts == 0 and fake.verify_asks == []
+    assert page.eval_on_selector('#code', 'el => el.value').startswith('rover.forward(60)')
+    assert 'Press Send' in page.text_content('#runMsg')
+    assert page.evaluate('document.activeElement.id') == 'runBtn'
+
+
+def test_a_handoff_mission_control_signed_runs_with_no_press_here(page: Page, live_server):
+    """The operator pressed Send to Rover in Mission Control. That is the one
+    press: once the satellite has checked the signature, the run station
+    records and sends by itself as soon as the yard is ready."""
+    fake = FakeSatellite(page, verified=True)
+    page.goto(handoff(live_server, signed=True))
+    wait_recording(page)
+    page.wait_for_function("document.getElementById('runMsg').textContent.includes('sent to the rover')")
+
+    [asked] = fake.verify_asks
+    assert asked['missionId'] == 'm1' and asked['signature'] == 'ab' * 32
+    assert asked['code'].startswith('rover.forward(60)') and asked['expires'] == '1793000000'
+    [[instruction]] = fake.sent
+    assert instruction['params']['mission_id'] == 'm1'
+
+
+def test_a_signature_the_satellite_rejects_waits_for_send(page: Page, live_server):
+    fake = FakeSatellite(page, verified=False)
+    page.goto(handoff(live_server, signed=True))
+    page.wait_for_function("!document.getElementById('runBtn').disabled")
+    page.wait_for_timeout(1500)
+
+    assert len(fake.verify_asks) == 1
+    assert fake.sent == [] and fake.starts == 0
+    assert 'Press Send' in page.text_content('#runMsg')
+    assert page.evaluate('document.activeElement.id') == 'runBtn'
+
+
+def test_pressing_send_after_a_handoff_runs_that_mission(page: Page, live_server):
+    fake = FakeSatellite(page)
+    open_run(page, live_server)
+    wait_recording(page)
+    page.wait_for_function("document.getElementById('runMsg').textContent.includes('sent to the rover')")
+
+    assert fake.starts == 1
+    [[instruction]] = fake.sent
+    assert instruction['cmd'] == 'run_python'
+    assert instruction['params']['mission_id'] == 'm1'
+    assert instruction['params']['code'].startswith('rover.forward(60)')
 
 
 def wait_recording(page: Page):
@@ -154,6 +239,11 @@ NOTICE = """() => {
         width: b.width, buttonHeight: button.height,
         focused: document.activeElement && document.activeElement.id,
         title: document.title,
+        upload: dialog.dataset.upload,
+        pill: document.getElementById('doneUpload').hidden ? null : document.getElementById('doneUpload').textContent,
+        href: document.getElementById('doneUpload').getAttribute('href'),
+        download: !document.getElementById('doneDownload').hidden,
+        ok: !document.getElementById('doneOk').hidden,
     };
 }"""
 
@@ -222,6 +312,9 @@ def test_a_finished_run_opens_a_big_notice_whose_button_downloads_its_video(page
     assert notice['title'].startswith('Mission complete'), notice
     # The recording is over, so the picture stops saying REC.
     assert not page.evaluate(RECORDING)['shown']
+
+    # This satellite does not upload by itself, so the video is the operator's.
+    assert notice['upload'] == 'off' and notice['download'] and not notice['ok'], notice
 
     with page.expect_download() as download:
         page.click('#doneDownload')
@@ -311,3 +404,99 @@ def test_on_a_phone_and_a_tablet_the_notice_fits_the_screen(page: Page, live_ser
     left, top, right, bottom = box
     assert 0 <= left and right <= width and 0 <= top and bottom <= height, box
     assert page.evaluate('document.documentElement.scrollWidth') <= width
+
+
+# ---- Whether the video is the operator's to upload ------------------------
+# The notice's one button was Download even when the satellite was about to
+# upload the video by itself, so nobody could tell whether to step in.
+
+ONLINE = {'configured': True, 'online': True, 'waiting': 1, 'uploaded': 0, 'manual': 0, 'sending': None}
+URL = 'https://www.youtube.com/watch?v=RNm4VtDxIPE'
+
+
+def finish_run(page: Page, live_server, fake: FakeSatellite):
+    open_run(page, live_server)
+    wait_recording(page)
+    fake.rover_finishes()
+    page.wait_for_function("document.getElementById('doneNotice').open")
+
+
+def wait_upload(page: Page, kind):
+    page.wait_for_function("(kind) => document.getElementById('doneNotice').dataset.upload === kind",
+                           arg=kind, timeout=8000)
+    return page.evaluate(NOTICE)
+
+
+def test_a_video_that_uploads_by_itself_leaves_the_operator_nothing_to_do(page: Page, live_server):
+    fake = FakeSatellite(page, uploads=ONLINE)
+    fake.upload = {'state': 'waiting'}
+    finish_run(page, live_server, fake)
+    notice = wait_upload(page, 'waiting')
+
+    assert notice['ok'] and not notice['download'], notice
+    assert notice['focused'] == 'doneOk', notice
+    assert notice['pill'] and notice['href'] is None, notice
+
+    # It follows the upload while it is open, and ends on the video.
+    fake.upload = {'state': 'sending', 'percent': 40}
+    assert '40' in wait_upload(page, 'sending')['pill']
+    fake.upload = {'state': 'uploaded', 'url': URL, 'outcome': 'completed'}
+    notice = wait_upload(page, 'uploaded')
+    assert notice['href'] == URL and notice['ok'] and not notice['download'], notice
+
+    page.click('#doneOk')
+    assert not page.evaluate(NOTICE)['open']
+
+
+def test_a_video_that_could_not_upload_hands_the_operator_the_download(page: Page, live_server):
+    fake = FakeSatellite(page, uploads=ONLINE)
+    fake.upload = {'state': 'waiting'}
+    finish_run(page, live_server, fake)
+    assert wait_upload(page, 'waiting')['focused'] == 'doneOk'
+
+    fake.upload = {'state': 'manual', 'reason': 'max-attempts'}
+    notice = wait_upload(page, 'manual')
+
+    assert notice['download'] and not notice['ok'], notice
+    # The button that went had the focus; it moves to the one that came.
+    assert notice['focused'] == 'doneDownload', notice
+    with page.expect_download() as download:
+        page.click('#doneDownload')
+    assert download.value.suggested_filename == FILE
+
+
+def test_with_no_internet_it_waits_and_still_needs_nothing(page: Page, live_server):
+    fake = FakeSatellite(page, uploads={**ONLINE, 'online': False})
+    fake.upload = {'state': 'waiting'}
+    finish_run(page, live_server, fake)
+    notice = wait_upload(page, 'offline')
+
+    assert notice['ok'] and not notice['download'], notice
+
+
+def test_an_errored_runs_video_is_on_youtube_but_left_off_the_mission(page: Page, live_server):
+    """Mission Control uploads it and does not attach it, because attaching
+    closes the run and tells the learner it is complete. That is a call the
+    operator makes, so the notice says it is theirs."""
+    fake = FakeSatellite(page, uploads=ONLINE)
+    fake.upload = {'state': 'uploaded', 'url': URL, 'outcome': 'error'}
+    finish_run(page, live_server, fake)
+    notice = wait_upload(page, 'unlinked')
+
+    assert notice['href'] == URL, notice
+    # Not a download: the video is up. What is left is on Mission Control.
+    assert notice['ok'] and not notice['download'], notice
+
+
+def test_a_video_the_satellite_never_noted_for_upload_becomes_the_operators(page: Page, live_server):
+    """The note is written just after the recording stops, so at first there
+    may be none. One that never comes means the video is not going by itself."""
+    page.clock.install()
+    fake = FakeSatellite(page, uploads=ONLINE)
+    finish_run(page, live_server, fake)
+    assert wait_upload(page, 'waiting')['ok']
+
+    page.clock.fast_forward(21_000)
+    notice = wait_upload(page, 'manual')
+
+    assert notice['download'] and not notice['ok'], notice

@@ -3,11 +3,12 @@
 Thin, like the camera routes: what it does and why is satellite_power.py.
 
 Not behind a sign-in, for the camera routes' reason: the console has none,
-because the yard works without internet. So anyone on the yard's wifi can
-shut it down, and that is accepted on purpose. They can already drive the
-rover from the same network, the command is fixed in satellite_power and
-nothing from the request reaches it, and what it costs is somebody walking
-to the plug.
+because the yard works without internet. This endpoint takes no body, so
+before the same-origin gate (same_origin.py) any website a browser on the
+yard's wifi had open in another tab could POST to it and power the box off.
+That gate now refuses anything that did not come from the satellite's own
+pages, so Shut down is a thing an operator does on purpose from the console,
+not something another tab can do behind their back.
 """
 
 from flask import jsonify

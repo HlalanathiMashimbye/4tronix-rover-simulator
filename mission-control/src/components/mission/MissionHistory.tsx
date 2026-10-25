@@ -5,11 +5,8 @@ import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Rocket, Plus, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
-import {
-  subscribeMissionsByLearnerId,
-  subscribeMissionsByLearnerEmail,
-} from '@/infrastructure/persistence/missionQueryService';
-import { Mission } from '@/core/domain/entities/Mission';
+import { learnerMissionFeed } from '@/infrastructure/container.browser';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { StaggeredEntrance } from '@/components/ui/StaggeredEntrance';
@@ -31,8 +28,8 @@ export function MissionHistory() {
   // submitted under that email on any device. We keep them separate and merge
   // so a learner sees their full history regardless of which one a mission was
   // stamped with.
-  const [byId, setById] = useState<Mission[]>([]);
-  const [byEmail, setByEmail] = useState<Mission[]>([]);
+  const [byId, setById] = useState<MissionRecord[]>([]);
+  const [byEmail, setByEmail] = useState<MissionRecord[]>([]);
   const [idLoaded, setIdLoaded] = useState(false);
   const [emailLoaded, setEmailLoaded] = useState(false);
 
@@ -44,7 +41,7 @@ export function MissionHistory() {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    subscribeMissionsByLearnerId(getLearnerID(), (missions) => {
+    learnerMissionFeed().subscribeMissionsByLearnerId(getLearnerID(), (missions) => {
       setById(missions);
       setIdLoaded(true);
     })
@@ -81,7 +78,7 @@ export function MissionHistory() {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    subscribeMissionsByLearnerEmail(learnerEmail, (missions) => {
+    learnerMissionFeed().subscribeMissionsByLearnerEmail(learnerEmail, (missions) => {
       setByEmail(missions);
       setEmailLoaded(true);
     })
@@ -105,7 +102,7 @@ export function MissionHistory() {
   }, [learnerEmail]);
 
   const missions = useMemo(() => {
-    const merged = new Map<string, Mission>();
+    const merged = new Map<string, MissionRecord>();
     for (const mission of [...byId, ...byEmail]) {
       merged.set(mission.id, mission);
     }

@@ -1,14 +1,17 @@
 /**
- * Mission Domain Entity
+ * A mission: a program a learner wrote, and every attempt to run it.
  *
- * Represents a learner's submitted rover control program.
- * Inspired by yard/rover/service.py queue semantics from the existing repo.
- *
- * Design decisions:
- * - Supports anonymous learners via sessionId (POPIA compliance - no email required)
- * - Status field enables Firestore-as-queue pattern
- * - Queue position calculated dynamically for real-time updates
+ * Two shapes, on purpose. `MissionRecord` is the stored data: it crosses
+ * Firestore and the server-to-browser boundary, and neither carries a class,
+ * so the feed and the cards read it as plain data. `Mission` is the entity
+ * the server acts through. It holds one record and its runs privately, and it
+ * is the only place that decides what an operator may do to them, so no
+ * caller can put a status on a mission that its lifecycle (MissionState) does
+ * not allow.
  */
+
+import type { MissionRun } from './MissionRun';
+import { MissionState } from './MissionState';
 
 export type MissionStatus =
   | 'queued'        // Waiting to be executed
@@ -30,7 +33,8 @@ export interface ExecutionMetadata {
   completed_at: string;
 }
 
-export interface Mission {
+/** The stored shape of a mission. Read freely; change it only through Mission. */
+export interface MissionRecord {
   // Identifiers
   id: string;                        // Firestore document ID
   yardId: string;                    // Which physical rover yard, named for the rover itself (e.g., "curiosity")
@@ -54,7 +58,6 @@ export interface Mission {
   // already know. The real address lives on the learner record.
   // See core/domain/services/learnerEmailHash.ts
   learnerEmailHash?: string;
-  learnerUid?: string;               // Optional - for when auth is added in future iterations
 
   // Payload
   name?: string;                     // Optional - mission name given by learner
@@ -79,16 +82,11 @@ export interface Mission {
   executionResult?: ExecutionResult;
   executionMetadata?: ExecutionMetadata;
 
-  //Locking (offline-sync lease mechanisms)
-  lockOwner?: string | null;                 // Which rover is currently executing this mission (if any)
-  lockedAt?: string | null;                   // When the mission was locked for execution (if any)
-  leaseExpiresAt?: string | null;             // When the lock lease expires (if any)
-
-  //Review
+  // Review
   needsReview?: boolean;              // Whether the mission needs review (e.g., for failed missions)
   reviewReason?: string | null;              // Optional - reason for review (e.g., "syntax error", "failed test case")
 
-  //Confilct Resolution
+  // Conflict resolution
   statusUpdatedAt?: string | null;          // When the status was last updated (for conflict resolution)
 
   // Media artifacts
@@ -101,16 +99,184 @@ export interface Mission {
   completedAt?: string;              // When execution finished
 }
 
-/**
- * Type guard to check if a mission is in an active state
- */
-export function isActiveMission(mission: Mission): boolean {
-  return mission.status === 'queued' || mission.status === 'processing';
+/** What a new mission brings with it. Its status and submission time are the entity's to set. */
+export type NewMission = Omit<MissionRecord, 'id' | 'status' | 'submittedAt'>;
+
+export type ResolveOutcome = 'completed' | 'requeue';
+
+export interface StatusChange {
+  /** The new run status, or null to leave it alone (attaching a video, a note). */
+  status: MissionStatus | null;
+  clearsReview: boolean;
 }
 
-/**
- * Type guard to check if a mission is terminal (no further state changes)
- */
-export function isTerminalMission(mission: Mission): boolean {
-  return mission.status === 'completed' || mission.status === 'failed' || mission.status === 'not_completed' || mission.status === 'cancelled';
+export type Decision =
+  | { ok: true; change: StatusChange }
+  | { ok: false; error: string };
+
+const UNCHANGED: Decision = { ok: true, change: { status: null, clearsReview: false } };
+
+export class Mission {
+  private constructor(
+    private readonly record: Readonly<MissionRecord>,
+    private readonly attempts: readonly MissionRun[],
+  ) {}
+
+  /** A mission as stored, with whatever runs have reached Firestore. */
+  static restore(record: MissionRecord, runs: readonly MissionRun[] = []): Mission {
+    return new Mission({ ...record }, [...runs]);
+  }
+
+  /** Every mission starts queued, stamped with when it arrived. */
+  static submit(fields: NewMission, now: Date): Omit<MissionRecord, 'id'> {
+    return { ...fields, status: 'queued', submittedAt: now.toISOString() };
+  }
+
+  /**
+   * A finished run with no video yet: the operator's outstanding work. A
+   * cancelled mission never ran, so it has no recording to look for.
+   *
+   * Static, and takes only the two fields it reads, so the operator queue's
+   * narrower record answers it too.
+   */
+  static stillNeedsVideo(mission: { status: MissionStatus; youtubeUrl?: string | null }): boolean {
+    return MissionState.of(mission.status).canAttachVideo() && !mission.youtubeUrl;
+  }
+
+  get id(): string {
+    return this.record.id;
+  }
+
+  get status(): MissionStatus {
+    return this.record.status;
+  }
+
+  get state(): MissionState {
+    return MissionState.of(this.record.status);
+  }
+
+  get isDeleted(): boolean {
+    return this.record.deleted === true;
+  }
+
+  get runs(): readonly MissionRun[] {
+    return this.attempts;
+  }
+
+  run(runId: string): MissionRun | null {
+    return this.attempts.find((r) => r.runId === runId) ?? null;
+  }
+
+  /**
+   * The latest run at this yard, not the first match: a yard can attempt a
+   * mission twice, and "mark complete" means the attempt in front of the
+   * operator.
+   */
+  latestRunAt(yardId: string): MissionRun | null {
+    return (
+      this.attempts
+        .filter((r) => r.yardId === yardId)
+        .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null
+    );
+  }
+
+  /**
+   * The status an operator at this yard is acting on. The run wins, because it
+   * is the record of an actual attempt. With no run, the mission's own status:
+   * a yard with no network never flushes its runs, and the desk still has to
+   * be able to settle a mission somebody ran there by hand.
+   */
+  statusAt(yardId: string): MissionStatus {
+    return this.latestRunAt(yardId)?.status ?? this.record.status;
+  }
+
+  needsReviewAt(yardId: string): boolean {
+    return this.latestRunAt(yardId)?.needsReview ?? this.record.needsReview ?? false;
+  }
+
+  /** The operator checked, and the run finished. Completing also settles a review. */
+  complete(yardId: string): Decision {
+    if (!this.stateAt(yardId).canComplete()) {
+      return this.refuse(`This mission is already ${this.statusAt(yardId)}, so there is nothing to complete.`);
+    }
+    return { ok: true, change: { status: 'completed', clearsReview: true } };
+  }
+
+  /**
+   * Cancel rather than delete: the record of a child's work survives, and
+   * reads as Pending to them rather than as a rejection. Allowed while running,
+   * because a run stuck in processing after the yard lost signal is what most
+   * needs clearing from a desk. It records an outcome; it does not reach the
+   * rover.
+   */
+  cancel(yardId: string): Decision {
+    if (!this.stateAt(yardId).canCancel()) {
+      return this.refuse(`This mission is already ${this.statusAt(yardId)}, so there is nothing to cancel.`);
+    }
+    return { ok: true, change: { status: 'cancelled', clearsReview: true } };
+  }
+
+  /**
+   * A second attempt, logged by the operator who watched it finish. Explicit
+   * rather than inferred from a second upload, because a video is evidence of
+   * an upload, not of a run.
+   */
+  logAnotherRun(yardId: string): Decision {
+    if (!this.stateAt(yardId).canLogAnotherRun()) {
+      return this.refuse(`This mission is still ${this.statusAt(yardId)}. Settle the current run before logging another.`);
+    }
+    return { ok: true, change: { status: 'completed', clearsReview: true } };
+  }
+
+  /** Completed only: a video on an unfinished run is one the learner watches while it reads Pending. */
+  attachVideo(yardId: string): Decision {
+    if (!this.stateAt(yardId).canAttachVideo()) {
+      return this.refuse('Mark the mission complete before attaching its video.');
+    }
+    return UNCHANGED;
+  }
+
+  /** For a recording taken down, which leaves the run with none rather than a different one. */
+  removeVideo(yardId: string): Decision {
+    if (!this.stateAt(yardId).canRemoveVideo()) {
+      return this.refuse('This run has not finished, so it has no video to remove.');
+    }
+    return UNCHANGED;
+  }
+
+  /**
+   * Only on a run that happened. A run that did not finish still takes one: it
+   * is the mission a child most needs a sentence about, and their status still
+   * reads Pending, never Failed.
+   */
+  leaveFeedback(yardId: string): Decision {
+    if (!this.stateAt(yardId).canTakeFeedback()) {
+      return this.refuse('Wait until the mission has run before leaving feedback on it.');
+    }
+    return UNCHANGED;
+  }
+
+  /** Settle a mission the satellite flagged for review. Requeue never dispatches: a person sends it again. */
+  resolve(yardId: string, outcome: ResolveOutcome): Decision {
+    if (!this.needsReviewAt(yardId)) {
+      return this.refuse('This mission is not waiting on a review.');
+    }
+    return {
+      ok: true,
+      change: { status: outcome === 'completed' ? 'completed' : 'queued', clearsReview: true },
+    };
+  }
+
+  /** A copy of the stored data, for a caller that hands it on, such as the learner's email. */
+  toRecord(): MissionRecord {
+    return { ...this.record };
+  }
+
+  private stateAt(yardId: string): MissionState {
+    return MissionState.of(this.statusAt(yardId));
+  }
+
+  private refuse(error: string): Decision {
+    return { ok: false, error };
+  }
 }

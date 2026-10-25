@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 export default function MissionPage() {
   return (
     // Pinned to the viewport at every size. On a phone this used to grow and
-    // scroll, which put the simulator a screen away from the blocks (AB#455).
+    // scroll, which put the simulator a screen away from the blocks.
     // data-surface tells globals.css there is no tab bar to keep clear of
     // here; the navbar drops it on this page (lib/appSurfaces.ts).
     <main data-surface="build" className="relative h-page overflow-hidden px-3 py-1.5">

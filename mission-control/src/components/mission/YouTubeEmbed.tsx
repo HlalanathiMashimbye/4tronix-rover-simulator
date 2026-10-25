@@ -21,12 +21,13 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Play, ExternalLink } from 'lucide-react';
+import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 
 interface YouTubeEmbedProps {
   youtubeId: string;
   title: string;
   showFallbackLink?: boolean;
-  /** Start muted, and follow the learner's choice while playing (AB#409). */
+  /** Start muted, and follow the learner's choice while playing. */
   muted?: boolean;
   /**
    * Fires when the facade hands over to the real iframe.
@@ -63,7 +64,8 @@ export function YouTubeEmbed({
   // start every time someone reached for the speaker button.
   const [startedMuted, setStartedMuted] = useState(false);
   const frameRef = useRef<HTMLIFrameElement>(null);
-  const watchUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
+  const video = YouTubeVideoId.of(youtubeId);
+  const watchUrl = video.watchUrl();
 
   // Muting happens TWICE, on purpose, and neither way is redundant.
   //
@@ -111,7 +113,7 @@ export function YouTubeEmbed({
           >
             {/* eslint-disable-next-line @next/next/no-img-element -- fixed img.youtube.com host; a plain img keeps the facade dependency-free */}
             <img
-              src={`https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`}
+              src={video.thumbnailUrl('hq')}
               alt=""
               className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             />

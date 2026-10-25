@@ -67,10 +67,20 @@ variable "tfstate_bucket" {
 }
 
 variable "environments" {
-  description = "Cloud Run environments. min_instances = 1 during event days kills cold starts."
+  description = <<-EOT
+    Cloud Run environments. min_instances = 1 during event days kills cold starts.
+
+    firestore_database is the database the environment reads and writes, in
+    this project. "(default)" is the database that already exists and is not
+    created here. Any other name is created by this configuration, with
+    point-in-time recovery and delete protection, and added to the weekly
+    export. Two environments must not name the same one unless they are meant
+    to share their data.
+  EOT
   type = map(object({
-    min_instances = number
-    max_instances = number
+    min_instances      = number
+    max_instances      = number
+    firestore_database = optional(string, "(default)")
   }))
   default = {
     staging = { min_instances = 0, max_instances = 2 }
@@ -106,7 +116,7 @@ variable "cron_region" {
 }
 
 variable "cron_environment" {
-  description = "Which environment runs the YouTube auto-link schedule, or \"\" for none. Only one may: the environments share a Firestore."
+  description = "Which environment runs the YouTube auto-link schedule, or \"\" for none. One at most: there is one YouTube channel, and a second schedule would only attach the yard's videos to another environment's test missions."
   type        = string
   default     = ""
 }

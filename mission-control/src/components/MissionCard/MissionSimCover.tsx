@@ -37,7 +37,7 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
  */
 interface MissionSimCoverProps {
   trajectory: TrajectoryPoint[];
-  /** The yard the mission was sent to (AB#468): its layout and its floor. */
+  /** The yard the mission was sent to: its layout and its floor. */
   yardId?: string;
 }
 

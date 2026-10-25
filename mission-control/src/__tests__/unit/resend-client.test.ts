@@ -10,6 +10,7 @@
  */
 
 const sendMock = jest.fn();
+const getMock = jest.fn();
 
 // The store, not Google. Without this the sender's config lookup falls
 // through to a real Secret Manager call the moment a test unsets an env var,
@@ -27,7 +28,7 @@ jest.mock('@/infrastructure/config/runtimeSettingsStore', () => ({
 
 jest.mock('resend', () => ({
   Resend: jest.fn().mockImplementation(() => ({
-    emails: { send: sendMock },
+    emails: { send: sendMock, get: getMock },
   })),
 }));
 
@@ -43,6 +44,8 @@ async function loadSender() {
 beforeEach(() => {
   sendMock.mockReset();
   sendMock.mockResolvedValue({ data: { id: 'email-1' }, error: null });
+  getMock.mockReset();
+  getMock.mockImplementation(async (id: string) => ({ data: { id, message_id: `<${id}@resend.example>` }, error: null }));
   process.env = {
     ...ORIGINAL_ENV,
     RESEND_API_KEY: 're_test_key',
@@ -111,5 +114,65 @@ describe('ResendEmailSender', () => {
     await expect(
       new ResendEmailSender().send('learner@school.edu', 'Mission Queued', '<p>hi</p>')
     ).rejects.toThrow('RESEND_API_KEY, RESEND_FROM_EMAIL');
+  });
+
+  it("returns Resend's id for the email, so a reply can find it later", async () => {
+    const ResendEmailSender = await loadSender();
+
+    await expect(new ResendEmailSender().send('admin@rover.com', 'Request', '<p>hi</p>')).resolves.toBe('email-1');
+  });
+
+  it('sends a reply in the thread of the emails it answers', async () => {
+    const ResendEmailSender = await loadSender();
+
+    await new ResendEmailSender().send('admin@rover.com', 'thandi@school.org is asking for operator access', '<p>done</p>', {
+      answering: ['first-ask', 'second-ask'],
+    });
+
+    const payload = sendMock.mock.calls[0][0];
+    // Clients match a reply to its original by subject with "Re:" removed, and
+    // by these two headers, which have to carry the Message-ID, not Resend's id.
+    expect(payload.subject).toBe('Re: thandi@school.org is asking for operator access');
+    expect(payload.headers).toEqual({
+      'In-Reply-To': '<second-ask@resend.example>',
+      References: '<first-ask@resend.example> <second-ask@resend.example>',
+    });
+  });
+
+  it('sends a plain email with no thread headers when it answers nothing', async () => {
+    const ResendEmailSender = await loadSender();
+
+    await new ResendEmailSender().send('admin@rover.com', 'Request', '<p>hi</p>');
+
+    expect(sendMock.mock.calls[0][0].headers).toBeUndefined();
+    expect(getMock).not.toHaveBeenCalled();
+  });
+
+  it('still sends the reply when an email it answers cannot be found', async () => {
+    getMock.mockImplementation(async (id: string) =>
+      id === 'gone'
+        ? { data: null, error: { message: 'Email not found' } }
+        : { data: { id, message_id: `<${id}@resend.example>` }, error: null },
+    );
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const ResendEmailSender = await loadSender();
+
+    await new ResendEmailSender().send('admin@rover.com', 'Request', '<p>done</p>', { answering: ['gone', 'kept'] });
+
+    const payload = sendMock.mock.calls[0][0];
+    expect(payload.subject).toBe('Re: Request');
+    expect(payload.headers).toEqual({ 'In-Reply-To': '<kept@resend.example>', References: '<kept@resend.example>' });
+    warnSpy.mockRestore();
+  });
+
+  it('puts "Re:" ahead of the sandbox prefix, where the answered subject had it', async () => {
+    process.env.RESEND_SANDBOX_RECIPIENT = 'konke@example.com';
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const ResendEmailSender = await loadSender();
+
+    await new ResendEmailSender().send('admin@rover.com', 'Request', '<p>done</p>', { answering: ['e1'] });
+
+    expect(sendMock.mock.calls[0][0].subject).toBe('Re: [to: admin@rover.com] Request');
+    warnSpy.mockRestore();
   });
 });

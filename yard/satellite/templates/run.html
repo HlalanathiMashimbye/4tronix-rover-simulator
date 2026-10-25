@@ -173,7 +173,7 @@
             font-size: var(--fs-2xs); font-weight: 600; line-height: 1.45;
         }
         .warning-box.show { display: block; }
-        /* The start mark (AB#465): where the rover stands is the one thing the
+        /* The start mark: where the rover stands is the one thing the
            checks cannot see, so the reminder sits on the Send button's own
            row of the page, every time. */
         .start-mark {
@@ -633,21 +633,24 @@
         </div>
     </main>
 
-    <!-- The end of a run. Outside .run-desk so the console's filled primary
-         button applies: on the desk only Send is filled, and here Download
-         is the one thing left to do. -->
+    <!-- The end of a run, and whether anything is left to do. Outside
+         .run-desk so the console's filled primary button applies: on the desk
+         only Send is filled. Here it is Download when the video is the
+         operator's to upload, and OK when it uploads by itself. -->
     <dialog class="modal announce" id="doneNotice" aria-labelledby="doneTitle" aria-describedby="doneSub">
         <div class="announce-body">
             <div class="announce-mark" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
             </div>
             <h2 id="doneTitle">Mission complete</h2>
-            <p id="doneSub"><strong id="doneName">The rover</strong> <span id="doneWhat">has finished, and the video is saved on this satellite.</span></p>
+            <p id="doneSub"><strong id="doneName">The rover</strong> <span id="doneWhat" aria-live="polite">has finished, and the video is saved on this satellite.</span></p>
             <span class="announce-detail" id="doneFile"></span>
+            <a class="badge announce-upload" id="doneUpload" hidden></a>
             <button class="btn primary announce-action" id="doneDownload" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download the video
             </button>
+            <button class="btn primary announce-action" id="doneOk" type="button" hidden>OK</button>
             <button class="announce-dismiss" id="doneClose" type="button">Close</button>
         </div>
     </dialog>
@@ -662,8 +665,12 @@
     // say the recording has stopped.
     let recordingFile = null;
     let recordingSince = 0;
-    let automaticRunRequested = false;
-    let automaticRunStarted = false;
+    // A mission handed over from Mission Control, filled in and not sent yet.
+    // `handoffChecking` while the satellite checks its signature, and
+    // `handoffVerified` once it has: then Send presses itself.
+    let handoffWaiting = false;
+    let handoffChecking = false;
+    let handoffVerified = false;
     let runListenerReady = false;
 
     function flash(el, text, tone) {
@@ -801,6 +808,13 @@
     // Automatic Route hands off through the application URL, never through the
     // clipboard. The yard identity is checked again here so a console opened
     // for the wrong yard cannot run a mission against this rover.
+    //
+    // The operator already pressed Send to Rover in Mission Control, so a
+    // handoff Mission Control signed is sent from here by itself. Anything
+    // else in the address waits for Send: anything can open a link, and a page
+    // that ran whatever its address carried would let any site a yard browser
+    // visited move the rover. The same-origin check on /api/queue/add cannot
+    // help there, because the POST comes from this page.
     const handoff = new URLSearchParams(window.location.search);
     if (handoff.get('handoff') === 'automatic') {
         if (handoff.get('yardId') !== YARD_ID) {
@@ -810,7 +824,37 @@
             setMetaValue(missionName, handoff.get('missionName') || '');
             code.value = handoff.get('code') || '';
             updateRunIdentity();
-            automaticRunRequested = true;
+            handoffWaiting = true;
+            noteHandoff('Mission loaded from Mission Control. Press Send to rover to run it.');
+            if (handoff.get('signature')) verifyHandoff(handoff);
+        }
+    }
+
+    function noteHandoff(text) {
+        $('runMsg').dataset.tone = 'ok';
+        $('runMsg').textContent = text;
+    }
+
+    async function verifyHandoff(params) {
+        handoffChecking = true;
+        try {
+            const resp = await fetch('/api/handoff/verify', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    missionId: params.get('missionId') || '', code: params.get('code') || '',
+                    expires: params.get('expires'), signature: params.get('signature'),
+                }),
+            });
+            const d = await resp.json();
+            if (resp.ok && d.verified) {
+                handoffVerified = true;
+                noteHandoff('Mission from Mission Control. It starts as soon as the camera and rover are ready.');
+            }
+        } catch (e) {
+            // Unchecked is unverified: the operator presses Send.
+        } finally {
+            handoffChecking = false;
+            continueHandoff();
         }
     }
 
@@ -981,7 +1025,7 @@
                 announceDone(file);
             }
             paintGate();
-            maybeAutoRun();
+            continueHandoff();
         });
         YardStatus.onError(() => {
             roverOk = false;
@@ -1137,16 +1181,17 @@
         }
     });
 
-    // The listener must exist before a synchronous status subscriber can
-    // trigger an Automatic Route handoff.
-    runListenerReady = true;
-    maybeAutoRun();
-
-    function maybeAutoRun() {
-        if (!runListenerReady || !automaticRunRequested || automaticRunStarted || !cameraPrimed || !roverOk) return;
-        automaticRunStarted = true;
-        $('runBtn').click();
+    // Once, when the yard is ready and the signature has been checked: a
+    // verified handoff sends, anything else puts the focus on Send.
+    function continueHandoff() {
+        if (!handoffWaiting || handoffChecking || !runListenerReady || $('runBtn').disabled) return;
+        handoffWaiting = false;
+        if (handoffVerified) $('runBtn').click();
+        else $('runBtn').focus();
     }
+    // The click handler exists from here, so a status that arrives first waits.
+    runListenerReady = true;
+    continueHandoff();
 
     $('stopBtn').addEventListener('click', async () => {
         try {
@@ -1236,29 +1281,127 @@
     const pageTitle = document.title;
     let doneFile = null;
 
+    // ---- And whose move it is -----------------------------------------
+    // Its one button was Download whether or not the satellite was about to
+    // upload the video by itself, so the operator could not tell whether the
+    // next step was theirs. Now it says. When the video uploads by itself
+    // there is nothing to do and the button is OK; when automatic upload is
+    // off, or this video could not go, it is Download and YouTube Studio, as
+    // it always was. It follows the upload while it is open, because a video
+    // that is waiting can still end up needing a hand.
+    //
+    // The watcher stops the recording first and leaves the video's upload
+    // note after, so the first look can come before the note exists. A
+    // satellite that uploads gets NOTE_GRACE_MS to write one; a video with no
+    // note by then is not going by itself.
+    const NOTE_GRACE_MS = 20000;
+    const FOLLOW_MS = 2000;
+    // The pills are Settings' words for the same states.
+    const DONE_SAYS = {
+        none: { what: 'has finished. No video of it was found on this satellite.' },
+        off: { yours: true, what: 'has finished. Automatic upload is off, so download the video and upload it in YouTube Studio.' },
+        manual: { yours: true, pill: ['warn', 'Upload by hand'],
+                  what: 'has finished, but its video could not upload by itself. Download it and upload it in YouTube Studio.' },
+        waiting: { pill: ['info', 'Waiting to upload'],
+                   what: 'has finished. Its video uploads to YouTube by itself, so there is nothing for you to do.' },
+        sending: { pill: ['info', 'Uploading'],
+                   what: 'has finished. Its video uploads to YouTube by itself, so there is nothing for you to do.' },
+        offline: { pill: ['warn', 'Waiting for internet'],
+                   what: 'has finished. Its video uploads to YouTube by itself once this satellite has internet, so there is nothing for you to do.' },
+        uploaded: { pill: ['ok', 'On YouTube'],
+                    what: 'has finished, and its video is on YouTube and on the mission. Nothing for you to do.' },
+        // Mission Control uploads it but leaves it off the run: attaching
+        // would close the run and tell the learner it is complete.
+        unlinked: { pill: ['warn', 'On YouTube'],
+                    what: 'stopped with an error. Its video is on YouTube but not on the mission: decide on Mission Control whether the run counts.' },
+    };
+    const SETTLED = ['none', 'off', 'manual', 'uploaded', 'unlinked'];
+    let doneEntry = null, doneSince = 0, doneFollow = null;
+
+    function uploadPlan(entry, uploads, waited) {
+        if (!entry) return { kind: 'none' };
+        const u = entry.upload;
+        if (u && u.state === 'uploaded') return { kind: u.outcome === 'error' ? 'unlinked' : 'uploaded', url: u.url };
+        if (u && u.state === 'manual') return { kind: 'manual' };
+        // Waiting, or not noted yet: whether it goes by itself is the satellite's to say.
+        if (!uploads || !uploads.configured) return { kind: 'off' };
+        if (u && u.state === 'sending') return { kind: 'sending', percent: u.percent };
+        if (!u && waited >= NOTE_GRACE_MS) return { kind: 'manual' };
+        return { kind: uploads.online === false ? 'offline' : 'waiting' };
+    }
+
+    function paintDone() {
+        const snapshot = window.YardStatus ? YardStatus.latest() : null;
+        const plan = uploadPlan(doneEntry, snapshot && snapshot.uploads, Date.now() - doneSince);
+        const says = DONE_SAYS[plan.kind];
+        doneNotice.dataset.upload = plan.kind;
+        $('doneWhat').textContent = says.what;
+        const pill = $('doneUpload');
+        pill.hidden = !says.pill;
+        if (says.pill) {
+            pill.dataset.tone = says.pill[0];
+            pill.textContent = plan.kind === 'sending' && plan.percent != null
+                ? `Uploading ${Number(plan.percent)}%`
+                : says.pill[1] + (plan.url ? ' \u2197' : '');
+            if (plan.url) {
+                pill.href = plan.url; pill.target = '_blank'; pill.rel = 'noopener noreferrer';
+            } else {
+                pill.removeAttribute('href');
+            }
+        }
+        // A button that goes while it has the focus would take it away from
+        // the dialog, so the focus moves to the one that replaces it.
+        const focused = document.activeElement;
+        $('doneDownload').hidden = !says.yours;
+        $('doneClose').hidden = !says.yours;
+        $('doneOk').hidden = !!says.yours;
+        const primary = says.yours ? $('doneDownload') : $('doneOk');
+        if (focused && focused.hidden && doneNotice.open) primary.focus();
+        return { plan, primary };
+    }
+
+    async function followUpload() {
+        doneFollow = null;
+        if (!doneNotice.open || !doneFile) return;
+        try {
+            const list = (await (await fetch('/api/recordings')).json()).recordings || [];
+            doneEntry = list.find((r) => r.name === doneFile) || doneEntry;
+        } catch (e) { /* the next look may do better */ }
+        if (!doneNotice.open) return;
+        const { plan } = paintDone();
+        if (!SETTLED.includes(plan.kind)) doneFollow = setTimeout(followUpload, FOLLOW_MS);
+    }
+
     async function announceDone(file) {
         const list = await loadRecordings(file);
         // The satellite names the file when the recording starts. If it did
         // not, the newest is this run's: it is the last thing written.
         const entry = list.find((r) => r.name === file) || (file ? null : list[0]) || null;
         doneFile = entry ? entry.name : file;
+        doneEntry = entry;
+        doneSince = Date.now();
         $('doneName').textContent = metaValue(missionName) || 'The rover';
-        $('doneWhat').textContent = doneFile
-            ? 'has finished, and the video is saved on this satellite.'
-            : 'has finished. No video of it was found on this satellite.';
         $('doneFile').textContent = entry ? `${entry.name} · ${humanBytes(entry.bytes)}` : (doneFile || '');
         $('doneFile').hidden = !doneFile;
         $('doneDownload').disabled = !doneFile;
+        const { plan, primary } = paintDone();
         // For a station left in a background tab: the tab says so too.
         document.title = 'Mission complete · ' + pageTitle;
         if (!doneNotice.open) doneNotice.showModal();
-        (doneFile ? $('doneDownload') : $('doneClose')).focus();
+        primary.focus();
+        clearTimeout(doneFollow);
+        if (!SETTLED.includes(plan.kind)) doneFollow = setTimeout(followUpload, FOLLOW_MS);
     }
 
     function closeDone() { if (doneNotice.open) doneNotice.close(); }
     // Escape closes a dialog by itself; this is the one place either way ends.
-    doneNotice.addEventListener('close', () => { document.title = pageTitle; });
+    doneNotice.addEventListener('close', () => {
+        document.title = pageTitle;
+        clearTimeout(doneFollow);
+        doneFollow = null;
+    });
     $('doneClose').addEventListener('click', closeDone);
+    $('doneOk').addEventListener('click', closeDone);
     // The dialog has no padding of its own, so a click on it is a click on
     // the backdrop.
     doneNotice.addEventListener('click', (e) => { if (e.target === doneNotice) closeDone(); });

@@ -1,5 +1,5 @@
 /**
- * Whether a simulated run climbs rising ground, how steep, and when (AB#468).
+ * Whether a simulated run climbs rising ground, how steep, and when.
  *
  * The one answer to that question, beside crashCheck's: the learner's
  * pre-flight checks, the operator's preview and the simulator's own words all

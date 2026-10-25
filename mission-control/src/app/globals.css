@@ -1055,7 +1055,7 @@
    stacked panel, and let the page scroll. That made blocks and the simulator
    two separate screens: you could never watch the rover and the program
    together, and a drag on the block canvas fought the page's own scroll.
-   It now fits one screen like every other size (AB#455), the build panel
+   It now fits one screen like every other size, the build panel
    taking the larger share because it is where the work happens.
 
    The mission VIEW (the fixed variant) fits one screen too, player above
@@ -1465,7 +1465,7 @@
 }
 
 /* Create Mission from 768px: three cards in one grid (MissionWorkspace). The
-   simulator's column is sized from the yard's real shape (AB#464), because
+   simulator's column is sized from the yard's real shape, because
    the yard stretches to fill whatever it is given and a column sized any
    other way reshapes the rocks. Its card is only a header over the yard:
    name, checks and Send are the footer card, placed below.
@@ -1582,7 +1582,7 @@
 }
 
 /*
- * What the simulator is running (AB#450), on the block canvas.
+ * What the simulator is running, on the block canvas.
  *
  * Built to be unmissable, after a green outline proved easy to overlook on a
  * busy program:
@@ -1714,7 +1714,7 @@
 }
 
 /*
- * Create Mission on a phone (PhoneWorkspace.tsx, AB#455).
+ * Create Mission on a phone (PhoneWorkspace.tsx).
  *
  * Editing and running: the simulator has a third and the editor two, so a
  * run plays with its program in view and the running block lit up in it.
@@ -1922,7 +1922,7 @@
 
 /*
  * The category strip along the bottom of the block editor on a phone
- * (blocklyInjectOptions.ts, AB#455). One row of chips that scrolls sideways if the
+ * (blocklyInjectOptions.ts). One row of chips that scrolls sideways if the
  * categories ever outgrow the width, rather than wrapping into a second row
  * of canvas lost.
  */

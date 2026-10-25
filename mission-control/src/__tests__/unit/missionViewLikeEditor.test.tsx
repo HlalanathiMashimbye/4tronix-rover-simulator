@@ -11,7 +11,7 @@
  * pinned here.
  */
 
-import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
+import { render, screen, waitFor, renderHook } from '@testing-library/react';
 
 let pathname = '/missions/abc123';
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));
@@ -44,7 +44,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { SearchProvider } from '@/contexts/SearchContext';
 import { CodeLines } from '@/components/mission/CodeLines';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
 describe('the mission page surface', () => {
   it('is one mission, not the feed of them', () => {
@@ -89,7 +89,7 @@ describe('simulating a stored mission', () => {
   });
 
   const mission = (blocklyState?: string) =>
-    ({ id: 'm', name: 'M', code: 'rover.forward(60)\ntime.sleep(1)\nrover.stop()', blocklyState }) as unknown as Mission;
+    ({ id: 'm', name: 'M', code: 'rover.forward(60)\ntime.sleep(1)\nrover.stop()', blocklyState }) as unknown as MissionRecord;
 
   it('knows the Python lines for a Python mission', () => {
     const { result } = renderHook(() => useMissionTrajectory(mission()));

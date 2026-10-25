@@ -42,9 +42,16 @@ The loop, end to end:
    pass.
 3. Send navigates the browser to the satellite's run station (`/run/`) with
    the mission in the URL (`handoff=automatic`, id, name and code). The
-   station starts recording, waits a second so the first move is on camera,
-   then posts the code to the rover's queue with the mission id in its
-   params. **Copy** remains as the fallback: the mission's Python with its
+   link also carries a signature from Mission Control's server
+   (`api/operator/missions/[id]/handoff`, `MissionHandoffService`): an
+   HMAC over the yard, mission, expiry and the stored code, keyed with the
+   upload secret the satellite already holds. The satellite checks it
+   (`mission_handoff.py`, once per signature, five minutes), and a verified
+   handoff sends by itself once the camera and rover are ready, so Send to
+   Rover is the operator's only press. Anything unsigned or rejected fills the
+   station and waits for Send: a link alone never moves the rover. Sending
+   starts recording, waits a second so the first move is on camera, then posts
+   the code to the rover's queue with the mission id in its params. **Copy** remains as the fallback: the mission's Python with its
    name and id in `# Mission:` and `# MissionID:` header comments, pasted
    into the station by hand.
 4. The rover runs it and records the outcome in its history, mission id
@@ -106,11 +113,24 @@ Controller, and `core/domain` is the Model.
 
 Paths in this section are relative to `mission-control/src`.
 
-- **`core/domain/entities`** - `Mission`, `MissionRun`, `Learner`,
-  `OperatorAccount`, `Yard`. Interfaces plus pure functions rather than
-  classes with behaviour. `missionBookkeeping.ts` in `core/domain/services` is
-  the pattern worth copying: pure decision functions returning a typed result,
-  fully testable with no Firestore anywhere near them.
+- **`core/domain/entities`** - `Mission` is the entity the server acts
+  through: it holds a mission's stored record and its runs privately, and its
+  methods (`complete`, `cancel`, `logAnotherRun`, `attachVideo`,
+  `removeVideo`, `leaveFeedback`, `resolve`) are the only place an operator's
+  request becomes a status change. `Mission.submit` is the only place a new
+  mission gets its first status, and `architecture.test.ts` fails on a status
+  written anywhere else in core or persistence. `MissionRecord`, `MissionRun`,
+  `Learner`, `OperatorAccount` and `Yard` are plain records, because they
+  cross Firestore and the server-to-browser boundary and neither carries a
+  class. Two value objects go with them. `MissionState` answers what a status
+  means (open or settled, what a learner sees, what an operator may do next),
+  and the operator console and the server's bookkeeping both ask it, so the
+  console never offers an action the server refuses. `YouTubeVideoId` is the
+  one reading of a pasted link and the one builder of watch and thumbnail
+  addresses. A mission's status changes only through `IMissionBookkeeping`:
+  there is no free-form update that could set any field to anything, and
+  what it applies is a decision the `Mission` entity made, fully testable with
+  no Firestore anywhere near it.
 - **`core/domain/safety`** - the allowlist, the code checker, the duration
   calculator, the speed and time ceilings. These were under `infrastructure`
   and `lib`. They touch no database, network or framework: they are the rules
@@ -147,13 +167,20 @@ passed throughout the period when the arrows were backwards. The iteration 2
 marksheet scored separation of concerns 2.2/4 on a codebase with a completely
 green build.
 
-### Two Firestore SDKs, one repository class
+### Two Firestore SDKs, one set of reading rules
 
-`FirestoreMissionRepository` accepts either the Admin SDK or the browser SDK.
-That is deliberate, so the same query logic serves a privileged server write
-and an unprivileged browser read, and it is exactly why choosing between them
-happens in one place. Realtime subscriptions (`onSnapshot`) run browser-side
-against Firestore rules; anything privileged goes through an API route.
+`FirestoreMissionReader` holds the rules of reading a mission (deleted reads
+as absent, pages by cursor, one extra document to learn whether there is a
+next page) and asks a subclass for four fetches.
+`AdminFirestoreMissionRepository` supplies them on the Admin SDK and adds the
+writes; `BrowserFirestoreMissionReader` supplies them on the browser SDK, where
+Firestore rules apply, and adds only the email stamp those rules allow. It used
+to be one class holding either SDK and asking which in every method, so each
+read was written twice and the browser's half had no test.
+`missionReaderContract.test.ts` now runs both against one dataset. Realtime
+subscriptions (`onSnapshot`) run browser-side against Firestore rules and reach
+components through `container.browser.ts`; anything privileged goes through
+an API route.
 
 ### The operator console
 
@@ -181,8 +208,8 @@ the sign-in form without a session, the console with one.
   the clipboard as the fallback; `test_mission_import.py` keeps the yard's
   parsing of that clipboard payload in agreement with what this emits.
 - **Desk actions only.** Complete, cancel, log another run, attach or remove a
-  video, resolve a review, and feedback, decided in `missionBookkeeping.ts`
-  and applied through the Admin SDK in `api/operator/missions/[id]/route.ts`.
+  video, resolve a review, and feedback, decided by the `Mission` entity
+  (`core/domain/entities/Mission.ts`) and applied through the Admin SDK in `api/operator/missions/[id]/route.ts`.
   Nothing in that route can move a rover, and a test asserts it. Deleting a
   mission is admin-only, as are `/operator/team` (who may operate) and
   `/operator/settings` (email, YouTube, the auto-link interval, the yards).
@@ -218,10 +245,12 @@ program and managing a queue change for entirely different reasons.
 
 ### The satellite
 
-The satellite is the yard's control panel, and it is deliberately small. It
-holds no cloud credential, talks to nothing beyond the rover and the camera on
-the LAN, and asks nobody to sign in: an auth gate that only works when the
-venue wifi does protects nothing on a box whose job is to run without it.
+The satellite is the yard's control panel, and it is deliberately small. A
+run talks to nothing beyond the rover and the camera on the LAN, and nobody
+signs in: an auth gate that only works when the venue wifi does protects
+nothing on a box whose job is to run without it. The one credential it can
+hold is the optional upload secret, which sends a finished recording outbound
+to Mission Control after the run, never during it.
 
 | Path | For |
 |---|---|
@@ -307,8 +336,8 @@ rather than by surprise:
 1. `ROADMAP.md` - the constraints. Nothing below makes sense without them.
 2. `yard/rover/service.py` - the smallest complete example of the layering
    this project is aiming at.
-3. `mission-control/src/core/domain/services/missionBookkeeping.ts` - the
-   cleanest domain code in the repository, and the pattern to copy.
+3. `mission-control/src/core/domain/entities/Mission.ts` - the mission
+   entity and its lifecycle, and the pattern to copy.
 4. `yard/satellite/mission_watcher.py` - the yard's one background thread:
    how a run's end closes its recording, and why reading an outcome the rover
    reported is allowed where dispatching is not.

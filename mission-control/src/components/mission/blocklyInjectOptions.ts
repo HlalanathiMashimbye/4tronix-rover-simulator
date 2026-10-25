@@ -5,7 +5,7 @@ import { ROVER_MAX_INSTANCES, ROVER_TOOLBOX } from '@/lib/roverBlockly';
  *
  * A function rather than an object literal inside BlocklyEditor so the two
  * can be compared in a test without loading Blockly: the phone options are
- * the whole of AB#455's Blockly fix, and nothing else would notice them
+ * the whole of the phone layout's Blockly fix, and nothing else would notice them
  * quietly reverting to the desktop ones.
  */
 export function blocklyInjectOptions(phone: boolean) {

@@ -1,5 +1,5 @@
 /**
- * What the editor tells a learner while they are still writing (AB#348).
+ * What the editor tells a learner while they are still writing.
  *
  * THE RULES ALREADY EXISTED. analyzeCodeForAllowlist has known since PR #78
  * that a speed of 6300 is out of range, and it reports the line. The editor

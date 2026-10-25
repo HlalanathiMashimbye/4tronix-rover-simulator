@@ -3,7 +3,7 @@
 import { RotateCcw } from 'lucide-react';
 
 /**
- * Drive mode's half of Create Mission's footer card (AB#464).
+ * Drive mode's half of Create Mission's footer card.
  *
  * The card is one fixed height in every mode, so nothing moves when a learner
  * switches between driving and building. Drive has nothing to send, so it

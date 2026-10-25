@@ -21,7 +21,7 @@ interface PythonCodeEditorProps {
   onCodeChange?: (code: string) => void;
   /** The Python the learner's blocks produce, if they have built any. */
   blocklyCode?: string;
-  /** What the simulator is running right now (AB#450). */
+  /** What the simulator is running right now. */
   highlight?: CommandSource | null;
   /** Hands this editor's Run up, for a Run button outside it. */
   onRegisterRun?: (run: (() => void) | null) => void;
@@ -123,7 +123,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     // own localStorage draft, while the Python the blocks generate went
     // straight to the submission and was never displayed. So a learner who
     // built something and then opened this tab to see what it looked like -
-    // the exact thing AB#413's comments are written for - saw a default
+    // the exact thing the generator's comments are written for - saw a default
     // snippet instead of their own program.
     //
     // Only when the draft is untouched. Somebody's hand-written code is theirs,
@@ -212,7 +212,7 @@ export function PythonCodeEditor({ onGenerateCommands, onCodeChange, blocklyCode
     );
   }, [validationErrors]);
 
-  // Light up the running lines (AB#450). Editor state rather than a selection,
+  // Light up the running lines. Editor state rather than a selection,
   // so it does not move the learner's cursor or fight their typing.
   const fromLine = highlight?.fromLine;
   const toLine = highlight?.toLine ?? fromLine;

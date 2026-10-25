@@ -44,7 +44,7 @@ const SEND_PROBLEM = "Your mission couldn't be sent. Please try again.";
 export function MissionWorkspace() {
   const { learnerEmail, openEmailPrompt, showEmailPrompt } = useLearner();
   const searchParams = useSearchParams();
-  // The yard this site's missions go to, and its layout (AB#468): what the
+  // The yard this site's missions go to, and its layout: what the
   // simulator drives in here, so a run is judged against the rocks and slopes
   // of the yard it will run in.
   const yardId = resolveYardId();
@@ -87,7 +87,7 @@ export function MissionWorkspace() {
   const registerRun = useCallback((run: (() => void) | null) => {
     runEditorRef.current = run;
   }, []);
-  /** The part of the program the simulator's playhead is on (AB#450). */
+  /** The part of the program the simulator's playhead is on. */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
   /**
    * Only while the editor still holds the program that was run. Once the
@@ -197,7 +197,7 @@ export function MissionWorkspace() {
    * the Python tab immediately overwrites it with that tab's own draft. So the
    * blocks' version has to be held separately or it is lost the moment the
    * learner goes to look at it - which is exactly what they do after building
-   * something (AB#413).
+   * something.
    */
   const [blocklyCode, setBlocklyCode] = useState('');
 
@@ -424,14 +424,14 @@ export function MissionWorkspace() {
 
   // Not "has a run happened" but "has THIS been watched" - see watchedCode.
   const hasRunSimulation = watchedCode !== null && watchedCode === currentCode;
-  // What that watched run hit (AB#466). Only once it has been watched: before
+  // What that watched run hit. Only once it has been watched: before
   // then the trajectory may be an older program's, and there is nothing yet
   // that the learner has seen happen.
   const crash = useMemo(
     () => (hasRunSimulation ? findCrash(trajectory) : undefined),
     [hasRunSimulation, trajectory],
   );
-  // And what ground it climbs (AB#468), on the same terms.
+  // And what ground it climbs, on the same terms.
   const slope = useMemo(
     () => (hasRunSimulation ? findSlope(trajectory) : undefined),
     [hasRunSimulation, trajectory],

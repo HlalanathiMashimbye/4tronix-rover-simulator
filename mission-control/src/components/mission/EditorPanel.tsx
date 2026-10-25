@@ -58,7 +58,7 @@ interface EditorPanelProps {
 
   onManualTrajectory: (trajectory: TrajectoryPoint[]) => void;
   manualResetVersion: number;
-  /** The yard Drive drives in (AB#468). */
+  /** The yard Drive drives in. */
   yard?: Yard;
   onGenerateCommands: (commands: SimulationCommand[]) => void;
   onCodeChange: (code: string) => void;

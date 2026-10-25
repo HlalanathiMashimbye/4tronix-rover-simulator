@@ -60,7 +60,7 @@ export function PostHogProvider({
     // Runs once per full page load. RootLayout (and this provider with it)
     // stays mounted across client-side navigation in the App Router, so an
     // empty dep array - not [environment] - is what keeps this a single init.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one init per page load, as above
   }, []);
 
   // No key configured (e.g. local dev without .env set up): render children

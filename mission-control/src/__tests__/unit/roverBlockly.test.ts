@@ -6,7 +6,7 @@
  * simulator. Uses lightweight mock blocks so no browser/Blockly is required.
  */
 
-import { mergeUplinkHats, workspaceToPython, workspaceToCommands } from '@/lib/roverBlockly';
+import { mergeUplinkHats, workspaceToPython, workspaceToCommands, type RoverWorkspace } from '@/lib/roverBlockly';
 
 type Fields = Record<string, string | number>;
 
@@ -218,7 +218,7 @@ describe('mergeUplinkHats', () => {
 
     const ws = mergeWorkspace(firstHat, secondHat);
 
-    expect(mergeUplinkHats(ws)).toBe(true);
+    expect(mergeUplinkHats(ws as unknown as RoverWorkspace)).toBe(true);
     expect(firstHat._body).toBe(firstBody);
     expect(firstBody._next).toBe(secondBody);
     expect(secondHat._disposed).toBe(true);
@@ -236,7 +236,7 @@ describe('mergeUplinkHats', () => {
 
     const ws = mergeWorkspace(firstHat, emptyHat);
 
-    expect(mergeUplinkHats(ws)).toBe(true);
+    expect(mergeUplinkHats(ws as unknown as RoverWorkspace)).toBe(true);
     expect(emptyHat._disposed).toBe(true);
     expect(firstHat._body).toBe(firstBody);
   });
@@ -245,7 +245,7 @@ describe('mergeUplinkHats', () => {
     const onlyHat = mergeBlock('rover_on_receive');
     const ws = mergeWorkspace(onlyHat);
 
-    expect(mergeUplinkHats(ws)).toBe(false);
+    expect(mergeUplinkHats(ws as unknown as RoverWorkspace)).toBe(false);
     expect(onlyHat._disposed).toBe(false);
   });
 });

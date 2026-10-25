@@ -155,3 +155,40 @@ export function inviteClaimant(token: InviteClaimToken): string | null {
 export function sortInvites(invites: OperatorInvite[]): OperatorInvite[] {
   return [...invites].sort((a, b) => (b.invitedAt ?? '').localeCompare(a.invitedAt ?? ''));
 }
+
+/**
+ * One email an access request went out as: the admin it went to, and the
+ * sender's id for it, which is what a reply needs to land in the same thread.
+ */
+export interface AccessRequestEmail {
+  to: string;
+  emailId: string;
+}
+
+/** A reply closing a request: who it goes to, and which of their emails it answers, oldest first. */
+export interface AccessRequestReply {
+  to: string;
+  answering: string[];
+}
+
+/**
+ * Who to tell that a request for access has been dealt with.
+ *
+ * A request emails every admin, so the rest need telling when one of them has
+ * handled it, or each is left to wonder whether it is still theirs to do. The
+ * admin who handled it is not told: they know. Someone who asked twice (the
+ * hour had passed) is in an admin's inbox twice, so that admin gets one reply
+ * answering both, which is also what joins the two into one thread.
+ */
+export function accessRequestReplies(sent: AccessRequestEmail[], handledBy: string): AccessRequestReply[] {
+  const handler = inviteKey(handledBy);
+  const replies = new Map<string, AccessRequestReply>();
+  for (const { to, emailId } of sent) {
+    const key = inviteKey(to);
+    if (key === handler) continue;
+    const reply = replies.get(key) ?? { to, answering: [] };
+    reply.answering.push(emailId);
+    replies.set(key, reply);
+  }
+  return [...replies.values()];
+}

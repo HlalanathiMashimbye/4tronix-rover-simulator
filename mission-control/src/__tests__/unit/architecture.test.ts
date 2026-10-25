@@ -92,6 +92,16 @@ describe('the dependency rule', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('core holds no styling', () => {
+    // The learner-facing status's colours sat in core/domain beside the rule
+    // that decides it, so the Model carried Tailwind classes. How a status
+    // looks belongs to the component that draws it.
+    const tailwindColour = /['"` ](bg|text|border|ring)-[a-z]+-\d{2,3}/;
+    const offenders = sourceFiles('core').filter((f) => tailwindColour.test(read(f)));
+
+    expect(offenders).toEqual([]);
+  });
+
   it('domain never imports application', () => {
     /**
      * Application is built from domain, so domain cannot know application
@@ -211,6 +221,34 @@ describe('the server/browser boundary', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('no page, component, context or hook imports a persistence module', () => {
+    /**
+     * Ten UI files imported Firestore adapters directly, so the View talked to
+     * the database and the composition-root rule below guarded one-shot reads
+     * while every live subscription went around it. They go through
+     * container.browser.ts now, behind the ports in core. API routes are
+     * server controllers and are not part of this rule.
+     */
+    const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
+                       ...sourceFiles('contexts'), ...sourceFiles('hooks')]
+      .filter((f) => !f.startsWith(join('app', 'api')))
+      .filter((f) => read(f).includes('@/infrastructure/persistence/'));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('no route calls the Admin SDK itself', () => {
+    /**
+     * Four routes held grant, invite, sign-in and email logic with the Admin
+     * SDK inline, so a controller did five jobs and the rules about who may
+     * do what could only be tested through HTTP. Routes validate and map to
+     * HTTP; the work is a use case or repository from container.server.ts.
+     */
+    const offenders = sourceFiles('app').filter((f) => read(f).includes('@/infrastructure/persistence/firebase-admin'));
+
+    expect(offenders).toEqual([]);
+  });
+
   it('hands the browser a repository with no way to write', () => {
     /**
      * Checked by the compiler, not by reading source. Each line below names a
@@ -226,7 +264,7 @@ describe('the server/browser boundary', () => {
     type BrowserRepository = ReturnType<typeof browserMissionRepository>;
 
     // @ts-expect-error - writing a mission is server-only
-    type Update = BrowserRepository['update'];
+    type Update = BrowserRepository['create'];
     // @ts-expect-error - so is an operator's bookkeeping
     type Bookkeeping = BrowserRepository['applyBookkeeping'];
     // @ts-expect-error - and deleting a child's mission
@@ -249,7 +287,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new Firestore(Mission|RecoveryCode|ParentLink)Repository/.test(read(f)));
+      .filter((f) => /new \w*Firestore\w*(Repository|Reader)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });
@@ -264,7 +302,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands|VideoLinker)\(/.test(read(f)));
+      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands|OperatorTeamService|OperatorSessionService|OperatorAccessRequests|VideoLinker)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });
@@ -298,6 +336,67 @@ describe('the Copy buttons', () => {
         }
       }
     }
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+const PRODUCTION_DIRS = ['app', 'components', 'contexts', 'core', 'hooks', 'infrastructure', 'lib'];
+
+describe('the meaning of a mission status', () => {
+  it('is decided on MissionState, not by comparing statuses at the call site', () => {
+    /**
+     * The operator card once decided "settled" as completed-or-cancelled while
+     * the server's bookkeeping meant every status but queued and processing.
+     * The card offered actions the server always refused, and hid one it
+     * accepted. A chain of two status comparisons is a rule being written
+     * again, so it belongs on MissionState, where both sides read it.
+     */
+    const STATUS = "'(?:queued|processing|completed|failed|not_completed|cancelled)'";
+    const chain = new RegExp(`status\\s*[!=]==\\s*${STATUS}\\s*(?:\\|\\||&&)\\s*[\\w.]*status\\s*[!=]==\\s*${STATUS}`);
+    const offenders = PRODUCTION_DIRS.flatMap(sourceFiles)
+      .filter((file) => file !== join('core', 'domain', 'entities', 'MissionState.ts'))
+      .filter((file) => chain.test(read(file)));
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('is set only by the Mission entity, in core and persistence', () => {
+    /**
+     * A new mission's first status and every operator's change to it are the
+     * entity's decisions (Mission.submit and its methods). A status literal
+     * written into a mission anywhere else is a decision the entity never saw.
+     * 'failed' is left out because YouTube uploads use the same word.
+     */
+    const write = /status:\s*'(?:queued|processing|completed|not_completed|cancelled)'/;
+    const offenders = ['core', join('infrastructure', 'persistence')].flatMap(sourceFiles)
+      .filter((file) => file !== join('core', 'domain', 'entities', 'Mission.ts'))
+      .filter((file) => write.test(read(file)));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('Firestore collection names', () => {
+  it('are spelled in collections.ts and nowhere else', () => {
+    // They were literals in a dozen files, so a rename was a search that
+    // could miss a spelling. firestore.rules is the other half of the list.
+    const literal = /(collection|doc)\([^)]*'(missions|runs|automaticUploads|learners|users|operatorInvites|operatorAccessRequests|yards|missionNames|rateLimits)'/;
+    const offenders = PRODUCTION_DIRS.flatMap(sourceFiles)
+      .filter((file) => literal.test(read(file)));
+
+    expect(offenders).toEqual([]);
+  });
+});
+
+describe('YouTube addresses', () => {
+  it('are built in YouTubeVideoId and nowhere else', () => {
+    // Five places used to read ids out of links or build watch and thumbnail
+    // addresses by hand, and two of the parsers disagreed about what an id is.
+    const builder = /youtube\.com\/watch\?v=\$\{|img\.youtube\.com\/vi\/\$\{/;
+    const offenders = PRODUCTION_DIRS.flatMap(sourceFiles)
+      .filter((file) => file !== join('core', 'domain', 'entities', 'YouTubeVideoId.ts'))
+      .filter((file) => builder.test(read(file)));
 
     expect(offenders).toEqual([]);
   });
@@ -358,11 +457,14 @@ describe('the deploy smoke check', () => {
   // Comments stripped: a workflow may explain the check, it may not make it.
   const steps = (name: string) => root(`.github/workflows/${name}`).replace(/^\s*#.*$/gm, '');
 
-  it('is one script, run by both deploy workflows against their own URL', () => {
+  it('is one script, run by both deploy workflows against their own URL and database', () => {
     expect(existsSync(join(SRC, '..', '..', SCRIPT))).toBe(true);
 
+    // The database argument is required, not optional: prod and staging are
+    // two databases in one project, and a promoted image pointing at the
+    // wrong one passes every other assertion in the script.
     const notRunningIt = workflows.filter(
-      (name) => !/^\s*bash scripts\/smoke-check\.sh "\$URL"\s*$/m.test(steps(name))
+      (name) => !/^\s*bash scripts\/smoke-check\.sh "\$URL" "[^"]+"\s*$/m.test(steps(name))
     );
 
     expect(notRunningIt).toEqual([]);

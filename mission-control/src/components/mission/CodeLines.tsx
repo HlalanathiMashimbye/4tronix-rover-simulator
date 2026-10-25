@@ -5,7 +5,7 @@ import type { CommandSource } from '@/lib/roverBlockly';
 
 /**
  * The mission's Python, with the line the simulation is running lit up, as in
- * the editor (AB#450). Lines rather than one block of text so a single line
+ * the editor. Lines rather than one block of text so a single line
  * can carry the highlight.
  */
 export function CodeLines({ code, highlight }: { code: string; highlight: CommandSource | null }) {

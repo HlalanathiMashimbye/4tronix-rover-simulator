@@ -9,24 +9,37 @@
  * Nothing is granted here. The email links to Manage access with the address
  * filled in, and the admin decides.
  *
- * ONE REQUEST PER HOUR PER ACCOUNT. Recorded in operatorAccessRequests/{uid}
- * (server-only: firestore.rules matches nothing there, so it is denied to
- * browsers). Pressing the button again is answered as success without
- * sending, so a nervous double-tap does not become two emails.
+ * ONE REQUEST PER HOUR PER ACCOUNT. Pressing the button again is answered as
+ * success without sending, so a nervous double-tap does not become two emails.
+ *
+ * The record also keeps which email went to which admin. Granting the access
+ * replies to those emails, so the admins who did not handle it see that it is
+ * done (operator/team/route.ts).
+ *
+ * This file maps the outcome to HTTP; the decisions are OperatorAccessRequests.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
-import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
-import { resolveAppUrl } from '@/infrastructure/config/appUrl';
-import { isOperatorRole } from '@/core/domain/entities/OperatorAccount';
+import { operatorAccessRequests } from '@/infrastructure/container.server';
+import { clientIp, rateLimited } from '@/app/api/rateLimit';
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+// Per client IP, on top of the per-account hourly ledger inside
+// OperatorAccessRequests: the ledger stops one account asking repeatedly, this
+// stops one machine spraying tokens for many accounts. Ten in ten minutes is
+// well above a person retrying a flaky sign-in.
+const REQUEST_LIMIT = 10;
+const REQUEST_WINDOW_SECONDS = 600;
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimited(
+    `access-request:${clientIp(request)}`,
+    REQUEST_LIMIT,
+    REQUEST_WINDOW_SECONDS,
+    'Too many requests. Please wait a few minutes before asking again.',
+  );
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -39,56 +52,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: false, error: 'Missing token' }, { status: 400 });
   }
 
-  let decoded;
   try {
-    decoded = await getFirebaseAdminAuth().verifyIdToken(token);
-  } catch {
-    return NextResponse.json({ success: false, error: 'Please sign in again' }, { status: 401 });
-  }
-
-  if (isOperatorRole(decoded.role)) {
-    return NextResponse.json({ success: false, error: 'This account already has access. Sign in again.' }, { status: 409 });
-  }
-
-  const email = typeof decoded.email === 'string' ? decoded.email : null;
-  if (!email || decoded.email_verified !== true) {
-    // An unverified address could be anyone's, so it is not put in front of an admin.
-    return NextResponse.json(
-      { success: false, error: 'This account has no verified email address to send with the request.' },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const db = getFirestoreInstance();
-    const ref = db.collection('operatorAccessRequests').doc(decoded.uid);
-    const previous = await ref.get();
-    const lastAt = previous.exists ? Date.parse(previous.data()?.requestedAt ?? '') : NaN;
-    if (!Number.isNaN(lastAt) && Date.now() - lastAt < ONE_HOUR_MS) {
-      return NextResponse.json({ success: true, alreadyAsked: true });
+    const result = await operatorAccessRequests(request.nextUrl.origin).request(token);
+    switch (result.outcome) {
+      case 'sent':
+        return NextResponse.json({ success: true, notified: result.notified });
+      case 'already-asked':
+        return NextResponse.json({ success: true, alreadyAsked: true });
+      case 'signed-out':
+        return NextResponse.json({ success: false, error: 'Please sign in again' }, { status: 401 });
+      case 'has-access':
+        return NextResponse.json({ success: false, error: 'This account already has access. Sign in again.' }, { status: 409 });
+      case 'unverified':
+        return NextResponse.json(
+          { success: false, error: 'This account has no verified email address to send with the request.' },
+          { status: 400 },
+        );
+      case 'no-admin':
+        return NextResponse.json(
+          { success: false, error: 'There is no admin to ask yet. Contact the person who runs the yard.' },
+          { status: 503 },
+        );
+      case 'undelivered':
+        return NextResponse.json({ success: false, error: 'Could not email an admin. Try again in a few minutes.' }, { status: 502 });
     }
-
-    const admins = (await listOperatorAccounts()).filter((a) => a.role === 'admin' && a.email);
-    if (admins.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'There is no admin to ask yet. Contact the person who runs the yard.' },
-        { status: 503 },
-      );
-    }
-
-    const grantUrl = `${resolveAppUrl(request.nextUrl.origin)}/operator/team?grant=${encodeURIComponent(email)}`;
-    const { subject, html } = buildAccessRequestEmail(email, grantUrl);
-    const sender = new ResendEmailSender();
-    const results = await Promise.allSettled(admins.map((a) => sender.send(a.email!, subject, html)));
-    const delivered = results.filter((r) => r.status === 'fulfilled').length;
-
-    if (delivered === 0) {
-      console.error('[access-request] no admin email sent:', results);
-      return NextResponse.json({ success: false, error: 'Could not email an admin. Try again in a few minutes.' }, { status: 502 });
-    }
-
-    await ref.set({ email, requestedAt: new Date().toISOString(), notified: delivered });
-    return NextResponse.json({ success: true, notified: delivered });
   } catch (error) {
     console.error('[access-request] failed:', error);
     return NextResponse.json({ success: false, error: 'Could not send the request' }, { status: 500 });

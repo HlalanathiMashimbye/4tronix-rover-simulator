@@ -13,17 +13,18 @@ import {
   ILearnerContactReader,
   LearnerContact,
 } from '@/core/domain/services/ILearnerContactReader';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 
 class MockEmailSender implements IEmailSender {
   public calls: Array<{ to: string; subject: string; html: string }> = [];
   private failNext = false;
 
-  async send(to: string, subject: string, html: string): Promise<void> {
+  async send(to: string, subject: string, html: string): Promise<string> {
     if (this.failNext) {
       throw new Error('Resend is down');
     }
     this.calls.push({ to, subject, html });
+    return `email-${this.calls.length}`;
   }
 
   failOnNextSend() {
@@ -38,7 +39,7 @@ function contactsOf(contact: LearnerContact) {
   return { reader, findByLearnerRef };
 }
 
-function makeMission(overrides: Partial<Mission> = {}): Mission {
+function makeMission(overrides: Partial<MissionRecord> = {}): MissionRecord {
   return {
     id: 'mission-1',
     yardId: 'yard-1',

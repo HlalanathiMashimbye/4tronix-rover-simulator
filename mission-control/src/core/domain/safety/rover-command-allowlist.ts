@@ -1,7 +1,7 @@
 /**
  * Rover Command Allowlist
  *
- * User Story 21, Task 22: Define approved rover functions and blocked imports
+ * The rover functions learner code may call, and the imports it may not
  *
  * Security Model:
  * - Learners can only call functions in ROVER_COMMAND_ALLOWLIST

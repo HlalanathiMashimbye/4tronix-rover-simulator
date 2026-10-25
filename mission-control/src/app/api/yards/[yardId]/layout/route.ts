@@ -1,7 +1,7 @@
 /**
  * GET /api/yards/:yardId/layout
  *
- * What the simulator draws and drives in for a yard (AB#468): its size,
+ * What the simulator draws and drives in for a yard: its size,
  * start, rocks and rising ground. Public, like the yard itself: a learner
  * building a mission has no account, and nothing here is private (the rocks
  * are on every mission's video).

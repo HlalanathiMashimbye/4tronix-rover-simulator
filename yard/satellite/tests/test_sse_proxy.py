@@ -13,6 +13,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import web_server
+import routes.rover
 
 
 class FakeRoverResponse:
@@ -48,7 +49,7 @@ def test_proxy_uses_read_timeout(client, monkeypatch):
         captured.update(kwargs)
         return FakeRoverResponse([b'data: {}\n\n'])
 
-    monkeypatch.setattr(web_server.requests, 'get', fake_get)
+    monkeypatch.setattr(routes.rover.requests, 'get', fake_get)
     resp = client.get('/api/queue/events')
     resp.get_data()
 
@@ -61,7 +62,7 @@ def test_stream_ends_cleanly_on_midstream_error(client, monkeypatch):
         [b'data: {"pending_count": 0}\n\n'],
         error=requests.exceptions.ChunkedEncodingError('rover died'),
     )
-    monkeypatch.setattr(web_server.requests, 'get', lambda url, **kw: rover_resp)
+    monkeypatch.setattr(routes.rover.requests, 'get', lambda url, **kw: rover_resp)
 
     resp = client.get('/api/queue/events')
     body = resp.get_data()
@@ -77,7 +78,7 @@ def test_stream_ends_cleanly_on_read_timeout(client, monkeypatch):
         [b': heartbeat\n\n'],
         error=requests.exceptions.ReadTimeout('no data'),
     )
-    monkeypatch.setattr(web_server.requests, 'get', lambda url, **kw: rover_resp)
+    monkeypatch.setattr(routes.rover.requests, 'get', lambda url, **kw: rover_resp)
 
     resp = client.get('/api/queue/events')
     body = resp.get_data()
@@ -91,7 +92,7 @@ def test_rover_unreachable_returns_503(client, monkeypatch):
     def fake_get(url, **kwargs):
         raise requests.exceptions.ConnectionError('refused')
 
-    monkeypatch.setattr(web_server.requests, 'get', fake_get)
+    monkeypatch.setattr(routes.rover.requests, 'get', fake_get)
     resp = client.get('/api/queue/events')
 
     assert resp.status_code == 503
@@ -101,7 +102,7 @@ def test_rover_connect_timeout_returns_503(client, monkeypatch):
     def fake_get(url, **kwargs):
         raise requests.exceptions.ConnectTimeout('slow')
 
-    monkeypatch.setattr(web_server.requests, 'get', fake_get)
+    monkeypatch.setattr(routes.rover.requests, 'get', fake_get)
     resp = client.get('/api/queue/events')
 
     assert resp.status_code == 503

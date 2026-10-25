@@ -1,5 +1,5 @@
 /**
- * Mission and rover safety limits (AB#401). Mirrored in yard/rover/limits.py -
+ * Mission and rover safety limits. Mirrored in yard/rover/limits.py -
  * change both, or the yard and the cloud will disagree about what is legal.
  */
 

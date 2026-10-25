@@ -179,6 +179,11 @@ npm-debug.log*
 # them reached a branch.
 *.mp4
 *.downloaded
+# Everything else the satellite writes there too: each video's upload note
+# (<name>.mp4.upload.json, and the .tmp it is written through) showed every
+# uploading yard as having uncommitted work, and an empty `git status` is how
+# the runbook tells a Pi serving stale code from one that is not.
+yard/satellite/recordings/
 
 # Root lockfile — dev-only tooling (concurrently); apps own their lockfiles
 /package-lock.json

@@ -2,7 +2,7 @@
  * Mission Service
  *
  * Business logic layer for mission management.
- * Handles anonymous mission submission (User Story 35).
+ * Handles anonymous mission submission.
  *
  * Responsibilities:
  * - Coordinate mission creation
@@ -12,7 +12,7 @@
  * Follows Single Responsibility Principle (SOLID).
  */
 
-import { Mission } from '@/core/domain/entities/Mission';
+import { Mission, MissionRecord } from '@/core/domain/entities/Mission';
 import { IMissionReader, IMissionWriter } from '@/core/domain/repositories/IMissionRepository';
 import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
 import { isNewMissionName } from '@/core/domain/services/missionNameGenerator';
@@ -22,7 +22,7 @@ import { CreateMissionDto } from '@/core/application/dto/mission';
 
 export interface SubmitMissionResult {
   success: boolean;
-  mission?: Mission;
+  mission?: MissionRecord;
   error?: string;
 }
 
@@ -35,7 +35,6 @@ export class MissionService {
 
   /**
    * Submit a new mission (anonymous - no authentication required)
-   * Implements User Story 35 and Task 38
    *
    * @param dto - Validated mission submission data
    * @returns Result with created mission or error
@@ -56,7 +55,7 @@ export class MissionService {
 
       const name = await this.uniqueName(dto.name);
 
-      const mission = await this.missionRepository.create({
+      const mission = await this.missionRepository.create(Mission.submit({
         yardId: dto.yardId,
         learnerRef,
         sessionId: dto.sessionId,
@@ -66,9 +65,7 @@ export class MissionService {
         blocklyState: dto.blocklyState,
         origin: dto.origin,
         challengeId: dto.challengeId,
-        status: 'queued',
-        submittedAt: new Date().toISOString(),
-      });
+      }, new Date()));
 
       return {
         success: true,
@@ -103,20 +100,8 @@ export class MissionService {
    * @param id - Mission ID
    * @returns Mission or null if not found
    */
-  async getMissionById(id: string): Promise<Mission | null> {
+  async getMissionById(id: string): Promise<MissionRecord | null> {
     return this.missionRepository.findById(id);
   }
 
-
-  /**
-   * Update mission status and results
-   * Used by execution agent and operator console
-   *
-   * @param id - Mission ID
-   * @param updates - Fields to update
-   * @returns Updated mission or null if not found
-   */
-  async updateMission(id: string, updates: Partial<Mission>): Promise<Mission | null> {
-    return this.missionRepository.update(id, updates);
-  }
 }

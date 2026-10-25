@@ -222,6 +222,14 @@ def recordings_at(yard_id):
         return sorted(mission for mission, yard in _paths if yard == yard_id)
 
 
+def started_at(mission_id, yard_id):
+    """When this recording started (time.monotonic), or None. Unique per
+    recording, so it tells a re-run of a mission apart from the run before it,
+    which the file name cannot when both start within the same second."""
+    with _lock:
+        return _started.get((mission_id, yard_id))
+
+
 def note_dispatch(mission_id, yard_id, instruction_id):
     """Remember that the rover was sent instruction_id while this recording ran.
 

@@ -15,6 +15,14 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
   getFirebaseAdminAuth: () => ({ verifyIdToken }),
   getFirestoreInstance: () => ({
     collection: () => ({ doc: () => ({ get: docGet, set: docSet }) }),
+    // The route now rate-limits before verifying the token. The limiter runs a
+    // transaction; this fresh-window stub lets it through so these tests stay
+    // about the access request, not the limit (rateLimit.api.test.ts covers that).
+    runTransaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        get: async () => ({ exists: false, data: () => undefined }),
+        set: () => undefined,
+      }),
   }),
 }));
 jest.mock('@/infrastructure/auth/operatorAccounts', () => ({
@@ -28,6 +36,7 @@ import { POST } from '@/app/api/auth/access-request/route';
 import { NextRequest } from 'next/server';
 
 const NOW = 1_800_000_000_000;
+const ONE_HOUR = 60 * 60 * 1000;
 
 function post(body: unknown) {
   return POST(new NextRequest('http://localhost:3005/api/auth/access-request', {
@@ -47,7 +56,7 @@ beforeEach(() => {
   verifyIdToken.mockResolvedValue(googleUser);
   docGet.mockResolvedValue({ exists: false, data: () => undefined });
   docSet.mockResolvedValue(undefined);
-  send.mockResolvedValue(undefined);
+  send.mockImplementation(async (to: string) => `id-for-${to}`);
   listOperatorAccounts.mockResolvedValue([
     { uid: 'a1', email: 'mshhla017@myuct.ac.za', role: 'admin' },
     { uid: 'a2', email: 'second@rover.com', role: 'admin' },
@@ -115,6 +124,51 @@ it('records the request after sending', async () => {
   await post({ token: 't' });
 
   expect(docSet).toHaveBeenCalledWith(expect.objectContaining({ email: 'thandi@school.org' }));
+});
+
+it('records which email went to which admin, so granting can reply to each', async () => {
+  await post({ token: 't' });
+
+  const record = docSet.mock.calls[0][0];
+  expect(record.subject).toBe(send.mock.calls[0][1]);
+  expect(record.sent).toEqual(
+    expect.arrayContaining([
+      { to: 'mshhla017@myuct.ac.za', emailId: 'id-for-mshhla017@myuct.ac.za' },
+      { to: 'second@rover.com', emailId: 'id-for-second@rover.com' },
+    ]),
+  );
+  expect(record.sent).toHaveLength(2);
+});
+
+it('keeps the emails of an earlier request when the person asks again', async () => {
+  // The hour is up, so each admin now has two emails, and the reply that
+  // closes the request has to answer both.
+  docGet.mockResolvedValue({
+    exists: true,
+    data: () => ({
+      email: 'thandi@school.org',
+      subject: 'thandi@school.org is asking for operator access',
+      requestedAt: new Date(NOW - 2 * ONE_HOUR).toISOString(),
+      sent: [{ to: 'second@rover.com', emailId: 'first-ask' }],
+    }),
+  });
+
+  await post({ token: 't' });
+
+  const { sent } = docSet.mock.calls[0][0];
+  expect(sent[0]).toEqual({ to: 'second@rover.com', emailId: 'first-ask' });
+  expect(sent).toHaveLength(3);
+});
+
+it('records only the emails that went', async () => {
+  send.mockImplementation(async (to: string) => {
+    if (to === 'second@rover.com') throw new Error('bounced');
+    return `id-for-${to}`;
+  });
+
+  await post({ token: 't' });
+
+  expect(docSet.mock.calls[0][0].sent).toEqual([{ to: 'mshhla017@myuct.ac.za', emailId: 'id-for-mshhla017@myuct.ac.za' }]);
 });
 
 it('says so when there is no admin to ask', async () => {

@@ -12,8 +12,10 @@ jest.mock('@/infrastructure/youtube/youtubeUploadLedger', () => ({
   runAutomaticUpload: jest.fn(),
 }));
 const link = jest.fn();
+const findById = jest.fn();
 jest.mock('@/infrastructure/container.server', () => ({
   videoLinker: () => ({ link }),
+  adminMissionRepository: () => ({ findById }),
 }));
 
 const configuredMock = isAutoUploadConfigured as jest.MockedFunction<typeof isAutoUploadConfigured>;
@@ -116,8 +118,9 @@ describe('satellite automatic-upload ingress', () => {
       const response = await POST(delivery({ outcome: 'completed' }));
 
       expect(response.status).toBe(200);
+      // With the dispatch it filmed, so a re-run gets a run of its own.
       expect(link).toHaveBeenCalledWith(
-        { missionId: 'mission-1', yardId: 'curiosity', videoId: 'abcdefghijk' },
+        { missionId: 'mission-1', yardId: 'curiosity', videoId: 'abcdefghijk', dispatchId: 'dispatch-1' },
         'youtube-auto-upload',
       );
       expect(await response.json()).toMatchObject({ status: 'uploaded', linked: { kind: 'linked' } });
@@ -180,6 +183,33 @@ describe('satellite automatic-upload ingress', () => {
 
       expect(response.status).toBe(400);
       expect(uploadMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('the title', () => {
+    beforeEach(() => {
+      uploadMock.mockResolvedValue({ kind: 'failed', attempts: 1, errorMessage: 'no' });
+    });
+
+    it("is the mission's name, not the recording's file name", async () => {
+      findById.mockResolvedValue({ id: 'mission-1', name: 'Cheerful Pebble Ranger' });
+
+      await POST(delivery());
+
+      expect(findById).toHaveBeenCalledWith('mission-1');
+      expect(uploadMock).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Cheerful Pebble Ranger · Mars Yard rover run',
+      }));
+    });
+
+    it('still uploads, under the stand-in, when the mission cannot be read', async () => {
+      findById.mockRejectedValue(new Error('Firestore unavailable'));
+
+      await POST(delivery());
+
+      expect(uploadMock).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Rover mission · Mars Yard rover run',
+      }));
     });
   });
 

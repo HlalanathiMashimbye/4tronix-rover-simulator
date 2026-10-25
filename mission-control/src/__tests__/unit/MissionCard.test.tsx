@@ -12,9 +12,9 @@
 
 import { render, screen } from '@testing-library/react';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
-function makeMission(overrides: Partial<Mission> = {}): Mission {
+function makeMission(overrides: Partial<MissionRecord> = {}): MissionRecord {
   return {
     id: 'mission-1',
     yardId: 'curiosity',

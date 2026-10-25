@@ -6,12 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Rocket, Star } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { missionSlug, parseMissionSlug, pickLinkedMission } from '@/core/domain/services/missionSlug';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 import { useYardLayout } from '@/hooks/useYardLayout';
 import type { CommandSource } from '@/lib/roverBlockly';
-import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
+import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
+import { DiscoveryBadge } from '@/components/ui/DiscoveryBadge';
 import { useFavorites } from '@/hooks/useFavorites';
 import { findYardIn, yardLabelOf, type Yard } from '@/core/domain/entities/Yard';
 import { buildRunOptions, type RunOption } from '@/lib/missionRuns';
@@ -25,6 +26,7 @@ import { usePhoneLayout } from '@/hooks/useIsPhoneLayout';
 import { useMissionLayout } from '@/hooks/useMissionLayout';
 import { missionLayoutStyle } from '@/lib/missionLayout';
 import { YARD } from '@/lib/rover-physics';
+import { MissionState } from '@/core/domain/entities/MissionState';
 
 
 export default function MissionVideoClient({
@@ -37,7 +39,7 @@ export default function MissionVideoClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoRemix = searchParams.get('autoRemix') === 'true';
-  const [mission, setMission] = useState<Mission | null>(null);
+  const [mission, setMission] = useState<MissionRecord | null>(null);
   // Every yard's attempt, so the feed can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
   const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);
@@ -56,10 +58,10 @@ export default function MissionVideoClient({
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
   // From the blocks where there are blocks, so it knows which block is which.
-  // Simulated in the yard it was sent to (AB#468), the one drawn below.
+  // Simulated in the yard it was sent to, the one drawn below.
   const { layout: yardLayout } = useYardLayout(mission?.yardId);
   const simTrajectory = useMissionTrajectory(mission, yardLayout);
-  /** What the simulation is running, lit up in the code like the editor (AB#450). */
+  /** What the simulation is running, lit up in the code like the editor. */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
   // How many times the simulation has played to its end. Each one is the
   // moment a learner has something to change, so each one nudges Remix.
@@ -128,7 +130,7 @@ export default function MissionVideoClient({
   // Remix into the workspace: carry blocks for block-built missions,
   // otherwise the Python, and open the matching editor mode.
   const remix = useCallback(() => {
-    if (mission && mission.status === 'completed') {
+    if (mission && MissionState.of(mission.status).isCompleted()) {
       if (mission.blocklyState) {
         localStorage.setItem('roverWorkspace', mission.blocklyState);
         router.push('/mission?mode=blockly');
@@ -141,7 +143,7 @@ export default function MissionVideoClient({
 
   // Auto-remix when landing from email or deep link with ?autoRemix=true
   useEffect(() => {
-    if (autoRemix && mission && mission.status === 'completed') {
+    if (autoRemix && mission && MissionState.of(mission.status).isCompleted()) {
       remix();
     }
   }, [autoRemix, mission, remix]);
@@ -175,7 +177,7 @@ export default function MissionVideoClient({
   const missionName = mission.name || `Mission ${mission.id.slice(0, 8)}`;
   const starred = isFavorite(mission.id);
   const discoveryStatus = getDiscoveryStatus(mission.status);
-  const remixable = mission.status === 'completed';
+  const remixable = MissionState.of(mission.status).isCompleted();
   // How long the program runs, which is what the simulation plays. Each
   // rover's video says what its own run took (RunFeed).
   const simDuration = durationLabel(simTrajectory);
@@ -206,7 +208,7 @@ export default function MissionVideoClient({
   const noteUnderTheVideo = wide && runs.length === 1;
 
   return (
-    // Pinned to the viewport at every size, like Create Mission (AB#455). On a
+    // Pinned to the viewport at every size, like Create Mission. On a
     // phone this used to stack the panels and scroll the whole page, with the
     // tab bar and the floating button on top of the blocks. Now the one thing
     // that scrolls is the feed of pictures (.missionBody in globals.css), and
@@ -227,11 +229,10 @@ export default function MissionVideoClient({
             <h1 className="min-w-[6.5rem] truncate font-display text-base font-bold text-foreground md:min-w-0 md:text-xl">
               {missionName}
             </h1>
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:uppercase md:tracking-[0.12em] ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
-            >
-              {discoveryStatus}
-            </span>
+            <DiscoveryBadge
+              status={discoveryStatus}
+              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold md:px-2.5 md:py-1 md:uppercase md:tracking-[0.12em]"
+            />
             <button
               onClick={() => toggleFavorite(mission.id, missionName)}
               aria-label={starred ? 'Remove from favorites' : 'Add to favorites'}

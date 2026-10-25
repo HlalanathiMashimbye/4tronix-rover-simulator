@@ -15,7 +15,7 @@
  * - Verify video fields in completed missions
  */
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
 describe('Video Display Integration', () => {
   describe('Mission Entity Video Fields', () => {
@@ -23,7 +23,7 @@ describe('Video Display Integration', () => {
      * Test Case 1: Mission entity includes videoUrl field
      */
     it('mission entity supports videoUrl field', () => {
-      const mission: Mission = {
+      const mission: MissionRecord = {
         id: 'test-mission-1',
         yardId: 'curiosity',
         sessionId: 'session-123',
@@ -42,7 +42,7 @@ describe('Video Display Integration', () => {
      * Test Case 2: Mission entity supports youtubeUrl field
      */
     it('mission entity supports youtubeUrl field', () => {
-      const mission: Mission = {
+      const mission: MissionRecord = {
         id: 'test-mission-2',
         yardId: 'curiosity',
         sessionId: 'session-123',
@@ -61,7 +61,7 @@ describe('Video Display Integration', () => {
      * Test Case 3: Mission can have both videoUrl and youtubeUrl
      */
     it('mission entity supports both video fields simultaneously', () => {
-      const mission: Mission = {
+      const mission: MissionRecord = {
         id: 'test-mission-3',
         yardId: 'curiosity',
         sessionId: 'session-123',
@@ -81,7 +81,7 @@ describe('Video Display Integration', () => {
      * Test Case 4: Video fields are optional
      */
     it('video fields are optional in mission entity', () => {
-      const mission: Mission = {
+      const mission: MissionRecord = {
         id: 'test-mission-4',
         yardId: 'curiosity',
         sessionId: 'session-123',
@@ -131,7 +131,7 @@ describe('Video Display Integration', () => {
      * Test Case 8: Completed mission can have video
      */
     it('completed mission includes video URL', () => {
-      const completedMission: Mission = {
+      const completedMission: MissionRecord = {
         id: 'completed-1',
         yardId: 'curiosity',
         sessionId: 'session-456',
@@ -157,7 +157,7 @@ describe('Video Display Integration', () => {
      * Test Case 9: Failed mission can also have video
      */
     it('failed mission includes video URL showing failure', () => {
-      const failedMission: Mission = {
+      const failedMission: MissionRecord = {
         id: 'failed-1',
         yardId: 'curiosity',
         sessionId: 'session-789',
@@ -184,7 +184,7 @@ describe('Video Display Integration', () => {
      * Test Case 10: Queued mission does not have video yet
      */
     it('queued mission does not have video URL', () => {
-      const queuedMission: Mission = {
+      const queuedMission: MissionRecord = {
         id: 'queued-1',
         yardId: 'curiosity',
         sessionId: 'session-101',
@@ -203,7 +203,7 @@ describe('Video Display Integration', () => {
      * Test Case 11: Processing mission does not have video yet
      */
     it('processing mission does not have video URL', () => {
-      const processingMission: Mission = {
+      const processingMission: MissionRecord = {
         id: 'processing-1',
         yardId: 'curiosity',
         sessionId: 'session-202',

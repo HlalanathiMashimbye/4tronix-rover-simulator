@@ -13,7 +13,7 @@ testable.
 |------|------|
 | `rover_server.py` | Thin Flask HTTP adapter. Translates requests into service calls; no business logic. |
 | `service.py` | `RoverQueueService` + `RoverQueuePort` — the application core (queue semantics, execution). |
-| `drivers.py` | `RoverDriver` abstract base + `FakeRoverDriver` / `RealRoverDriver`, chosen by `create_driver()`. Falls back to the fake driver when not on a Pi. |
+| `drivers.py` | `RoverDriver` abstract base + `FakeRoverDriver` / `RealRoverDriver`, chosen by `create_driver()`. Falls back to the fake driver when not on a Pi. Each driver also hands out the `rover` a learner's program drives (`learner_rover()`), speed-checked, so the simulator runs learner Python on the fake. |
 | `rover_physics.py` | Reference physics model (kept for parity; the live simulation now runs in TypeScript). |
 | `test_*.py` | pytest suites for the service, drivers, physics, integration, and SSE. |
 

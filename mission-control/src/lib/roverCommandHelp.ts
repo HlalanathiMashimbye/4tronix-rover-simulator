@@ -1,5 +1,5 @@
 /**
- * What each rover command means, in words a nine-year-old can use (AB#413).
+ * What each rover command means, in words a nine-year-old can use.
  *
  * THE GAP THIS FILLS. A learner who builds blocks now gets commented Python.
  * A learner who writes Python directly got `rover.reverse(60)` from the palette

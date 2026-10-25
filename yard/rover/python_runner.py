@@ -15,7 +15,6 @@ into a service, so it can be exercised without a queue, a driver or a thread.
 
 import contextlib
 import io
-import os
 import sys
 import time
 
@@ -40,58 +39,6 @@ SAFE_BUILTINS = {
     'enumerate': enumerate, 'zip': zip, 'abs': abs,
     'min': min, 'max': max, 'round': round,
 }
-
-
-def rover_lib_path() -> str:
-    """Directory holding the 4tronix `rover` library on the Pi.
-
-    Defaults to the copy vendored beside this file rather than a hardcoded
-    absolute path, so nothing here bakes in a machine layout. ROVER_LIB_PATH
-    overrides it; yard/deploy/rover-server.service sets it explicitly.
-
-    Note this is only half of what the Pi needs on its path: rover.py imports
-    `pca9685`, which is not vendored and still comes from the 4tronix install.
-    See yard/rover/vendor/README.md.
-    """
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.environ.get('ROVER_LIB_PATH', os.path.join(here, 'vendor'))
-
-
-def simulator_path() -> str:
-    """Directory holding roversimulator.py, the off-Pi stand-in for `rover`."""
-    here = os.path.dirname(os.path.abspath(__file__))
-    repo_root = os.path.dirname(os.path.dirname(here))
-    return os.path.join(repo_root, 'legacy', 'simulator')
-
-
-def import_rover_module():
-    """Import the rover hardware library, or the simulator standing in for it.
-
-    On the Pi, `rover` drives real motors. Off it, that import fails (no
-    RPi.GPIO) and legacy/simulator/roversimulator.py takes over with the same
-    API, which is the whole reason that file is kept rather than deleted.
-
-    This is a module-level function, not inline in the caller, so both paths
-    are reachable from a test. They were not, and it cost us: when the
-    simulator moved into legacy/simulator/, the fallback kept pointing at the
-    repo root and raised ModuleNotFoundError on every machine without the
-    4tronix library, while all the rover tests stayed green because each one
-    injects a rover_module and never reaches this code.
-    """
-    try:
-        lib_path = rover_lib_path()
-        if lib_path not in sys.path:
-            sys.path.insert(0, lib_path)
-        import rover as rover_module
-        if not hasattr(rover_module, 'forward'):
-            raise ImportError('rover module missing hardware API')
-        return rover_module
-    except (ImportError, AttributeError):
-        sim_path = simulator_path()
-        if sim_path not in sys.path:
-            sys.path.insert(0, sim_path)
-        import roversimulator as rover_module
-        return rover_module
 
 
 class StudentCodeRunner:

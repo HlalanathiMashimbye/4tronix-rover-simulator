@@ -1,5 +1,5 @@
 /**
- * The CodeMirror 6 pieces behind the Python tab (AB#456).
+ * The CodeMirror 6 pieces behind the Python tab.
  *
  * WHY CODEMIRROR AND NOT MONACO. Monaco's own README says it is not supported
  * in mobile browsers, and a reviewer could not get past a challenge on a phone.
@@ -81,7 +81,7 @@ export function roverCompletions(context: CompletionContext): CompletionResult |
   };
 }
 
-/** Which lines the simulator is running; null when nothing is (AB#450). */
+/** Which lines the simulator is running; null when nothing is. */
 export const setRunningLines = StateEffect.define<{ from: number; to: number } | null>();
 
 const runningLine = Decoration.line({ class: 'rover-running-line' });

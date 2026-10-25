@@ -1,6 +1,7 @@
 import { findYardIn, type Yard } from '@/core/domain/entities/Yard';
 import { watchableRuns, type MissionRun } from '@/core/domain/entities/MissionRun';
 import { getYouTubeId } from '@/core/domain/services/youtubeLinking';
+import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 
 /**
  * The rover's runs a learner can watch for one mission, newest first.
@@ -49,7 +50,7 @@ export { getYouTubeId };
  * img.youtube.com is already allow-listed in next.config.ts remotePatterns.
  */
 export function thumbnailFor(youtubeId: string): string {
-  return `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`;
+  return YouTubeVideoId.of(youtubeId).thumbnailUrl('mq');
 }
 
 /** "6 Aug" - short enough for a 104px card, enough to tell two runs apart. */

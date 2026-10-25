@@ -69,7 +69,7 @@ def test_the_console_links_back_to_mission_control(client):
     for path in ('/', '/run/', '/settings'):
         page = client.get(path).get_data(as_text=True)
         assert 'class="mc-back"' in page, path
-        assert 'https://marsyard.labs.ws' in page, path
+        assert 'https://marsyard.sapient.rocks' in page, path
 
 
 
@@ -82,34 +82,6 @@ def test_code_and_monitor_stay_public(client):
     # Learner tablets and the TV never sign in; their pages must not gate.
     assert client.get('/code/').status_code == 200
     assert client.get('/monitor/').status_code == 200
-
-
-
-def test_satellite_id_is_stable_across_calls_and_restarts(monkeypatch, tmp_path):
-    import satellite_identity
-    cfg = tmp_path / 'sat.json'
-    monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(cfg))
-    satellite_identity.reset_cache()
-
-    first = satellite_identity.satellite_id()
-    assert satellite_identity.satellite_id() == first, 'must be stable within a process'
-
-    # Simulate a restart: drop the memo, reload from disk.
-    satellite_identity.reset_cache()
-    assert satellite_identity.satellite_id() == first, 'must survive a restart'
-    assert cfg.exists(), 'the id must be persisted, not regenerated each boot'
-    satellite_identity.reset_cache()
-
-
-
-def test_satellite_id_survives_an_unwritable_config(monkeypatch, tmp_path):
-    """A read-only filesystem degrades lock ownership; it must not stop boot."""
-    import satellite_identity
-    monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(tmp_path / 'nope' / 'sat.json'))
-    satellite_identity.reset_cache()
-
-    assert satellite_identity.satellite_id()  # does not raise
-    satellite_identity.reset_cache()
 
 
 
@@ -458,6 +430,6 @@ def test_the_way_back_goes_to_the_operator_console_not_the_learner_feed(client):
     never been."""
     page = client.get('/run/').get_data(as_text=True)
     back = page.split('class="mc-back"', 1)[1].split('>', 1)[0]
-    assert 'href="https://marsyard.labs.ws/operator"' in back
-    assert 'data-mission-control="https://marsyard.labs.ws"' in back
+    assert 'href="https://marsyard.sapient.rocks/operator"' in back
+    assert 'data-mission-control="https://marsyard.sapient.rocks"' in back
     assert '/static/mc-return.js' in page

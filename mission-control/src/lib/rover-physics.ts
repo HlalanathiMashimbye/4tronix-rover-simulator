@@ -23,7 +23,7 @@
  * forward at speed 100 for 1s and 2s: this predicts 15cm and 30cm.
  *
  * ONE BATTERY STATE. Four runs in a row from one charge; how the distance
- * drifts as the battery drains is not measured yet (AB#467's note suggests
+ * drifts as the battery drains is not measured yet (the calibration notes suggest
  * about 20 runs from full).
  */
 const FULL_SPEED_CM_PER_SECOND = 15;
@@ -45,7 +45,7 @@ export interface YardRock {
 }
 
 /**
- * How steep the ground is, from gentle to no-go (AB#468): yellow, orange, red.
+ * How steep the ground is, from gentle to no-go: yellow, orange, red.
  *
  * Drawn by eye from the yard, not measured: the mounds' heights could not be
  * recovered from the photos (yard-measurements.md, The ground). So a zone does
@@ -77,12 +77,12 @@ export interface Yard {
   /** Where every mission starts, and the compass bearing the rover faces there. */
   start: { x: number; y: number; facingDegrees: number };
   rocks: YardRock[];
-  /** Rising ground (AB#468). A yard can have none: flat, with only its rocks. */
+  /** Rising ground. A yard can have none: flat, with only its rocks. */
   zones?: YardZone[];
 }
 
 /**
- * The real yard (AB#464), as yard/docs/yard-measurements.md records it.
+ * The real yard, as yard/docs/yard-measurements.md records it.
  * yardMeasurements.test.ts reads that doc's tables and fails if these drift
  * from it, so the measurement and the simulator cannot quietly disagree.
  *
@@ -139,7 +139,7 @@ export function roverToYard(rx: number, ry: number, yard: Yard = YARD): [number,
 
 /**
  * The rover's footprint from above, per 4tronix: 20 cm long and 18.5 cm wide,
- * wheels included. Rocks are tested against this (AB#466), not against the
+ * wheels included. Rocks are tested against this, not against the
  * centre, because it is the wheels and the nose that reach a rock first.
  */
 const ROVER_HALF_LENGTH_CM = 10;
@@ -379,7 +379,7 @@ export interface RoverState {
   servos: number[];
   hitWall: boolean;
   /**
-   * The rock this step would have driven into, so did not (AB#466), or null.
+   * The rock this step would have driven into, so did not, or null.
    * Like a wall, a rock stops the rover where it is for as long as it is
    * driven at it; the real rover would push, climb or stall, and the operator
    * would have to rescue it, which is what the pre-flight check exists to stop.

@@ -1,5 +1,5 @@
 /**
- * Whether the learner wants sound, remembered across visits (AB#409).
+ * Whether the learner wants sound, remembered across visits.
  *
  * Mostly this is the REAL RUN'S VIDEO. The one sound the app makes itself -
  * the launch when finishing a challenge unlocks a level (levelUnlockSound.ts)

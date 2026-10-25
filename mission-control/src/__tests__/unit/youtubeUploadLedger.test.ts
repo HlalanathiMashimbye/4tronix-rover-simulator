@@ -38,6 +38,20 @@ describe('automatic YouTube upload ledger workflow', () => {
     }));
   });
 
+  it('uploads under the title it is given', async () => {
+    const claim = jest.fn().mockResolvedValue({ kind: 'claimed', attemptId: 'claim-1', attempts: 1 });
+    const upload = jest.fn().mockResolvedValue({ status: 'uploaded', videoId: 'video-1', url: 'u' });
+
+    await runAutomaticUpload(
+      { ...request, title: 'Cheerful Pebble Ranger · Mars Yard rover run' },
+      { claim, finish: jest.fn(), upload },
+    );
+
+    expect(upload).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Cheerful Pebble Ranger · Mars Yard rover run',
+    }));
+  });
+
   it('does not upload a repeated or concurrent trigger already claimed by another request', async () => {
     let reserved = false;
     const claim = jest.fn(async () => {

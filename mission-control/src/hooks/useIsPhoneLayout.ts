@@ -29,7 +29,7 @@ function getServerSnapshot(): null {
 }
 
 /**
- * Whether to render the phone layout of a page (AB#455), or null while that
+ * Whether to render the phone layout of a page, or null while that
  * cannot be known yet: on the server, and while the browser hydrates what the
  * server sent.
  *
@@ -78,7 +78,7 @@ export interface OnScreenKeyboard {
 const CLOSED: OnScreenKeyboard = { open: false, inset: 0 };
 
 /**
- * The on-screen keyboard, measured (AB#455).
+ * The on-screen keyboard, measured.
  *
  * iOS Safari, and Chrome on Android by default, open the keyboard OVER the
  * page without resizing it, so 100dvh still means the whole screen and the

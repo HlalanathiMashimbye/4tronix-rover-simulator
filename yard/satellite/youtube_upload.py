@@ -64,13 +64,100 @@ _sending = {}
 _STARTED = time.time()
 
 
+# The shared secret Mission Control checks on every recording it is sent. Set
+# on the Settings page, in the Mission Control dialog, rather than in a .env on
+# the Pi; the environment is only where a fresh satellite gets its first one.
+#
+# TIED TO THE ADDRESS IT WAS ENTERED FOR. The console has no sign-in, on
+# purpose (it has to work with no internet), so anyone on the yard's wifi can
+# change the Mission Control address. A secret that followed the address would
+# go, in a header, to whatever server they typed, and with it anyone could
+# post videos to the channel as this yard. So it is only ever sent to the
+# Mission Control it was given for, and a new address needs it entered again.
+_SECRET_KEY = 'upload_secret'
+_SECRET_FOR_KEY = 'upload_secret_for'
+# Terraform makes it 48 characters. Anything much shorter is something else
+# pasted by mistake, which would otherwise only show up as uploads refused.
+_SECRET_MIN_LENGTH = 16
+
+
+def _mission_control():
+    import tunables
+    return tunables.get('missionControlUrl')
+
+
+def _issued_secret():
+    """(secret, the Mission Control it is for, where it came from), or blanks."""
+    from satellite_identity import _load
+    cfg = _load()
+    stored = str(cfg.get(_SECRET_KEY) or '').strip()
+    if stored:
+        return stored, str(cfg.get(_SECRET_FOR_KEY) or '').strip(), 'settings'
+
+    from_env = os.environ.get('YOUTUBE_UPLOAD_INGEST_SECRET', '').strip()
+    if not from_env:
+        return '', '', None
+    # Whoever put it in the environment put it there for the Mission Control
+    # the environment names, or for the default one if it names none.
+    import tunables
+    _key, env_var, default, cast, _bounds = tunables.TUNABLES['missionControlUrl']
+    try:
+        issued_for = cast(os.environ.get(env_var) or default)
+    except ValueError:
+        issued_for = default
+    return from_env, issued_for, 'environment'
+
+
 def _secret():
-    return os.environ.get('YOUTUBE_UPLOAD_INGEST_SECRET', '').strip()
+    """The secret, if it was given for the Mission Control this yard uses now."""
+    secret, issued_for, _source = _issued_secret()
+    return secret if secret and issued_for == _mission_control() else ''
+
+
+def shared_secret():
+    """The same secret, for checking what Mission Control signs (mission_handoff)."""
+    return _secret()
+
+
+def secret_status():
+    """What the Settings page may know about the secret: never the secret."""
+    secret, issued_for, source = _issued_secret()
+    in_force = bool(secret) and issued_for == _mission_control()
+    return {
+        'configured': in_force,
+        'source': source if secret else None,
+        'issuedFor': issued_for or None,
+        # Entered for another address: kept, but not sent anywhere until the
+        # yard is pointed back, or it is entered again for the new one.
+        'otherAddress': bool(secret) and not in_force,
+    }
+
+
+def save_secret(raw):
+    """Store the secret for the Mission Control in force now, or forget it.
+
+    An empty value removes it, which turns automatic upload off. ValueError for
+    anything that cannot be the secret.
+    """
+    from satellite_identity import _load, _save
+    value = str(raw or '').strip()
+    cfg = _load()
+    if not value:
+        cfg.pop(_SECRET_KEY, None)
+        cfg.pop(_SECRET_FOR_KEY, None)
+    elif len(value) < _SECRET_MIN_LENGTH or any(ch.isspace() for ch in value):
+        raise ValueError('not an upload secret')
+    else:
+        cfg[_SECRET_KEY] = value
+        cfg[_SECRET_FOR_KEY] = _mission_control()
+    _save(cfg)
+    kick()
+    return secret_status()
 
 
 def _endpoint():
-    base = (os.environ.get('MISSION_CONTROL_URL') or 'https://marsyard.labs.ws').rstrip('/')
-    return f'{base}/api/youtube-upload/recording'
+    import tunables
+    return f"{tunables.get('missionControlUrl')}/api/youtube-upload/recording"
 
 
 def _recordings_dir():
@@ -223,9 +310,9 @@ def _waiting_count():
 
 def check_connection(now=None):
     """Whether Mission Control answers at all. Any reply is a yes."""
-    base = (os.environ.get('MISSION_CONTROL_URL') or 'https://marsyard.labs.ws').rstrip('/')
+    import tunables
     try:
-        requests.head(base, timeout=(3, 3), allow_redirects=False)
+        requests.head(tunables.get('missionControlUrl'), timeout=(3, 3), allow_redirects=False)
     except requests.exceptions.RequestException:
         _saw(False, now)
         return False
@@ -372,11 +459,17 @@ def kick():
 
 
 def state_of(recording_path):
-    """What the Settings page shows for one recording, or None if it has no note."""
+    """What Settings and the run station show for one recording, or None if it
+    has no note.
+
+    `outcome` is there for the run station: a video of a run the rover
+    reported as an error goes to YouTube but not onto its run, which leaves
+    the operator something to decide.
+    """
     note = _read_note(recording_path + NOTE_SUFFIX)
     if note is None:
         return None
-    view = {key: note.get(key) for key in ('url', 'reason', 'attempts', 'nextTryAt', 'lastError', 'settledAt')}
+    view = {key: note.get(key) for key in ('url', 'reason', 'attempts', 'nextTryAt', 'lastError', 'settledAt', 'outcome')}
     view['state'] = _state(note)
     if _sending.get('recording') == os.path.basename(recording_path) and _sending.get('total'):
         view['state'] = 'sending'

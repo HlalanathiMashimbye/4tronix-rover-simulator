@@ -17,6 +17,9 @@ const saveInvite = jest.fn();
 const deleteInvite = jest.fn();
 const sendEmail = jest.fn();
 
+/** Access request records stored per uid, returned and deleted by the ledger. */
+const accessRequests = new Map<string, Record<string, unknown>>();
+
 jest.mock('@/infrastructure/email/resend-client', () => ({
   ResendEmailSender: jest.fn().mockImplementation(() => ({ send: (...a: unknown[]) => sendEmail(...a) })),
 }));
@@ -47,11 +50,23 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
     listUsers,
   }),
   getFirestoreInstance: () => ({
-    collection: () => ({
-      doc: () => ({
-        set: docSet,
-        get: async () => ({ exists: false, data: () => ({}) }),
-      }),
+    collection: (name: string) => ({
+      doc: (id: string) => {
+        if (name === 'operatorAccessRequests') {
+          return {
+            get: async () => {
+              const data = accessRequests.get(id);
+              return { exists: !!data, data: () => data ?? {} };
+            },
+            set: async (data: Record<string, unknown>) => void accessRequests.set(id, data),
+            delete: async () => void accessRequests.delete(id),
+          };
+        }
+        return {
+          set: docSet,
+          get: async () => ({ exists: false, data: () => ({}) }),
+        };
+      },
     }),
   }),
 }));
@@ -83,6 +98,7 @@ function population(users: ReturnType<typeof authUser>[]) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  accessRequests.clear();
   requireAdmin.mockResolvedValue(ADMIN);
   docSet.mockResolvedValue(undefined);
   setCustomUserClaims.mockResolvedValue(undefined);
@@ -90,7 +106,7 @@ beforeEach(() => {
   listInvites.mockResolvedValue([]);
   saveInvite.mockResolvedValue(undefined);
   deleteInvite.mockResolvedValue(false);
-  sendEmail.mockResolvedValue(undefined);
+  sendEmail.mockResolvedValue('email-id');
 });
 
 describe('who may call it', () => {
@@ -406,5 +422,103 @@ describe('telling the person they were let in', () => {
     expect(response.status).toBe(200);
     expect(setCustomUserClaims).toHaveBeenCalled();
     expect(data.message).not.toMatch(/emailed/i);
+  });
+});
+
+describe('telling the other admins a request is done', () => {
+  const SUBJECT = 'op@school.org is asking for operator access';
+
+  /** What the person's request sent: one email to each of three admins. */
+  function anOpenRequest() {
+    accessRequests.set('u2', {
+      email: 'op@school.org',
+      subject: SUBJECT,
+      requestedAt: '2026-10-25T08:00:00.000Z',
+      sent: [
+        { to: 'admin@rover.com', emailId: 'to-the-granter' },
+        { to: 'second@rover.com', emailId: 'to-second' },
+        { to: 'third@rover.com', emailId: 'to-third' },
+      ],
+    });
+  }
+
+  function replies() {
+    return sendEmail.mock.calls.filter(([, , , options]) => options?.answering);
+  }
+
+  it('replies to every other admin who was asked, in the thread of their own email', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+    anOpenRequest();
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(accessRequests.has('u2')).toBe(false);
+    // The admin who granted it is not told what they just did.
+    expect(replies().map(([to, subject, , options]) => [to, subject, options.answering])).toEqual([
+      ['second@rover.com', SUBJECT, ['to-second']],
+      ['third@rover.com', SUBJECT, ['to-third']],
+    ]);
+    const html: string = replies()[0][2];
+    expect(html).toContain('admin@rover.com');
+    expect(html).toContain('op@school.org');
+    expect(data.message).toMatch(/other admins they asked have been told/i);
+  });
+
+  it('tells nobody when the person never asked', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+    const data = await response.json();
+
+    expect(replies()).toHaveLength(0);
+    // The person themselves is still told they are in.
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect(data.message).not.toMatch(/other admins/i);
+  });
+
+  it('tells nobody about a request recorded before replies existed', async () => {
+    // Those records hold no emails, so there is no thread to reply in.
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+    accessRequests.set('u2', { email: 'op@school.org', requestedAt: 'x', notified: 2 });
+
+    await post({ email: 'op@school.org', role: 'operator' });
+
+    expect(replies()).toHaveLength(0);
+  });
+
+  it('leaves the request open when access is removed or nothing changed', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org', 'operator')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org', 'operator'));
+    anOpenRequest();
+
+    await post({ email: 'op@school.org', role: 'operator' });
+    await post({ email: 'op@school.org', role: null });
+
+    // A no-op and a revoke both leave the request open.
+    expect(accessRequests.has('u2')).toBe(true);
+    expect(replies()).toHaveLength(0);
+  });
+
+  it('still grants the access when the replies cannot be sent', async () => {
+    population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
+    getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
+    anOpenRequest();
+    sendEmail.mockImplementation(async (_to: string, _subject: string, _html: string, options?: { answering?: string[] }) => {
+      if (options?.answering) throw new Error('resend down');
+      return 'email-id';
+    });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await post({ email: 'op@school.org', role: 'operator' });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(setCustomUserClaims).toHaveBeenCalledWith('u2', { role: 'operator' });
+    expect(data.message).not.toMatch(/other admins/i);
   });
 });

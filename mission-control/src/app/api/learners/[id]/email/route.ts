@@ -18,30 +18,29 @@
  * (which bypasses rules) can reach it. The public learner document keeps the
  * harmless profile fields.
  *
- * KNOWN LIMITATION, deliberately not solved here: `learnerId` is still
- * published on public mission documents, so it is not a secret and this route
- * cannot prove the caller owns the learner it names. That means someone can
- * still WRITE an address onto another learner's record - exactly as they
- * could before this change, since the old browser-side rule was equally
- * unauthenticated. This change closes the bulk-read exposure only. The root
- * fix is to stop publishing learnerId (carry a one-way hash on missions, the
- * same trick already used for the address itself) so possession of the id
- * means something; that needs a backfill of existing mission documents and is
- * tracked separately.
+ * Holding the learner id is what this route accepts as being that learner.
+ * That only means something because the id is no longer published: missions
+ * carry learnerRef, a one-way hash, and scripts/backfill-learner-refs.mjs
+ * removed learnerId from every existing mission. The id lives in the
+ * learner's own browser.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import {
-  LEARNER_PRIVATE_COLLECTION,
-  LEARNER_CONTACT_DOC,
-} from '@/core/domain/services/learnerContact';
+import { learnerContactWriter } from '@/infrastructure/container.server';
+import { clientIp, rateLimited } from '@/app/api/rateLimit';
 
 const bodySchema = z.object({
   // null clears the address (the learner removing it).
   email: z.string().email('Must be a valid email address').nullable(),
 });
+
+// Keyed by IP and learner id together, so a class on one school IP is not one
+// bucket: each child saving their own address has their own allowance, while a
+// single id cannot be hammered. Saving an address is a rare thing a learner
+// does a handful of times, so ten in ten minutes is generous.
+const EMAIL_LIMIT = 10;
+const EMAIL_WINDOW_SECONDS = 600;
 
 export async function POST(
   request: NextRequest,
@@ -55,6 +54,14 @@ export async function POST(
       { status: 400 }
     );
   }
+
+  const limited = await rateLimited(
+    `learner-email:${clientIp(request)}:${id}`,
+    EMAIL_LIMIT,
+    EMAIL_WINDOW_SECONDS,
+    'You are changing your email too often. Please wait a minute and try again.',
+  );
+  if (limited) return limited;
 
   let body: unknown;
   try {
@@ -80,29 +87,7 @@ export async function POST(
   const { email } = validation.data;
 
   try {
-    const firestore = getFirestoreInstance();
-    const contactRef = firestore
-      .collection('learners')
-      .doc(id)
-      .collection(LEARNER_PRIVATE_COLLECTION)
-      .doc(LEARNER_CONTACT_DOC);
-
-    if (email === null) {
-      await contactRef.delete();
-    } else {
-      await contactRef.set(
-        { learnerEmail: email, updatedAt: new Date().toISOString() },
-        { merge: true }
-      );
-    }
-
-    // Clear any address left on the publicly readable parent document by the
-    // old client-side write. Without this, existing learners stay exposed
-    // even though nothing writes there any more.
-    await firestore
-      .collection('learners')
-      .doc(id)
-      .set({ learnerEmail: null }, { merge: true });
+    await learnerContactWriter().save(id, email);
 
     return NextResponse.json({ success: true });
   } catch (error) {

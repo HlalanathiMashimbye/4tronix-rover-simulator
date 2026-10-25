@@ -55,7 +55,7 @@ describe('registering the bin', () => {
       utils: { Rect: class {} },
       ComponentManager: { Capability: { DELETE_AREA: 'delete_area', DRAG_TARGET: 'drag_target' } },
       Events: { BLOCK_DRAG },
-    };
+    } as never;
   });
   afterEach(() => {
     delete (window as { Blockly?: unknown }).Blockly;
@@ -73,7 +73,8 @@ describe('registering the bin', () => {
   });
 
   function mount(ready = true) {
-    const workspaceRef = { current: workspace() };
+    // Mock workspaces carry only what each hook calls.
+    const workspaceRef = { current: workspace() as never };
     const binRef = { current: document.createElement('div') };
     return renderHook(({ ready }) => useBlockBin({ workspaceRef, binRef, ready }), { initialProps: { ready } });
   }
@@ -125,7 +126,7 @@ describe('following a run', () => {
       getBoundingRectangle: () => 'this block and everything under it',
     };
     const workspaceRef = {
-      current: { getBlockById: () => block, addChangeListener: () => {}, removeChangeListener: () => {}, scrollBoundsIntoView },
+      current: { getBlockById: () => block, addChangeListener: () => {}, removeChangeListener: () => {}, scrollBoundsIntoView } as never,
     };
     const hostRef = { current: document.createElement('div') };
     const highlight = { blockIds: ['b1'] };

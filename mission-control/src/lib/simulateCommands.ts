@@ -9,10 +9,10 @@ export interface TrajectoryPoint {
   speedR: number;
   servos: Record<string, number>;
   hitWall?: boolean;
-  /** The rock the rover was stopped by at this frame, if any (AB#466). */
+  /** The rock the rover was stopped by at this frame, if any. */
   hitRock?: string | null;
   /**
-   * The rising ground the rover is on at this frame, if any (AB#468). Nothing
+   * The rising ground the rover is on at this frame, if any. Nothing
    * in the physics reads it: the rover drives on as it would on the flat, and
    * this only records that from here the real run may not match.
    */
@@ -33,7 +33,7 @@ export interface TrajectoryPoint {
   leds: (string | null)[];
   /**
    * The part of the program this frame is running, for the editor to light up
-   * (AB#450). Per point for the same reason as the lamps: scrubbing back has
+   *. Per point for the same reason as the lamps: scrubbing back has
    * to show what was running then. Absent on the starting point, where
    * nothing has run yet.
    */
@@ -43,7 +43,7 @@ export interface TrajectoryPoint {
 /**
  * The first frame the physics stopped the rover, at a wall or a rock, or -1.
  *
- * The one definition of where a run crashes (AB#466): crashCheck builds the
+ * The one definition of where a run crashes: crashCheck builds the
  * pre-flight check and the operator's preview on it, and the renderer marks
  * the spot with it, so the mark on screen is the crash the checks mean.
  */

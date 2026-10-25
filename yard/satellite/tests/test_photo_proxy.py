@@ -9,6 +9,7 @@ import requests
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import web_server
+import routes.rover
 
 
 class FakePhotoResponse:
@@ -27,7 +28,7 @@ def client():
 
 
 def test_photo_proxied(client, monkeypatch):
-    monkeypatch.setattr(web_server.requests, 'get',
+    monkeypatch.setattr(routes.rover.requests, 'get',
                         lambda url, **kw: FakePhotoResponse())
     resp = client.get('/api/photo')
 
@@ -38,7 +39,7 @@ def test_photo_proxied(client, monkeypatch):
 
 
 def test_photo_404_passed_through(client, monkeypatch):
-    monkeypatch.setattr(web_server.requests, 'get',
+    monkeypatch.setattr(routes.rover.requests, 'get',
                         lambda url, **kw: FakePhotoResponse(
                             content=b'{"error": "No photo taken yet"}',
                             status_code=404, content_type='application/json'))
@@ -51,7 +52,7 @@ def test_photo_rover_unreachable(client, monkeypatch):
     def fake_get(url, **kw):
         raise requests.exceptions.ConnectionError('refused')
 
-    monkeypatch.setattr(web_server.requests, 'get', fake_get)
+    monkeypatch.setattr(routes.rover.requests, 'get', fake_get)
     resp = client.get('/api/photo')
 
     assert resp.status_code == 503

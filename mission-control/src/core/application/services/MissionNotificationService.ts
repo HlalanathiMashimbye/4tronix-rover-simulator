@@ -12,7 +12,7 @@
  * container.server.ts; three routes used to build it by hand.
  */
 
-import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import { MissionRecord, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import { missionSlug } from '@/core/domain/services/missionSlug';
@@ -52,13 +52,13 @@ export class MissionNotificationService {
      */
     private readonly appUrl: string,
     /**
-     * Missions that must never send mail, whatever their status (AB#470): the
+     * Missions that must never send mail, whatever their status: the
      * reviewed list in infrastructure/config/notificationExclusions.ts.
      */
     private readonly excludedMissionIds: ReadonlySet<string> = new Set(),
   ) {}
 
-  async notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome> {
+  async notifyStatusChange(mission: MissionRecord, status: MissionStatus): Promise<NotifyOutcome> {
     // Before anyone's address is even read: an excluded mission has nobody it
     // should reach.
     if (this.excludedMissionIds.has(mission.id)) {
@@ -88,7 +88,7 @@ export class MissionNotificationService {
     }
 
     /**
-     * THE LEARNER HOLDS THE KEY, THE MISSION HOLDS THE HASH (AB#470).
+     * THE LEARNER HOLDS THE KEY, THE MISSION HOLDS THE HASH.
      *
      * A mission carries learnerEmailHash only when its learner gave an address
      * as they sent it - that is them asking to hear about it. The address
@@ -99,8 +99,9 @@ export class MissionNotificationService {
      * it is not sent.
      *
      * A mission with NO hash is left as it was - sent to the learner's address
-     * - by decision: AB#470 requires that no other mission's notifications
-     * change, and those missions predate a learner giving an address. See
+     * - by decision: the fix for misdirected test emails required that no
+     * other mission's notifications change, and those missions predate a
+     * learner giving an address. See
      * docs/architecture/design-decisions.md, "Who a notification reaches".
      */
     if (mission.learnerEmailHash && (await hashLearnerEmail(learner.email)) !== mission.learnerEmailHash) {

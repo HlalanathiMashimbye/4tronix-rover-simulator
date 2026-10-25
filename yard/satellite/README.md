@@ -6,8 +6,9 @@ monitor and the operator's run station, proxies API calls to the rover server,
 records runs, and works with no internet at all.
 
 It holds no Firebase or YouTube OAuth credential. If automatic uploads are
-enabled, it uses the separate `YOUTUBE_UPLOAD_INGEST_SECRET` to deliver
-completed recordings to Mission Control; the rover run path remains local.
+enabled, it uses a separate upload secret, entered on the Settings page and
+sent only to the Mission Control it was entered for, to deliver completed
+recordings; the rover run path remains local.
 Each one waits in a note beside the recording (`<file>.mp4.upload.json`) until
 it is delivered, so a satellite with no internet, which is what it is while it
 serves the yard's wifi, sends its videos once it has a way out
@@ -20,7 +21,8 @@ for what the Firestore mirror used to do and why it went.
 
 | File | Role |
 |------|------|
-| `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
+| `web_server.py` | The app factory, `create_app()`: configuration, the rover's address (app config, saved from Settings), and the blueprints. `python web_server.py` serves it. |
+| `routes/` | Every route outside `/operator`, as three blueprints: `pages` (hub, run station, settings, code, monitor), `rover` (health, discovery, the rover's address, the queue proxy, photos) and `recordings` (camera readiness, start, stop, list, download, delete). |
 | `operator_console.py` / `console/` | What is left of `/operator/`: camera control, the satellite's tunables, and shutting down. The mission queue, the login and the review flow went with the mirror. |
 | `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. Owns `recording_key()`, the one rule for turning a mission id into a recording name, and remembers which rover instructions each recording dispatched. |
 | `mission_watcher.py` | Polls the rover and releases the camera when a recording's own run finishes, not any run of that mission. Stops any recording older than ten minutes, for the rover that loses power mid-run. The only background thread. |
@@ -29,7 +31,7 @@ for what the Firestore mirror used to do and why it went.
 | `start-mac.sh` | Runs the satellite on a MacBook: starts the web server, then asks it to start the camera so Settings can switch it. See `yard/MACBOOK_SETUP.md`. |
 | `satellite_identity.py` | Which yard this is. Half of what identifies a run. |
 | `satellite_power.py` | Shutting the satellite down from Settings: closes and keeps any recording still open, then powers off through the passwordless sudo rule in `yard/deploy/satellite.sudoers`, which it checks for first. |
-| `tunables.py` | Settings editable at `/settings` without a restart. |
+| `tunables.py` | Settings editable at `/settings` without a restart, the yard's Mission Control address among them. |
 | `templates/`, `static/` | The five pages: hub, run station, code, monitor, settings. `static/camera-client.js` is the one camera-stream WebSocket client, shared by the monitor and the run station's live view. `static/yard-theme.css` is Mission Control's palette, generated from its `globals.css` by `npm run build:yard-theme` in `mission-control/` (never edit it by hand; CI fails if it drifts). `static/yard-theme-init.js` puts the console pages in Mission Control's light or dark theme; the kiosk pages (code, monitor) leave it out and stay dark. |
 | `tests/` | pytest. `pytest tests` from this directory. |
 

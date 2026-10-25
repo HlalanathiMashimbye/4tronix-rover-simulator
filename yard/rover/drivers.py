@@ -6,6 +6,7 @@ for testability (real hardware vs a stand-in that keeps the same state).
 """
 
 import os
+import sys
 import time
 import threading
 from abc import ABC, abstractmethod
@@ -20,6 +21,21 @@ STRAIGHT = {9: 0, 11: 0, 13: 0, 15: 0}
 
 # Toed in for spinning on the spot.
 PIVOT = {9: 50, 15: -50, 11: -50, 13: 50}
+
+
+def rover_lib_path() -> str:
+    """Directory holding the 4tronix `rover` library on the Pi.
+
+    Defaults to the copy vendored beside this file rather than a hardcoded
+    absolute path, so nothing here bakes in a machine layout. ROVER_LIB_PATH
+    overrides it; yard/deploy/rover-server.service sets it explicitly.
+
+    Note this is only half of what the Pi needs on its path: rover.py imports
+    `pca9685`, which is not vendored and still comes from the 4tronix install.
+    See yard/rover/vendor/README.md.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.environ.get('ROVER_LIB_PATH', os.path.join(here, 'vendor'))
 
 
 def steer_angles(front_degrees: float) -> dict:
@@ -108,6 +124,17 @@ class RoverDriver(ABC):
         """Steer right while driving. The speed has already been checked."""
 
     @abstractmethod
+    def learner_rover(self):
+        """The `rover` a learner's Python is given, as a LearnerRover.
+
+        Owned by the driver so that swapping the driver swaps what a learner's
+        program drives too. It used to be chosen by whether the hardware
+        library would import, so on the satellite's simulator, a Pi where it
+        does, learner programs went to the real library and the fake driver
+        never saw them.
+        """
+
+    @abstractmethod
     def stop(self) -> None:
         """Stop all movement and straighten the wheels"""
 
@@ -118,6 +145,97 @@ class RoverDriver(ABC):
     @abstractmethod
     def cleanup(self) -> None:
         """Clean up resources"""
+
+
+class LearnerRover:
+    """The 4tronix library's own API, with its speeds held to 0-100.
+
+    Learner programs call the library directly (forward(speed), time.sleep,
+    stop, setServo), and its semantics are the ones the browser simulator
+    copies: forward does not straighten the wheels, stop does not either. So
+    this does not translate calls into the driver's high-level methods, which
+    add steering of their own. It forwards each call unchanged, after checking
+    the speed the way RoverDriver's own methods do, so a speed held in a
+    variable, which no validator can read, is refused before a motor sees it.
+    """
+
+    _MOTIONS = frozenset({'forward', 'reverse', 'spinLeft', 'spinRight'})
+
+    def __init__(self, library):
+        self._library = library
+
+    def __getattr__(self, name):
+        call = getattr(self._library, name)
+        if name not in self._MOTIONS:
+            return call
+
+        def checked(speed, *rest):
+            return call(check_speed(speed), *rest)
+
+        return checked
+
+
+class _FakeRoverLibrary:
+    """The library's calls, kept as the fake driver's state instead of sent to pins.
+
+    Same semantics as the hardware library, not as the driver's methods: the
+    motors and the servos are separate, so driving leaves the wheels where the
+    program last pointed them.
+    """
+
+    def __init__(self, driver):
+        self._driver = driver
+
+    def init(self, brightness=40, PiBit=False):
+        pass
+
+    def cleanup(self):
+        self._driver.motion = None
+
+    def _drive(self, name, speed):
+        print(f"[FAKE] {name}({speed})")
+        self._driver.motion = (name, speed)
+
+    def forward(self, speed):
+        self._drive('forward', speed)
+
+    def reverse(self, speed):
+        self._drive('reverse', speed)
+
+    def spinLeft(self, speed):
+        self._drive('spinLeft', speed)
+
+    def spinRight(self, speed):
+        self._drive('spinRight', speed)
+
+    def stop(self):
+        print("[FAKE] stop()")
+        self._driver.motion = None
+
+    brake = stop
+
+    def setServo(self, servo, degrees):
+        print(f"[FAKE] setServo({servo}, {degrees})")
+        self._driver.wheels[servo] = degrees
+
+    def getDistance(self):
+        # Nothing in range: what the sensor reports in an empty yard.
+        return 100.0
+
+    def fromRGB(self, red, green, blue):
+        return (int(red) << 16) + (int(green) << 8) + blue
+
+    def setColor(self, color):
+        pass
+
+    def setPixel(self, ID, color):
+        pass
+
+    def show(self):
+        pass
+
+    def clear(self):
+        pass
 
 
 class FakeRoverDriver(RoverDriver):
@@ -142,6 +260,9 @@ class FakeRoverDriver(RoverDriver):
         # None while stopped.
         self.motion = None
         self.animation_running = False
+
+    def learner_rover(self):
+        return LearnerRover(_FakeRoverLibrary(self))
 
     def _forward(self, speed: float) -> None:
         print(f"[FAKE] Forward at speed {speed}")
@@ -194,7 +315,10 @@ class RealRoverDriver(RoverDriver):
     """Real hardware driver - uses rover.py module on Pi"""
 
     def __init__(self):
-        # Import rover module (only available on Pi)
+        # The vendored library, or ROVER_LIB_PATH's; only importable on a Pi.
+        lib_path = rover_lib_path()
+        if lib_path not in sys.path:
+            sys.path.insert(0, lib_path)
         import rover
         self.rover = rover
         self.rover.init(40)
@@ -262,6 +386,11 @@ class RealRoverDriver(RoverDriver):
         self.rover.stop()
         self._set_all_leds_white()
         self.rover.cleanup()
+
+    def learner_rover(self):
+        # The same library this driver drives, so a learner's program reaches
+        # the motors exactly as it did before the driver owned it.
+        return LearnerRover(self.rover)
 
     def _point_wheels(self, angles: dict) -> None:
         """Send each steering servo its angle, in the order given."""

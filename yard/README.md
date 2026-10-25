@@ -23,7 +23,7 @@ yard/
 
 **Rover** (marspi.local:8523) - Receives instructions via REST API and executes them in order. Automatically falls back to a fake driver (logs instead of moving) when not on a Pi.
 
-**Satellite** (mro.local:3001) - Serves the operator's run station at `/run/`, the tablet Blockly interface at `/code/`, the TV monitor at `/monitor/` and settings at `/settings`, and records each run. Also streams the Pi camera at port 8890. It has no sign-in and holds no cloud credential: missions arrive by copy and paste from Mission Control's operator console.
+**Satellite** (mro.local:3001) - Serves the operator's run station at `/run/`, the tablet Blockly interface at `/code/`, the TV monitor at `/monitor/` and settings at `/settings`, and records each run. Also streams the Pi camera at port 8890. It has no sign-in: missions arrive by copy and paste from Mission Control's operator console. The one credential it can hold is the optional upload secret, set in Settings, for sending finished videos to Mission Control.
 
 ## How It Works
 

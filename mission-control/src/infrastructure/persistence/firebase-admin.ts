@@ -27,6 +27,7 @@
 import { initializeApp, getApps, applicationDefault, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
+import { resolveFirestoreDatabaseId } from '@/infrastructure/config/firestoreDatabase';
 
 let app: App | undefined;
 let firestoreInstance: Firestore | undefined;
@@ -139,8 +140,10 @@ export function getFirestoreInstance(): Firestore {
     return firestoreInstance;
   }
 
-  initializeFirebaseAdmin();
-  firestoreInstance = getFirestore();
+  // Named, not implied: prod and staging are two databases in one project, so
+  // "the project's database" no longer says which. See firestoreDatabase.ts.
+  const adminApp = initializeFirebaseAdmin();
+  firestoreInstance = getFirestore(adminApp, resolveFirestoreDatabaseId());
 
   return firestoreInstance;
 }
@@ -148,7 +151,7 @@ export function getFirestoreInstance(): Firestore {
 /**
  * Firebase Admin Auth, for verifying operator session cookies server-side.
  *
- * Restored for AB#341. It was removed when the operator console moved to the
+ * Restored for the operator console. It was removed when the console moved to the
  * yard satellite and mission-control became learner-only; the console is coming
  * back as a role-gated route, so the server needs to verify sessions again.
  *

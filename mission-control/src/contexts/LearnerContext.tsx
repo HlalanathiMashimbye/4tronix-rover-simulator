@@ -8,8 +8,7 @@
  */
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
+import { browserLearnerEmailStamp, browserLearnerRepository } from '@/infrastructure/container.browser';
 import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
@@ -72,15 +71,10 @@ async function backfillLatestMissionEmail(email: string): Promise<void> {
   if (!missionId) return;
 
   try {
-    const db = getFirestoreClient();
-    const missionRef = doc(db, 'missions', missionId);
-    const snapshot = await getDoc(missionRef);
-
-    // Already stamped (e.g. the learner re-saved the same address from the
-    // history page) - the queued email has been sent, don't send it twice.
-    if (!snapshot.exists() || snapshot.data().learnerEmailHash) return;
-
-    await updateDoc(missionRef, { learnerEmailHash: await hashLearnerEmail(email) });
+    // False when it was already stamped (the learner re-saved the same address
+    // from the history page): the queued email has been sent, so not twice.
+    const stamped = await browserLearnerEmailStamp().stampLearnerEmailHash(missionId, await hashLearnerEmail(email));
+    if (!stamped) return;
 
     await fetch(`/api/missions/${missionId}/notify`, {
       method: 'POST',
@@ -99,11 +93,6 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const [learnerEmail, setLearnerEmailState] = useState<string | null>(null);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability -- initializeLearnerSession is a hoisted function declaration and this effect runs once after mount, so there is no window where it is genuinely undefined. Pre-existing; the compiler only began reporting it once updateDisplayName was removed and it could analyse this component through to the end.
-    initializeLearnerSession();
-  }, []);
 
   // Load any saved email. We never prompt for it on landing (per David); the
   // email ask happens after a mission is submitted, and on the history page.
@@ -144,9 +133,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setShowEmailPrompt(false);
 
     // Written server-side, not from here. The learner document is readable by
-    // exact id and those ids are published on public mission documents, so an
-    // address stored on it could be harvested in bulk from the feed. The route
-    // puts it in a subcollection browsers cannot read at all - see
+    // exact id, so the route puts the address in a subcollection browsers
+    // cannot read at all, and it stays private even if an id ever leaks - see
     // core/domain/services/learnerContact.ts.
     //
     // Order still matters: backfillLatestMissionEmail triggers a notify that
@@ -182,44 +170,20 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     setSessionId(learnerId);
 
     try {
-      const db = getFirestoreClient();
-      const learnerRef = doc(db, 'learners', learnerId);
-      const learnerSnap = await getDoc(learnerRef);
-
+      const learners = browserLearnerRepository();
       const learnerRefHash = await hashLearnerId(learnerId);
+      const existingLearner = await learners.findById(learnerId);
 
-      if (learnerSnap.exists()) {
-        const existingLearner = learnerSnap.data() as Learner;
-
-        const updates: Record<string, unknown> = {
-          lastActiveAt: new Date().toISOString(),
-          learnerRef: learnerRefHash,
-        };
-
-        if (!existingLearner.displayName) {
-          updates.displayName = generateDisplayName();
-        }
-
-        await updateDoc(learnerRef, updates);
-
-        setLearner({
-          ...existingLearner,
-          lastActiveAt: new Date().toISOString(),
-          displayName: existingLearner.displayName || (updates.displayName as string),
-        });
+      if (existingLearner) {
+        const now = new Date().toISOString();
+        // A learner recorded before names were given gets one on this visit.
+        const displayName = existingLearner.displayName || generateDisplayName();
+        await learners.recordVisit(learnerId, learnerRefHash, now,
+          existingLearner.displayName ? undefined : displayName);
+        setLearner({ ...existingLearner, lastActiveAt: now, displayName });
       } else {
-        const newLearner = {
-          ...createAnonymousLearner(learnerId),
-          displayName: generateDisplayName(),
-        };
-
-        await setDoc(learnerRef, {
-          ...newLearner,
-          learnerRef: learnerRefHash,
-          createdAt: serverTimestamp(),
-          lastActiveAt: serverTimestamp(),
-        });
-
+        const newLearner = { ...createAnonymousLearner(learnerId), displayName: generateDisplayName() };
+        await learners.create(newLearner, learnerRefHash);
         setLearner(newLearner);
       }
     } catch (error) {
@@ -229,6 +193,12 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }
+
+  // After the declaration it calls, so nothing reads it before it exists.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration: the learner id lives in localStorage, which a server render cannot read
+    initializeLearnerSession();
+  }, []);
 
   async function updateProfile(
     displayName: string,

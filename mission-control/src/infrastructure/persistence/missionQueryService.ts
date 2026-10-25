@@ -16,15 +16,16 @@ import {
   where,
   orderBy,
   onSnapshot,
-  getDocs,
   limit,
   Unsubscribe,
-  Timestamp,
 } from 'firebase/firestore';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
+import { MissionState } from '@/core/domain/entities/MissionState';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
+import { missionFromDocument } from '@/infrastructure/persistence/missionDocuments';
 
 /**
  * Upper bound on a learner's history subscription.
@@ -58,11 +59,11 @@ export const HISTORY_LIMIT = 50;
  */
 export async function subscribeMissionsByLearnerId(
   learnerId: string,
-  callback: (missions: Mission[]) => void
+  callback: (missions: MissionRecord[]) => void
 ): Promise<Unsubscribe> {
   const learnerRef = await hashLearnerId(learnerId);
   const db = getFirestoreClient();
-  const missionsRef = collection(db, 'missions');
+  const missionsRef = collection(db, COLLECTIONS.missions);
   const q = query(
     missionsRef,
     where('learnerRef', '==', learnerRef),
@@ -73,9 +74,9 @@ export async function subscribeMissionsByLearnerId(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
-        const mission = convertTimestamps(doc.data() as Mission, doc.id);
+        const mission = missionFromDocument(doc.id, doc.data());
         if (!mission.deleted) missions.push(mission);
       });
       callback(missions);
@@ -104,12 +105,12 @@ export async function subscribeMissionsByLearnerId(
  */
 export async function subscribeMissionsByLearnerEmail(
   learnerEmail: string,
-  callback: (missions: Mission[]) => void
+  callback: (missions: MissionRecord[]) => void
 ): Promise<Unsubscribe> {
   const learnerEmailHash = await hashLearnerEmail(learnerEmail);
 
   const db = getFirestoreClient();
-  const missionsRef = collection(db, 'missions');
+  const missionsRef = collection(db, COLLECTIONS.missions);
   const q = query(
     missionsRef,
     where('learnerEmailHash', '==', learnerEmailHash),
@@ -120,9 +121,9 @@ export async function subscribeMissionsByLearnerEmail(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
-        const mission = convertTimestamps(doc.data() as Mission, doc.id);
+        const mission = missionFromDocument(doc.id, doc.data());
         if (!mission.deleted) missions.push(mission);
       });
       callback(missions);
@@ -166,12 +167,12 @@ export const COMPLETION_FEED_LIMIT = 8;
  * client-side status check is belt and braces, not the load-bearing part.
  */
 export function subscribeRecentCompletions(
-  callback: (missions: Mission[]) => void,
+  callback: (missions: MissionRecord[]) => void,
   max: number = COMPLETION_FEED_LIMIT
 ): Unsubscribe {
   const db = getFirestoreClient();
   const q = query(
-    collection(db, 'missions'),
+    collection(db, COLLECTIONS.missions),
     orderBy('completedAt', 'desc'),
     limit(max)
   );
@@ -179,10 +180,10 @@ export function subscribeRecentCompletions(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
-        const mission = convertTimestamps(doc.data() as Mission, doc.id);
-        if (!mission.deleted && mission.status === 'completed') missions.push(mission);
+        const mission = missionFromDocument(doc.id, doc.data());
+        if (!mission.deleted && MissionState.of(mission.status).isCompleted()) missions.push(mission);
       });
       callback(missions);
     },
@@ -192,64 +193,4 @@ export function subscribeRecentCompletions(
       callback([]);
     }
   );
-}
-
-/**
- * Get all missions for a learner (one-time fetch)
- *
- * @param learnerId - Unique learner identifier (hashed before querying)
- * @returns Array of missions sorted by submission time (newest first)
- */
-export async function getMissionsByLearnerId(
-  learnerId: string
-): Promise<Mission[]> {
-  try {
-    const learnerRef = await hashLearnerId(learnerId);
-    const db = getFirestoreClient();
-    const missionsRef = collection(db, 'missions');
-    const q = query(
-      missionsRef,
-      where('learnerRef', '==', learnerRef),
-      orderBy('submittedAt', 'desc'),
-      limit(HISTORY_LIMIT)
-    );
-
-    const querySnapshot = await getDocs(q);
-
-    const missions: Mission[] = [];
-    querySnapshot.forEach((doc) => {
-      const mission = convertTimestamps(doc.data() as Mission, doc.id);
-      if (!mission.deleted) missions.push(mission);
-    });
-
-    return missions;
-  } catch (error) {
-    console.error('Failed to get missions by learnerId:', error);
-    return [];
-  }
-}
-
-/**
- * Convert Firestore Timestamps to ISO strings
- *
- * Firestore sometimes returns Timestamp objects instead of strings.
- * This helper ensures consistent date formatting.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Firestore returns Timestamp|string for date fields; this bridges both shapes
-function convertTimestamps(data: any, docId: string): Mission {
-  const mission = { ...data, id: docId };
-
-  if (mission.submittedAt instanceof Timestamp) {
-    mission.submittedAt = mission.submittedAt.toDate().toISOString();
-  }
-
-  if (mission.startedAt instanceof Timestamp) {
-    mission.startedAt = mission.startedAt.toDate().toISOString();
-  }
-
-  if (mission.completedAt instanceof Timestamp) {
-    mission.completedAt = mission.completedAt.toDate().toISOString();
-  }
-
-  return mission as unknown as Mission;
 }

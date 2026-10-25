@@ -11,12 +11,9 @@
  * Nothing in this file is reachable without an admin already existing, so
  * bootstrapping cannot happen here by definition.
  *
- * WHAT IS WRITTEN
- *
- *   Auth custom claim   role=operator|admin   the store everything enforces from
- *   users/{uid}         ledger only           who granted it, when, to whom
- *   operatorInvites     pending only          access for an address that has
- *                                             never signed in (see OperatorInvite)
+ * This file is the controller: it checks the caller is an admin, validates
+ * the request and maps the outcome to HTTP. What may change, and what gets
+ * written, is OperatorTeamService and FirebaseOperatorDirectory.
  *
  * The ledger records the granting ADMIN, which the script could not do: it
  * recorded $USER from whatever shell happened to run it.
@@ -24,19 +21,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
-import { deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
-import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { buildAccessGrantedEmail } from '@/infrastructure/email/accessRequestTemplate';
-import { resolveAppUrl } from '@/infrastructure/config/appUrl';
+import { operatorTeamService } from '@/infrastructure/container.server';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
-import {
-  changeBlocker,
-  isNoOpChange,
-  isOperatorRole,
-  type OperatorRole,
-} from '@/core/domain/entities/OperatorAccount';
+import { TeamChangeFailed } from '@/core/application/services/OperatorTeamService';
+import { isOperatorRole, type OperatorRole } from '@/core/domain/entities/OperatorAccount';
 
 function errorResponse(error: unknown) {
   if (error instanceof UnauthorizedError) {
@@ -54,32 +42,14 @@ function errorResponse(error: unknown) {
 export async function GET() {
   try {
     await requireAdmin();
-    const [accounts, invites] = await Promise.all([listOperatorAccounts(), listInvites()]);
-    return NextResponse.json({ success: true, accounts, invites });
+    const listing = await operatorTeamService().listing();
+    return NextResponse.json({ success: true, ...listing });
   } catch (error) {
     const known = errorResponse(error);
     if (known) return known;
 
     console.error('[operator/team] list failed:', error);
     return NextResponse.json({ success: false, error: 'Could not load the team' }, { status: 500 });
-  }
-}
-
-/**
- * Tell the person they have been let in.
- *
- * Never fails the grant: the access is already written, and an admin told
- * "could not apply that change" over an email hiccup would grant it twice.
- * Returns whether it went, so the admin's confirmation can say so.
- */
-async function emailGrant(to: string, role: OperatorRole, origin: string): Promise<boolean> {
-  try {
-    const { subject, html } = buildAccessGrantedEmail(role, `${resolveAppUrl(origin)}/operator`);
-    await new ResendEmailSender().send(to, subject, html);
-    return true;
-  } catch (error) {
-    console.error('[operator/team] grant email failed:', error);
-    return false;
   }
 }
 
@@ -118,133 +88,30 @@ export async function POST(request: NextRequest) {
   }
   const nextRole: OperatorRole | null = role;
 
-  const auth = getFirebaseAdminAuth();
-  const db = getFirestoreInstance();
-
-  let user;
+  const team = operatorTeamService(request.nextUrl.origin);
   try {
-    user = await auth.getUserByEmail(email.trim());
-  } catch (error) {
-    if ((error as { code?: string }).code === 'auth/user-not-found') {
-      return inviteResponse(email.trim(), nextRole, session.email ?? session.uid, request.nextUrl.origin);
+    const result = await team.changeAccess(
+      { uid: session.uid, label: session.email ?? session.uid },
+      email.trim(),
+      nextRole,
+    );
+
+    if (result.outcome === 'blocked') {
+      return NextResponse.json({ success: false, error: result.message }, { status: 409 });
     }
-    console.error('[operator/team] lookup failed:', error);
-    return NextResponse.json({ success: false, error: 'Could not look up that account' }, { status: 500 });
-  }
-
-  const accounts = await listOperatorAccounts();
-  const change = { actorUid: session.uid, targetUid: user.uid, nextRole, accounts };
-
-  const blocked = changeBlocker(change);
-  if (blocked) {
-    return NextResponse.json({ success: false, error: blocked }, { status: 409 });
-  }
-
-  if (isNoOpChange(change)) {
-    // Returning early rather than writing: setCustomUserClaims plus a token
-    // revoke would sign the person out to give them what they already had.
-    return NextResponse.json({
-      success: true,
-      unchanged: true,
-      message: `${user.email ?? user.uid} already has this access.`,
-      accounts,
-      invites: await listInvites(),
-    });
-  }
-
-  try {
-    const existingClaims = user.customClaims ?? {};
-
-    if (nextRole === null) {
-      // Preserve unrelated claims rather than wiping the object.
-      const { role: _removed, ...rest } = existingClaims;
-      await auth.setCustomUserClaims(user.uid, rest);
-      await db.collection('users').doc(user.uid).set(
-        { role: null, revokedAt: new Date().toISOString(), revokedBy: session.email ?? session.uid },
-        { merge: true },
-      );
-      // dal.ts verifies with checkRevoked, so this takes effect on their very
-      // next request rather than whenever the session happens to lapse.
-      await auth.revokeRefreshTokens(user.uid);
-    } else {
-      await auth.setCustomUserClaims(user.uid, { ...existingClaims, role: nextRole });
-      await db.collection('users').doc(user.uid).set(
-        {
-          role: nextRole,
-          email: user.email ?? null,
-          grantedAt: new Date().toISOString(),
-          grantedBy: session.email ?? session.uid,
-        },
-        { merge: true },
-      );
+    if (result.outcome === 'nothing-to-revoke') {
+      return NextResponse.json({ success: false, error: result.message }, { status: 404 });
     }
-
-    // Only a grant is announced. A removal is usually deliberate and is not
-    // something to explain to the person by email.
-    const emailed =
-      nextRole !== null && user.email ? await emailGrant(user.email, nextRole, request.nextUrl.origin) : false;
-
-    // An invite for an address that has an account now is stale either way:
-    // the change above is the decision, and a leftover invite would re-grant
-    // a revoked role if this account were ever deleted and recreated.
-    await deleteInvite(email.trim());
 
     return NextResponse.json({
       success: true,
-      accounts: await listOperatorAccounts(),
-      invites: await listInvites(),
-      // Claims ride on the ID token, so a grant is not live until that token
-      // refreshes. The UI says so; hiding it produces "it did not work" reports
-      // for something that is working exactly as designed.
-      message:
-        nextRole === null
-          ? `Access removed for ${user.email ?? user.uid}. They have been signed out.`
-          : `${user.email ?? user.uid} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}They need to sign out and back in for it to take effect.`,
+      ...(result.outcome === 'unchanged' ? { unchanged: true } : {}),
+      message: result.message,
+      ...(await team.listing()),
     });
   } catch (error) {
-    console.error('[operator/team] write failed:', error);
-    return NextResponse.json({ success: false, error: 'Could not apply that change' }, { status: 500 });
-  }
-}
-
-/**
- * Granting to an address nobody has signed in with yet.
- *
- * Operators sign in with Google, and their first sign-in is what creates the
- * account, so "no account" is the normal case for a new facilitator rather
- * than a mistake. The grant is kept as an invite and applied by the session
- * route the first time that address signs in with Google.
- */
-async function inviteResponse(email: string, nextRole: OperatorRole | null, invitedBy: string, origin: string) {
-  try {
-    if (nextRole === null) {
-      if (!(await deleteInvite(email))) {
-        return NextResponse.json(
-          { success: false, error: `Nobody has access as ${email}, and there is no pending invite to remove.` },
-          { status: 404 },
-        );
-      }
-      return NextResponse.json({
-        success: true,
-        accounts: await listOperatorAccounts(),
-        invites: await listInvites(),
-        message: `Removed the pending access for ${email}.`,
-      });
-    }
-
-    await saveInvite(email, nextRole, invitedBy);
-    const emailed = await emailGrant(email, nextRole, origin);
-    return NextResponse.json({
-      success: true,
-      accounts: await listOperatorAccounts(),
-      invites: await listInvites(),
-      message:
-        `${email} has not signed in yet. They get ${nextRole} access the first time ` +
-        'they sign in with Google using that address.' +
-        (emailed ? ' They have been emailed.' : ''),
-    });
-  } catch (error) {
-    console.error('[operator/team] invite failed:', error);
-    return NextResponse.json({ success: false, error: 'Could not save that access' }, { status: 500 });
+    console.error('[operator/team] change failed:', error);
+    const message = error instanceof TeamChangeFailed ? error.message : 'Could not apply that change';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }

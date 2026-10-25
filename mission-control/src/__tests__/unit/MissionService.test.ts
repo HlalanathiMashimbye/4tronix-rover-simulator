@@ -12,7 +12,7 @@ import {
   MissionCursor,
   MissionPage,
 } from '@/core/domain/repositories/IMissionRepository';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import { CreateMissionDto } from '@/core/application/dto/mission';
 import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
 
@@ -33,12 +33,12 @@ class InMemoryNameRegistry implements IMissionNameRegistry {
 }
 
 class MockMissionRepository implements IMissionReader, IMissionWriter {
-  private missions: Map<string, Mission> = new Map();
+  private missions: Map<string, MissionRecord> = new Map();
   private idCounter = 0;
 
-  async create(mission: Omit<Mission, 'id' | 'queuePosition' | 'estimatedWait'>): Promise<Mission> {
+  async create(mission: Omit<MissionRecord, 'id' | 'queuePosition' | 'estimatedWait'>): Promise<MissionRecord> {
     const id = `mock-id-${++this.idCounter}`;
-    const newMission: Mission = {
+    const newMission: MissionRecord = {
       ...mission,
       id,
     };
@@ -46,35 +46,26 @@ class MockMissionRepository implements IMissionReader, IMissionWriter {
     return newMission;
   }
 
-  async findById(id: string): Promise<Mission | null> {
+  async findById(id: string): Promise<MissionRecord | null> {
     return this.missions.get(id) || null;
   }
 
-  async findByLearnerId(learnerRef: string): Promise<Mission[]> {
+  async findByLearnerId(learnerRef: string): Promise<MissionRecord[]> {
     return Array.from(this.missions.values())
       .filter((m) => m.learnerRef === learnerRef)
       .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   }
 
-  async findBySessionId(sessionId: string): Promise<Mission[]> {
+  async findBySessionId(sessionId: string): Promise<MissionRecord[]> {
     return Array.from(this.missions.values())
       .filter((m) => m.sessionId === sessionId)
       .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   }
 
-  async getQueuedMissions(yardId: string): Promise<Mission[]> {
+  async getQueuedMissions(yardId: string): Promise<MissionRecord[]> {
     return Array.from(this.missions.values())
       .filter((m) => m.yardId === yardId && m.status === 'queued')
       .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
-  }
-
-  async update(id: string, updates: Partial<Mission>): Promise<Mission | null> {
-    const mission = this.missions.get(id);
-    if (!mission) return null;
-
-    const updated = { ...mission, ...updates };
-    this.missions.set(id, updated);
-    return updated;
   }
 
   async getQueueLength(yardId: string): Promise<number> {
@@ -88,7 +79,7 @@ class MockMissionRepository implements IMissionReader, IMissionWriter {
   // so a mock of it no longer has to pretend to delete anything.
   async findRuns() { return []; }
 
-  async findByIdPrefix(prefix: string, max: number): Promise<Mission[]> {
+  async findByIdPrefix(prefix: string, max: number): Promise<MissionRecord[]> {
     return [...this.missions.values()].filter((m) => m.id.startsWith(prefix)).slice(0, max);
   }
 
@@ -113,7 +104,7 @@ class MockMissionRepository implements IMissionReader, IMissionWriter {
     };
   }
 
-  async findAll(): Promise<Mission[]> {
+  async findAll(): Promise<MissionRecord[]> {
     return Array.from(this.missions.values()).sort((a, b) =>
       b.submittedAt.localeCompare(a.submittedAt)
     );
@@ -253,30 +244,6 @@ describe('MissionService', () => {
       const retrieved = await service.getMissionById('non-existent-id');
 
       expect(retrieved).toBeNull();
-    });
-  });
-
-  describe('updateMission', () => {
-    it('should update mission status', async () => {
-      const submitted = await service.submitMission(
-        makeDto({ yardId: 'yard-1', code: 'rover.forward(100)' })
-      );
-
-      const updated = await service.updateMission(submitted.mission!.id, {
-        status: 'processing',
-        startedAt: new Date().toISOString(),
-      });
-
-      expect(updated?.status).toBe('processing');
-      expect(updated?.startedAt).toBeDefined();
-    });
-
-    it('should return null for non-existent mission', async () => {
-      const updated = await service.updateMission('non-existent-id', {
-        status: 'completed',
-      });
-
-      expect(updated).toBeNull();
     });
   });
 });

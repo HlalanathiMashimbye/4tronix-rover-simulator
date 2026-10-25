@@ -74,7 +74,7 @@ point inward". One line per stratum, no more:
 3. **Core** `src/core` : Mission, MissionRun, Learner entities; safety rules
    (allowlist, speed and time ceilings); `IMissionReader` / `IMissionWriter` /
    `IMissionBookkeeping` ports
-4. **Infrastructure** `src/infrastructure` : FirestoreMissionRepository,
+4. **Infrastructure** `src/infrastructure` : Admin and browser Firestore mission repositories,
    split composition roots (`container.server` privileged, `container.browser`
    rules-bound), Resend, YouTube
 

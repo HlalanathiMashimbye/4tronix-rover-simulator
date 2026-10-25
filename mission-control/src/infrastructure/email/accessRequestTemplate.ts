@@ -73,3 +73,37 @@ export function buildAccessGrantedEmail(role: 'operator' | 'admin', signInUrl: s
     `,
   };
 }
+
+/**
+ * The reply every other admin gets once a request has been dealt with.
+ *
+ * No subject of its own: it goes out as a reply to the request, under that
+ * email's subject, so it lands in the thread the admin already has open. It
+ * says who handled it so nobody else picks it up, and keeps a way to the team
+ * page for an admin who did not expect this person to be let in.
+ */
+export function buildAccessResolvedEmail(
+  requesterEmail: string,
+  role: 'operator' | 'admin',
+  handledBy: string,
+  teamUrl: string,
+) {
+  const who = escapeHtml(requesterEmail);
+  const by = escapeHtml(handledBy);
+  const href = escapeHtml(teamUrl);
+
+  return {
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; max-width: 520px; margin: 0 auto; color: #1f1f1f;">
+        <h2 style="font-size: 20px; margin: 0 0 12px;">Request handled</h2>
+        <p style="font-size: 15px; line-height: 1.5; margin: 0 0 16px;">
+          <strong>${by}</strong> gave <strong>${who}</strong> ${role} access.
+          There is nothing for you to do.
+        </p>
+        <p style="font-size: 13px; line-height: 1.5; color: #666; margin: 0;">
+          To see or change who has access, open <a href="${href}" style="color: #666;">Manage access</a>.
+        </p>
+      </div>
+    `,
+  };
+}

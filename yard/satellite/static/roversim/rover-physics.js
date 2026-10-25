@@ -25,7 +25,7 @@
  * forward at speed 100 for 1s and 2s: this predicts 15cm and 30cm.
  *
  * ONE BATTERY STATE. Four runs in a row from one charge; how the distance
- * drifts as the battery drains is not measured yet (AB#467's note suggests
+ * drifts as the battery drains is not measured yet (the calibration notes suggest
  * about 20 runs from full).
  */
 const FULL_SPEED_CM_PER_SECOND = 15;
@@ -36,7 +36,7 @@ const ROVER_MARGIN = 12;
 /** The levels from gentle to steep, which is also how they rank. */
 export const ZONE_LEVELS = ['yellow', 'orange', 'red'];
 /**
- * The real yard (AB#464), as yard/docs/yard-measurements.md records it.
+ * The real yard, as yard/docs/yard-measurements.md records it.
  * yardMeasurements.test.ts reads that doc's tables and fails if these drift
  * from it, so the measurement and the simulator cannot quietly disagree.
  *
@@ -91,7 +91,7 @@ export function roverToYard(rx, ry, yard = YARD) {
 }
 /**
  * The rover's footprint from above, per 4tronix: 20 cm long and 18.5 cm wide,
- * wheels included. Rocks are tested against this (AB#466), not against the
+ * wheels included. Rocks are tested against this, not against the
  * centre, because it is the wheels and the nose that reach a rock first.
  */
 const ROVER_HALF_LENGTH_CM = 10;
