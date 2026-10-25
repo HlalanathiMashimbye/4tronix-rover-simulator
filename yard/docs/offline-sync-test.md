@@ -1,10 +1,10 @@
 # Testing Task List for Offline Sync PRs 1–3
 
 > **Superseded.** The Firestore mirror this describes was removed from the
-> satellite. The yard holds no cloud credential and does not sync. Kept as the
-> record of a design that ran for real, and because its outbox parking and
-> back-off behaviour is worth reading if the yard ever talks to Mission Control
-> again. See [what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md)
+> satellite. The yard does not sync missions; its only cloud traffic is the
+> optional video upload to Mission Control. Kept as the record of a design
+> that ran for real, and because its outbox parking and back-off behaviour is
+> worth reading if the yard ever syncs missions again. See [what-the-yard-no-longer-does.md](what-the-yard-no-longer-does.md)
 > and [automatic-route-plan.md](automatic-route-plan.md).
 
 

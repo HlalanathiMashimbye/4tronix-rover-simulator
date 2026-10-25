@@ -129,7 +129,7 @@ unit-testable without a database emulator.
 **Decision.** Dependency inversion around the storage and email boundaries only.
 `MissionService` depends on `IMissionRepository`, not on Firestore;
 `MissionNotificationService` depends on `IEmailSender`, not on Resend. The
-concrete `FirestoreMissionRepository` and `ResendEmailSender` live in
+concrete `AdminFirestoreMissionRepository` and `ResendEmailSender` live in
 `infrastructure/` and are wired at the API route.
 
 **The payoff is provable, not theoretical.** Two things happened that this bought:

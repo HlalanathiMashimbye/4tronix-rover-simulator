@@ -9,7 +9,7 @@ The system has three deployable parts:
 | Service | Where it runs | What it is |
 |---|---|---|
 | **Mission Control** (`mission-control/`) | Cloud Run | The Next.js app. Learners write a mission, watch it run and browse history; operators sign in at `/operator` to work their yard's queue and settle each run |
-| **Yard satellite** (`yard/satellite`) | A Raspberry Pi in the yard | The yard's control panel: run station, tablet editor, TV monitor, camera and recordings. No sign-in and no cloud credential, so it works with no internet |
+| **Yard satellite** (`yard/satellite`) | A Raspberry Pi in the yard | The yard's control panel: run station, tablet editor, TV monitor, camera and recordings. No sign-in, and nothing on the run path needs the internet; the only credential it can hold is the optional secret for sending finished videos to Mission Control |
 | **Rover server** (`yard/rover`) | A Raspberry Pi on the rover | Runs the mission's Python against the rover's motors, servos and LEDs |
 
 Nothing connects the cloud to the yard over the network. An operator copies a

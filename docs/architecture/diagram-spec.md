@@ -87,7 +87,7 @@ point inward":
 2. API routes: `/api/missions`, `/api/learners`, Zod at the edge
 3. Core domain: Mission and Learner, `IMissionRepository` and `IEmailSender`
    ports, MissionService, AllowlistService
-4. Infrastructure: FirestoreMissionRepository, firebase-admin, ResendEmailSender,
+4. Infrastructure: Admin and browser Firestore mission repositories, firebase-admin, ResendEmailSender,
    allowlist analyzer
 
 **A3 Managed services** (external styling: lighter fill, dashed left edge).
