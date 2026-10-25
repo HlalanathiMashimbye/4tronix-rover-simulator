@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Copy, Download, Check } from 'lucide-react';
+import { ArrowLeft, Copy, Download, Check, X } from 'lucide-react';
 import Image from 'next/image';
 import { useLearner } from '@/contexts/LearnerContext';
+import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
 
 const EXIT_MS = 200;
 
@@ -15,12 +16,14 @@ interface Props {
 }
 
 export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
-  const { generateRecoveryCode, markProfileSaved } = useLearner();
+  const { generateRecoveryCode, markProfileSaved, linkParent } = useLearner();
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const generate = useCallback(async () => {
@@ -43,6 +46,8 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
   useEffect(() => {
     if (open) {
       generate();
+      setLinking(false);
+      setLinkError(null);
       const raf = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(raf);
     }
@@ -50,6 +55,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
     exitTimer.current = setTimeout(() => {
       setRecoveryCode(null);
       setCopied(false);
+      setLinkError(null);
     }, EXIT_MS);
     return () => {
       if (exitTimer.current) clearTimeout(exitTimer.current);
@@ -88,6 +94,31 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
     URL.revokeObjectURL(url);
   };
 
+  const handleLinkParent = async () => {
+    setLinking(true);
+    setLinkError(null);
+    try {
+      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      const idToken = await credential.user.getIdToken(true);
+      const auth = getFirebaseAuth();
+      await auth.signOut();
+      const result = await linkParent(idToken);
+      if (result.success) {
+        markProfileSaved();
+        onClose();
+      } else {
+        setLinkError(result.error ?? 'Could not link your account.');
+      }
+    } catch {
+      setLinkError('Sign-in did not finish. Please try again.');
+    } finally {
+      setLinking(false);
+    }
+  };
+
   return (
     <div
       className={`fixed inset-0 z-[100] grid place-items-center px-4 py-8 ${visible ? '' : 'pointer-events-none'}`}
@@ -105,6 +136,15 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
           visible ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
         }`}
       >
+        <button
+          type="button"
+          onClick={onSkip ?? onClose}
+          className="absolute right-4 top-4 z-10 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
         <div className="flex items-center justify-center py-5">
           <div className="h-16 w-16 overflow-hidden rounded-2xl">
             <Image src="/rover-hero.jpg" alt="" width={128} height={128} className="h-full w-full object-cover" />
@@ -142,7 +182,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
 
           {recoveryCode && !loading && (
             <div
-              className="mt-5 flex items-center gap-2 rounded-xl px-4 py-3"
+              className={`mt-5 flex items-center gap-2 rounded-xl px-4 py-3 transition-opacity ${linking ? 'pointer-events-none opacity-40' : ''}`}
               style={{
                 background: 'oklch(0.42 0.17 285)',
                 border: '1.5px solid oklch(0.52 0.19 285)',
@@ -154,6 +194,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
               <button
                 type="button"
                 onClick={handleCopy}
+                disabled={linking}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                 aria-label={copied ? 'Copied' : 'Copy code'}
               >
@@ -164,6 +205,7 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
               <button
                 type="button"
                 onClick={handleDownload}
+                disabled={linking}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                 aria-label="Download code"
               >
@@ -184,15 +226,14 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
                   Back
                 </button>
               )}
-              {onSkip && (
-                <button
-                  type="button"
-                  onClick={onSkip}
-                  className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  Skip
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={handleLinkParent}
+                disabled={linking}
+                className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {linking ? 'Linking…' : 'or link a parent email'}
+              </button>
             </div>
             <button
               type="button"
@@ -200,15 +241,16 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
                 if (recoveryCode) markProfileSaved();
                 onClose();
               }}
-              className="clay clay-press rounded-xl bg-gradient-mars px-6 py-2.5 text-sm font-bold text-primary-foreground"
+              disabled={linking}
+              className="clay clay-press rounded-xl bg-gradient-mars px-6 py-2.5 text-sm font-bold text-primary-foreground transition-opacity disabled:opacity-40"
             >
               Done
             </button>
           </div>
 
-          {onSkip && (
-            <p className="mt-3 text-center text-[11px] text-muted-foreground/70">
-              Skipping means clearing your browser loses your progress.
+          {linkError && (
+            <p className="mt-3 text-center text-[11px] text-red-400">
+              {linkError}
             </p>
           )}
         </div>
