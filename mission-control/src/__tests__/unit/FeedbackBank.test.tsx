@@ -12,11 +12,12 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MissionActions } from '@/components/operator/MissionActions';
 import { FEEDBACK_MESSAGES, allFeedbackMessages, fillFeedbackMessage } from '@/core/domain/services/feedbackMessages';
 import type { Crash } from '@/core/domain/safety/crashCheck';
+import type { MissionStatus } from '@/core/domain/entities/Mission';
 
 const settled = { id: 'm1', name: 'Rock Lover', code: 'rover.forward(60)', status: 'completed' as const };
 const wall: Crash = { into: 'wall', atSeconds: 5.3, frame: 53 };
 
-function mount(crash: Crash | null = null, status: 'completed' | 'cancelled' = 'completed') {
+function mount(crash: Crash | null = null, status: MissionStatus = 'completed') {
   render(
     <MissionActions
       mission={{ ...settled, status }}
@@ -95,9 +96,7 @@ describe('the feedback bank', () => {
   });
 
   it('lists the stopped group first for a run that did not finish', () => {
-    // Cancelled: the note panel opens once a mission is settled, which a
-    // failed one is not.
-    mount(null, 'cancelled');
+    mount(null, 'not_completed');
     expect(groups()[0]).toHaveAttribute('label', 'Had to stop it (suggested)');
   });
 
