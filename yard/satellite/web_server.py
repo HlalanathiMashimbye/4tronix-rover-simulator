@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask
+from flask import Flask, jsonify, request
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -27,6 +27,7 @@ load_dotenv(Path(__file__).resolve().parent / '.env')
 import operator_console  # noqa: E402  (after .env: reads the environment)
 from routes import BLUEPRINTS  # noqa: E402
 from routes.network import SERVER_PORT  # noqa: E402
+from same_origin import is_allowed  # noqa: E402
 from satellite_identity import _load  # noqa: E402
 
 DEFAULT_ROVER_URL = 'http://marspi.local:8523'
@@ -62,6 +63,18 @@ def create_app() -> Flask:
     app.config['ROVER_URL_GETTER'] = lambda: app.config['ROVER_URL']
 
     _restore_camera_index()
+
+    # One gate in front of every route, so no route can forget it: a request
+    # that would change state must come from the satellite's own pages. There
+    # is no sign-in to lean on and must not be; same_origin.py has why, and why
+    # this is not an offline gate.
+    @app.before_request
+    def _state_changes_come_from_our_pages():
+        if not is_allowed(request.method, request.host,
+                          request.headers.get('Sec-Fetch-Site'),
+                          request.headers.get('Origin')):
+            return jsonify({'error': "This change has to come from the "
+                            "satellite's own pages."}), 403
 
     # /operator: the camera, the tunables and shutdown. Everything else is in routes/.
     app.register_blueprint(operator_console.operator_bp)
