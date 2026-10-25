@@ -11,6 +11,13 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A run's video stops within a second of the run.** The watcher asked the
+  rover whether a run was over every ten seconds, so every recording ran on
+  for up to ten seconds of a rover sitting still. It asks every second now,
+  and only while a recording is open, so an idle satellite asks nothing;
+  uploads, the overdue cap and cleanup keep their own slower timers. Seen on
+  the first real-rover run after the driver change on 25 October.
+
 - **No route calls the Admin SDK itself.** After the team route, three more
   held their work inline: sign-in verified tokens, minted cookies and applied
   invites; "Ask an admin" kept its own hourly ledger and emailed the admins;

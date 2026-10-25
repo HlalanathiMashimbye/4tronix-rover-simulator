@@ -127,9 +127,10 @@ def test_repeated_watcher_events_do_not_trigger_a_second_upload(monkeypatch, rec
     assert len(calls) == 1
 
 
-def test_every_pass_sends_recordings_still_waiting_to_be_delivered(monkeypatch, recorder):
+def test_the_first_pass_sends_recordings_still_waiting_to_be_delivered(monkeypatch, recorder):
     """Not only when a run finishes: a satellite that was offline sends what
-    it has once it finds a way out, with no new run needed to set it off."""
+    it has once it finds a way out, with no new run needed to set it off, from
+    its first pass (and every ten seconds after: see the test below)."""
     import youtube_upload
 
     class Stop(Exception):
@@ -298,3 +299,95 @@ def test_is_recording_tracks_an_open_recording(recorder):
         recorder.stop_recording('m1', YARD, keep=False)
 
     assert recorder.is_recording('m1', YARD) is False
+
+
+class _Clock:
+    """Simulated time for the watcher loop: sleeping advances it, and the loop
+    stops after `seconds` of it so a test can count what happened."""
+
+    class Done(Exception):
+        pass
+
+    def __init__(self, seconds):
+        self.now = 1000.0
+        self.end = self.now + seconds
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+        if self.now >= self.end:
+            raise self.Done()
+
+
+def _run_watcher_for(monkeypatch, seconds, rover_url_getter=lambda: 'http://rover'):
+    clock = _Clock(seconds)
+    monkeypatch.setattr(mission_watcher.time, 'monotonic', clock.monotonic)
+    monkeypatch.setattr(mission_watcher.time, 'sleep', clock.sleep)
+    with pytest.raises(_Clock.Done):
+        mission_watcher.start_mission_watcher(rover_url_getter)
+    return clock
+
+
+def test_a_finished_run_stops_filming_within_a_second(monkeypatch, recorder):
+    """The recording is the run's video, so seconds of the rover sitting still
+    after it stopped are seconds of nothing at the end of every video. The
+    watcher asked every ten seconds; it must ask often enough that a run's
+    recording stops within a second of the rover saying it is over."""
+    import youtube_upload
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: None)
+    recorder.start_recording('m1', YARD)
+    clock = None
+
+    def rover_reply(*a, **k):
+        # Running for the first 3.5 simulated seconds, then over.
+        if clock.now < 1003.5:
+            return _Reply([{'status': 'running', 'params': {'mission_id': 'm1'}}])
+        return _Reply([{'status': 'completed', 'params': {'mission_id': 'm1'}}])
+
+    clock = _Clock(30)
+    monkeypatch.setattr(mission_watcher.requests, 'get', rover_reply)
+    monkeypatch.setattr(mission_watcher.time, 'monotonic', clock.monotonic)
+    monkeypatch.setattr(mission_watcher.time, 'sleep', clock.sleep)
+    stopped_at = {}
+    real_stop = recorder.stop_recording
+
+    def stop_and_note(*a, **k):
+        stopped_at.setdefault('t', clock.now)
+        return real_stop(*a, **k)
+
+    monkeypatch.setattr(mission_watcher, 'stop_recording', stop_and_note)
+
+    with pytest.raises(_Clock.Done):
+        mission_watcher.start_mission_watcher(lambda: 'http://rover')
+
+    assert not recorder.is_recording('m1', YARD)
+    assert stopped_at['t'] - 1003.5 <= 1.0
+
+
+def test_nothing_recording_means_the_rover_is_not_asked(monkeypatch, recorder):
+    """Asking every second is only worth it while a recording is open; an idle
+    satellite should not keep a rover answering it."""
+    import youtube_upload
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: None)
+    asked = []
+    monkeypatch.setattr(mission_watcher.requests, 'get', lambda *a, **k: asked.append(a) or _Reply([]))
+
+    _run_watcher_for(monkeypatch, 30)
+
+    assert asked == []
+
+
+def test_uploads_are_still_checked_every_ten_seconds_not_every_pass(monkeypatch, recorder):
+    """The faster rover check must not drag the upload check along with it."""
+    import youtube_upload
+    checks = []
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: checks.append(True))
+    _rover_says(monkeypatch, [])
+
+    _run_watcher_for(monkeypatch, 60)
+
+    assert 5 <= len(checks) <= 7

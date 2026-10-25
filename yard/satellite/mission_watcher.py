@@ -46,7 +46,21 @@ from recording_control import (
 )
 
 ROVER_POLL_TIMEOUT = 3.0
-DEFAULT_POLL_INTERVAL = 10  # seconds
+
+# How often the rover is asked whether a run is over, while one is filming.
+#
+# It was ten seconds, shared with everything else the loop does, so every
+# video ended with up to ten seconds of a rover sitting still. The recording
+# is the run's video; a second is as soon as anyone watching would notice. It
+# costs nothing when idle, because the rover is only asked while a recording
+# is open (stop_finished_recordings).
+ROVER_POLL_SECONDS = 1
+
+# Uploads still waiting and recordings past the cap change over minutes, not
+# seconds, so they keep the old pace on their own timer rather than following
+# the rover check down to one second.
+HOUSEKEEPING_SECONDS = 10
+CLEANUP_SECONDS = 300
 
 # The longest a recording may run before it is stopped whatever the rover says.
 #
@@ -115,12 +129,16 @@ def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None):
     way.
     """
     yard_id = _this_yard(yard_id)
+    filming = recordings_at(yard_id)
+    if not filming:
+        # Nothing to stop, so nothing to ask the rover.
+        return []
     runs = finished_runs(rover_url)
     if not runs:
         return []
 
     stopped = []
-    for recording in recordings_at(yard_id):
+    for recording in filming:
         own = dispatches_for(recording, yard_id)
         if own:
             finished = [run for run in runs if run[0] in own]
@@ -154,17 +172,15 @@ def stop_overdue_recordings(yard_id=None, max_seconds=MAX_RECORDING_SECONDS, now
     return stopped
 
 
-CLEANUP_EVERY = 30  # ticks (~5 min at 10s interval)
-
-
-def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
+def start_mission_watcher(rover_url_getter, interval=ROVER_POLL_SECONDS):
     """Poll the rover forever. Intended to run on a daemon thread.
 
     The URL is read through a getter on every pass rather than captured once,
     so a rover path edited on Settings applies without a restart.
     """
     def _loop():
-        tick = 0
+        housekeeping_at = None
+        cleanup_at = time.monotonic()
         while True:
             try:
                 from youtube_upload import queue_upload
@@ -172,22 +188,25 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
 
-            # Recordings still to be delivered, from this boot or one before
-            # it. Every pass, so a satellite that finds a connection sends
-            # them without waiting for another run to finish.
-            try:
-                from youtube_upload import tick as upload_tick
-                upload_tick()
-            except Exception as e:
-                print(f'[watcher] upload check failed: {type(e).__name__}')
+            now = time.monotonic()
+            if housekeeping_at is None or now - housekeeping_at >= HOUSEKEEPING_SECONDS:
+                housekeeping_at = now
+                # Recordings still to be delivered, from this boot or one
+                # before it, so a satellite that finds a connection sends them
+                # without waiting for another run to finish.
+                try:
+                    from youtube_upload import tick as upload_tick
+                    upload_tick()
+                except Exception as e:
+                    print(f'[watcher] upload check failed: {type(e).__name__}')
 
-            try:
-                stop_overdue_recordings()
-            except Exception as e:
-                print(f'[watcher] overdue check failed: {e}')
+                try:
+                    stop_overdue_recordings()
+                except Exception as e:
+                    print(f'[watcher] overdue check failed: {e}')
 
-            tick += 1
-            if tick % CLEANUP_EVERY == 0:
+            if now - cleanup_at >= CLEANUP_SECONDS:
+                cleanup_at = now
                 try:
                     from recording_cleanup import sweep
                     deleted = sweep()
@@ -201,7 +220,7 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
     _loop()
 
 
-def run_watcher_thread(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
+def run_watcher_thread(rover_url_getter, interval=ROVER_POLL_SECONDS):
     thread = threading.Thread(
         target=start_mission_watcher, args=(rover_url_getter,),
         kwargs={'interval': interval}, daemon=True,

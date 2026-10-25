@@ -223,7 +223,7 @@ through.
 4. The rover runs it; its history entry carries params.mission_id and a status
                     │
                     ▼
-5. mission_watcher polls the rover's GET /queue/status every 10s
+5. while a recording is open, mission_watcher polls the rover's GET /queue/status every second
    completed or error, for a mission_id that is being recorded
    → stop_recording(keep=True)
    → recordings/<mission>__<yard>__<UTC stamp>.mp4
