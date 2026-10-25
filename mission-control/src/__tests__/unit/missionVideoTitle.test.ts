@@ -15,7 +15,7 @@ import { buildAutomaticUploadDescription } from '@/infrastructure/youtube/youtub
 
 // A name the generator gave a real mission, the first one uploaded automatically.
 const NAME = 'Cheerful Pebble Ranger';
-const RUN_STATION = readFileSync(join(__dirname, '../../../../yard/satellite/templates/run.html'), 'utf8');
+const RUN_STATION = readFileSync(join(__dirname, '../../../../yard/satellite/static/pages/run.js'), 'utf8');
 
 describe('missionVideoTitle', () => {
   it('is a generated name followed by what the video is', () => {
