@@ -78,11 +78,6 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const [learnerEmail, setLearnerEmailState] = useState<string | null>(null);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
 
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/immutability -- initializeLearnerSession is a hoisted function declaration and this effect runs once after mount, so there is no window where it is genuinely undefined. Pre-existing; the compiler only began reporting it once updateDisplayName was removed and it could analyse this component through to the end.
-    initializeLearnerSession();
-  }, []);
-
   // Load any saved email. We never prompt for it on landing (per David); the
   // email ask happens after a mission is submitted, and on the history page.
   useEffect(() => {
@@ -168,6 +163,12 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // After the declaration it calls, so nothing reads it before it exists.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration: the learner id lives in localStorage, which a server render cannot read
+    initializeLearnerSession();
+  }, []);
+
   /*
    * There is deliberately no updateDisplayName.
    *
@@ -179,8 +180,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    * dormant writer for a name is the thing someone wires up to a "name
    * yourself" box without realising what it undoes.
    *
-   * Removed alongside AB#377, which asked the operator queue to show who
-   * submitted each mission and was closed as won't-do for the same reason.
+   * Removed alongside a request for the operator queue to show who submitted
+   * each mission, which was turned down for the same reason.
    *
    * MissionNotificationService still READS displayName when personalising the
    * completion email. That is a message to the learner's own address, it

@@ -51,7 +51,7 @@ export interface PreFlightCheck {
   passed: boolean;
   /**
    * Said, not enforced: a check that does not hold up Send. The slopes
-   * (AB#468) are the one: the real run may differ there, and the learner is
+   * are the one: the real run may differ there, and the learner is
    * told and left to decide.
    */
   advisory?: boolean;
@@ -134,12 +134,12 @@ export interface PreFlightContext {
    */
   hasRunSimulation: boolean;
   /**
-   * What the watched run hit, from crashCheck: null for nothing (AB#466).
+   * What the watched run hit, from crashCheck: null for nothing.
    * Passed in for the same reason: it is a property of the run, not of the
    * code, and only the workspace has the run.
    */
   crash?: Crash | null;
-  /** The steepest ground the watched run climbs, from slopeCheck (AB#468). */
+  /** The steepest ground the watched run climbs, from slopeCheck. */
   slope?: Slope | null;
 }
 
@@ -156,7 +156,7 @@ export function runPreFlightChecks(code: string, context: PreFlightContext): Pre
   // pressing a button rather than by editing, and watching the run is usually
   // how they discover the others are wrong.
   //
-  // No crash comes last and BLOCKS sending (AB#466). The yard is the measured
+  // No crash comes last and BLOCKS sending. The yard is the measured
   // one, so a run that hits a rock or a wall in the simulator is headed for a
   // real rock or wall, and the operator would be the one to rescue the rover.
   // It cannot pass before a run has been watched: there is nothing to judge.
@@ -166,7 +166,7 @@ export function runPreFlightChecks(code: string, context: PreFlightContext): Pre
     { id: 'runs-long-enough', passed: duration >= MISSION_MIN_DURATION_SECONDS },
     { id: 'within-time-limit', passed: duration <= MISSION_MAX_DURATION_SECONDS },
     { id: 'no-crash', passed: context.hasRunSimulation && !context.crash },
-    // Last, and advisory (AB#468): the slopes are drawn by eye and the
+    // Last, and advisory: the slopes are drawn by eye and the
     // physics drives over them as if flat, so a run that climbs one may not
     // match the real rover. The learner is told why; Send stays theirs.
     { id: 'flat-ground', passed: context.hasRunSimulation && !context.slope, advisory: true },

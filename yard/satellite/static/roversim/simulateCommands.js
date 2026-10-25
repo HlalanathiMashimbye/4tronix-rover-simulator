@@ -5,7 +5,7 @@ import { RoverPhysics, YARD, rockReached, zoneUnderRover } from './rover-physics
 /**
  * The first frame the physics stopped the rover, at a wall or a rock, or -1.
  *
- * The one definition of where a run crashes (AB#466): crashCheck builds the
+ * The one definition of where a run crashes: crashCheck builds the
  * pre-flight check and the operator's preview on it, and the renderer marks
  * the spot with it, so the mark on screen is the crash the checks mean.
  */

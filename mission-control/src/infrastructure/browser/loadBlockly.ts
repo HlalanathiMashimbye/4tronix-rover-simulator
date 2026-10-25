@@ -25,18 +25,18 @@
  * window.Blockly is still set, because the editor and viewer read it there.
  */
 
+/** The Blockly package's API, which is exactly what the dynamic import below yields. */
+export type BlocklyApi = typeof import('blockly');
+
 declare global {
   interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Blockly: any;
+    Blockly: BlocklyApi;
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let loadPromise: Promise<any> | null = null;
+let loadPromise: Promise<BlocklyApi> | null = null;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function loadBlockly(): Promise<any> {
+export function loadBlockly(): Promise<BlocklyApi> {
   if (typeof window === 'undefined') {
     return Promise.reject(new Error('Blockly can only load in the browser'));
   }
@@ -47,7 +47,7 @@ export function loadBlockly(): Promise<any> {
     .then((mod) => {
       // The package's ESM entry has a default export; interop for the
       // CommonJS one puts it on the namespace instead.
-      const Blockly = (mod as { default?: unknown }).default ?? mod;
+      const Blockly = ((mod as { default?: BlocklyApi }).default ?? mod) as BlocklyApi;
       window.Blockly = Blockly;
       return Blockly;
     })

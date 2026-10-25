@@ -11,6 +11,26 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **No route calls the Admin SDK itself.** After the team route, three more
+  held their work inline: sign-in verified tokens, minted cookies and applied
+  invites; "Ask an admin" kept its own hourly ledger and emailed the admins;
+  the learner email route walked the private contact path by hand. Each is a
+  controller over a use case or repository now (`OperatorSessionService`,
+  `OperatorAccessRequests`, `ILearnerContactWriter`), with Firebase-free tests,
+  and architecture.test.ts fails if a route imports the Admin SDK again.
+
+- **The satellite is an app factory.** `web_server.py` was the app, its config,
+  its state and every page and API in 723 lines, built on import, with the
+  rover's address in a `global`. It is `create_app()` now (91 lines); the routes
+  are blueprints in `yard/satellite/routes/`, and the address is app config. The
+  Pi needs a pull and a restart of `satellite-web` to pick this up.
+
+- **No `any` in production code, and comments without ticket numbers.** The 29
+  were all Blockly; the generator takes narrow `RoverWorkspace` and `RoverBlock`
+  interfaces and the editors use Blockly's own types. 148 board references in
+  comments became the reason they stood for. Three tests that checked behaviour
+  by reading source text now check the behaviour.
+
 - **The simulator runs a learner's program on the fake rover.** Learner
   Python was given whichever `rover` library would import, so on the
   satellite's simulator, a Pi where the hardware library imports, programs

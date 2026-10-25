@@ -3,9 +3,10 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { Play } from 'lucide-react';
 import type { CommandSource } from '@/lib/roverBlockly';
+import type { BlockSvg, WorkspaceSvg } from 'blockly';
 
 /**
- * What a block canvas shows while the simulator runs its program (AB#450):
+ * What a block canvas shows while the simulator runs its program:
  * the spotlight, the running block's glow, a "now" tag that glides from block
  * to block, and a "2 / 3" pass badge on each running Repeat.
  *
@@ -38,9 +39,7 @@ export function useRunningBlockMarks({
   highlight,
   ready,
 }: {
-  // The Blockly workspace (an untyped global, as everywhere else here).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  workspaceRef: RefObject<any>;
+  workspaceRef: RefObject<WorkspaceSvg | null>;
   /** The element Blockly was injected into. */
   hostRef: RefObject<HTMLDivElement | null>;
   highlight: CommandSource | null;
@@ -67,8 +66,7 @@ export function useRunningBlockMarks({
     const host = hostRef.current;
     if (!ready || !workspace || !host) return;
     const [ids, passes] = JSON.parse(highlightKey) as [string[], { pass: number; of: number }[]];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const lit: { block: any; className: string }[] = [];
+    const lit: { block: BlockSvg; className: string }[] = [];
     ids.forEach((id, i) => {
       const block = workspace.getBlockById(id);
       if (!block) return;
@@ -103,8 +101,7 @@ export function useRunningBlockMarks({
       const frame = host.getBoundingClientRect();
       // Only the block's own shape: its svg group also contains every block
       // stacked after it.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rectOf = (block: any) => block.getSvgRoot()?.querySelector(':scope > .blocklyPath')?.getBoundingClientRect();
+      const rectOf = (block: BlockSvg) => block.getSvgRoot()?.querySelector(':scope > .blocklyPath')?.getBoundingClientRect();
       const stepBlock = lit.find((l) => l.className === 'rover-running-step')?.block;
       const stepRect = stepBlock && rectOf(stepBlock);
       setMarks({

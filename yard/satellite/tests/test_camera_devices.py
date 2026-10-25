@@ -129,9 +129,10 @@ def test_the_route_tells_a_mac_with_no_camera_from_a_machine_that_cannot_say(cli
 
 def _restore_with(monkeypatch, tmp_path, cfg, env=None):
     import web_server
+    import satellite_identity
     path = tmp_path / 'satellite_config.json'
     path.write_text(__import__('json').dumps(cfg))
-    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(path))
+    monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(path))
     if env is None:
         monkeypatch.delenv('CAMERA_INDEX', raising=False)
     else:

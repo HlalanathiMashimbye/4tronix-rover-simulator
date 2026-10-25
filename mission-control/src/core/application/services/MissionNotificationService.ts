@@ -52,7 +52,7 @@ export class MissionNotificationService {
      */
     private readonly appUrl: string,
     /**
-     * Missions that must never send mail, whatever their status (AB#470): the
+     * Missions that must never send mail, whatever their status: the
      * reviewed list in infrastructure/config/notificationExclusions.ts.
      */
     private readonly excludedMissionIds: ReadonlySet<string> = new Set(),
@@ -88,7 +88,7 @@ export class MissionNotificationService {
     }
 
     /**
-     * THE LEARNER HOLDS THE KEY, THE MISSION HOLDS THE HASH (AB#470).
+     * THE LEARNER HOLDS THE KEY, THE MISSION HOLDS THE HASH.
      *
      * A mission carries learnerEmailHash only when its learner gave an address
      * as they sent it - that is them asking to hear about it. The address
@@ -99,8 +99,9 @@ export class MissionNotificationService {
      * it is not sent.
      *
      * A mission with NO hash is left as it was - sent to the learner's address
-     * - by decision: AB#470 requires that no other mission's notifications
-     * change, and those missions predate a learner giving an address. See
+     * - by decision: the fix for misdirected test emails required that no
+     * other mission's notifications change, and those missions predate a
+     * learner giving an address. See
      * docs/architecture/design-decisions.md, "Who a notification reaches".
      */
     if (mission.learnerEmailHash && (await hashLearnerEmail(learner.email)) !== mission.learnerEmailHash) {

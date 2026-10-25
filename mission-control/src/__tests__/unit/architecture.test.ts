@@ -238,6 +238,18 @@ describe('the server/browser boundary', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('no route calls the Admin SDK itself', () => {
+    /**
+     * Four routes held grant, invite, sign-in and email logic with the Admin
+     * SDK inline, so a controller did five jobs and the rules about who may
+     * do what could only be tested through HTTP. Routes validate and map to
+     * HTTP; the work is a use case or repository from container.server.ts.
+     */
+    const offenders = sourceFiles('app').filter((f) => read(f).includes('@/infrastructure/persistence/firebase-admin'));
+
+    expect(offenders).toEqual([]);
+  });
+
   it('hands the browser a repository with no way to write', () => {
     /**
      * Checked by the compiler, not by reading source. Each line below names a
@@ -291,7 +303,7 @@ describe('the composition root', () => {
     const offenders = [...sourceFiles('app'), ...sourceFiles('components'),
                        ...sourceFiles('core'), ...sourceFiles('lib'),
                        ...sourceFiles('contexts')]
-      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands|OperatorTeamService|VideoLinker)\(/.test(read(f)));
+      .filter((f) => /new (MissionNotificationService|MissionService|OperatorMissionCommands|OperatorTeamService|OperatorSessionService|OperatorAccessRequests|VideoLinker)\(/.test(read(f)));
 
     expect(offenders).toEqual([]);
   });

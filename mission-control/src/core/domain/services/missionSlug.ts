@@ -10,7 +10,7 @@
  * (IMissionNameRegistry), so their words alone could find them.
  *
  * Only generated names go into a link. Early missions carry names a child
- * typed (missionNameGenerator.ts, AB#402), one of them inappropriate, and a
+ * typed (see missionNameGenerator.ts), one of them inappropriate, and a
  * URL is copied and shared further than a card is ever seen. Those keep the
  * plain ID.
  *

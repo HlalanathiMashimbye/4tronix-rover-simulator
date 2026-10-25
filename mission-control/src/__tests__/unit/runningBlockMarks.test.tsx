@@ -29,7 +29,7 @@ function setup(blockRight: number) {
   const workspace = { getBlockById: () => block, addChangeListener: () => {}, removeChangeListener: () => {} };
   // Built once, as the components that use the hook build them (useRef):
   // fresh objects each render would re-run its effect on every render.
-  const workspaceRef = { current: workspace };
+  const workspaceRef = { current: workspace as never };
   const hostRef = { current: host };
   const highlight = { blockIds: ['b1'] };
   return renderHook(() => useRunningBlockMarks({ workspaceRef, hostRef, highlight, ready: true }));

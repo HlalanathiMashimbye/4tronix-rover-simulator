@@ -13,7 +13,7 @@
  * The navbar has to know: it drops the learner's floating Create Mission
  * button there, where it is a control nobody signed in as an operator can use
  * and it sits fixed over the bottom-right corner of a console that uses every
- * pixel. What the navbar must NOT do is name the route. AB#341 keeps the
+ * pixel. What the navbar must NOT do is name the route. That keeps the
  * operator path out of the learner navigation, and
  * `__tests__/unit/operator-route-hidden.test.ts` enforces it by reading
  * Navbar.tsx and failing on the string. That is a blunt check and the right
@@ -37,7 +37,7 @@ const BUILD_PATH = '/mission';
 /**
  * Whether a path is where a learner builds a mission.
  *
- * On a phone that page is a full-screen tool (AB#455): the learner's tab bar
+ * On a phone that page is a full-screen tool: the learner's tab bar
  * and floating Create Mission button cost 128px of a 667px screen there, and
  * the button sat over the block canvas, offering to create the mission the
  * learner was already creating. The navbar drops both on this surface.
@@ -54,7 +54,7 @@ const MISSION_VIEW_PREFIX = '/missions/';
 /**
  * Whether a path is one mission's own page (not the feed of them).
  *
- * Laid out like Create Mission on a phone (AB#455): player docked at the top,
+ * Laid out like Create Mission on a phone: player docked at the top,
  * the code filling the rest, no page scroll. The tab bar and floating Create
  * Mission button sat over its blocks, and the page header already has the way
  * back, so the navbar drops them here too.

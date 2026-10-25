@@ -32,7 +32,7 @@
  * already taken, so that would cost a skipped number rather than a duplicate,
  * but appending is what keeps the mapping meaning the same thing.
  *
- * THE WORD LISTS ARE A SAFETY CONTROL, NOT DECORATION (AB#402).
+ * THE WORD LISTS ARE A SAFETY CONTROL, NOT DECORATION.
  *
  * A mission name is shown prominently on a world-readable document: the feed,
  * every card, the operator queue. The name box is read-only, but for a while
@@ -250,7 +250,7 @@ export function isGeneratedMissionName(name: string): boolean {
     );
   }
 
-  // Legacy shape, still present on missions created before AB#330.
+  // Legacy shape, still present on missions named before two-word names.
   if (parts.length === 2) {
     return inList(PART1_WORDS, parts[0]) && inList(PART2_WORDS, parts[1]);
   }

@@ -2,7 +2,7 @@
  * Mission Service
  *
  * Business logic layer for mission management.
- * Handles anonymous mission submission (User Story 35).
+ * Handles anonymous mission submission.
  *
  * Responsibilities:
  * - Coordinate mission creation
@@ -35,7 +35,6 @@ export class MissionService {
 
   /**
    * Submit a new mission (anonymous - no authentication required)
-   * Implements User Story 35 and Task 38
    *
    * @param dto - Validated mission submission data
    * @returns Result with created mission or error

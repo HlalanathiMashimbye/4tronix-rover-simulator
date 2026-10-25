@@ -7,7 +7,7 @@ import { useOnScreenKeyboard } from '@/hooks/useIsPhoneLayout';
 import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
 
 /**
- * Create Mission on a phone: the "docked sim" layout (AB#455).
+ * Create Mission on a phone: the "docked sim" layout.
  *
  * Editing, and while a run plays:
  *   top bar     back, Run (Stop while a run plays)
@@ -21,7 +21,7 @@ import { preventIosInputZoom } from '@/infrastructure/browser/iosInputZoom';
  *
  * WHY THE CODE STAYS FOR THE RUN. Run used to open the launch view at once,
  * which slid the editor away just as the program started: the highlight
- * showing which block or line the rover is on (AB#450) played to nobody,
+ * showing which block or line the rover is on played to nobody,
  * and that is the whole point of running a program to test it (6 Oct 2026).
  *
  * WHY THE LAUNCH VIEW STILL OPENS BY ITSELF. Submitting used to sit behind a
@@ -186,7 +186,7 @@ export function PhoneWorkspace({
         data-keyboard={keyboard.open && !launching}
         data-launch={launching}
         // No frame of its own: the simulator frames itself, and stretches the
-        // yard to fill it (AB#464), so a frame here would be a second outline.
+        // yard to fill it, so a frame here would be a second outline.
         className="phoneSimStrip relative"
       >
         {simulator}

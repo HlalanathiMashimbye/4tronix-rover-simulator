@@ -27,12 +27,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import {
-  LEARNER_PRIVATE_COLLECTION,
-  LEARNER_CONTACT_DOC,
-} from '@/core/domain/services/learnerContact';
-import { COLLECTIONS } from '@/infrastructure/persistence/collections';
+import { learnerContactWriter } from '@/infrastructure/container.server';
 
 const bodySchema = z.object({
   // null clears the address (the learner removing it).
@@ -76,29 +71,7 @@ export async function POST(
   const { email } = validation.data;
 
   try {
-    const firestore = getFirestoreInstance();
-    const contactRef = firestore
-      .collection(COLLECTIONS.learners)
-      .doc(id)
-      .collection(LEARNER_PRIVATE_COLLECTION)
-      .doc(LEARNER_CONTACT_DOC);
-
-    if (email === null) {
-      await contactRef.delete();
-    } else {
-      await contactRef.set(
-        { learnerEmail: email, updatedAt: new Date().toISOString() },
-        { merge: true }
-      );
-    }
-
-    // Clear any address left on the publicly readable parent document by the
-    // old client-side write. Without this, existing learners stay exposed
-    // even though nothing writes there any more.
-    await firestore
-      .collection(COLLECTIONS.learners)
-      .doc(id)
-      .set({ learnerEmail: null }, { merge: true });
+    await learnerContactWriter().save(id, email);
 
     return NextResponse.json({ success: true });
   } catch (error) {

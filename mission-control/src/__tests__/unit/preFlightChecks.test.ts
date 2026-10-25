@@ -7,7 +7,7 @@
  */
 
 import { movesTheRover, runPreFlightChecks } from '@/core/domain/safety/preFlightChecks';
-import { workspaceToPython } from '@/lib/roverBlockly';
+import { workspaceToPython, type RoverWorkspace } from '@/lib/roverBlockly';
 import {
   MISSION_MAX_DURATION_SECONDS,
   MISSION_MIN_DURATION_SECONDS,
@@ -148,7 +148,7 @@ describe('runPreFlightChecks', () => {
           getNextBlock: () => null,
         },
       ],
-    };
+    } as unknown as RoverWorkspace;
 
     const result = runPreFlightChecks(workspaceToPython(workspace), { hasRunSimulation: true });
 

@@ -30,6 +30,7 @@ function directory(people: Array<{ uid: string; email: string; role?: OperatorRo
     },
     saveInvite: async (email, role, invitedBy) => void invites.set(email, { email, role, invitedAt: null, invitedBy }),
     deleteInvite: async (email) => invites.delete(email),
+    claimInvite: async () => null,
   };
   return { dir, roles, invites, signedOut };
 }

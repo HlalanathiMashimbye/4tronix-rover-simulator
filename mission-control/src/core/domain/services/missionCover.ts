@@ -25,7 +25,7 @@ export function missionCoverTrajectory(code: string | undefined, yard: Yard = YA
 
   let trajectory: TrajectoryPoint[];
   try {
-    // In the mission's own yard (AB#468), the one its cover is drawn on.
+    // In the mission's own yard, the one its cover is drawn on.
     trajectory = simulateCommands(parseRoverCode(code), yard);
   } catch {
     // This runs against whatever is on the mission document, including code

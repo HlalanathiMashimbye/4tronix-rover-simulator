@@ -19,7 +19,7 @@ export interface IYardRepository {
   setActive(yardId: string, active: boolean): Promise<void>;
 
   /**
-   * Replace a yard's layout whole (AB#468). Not through save: save merges,
+   * Replace a yard's layout whole. Not through save: save merges,
    * and a merged layout would keep a zone the admin had just removed.
    */
   setLayout(yardId: string, layout: YardLayout): Promise<void>;

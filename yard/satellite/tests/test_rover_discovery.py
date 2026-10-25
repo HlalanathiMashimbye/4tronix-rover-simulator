@@ -143,7 +143,7 @@ class TestOnePerMachine:
 
 def test_the_rover_in_use_is_marked_under_whichever_name_is_shown(monkeypatch):
     import web_server
-    monkeypatch.setattr(web_server, 'ROVER_URL', 'http://192.168.137.121:8523')
+    monkeypatch.setitem(web_server.app.config, 'ROVER_URL', 'http://192.168.137.121:8523')
     monkeypatch.setattr(rd, 'discover', lambda current_url=None, sweep=True: [{
         'url': 'http://curiosity.local:8523',
         'addresses': ['http://curiosity.local:8523', 'http://192.168.137.121:8523'],

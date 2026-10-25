@@ -39,7 +39,8 @@ function canvas(program: { width: number; height: number }, view: { width: numbe
       seen.scrolledTo = bounds;
     },
   };
-  return { workspace, seen };
+  // Only what fitBlocks reads; typed at the boundary.
+  return { workspace: workspace as never, seen };
 }
 
 describe('opening a program', () => {
@@ -99,8 +100,8 @@ describe('the bin', () => {
     const { bin } = make();
     // Shaped as Blockly's IDeletable, which is what it checks for.
     const dragged = (deletable: boolean) => ({ isDeletable: () => deletable, dispose: () => {}, setDeleteStyle: () => {} });
-    expect(bin.wouldDelete(dragged(true))).toBe(true);
-    expect(bin.wouldDelete(dragged(false))).toBe(false);
+    expect(bin.wouldDelete(dragged(true) as never)).toBe(true);
+    expect(bin.wouldDelete(dragged(false) as never)).toBe(false);
   });
 
   it('says when a block is over it, has left it, and has been dropped', () => {

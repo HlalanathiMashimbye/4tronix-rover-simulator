@@ -10,14 +10,17 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import web_server
+import routes.rover
+import routes.pages
+import routes.network
+import satellite_identity
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    """Test client with config writes redirected to a temp file and the
-    ROVER_URL global restored afterwards."""
-    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(tmp_path / 'satellite_config.json'))
-    original_url = web_server.ROVER_URL
+    """Test client with the rover address restored afterwards. Config writes
+    already go to a temp file: conftest isolates satellite_identity's."""
+    original_url = web_server.app.config['ROVER_URL']
     web_server.app.config['TESTING'] = True
     with web_server.app.test_client() as client:
         # Repointing the rover is now an operator action; these tests exercise
@@ -31,7 +34,7 @@ def client(tmp_path, monkeypatch):
                 'signed_in_at': now, 'checked_at': now,
             }
         yield client
-    web_server.ROVER_URL = original_url
+    web_server.app.config['ROVER_URL'] = original_url
 
 
 def test_set_rover_url(client):
@@ -41,7 +44,7 @@ def test_set_rover_url(client):
     assert resp.status_code == 200
     assert data['rover_url'] == 'http://curiosity.local:8523'
     assert data['persisted'] is True
-    assert web_server.ROVER_URL == 'http://curiosity.local:8523'
+    assert web_server.app.config['ROVER_URL'] == 'http://curiosity.local:8523'
 
 
 def test_set_rover_url_strips_trailing_slash(client):
@@ -53,7 +56,7 @@ def test_set_rover_url_strips_trailing_slash(client):
 def test_set_rover_url_persists_to_config_file(client):
     client.post('/api/config/rover_url', json={'url': 'http://10.0.0.7:8523', 'force': True})
 
-    with open(web_server.CONFIG_FILE) as f:
+    with open(satellite_identity.CONFIG_FILE) as f:
         assert json.load(f)['rover_url'] == 'http://10.0.0.7:8523'
 
 
@@ -64,9 +67,9 @@ def test_saved_url_used_by_api_status(client, monkeypatch):
 
     def fake_get(url, **kwargs):
         captured['url'] = url
-        raise web_server.requests.exceptions.ConnectionError('offline')
+        raise routes.rover.requests.exceptions.ConnectionError('offline')
 
-    monkeypatch.setattr(web_server.requests, 'get', fake_get)
+    monkeypatch.setattr(routes.rover.requests, 'get', fake_get)
     data = client.get('/api/status').get_json()
 
     assert captured['url'] == 'http://10.0.0.7:8523/health'
@@ -107,7 +110,7 @@ def test_an_address_with_no_rover_is_refused_rather_than_saved(client, monkeypat
     wrong-but-well-formed address saved happily and the yard looked broken with
     nothing on the page saying why. That is what happened at a demo."""
     import web_server
-    before = web_server.ROVER_URL
+    before = web_server.app.config['ROVER_URL']
 
     resp = client.post('/api/config/rover_url', json={'url': '192.168.1.99'})
 
@@ -115,7 +118,7 @@ def test_an_address_with_no_rover_is_refused_rather_than_saved(client, monkeypat
     body = resp.get_json()
     assert body['unreachable'] is True
     assert '192.168.1.99' in body['error']
-    assert web_server.ROVER_URL == before, 'a refused address must not be saved'
+    assert web_server.app.config['ROVER_URL'] == before, 'a refused address must not be saved'
 
 
 def test_force_saves_an_address_that_is_not_answering_yet(client):
@@ -138,13 +141,19 @@ def test_a_reachable_rover_saves_without_force(client, monkeypatch):
     assert resp.get_json()['rover_url'] == 'http://curiosity.local:8523'
 
 
-def test_load_config_precedence(tmp_path, monkeypatch):
-    """A saved config value wins over the environment default on startup"""
-    cfg = tmp_path / 'satellite_config.json'
-    cfg.write_text(json.dumps({'rover_url': 'http://saved.local:8523'}))
-    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(cfg))
+def test_load_config_precedence(monkeypatch):
+    """A saved address wins over the environment default when the app starts"""
+    with open(satellite_identity.CONFIG_FILE, 'w') as f:
+        json.dump({'rover_url': 'http://saved.local:8523'}, f)
+    monkeypatch.setenv('ROVER_URL', 'http://from-env.local:8523')
 
-    assert web_server._load_config().get('rover_url') == 'http://saved.local:8523'
+    assert web_server.create_app().config['ROVER_URL'] == 'http://saved.local:8523'
+
+
+def test_the_environment_supplies_the_address_until_one_is_saved(monkeypatch):
+    monkeypatch.setenv('ROVER_URL', 'http://from-env.local:8523')
+
+    assert web_server.create_app().config['ROVER_URL'] == 'http://from-env.local:8523'
 
 
 def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
@@ -158,7 +167,6 @@ def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
     work offline, a gate that bites only when the network is down protects
     nothing worth the cost.
     """
-    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(tmp_path / 'satellite_config.json'))
     monkeypatch.delenv('OPERATOR_AUTH', raising=False)
     web_server.app.config['TESTING'] = True
 
@@ -166,23 +174,22 @@ def test_rover_url_can_be_changed_without_a_login(tmp_path, monkeypatch):
         resp = anon.post('/api/config/rover_url', json={'url': 'http://newrover.local:8523', 'force': True})
 
     assert resp.status_code == 200
-    assert web_server.ROVER_URL == 'http://newrover.local:8523'
+    assert web_server.app.config['ROVER_URL'] == 'http://newrover.local:8523'
 
 
 def test_rover_url_is_still_validated_without_a_login(tmp_path, monkeypatch):
     """Dropping the login did not drop the checks. Validation is the control
     that actually stops this endpoint being pointed at nonsense, and it never
     depended on who was asking."""
-    monkeypatch.setattr(web_server, 'CONFIG_FILE', str(tmp_path / 'satellite_config.json'))
     monkeypatch.delenv('OPERATOR_AUTH', raising=False)
-    original_url = web_server.ROVER_URL
+    original_url = web_server.app.config['ROVER_URL']
     web_server.app.config['TESTING'] = True
 
     with web_server.app.test_client() as anon:
         resp = anon.post('/api/config/rover_url', json={'url': 'javascript:alert(1)', 'force': True})
 
     assert resp.status_code == 400
-    assert web_server.ROVER_URL == original_url, 'the URL must not have changed'
+    assert web_server.app.config['ROVER_URL'] == original_url, 'the URL must not have changed'
 
 
 def test_the_monitor_does_not_hardcode_the_camera_host(client):
@@ -197,13 +204,13 @@ def test_the_monitor_does_not_hardcode_the_camera_host(client):
     # Derived from wherever the page was served: the camera always runs on the
     # same machine as this web server, on the Pi and in development alike.
     assert 'window.location.hostname' in page
-    assert f':{web_server.CAMERA_PORT}`' in page
+    assert f':{routes.network.CAMERA_PORT}`' in page
 
 
 def test_the_monitor_uses_the_configured_camera_port(client, monkeypatch):
     """CAMERA_PORT is env-tunable, so a page that renders 8890 regardless would
     silently ignore it."""
-    monkeypatch.setattr(web_server, 'CAMERA_PORT', 9999)
+    monkeypatch.setattr(routes.pages, 'CAMERA_PORT', 9999)
 
     page = client.get('/monitor/').get_data(as_text=True)
 
@@ -798,3 +805,16 @@ class TestSettingsSpeaksTheConsoleLanguage:
         import re
         levels = sorted({int(m) for m in re.findall(r'<h([1-6])[ >]', self._page('/settings'))})
         assert levels == list(range(1, len(levels) + 1)), f'levels present: {levels}'
+
+
+def test_each_app_keeps_its_own_rover_address():
+    """The address is app state, not a module global: changing it on one app
+    leaves another alone, which a `global ROVER_URL` could not do."""
+    first = web_server.create_app()
+    second = web_server.create_app()
+    before = second.config['ROVER_URL']
+
+    first.test_client().post('/api/config/rover_url', json={'url': 'http://one.local:8523', 'force': True})
+
+    assert first.config['ROVER_URL'] == 'http://one.local:8523'
+    assert second.config['ROVER_URL'] == before

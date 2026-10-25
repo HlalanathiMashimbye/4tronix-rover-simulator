@@ -2,6 +2,8 @@
 
 import { useEffect, useState, type RefObject } from 'react';
 import { LocateFixed, Trash2 } from 'lucide-react';
+import type { Events, WorkspaceSvg } from 'blockly';
+import type { BlocklyApi } from '@/infrastructure/browser/loadBlockly';
 
 /**
  * How a block canvas frames its program, and the two controls it has on a
@@ -34,8 +36,7 @@ export const READABLE_SCALE = 0.5;
  * the On uplink block at the top, and the rest is a scroll away (and a run
  * follows the running block down: runningBlockMarks).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function fitBlocks(workspace: any, maxScale: number): void {
+export function fitBlocks(workspace: WorkspaceSvg, maxScale: number): void {
   const blocks = workspace.getBlocksBoundingBox();
   // In pixels, and without the category strip or the flyout.
   const view = workspace.getMetricsManager().getViewMetrics();
@@ -77,8 +78,7 @@ const BIN_REACH = 12;
  * manager the trashcan itself uses. Deleting is still Blockly's: a block
  * dropped while over any delete area is disposed by the dragger.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createBin(Blockly: any, element: HTMLElement, onState: (state: BinState) => void) {
+export function createBin(Blockly: BlocklyApi, element: HTMLElement, onState: (state: BinState) => void) {
   class Bin extends Blockly.DeleteArea {
     id = 'roverBin';
     getClientRect() {
@@ -107,8 +107,7 @@ export function useBlockBin({
   binRef,
   ready,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  workspaceRef: RefObject<any>;
+  workspaceRef: RefObject<WorkspaceSvg | null>;
   binRef: RefObject<HTMLElement | null>;
   ready: boolean;
 }): BinState {
@@ -125,10 +124,9 @@ export function useBlockBin({
     const { Capability } = Blockly.ComponentManager;
     manager.addComponent({ component: bin, weight: 1, capabilities: [Capability.DELETE_AREA, Capability.DRAG_TARGET] });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onDrag = (event: any) => {
-      if (event?.type !== Blockly.Events.BLOCK_DRAG) return;
-      setState(event.isStart ? 'dragging' : 'idle');
+    const onDrag = (event: Events.Abstract) => {
+      if (event.type !== Blockly.Events.BLOCK_DRAG) return;
+      setState((event as Events.BlockDrag).isStart ? 'dragging' : 'idle');
     };
     workspace.addChangeListener(onDrag);
 

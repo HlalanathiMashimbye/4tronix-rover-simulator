@@ -58,10 +58,10 @@ export default function MissionVideoClient({
   // The simulated run is reproducible from the mission's code, so it is computed
   // on demand rather than stored. Keeps hosting cheap and always in sync.
   // From the blocks where there are blocks, so it knows which block is which.
-  // Simulated in the yard it was sent to (AB#468), the one drawn below.
+  // Simulated in the yard it was sent to, the one drawn below.
   const { layout: yardLayout } = useYardLayout(mission?.yardId);
   const simTrajectory = useMissionTrajectory(mission, yardLayout);
-  /** What the simulation is running, lit up in the code like the editor (AB#450). */
+  /** What the simulation is running, lit up in the code like the editor. */
   const [runningSource, setRunningSource] = useState<CommandSource | null>(null);
   // How many times the simulation has played to its end. Each one is the
   // moment a learner has something to change, so each one nudges Remix.
@@ -208,7 +208,7 @@ export default function MissionVideoClient({
   const noteUnderTheVideo = wide && runs.length === 1;
 
   return (
-    // Pinned to the viewport at every size, like Create Mission (AB#455). On a
+    // Pinned to the viewport at every size, like Create Mission. On a
     // phone this used to stack the panels and scroll the whole page, with the
     // tab bar and the floating button on top of the blocks. Now the one thing
     // that scrolls is the feed of pictures (.missionBody in globals.css), and

@@ -43,13 +43,15 @@ def _load():
 
 
 def _save(cfg):
+    """Write the config. False when it could not be: a read-only filesystem
+    must not stop the satellite booting, the setting just won't survive a
+    restart, and Settings says so."""
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(cfg, f, indent=2)
+        return True
     except Exception:
-        # A read-only filesystem must not stop the satellite booting; the
-        # setting just won't survive a restart.
-        pass
+        return False
 
 
 def yard_id():

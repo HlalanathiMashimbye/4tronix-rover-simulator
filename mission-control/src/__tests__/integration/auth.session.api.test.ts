@@ -20,6 +20,7 @@ jest.mock('@/infrastructure/auth/operatorInvites', () => ({
 // The yard is validated against the live list at sign-in, so the repository
 // is stubbed with one selectable yard rather than reaching Firestore.
 jest.mock('@/infrastructure/container.server', () => ({
+  ...jest.requireActual('@/infrastructure/container.server'),
   adminYardRepository: () => ({
     findAll: async () => [
       { id: 'curiosity', name: 'Cape Town Science Centre', area: 'Observatory', city: 'Cape Town', active: true },

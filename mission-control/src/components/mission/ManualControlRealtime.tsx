@@ -9,7 +9,7 @@ interface ManualControlRealtimeProps {
   onTrajectoryUpdate: (trajectory: TrajectoryPoint[]) => void;
   /** Bumped by the workspace's reset (DriveFooter, or the simulator's own). */
   resetVersion?: number;
-  /** The yard being driven in (AB#468): its rocks stop the rover, its slopes are recorded. */
+  /** The yard being driven in: its rocks stop the rover, its slopes are recorded. */
   yard?: Yard;
 }
 
@@ -215,7 +215,7 @@ export function ManualControlRealtime({ onTrajectoryUpdate, resetVersion = 0, ya
   }, [runBlock, stopNow]);
 
   return (
-    // On a phone this shares the screen with the docked simulator (AB#455),
+    // On a phone this shares the screen with the docked simulator,
     // so the buttons compact. Reset position and the keyboard hint are not
     // here at all: on a laptop they are in the footer card under this panel
     // (DriveFooter), and on a phone the simulator's own Reset does the job

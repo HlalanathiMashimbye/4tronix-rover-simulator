@@ -21,18 +21,20 @@ it('lists each mission once, and the set the service reads holds exactly them', 
   expect([...EXCLUDED_MISSION_IDS].sort()).toEqual([...ids].sort());
 });
 
-it('is handed to the one notification service the app builds', () => {
-  /**
-   * The list only works if notificationService() passes it on, and dropping
-   * that argument still compiles - the service defaults to excluding nothing.
-   * Building the real service needs Resend and Firestore credentials, so this
-   * reads the factory, the way architecture.test.ts checks the same file.
-   */
-  const { readFileSync } = jest.requireActual('fs') as typeof import('fs');
-  const { join } = jest.requireActual('path') as typeof import('path');
-  const container = readFileSync(join(__dirname, '..', '..', 'infrastructure', 'container.server.ts'), 'utf8');
-  const factory = container.slice(container.indexOf('export function notificationService'));
-  expect(factory.slice(0, factory.indexOf('\n}'))).toContain('EXCLUDED_MISSION_IDS');
+it('is handed to the one notification service the app builds', async () => {
+  // Dropping the argument would still compile - the service defaults to
+  // excluding nothing - so this builds the container's real service, with
+  // only the outside world stubbed, and checks it refuses a listed mission.
+  jest.resetModules();
+  jest.doMock('@/infrastructure/email/resend-client', () => ({ ResendEmailSender: jest.fn(() => ({ send: jest.fn() })) }));
+  jest.doMock('@/infrastructure/persistence/firebase-admin', () => ({ getFirestoreInstance: () => ({}) }));
+  const { notificationService } = await import('@/infrastructure/container.server');
+  const [{ missionId }] = NOTIFICATION_EXCLUSIONS;
+  const mission = { id: missionId, learnerRef: 'r', name: 'm', code: '', status: 'queued', submittedAt: '' } as never;
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+  await expect(notificationService().notifyStatusChange(mission, 'completed')).resolves.toEqual({ sent: false, reason: 'excluded' });
+  warn.mockRestore();
 });
 
 it('stops every listed mission, through the service the app builds with the list', async () => {

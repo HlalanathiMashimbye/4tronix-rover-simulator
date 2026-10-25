@@ -14,7 +14,6 @@ import { spinDegreesForSeconds, spinSecondsForDegrees } from './rover-physics.js
  * The Python generator mirrors the yard's so a learner's blocks produce the same
  * rover program the yard would run (low-level servo + time.sleep sequences).
  */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // Dropdown values are "R, G, B" strings consumed by the generator.
 const LED_COLOURS = [
     ['red', '255, 0, 0'],
@@ -302,9 +301,8 @@ function getOrderedUplinkHats(workspace) {
 }
 function getStatementTail(block) {
     let tail = block;
-    while (tail?.getNextBlock()) {
-        tail = tail.getNextBlock();
-    }
+    for (let next = tail.getNextBlock(); next; next = next.getNextBlock())
+        tail = next;
     return tail;
 }
 /**
@@ -324,21 +322,21 @@ export function mergeUplinkHats(workspace) {
     if (hats.length <= 1)
         return false;
     const primaryHat = hats[0];
-    const primaryInput = primaryHat.getInput('DO');
+    const primaryInput = primaryHat.getInput?.('DO');
     let primaryBody = primaryHat.getInputTargetBlock('DO');
     for (const hat of hats.slice(1)) {
         const body = hat.getInputTargetBlock('DO');
         if (body) {
             if (!primaryBody) {
-                primaryInput?.connection?.connect(body.previousConnection);
+                primaryInput?.connection?.connect(body.previousConnection ?? null);
                 primaryBody = body;
             }
             else {
-                getStatementTail(primaryBody)?.nextConnection?.connect(body.previousConnection);
+                getStatementTail(primaryBody).nextConnection?.connect(body.previousConnection ?? null);
                 primaryBody = getStatementTail(body);
             }
         }
-        hat.dispose(false, false);
+        hat.dispose?.(false, false);
     }
     return true;
 }
@@ -475,7 +473,7 @@ export function workspaceToPython(workspace) {
             case 'rover_mast_turn': {
                 // Mast servo is 0; positive degrees = left, negative = right
                 const dir = block.getFieldValue('DIR');
-                const deg = block.getFieldValue('DEGREES');
+                const deg = Number(block.getFieldValue('DEGREES'));
                 const angle = dir === 'LEFT' ? deg : dir === 'RIGHT' ? -deg : 0;
                 lines.push(`${pad}# Turn the camera mast to ${angle} degrees`);
                 lines.push(`${pad}rover.setServo(0, ${angle})`);
@@ -493,7 +491,7 @@ export function workspaceToPython(workspace) {
                 break;
             }
             case 'rover_leds_all': {
-                const rgb = block.getFieldValue('COLOUR');
+                const rgb = String(block.getFieldValue('COLOUR'));
                 lines.push(`${pad}# Light up every LED in this colour`);
                 lines.push(`${pad}rover.setColor(rover.fromRGB(${rgb}))`);
                 lines.push(`${pad}rover.show()`);
@@ -501,7 +499,7 @@ export function workspaceToPython(workspace) {
             }
             case 'rover_led_one': {
                 const led = block.getFieldValue('LED');
-                const rgb = block.getFieldValue('COLOUR');
+                const rgb = String(block.getFieldValue('COLOUR'));
                 lines.push(`${pad}# Light up LED number ${led} in this colour`);
                 lines.push(`${pad}rover.setPixel(${led}, rover.fromRGB(${rgb}))`);
                 lines.push(`${pad}rover.show()`);
@@ -713,12 +711,12 @@ export function workspaceToCommands(workspace) {
                 out.push({ command: 'stop' });
                 break;
             case 'rover_leds_all': {
-                const rgb = block.getFieldValue('COLOUR');
+                const rgb = String(block.getFieldValue('COLOUR'));
                 out.push({ command: 'leds', leds: Array(LED_COUNT).fill(rgb) });
                 break;
             }
             case 'rover_led_one': {
-                const rgb = block.getFieldValue('COLOUR');
+                const rgb = String(block.getFieldValue('COLOUR'));
                 const which = Number(block.getFieldValue('LED'));
                 // Only the chosen lamp changes; the others keep whatever they were.
                 const leds = Array(LED_COUNT).fill(null);

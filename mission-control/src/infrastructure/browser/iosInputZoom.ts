@@ -4,7 +4,7 @@
  * iOS zooms in on focus for any text under 16px, and does not zoom back out,
  * so every tap into the code or a block's number field left a phone learner
  * pinching the page back to size. Making the code 16px avoided it and was too
- * big to read a program on a phone (AB#455).
+ * big to read a program on a phone.
  *
  * maximum-scale=1 is the documented way to stop it. It is applied on iOS only
  * because only iOS needs it, and because Android honours it as "no pinch-zoom"

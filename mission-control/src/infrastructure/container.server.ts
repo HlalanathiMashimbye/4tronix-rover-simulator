@@ -34,7 +34,13 @@ import { OperatorMissionCommands } from '@/core/application/services/OperatorMis
 import { VideoLinker } from '@/core/application/services/VideoLinker';
 import { OperatorTeamService } from '@/core/application/services/OperatorTeamService';
 import { FirebaseOperatorDirectory } from '@/infrastructure/auth/FirebaseOperatorDirectory';
-import { buildAccessGrantedEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { buildAccessGrantedEmail, buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { OperatorSessionService } from '@/core/application/services/OperatorSessionService';
+import { OperatorAccessRequests } from '@/core/application/services/OperatorAccessRequests';
+import { FirebaseOperatorAuth } from '@/infrastructure/auth/FirebaseOperatorAuth';
+import { FirestoreAccessRequestLedger } from '@/infrastructure/auth/FirestoreAccessRequestLedger';
+import { FirestoreLearnerContactWriter } from '@/infrastructure/persistence/FirestoreLearnerContactWriter';
+import type { ILearnerContactWriter } from '@/core/domain/services/ILearnerContactWriter';
 import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
@@ -94,4 +100,35 @@ export function operatorTeamService(origin?: string): OperatorTeamService {
       return false;
     }
   });
+}
+
+/** Operator sign-in and sign-out on Firebase Auth, applying invites on first sign-in. */
+export function operatorSessionService(): OperatorSessionService {
+  return new OperatorSessionService(new FirebaseOperatorAuth(), new FirebaseOperatorDirectory());
+}
+
+/**
+ * "Ask an admin", emailing every admin a link to Manage access with the
+ * address filled in. `origin` is the fallback for the link, as with grants.
+ */
+export function operatorAccessRequests(origin?: string): OperatorAccessRequests {
+  return new OperatorAccessRequests(
+    new FirebaseOperatorAuth(),
+    new FirebaseOperatorDirectory(),
+    new FirestoreAccessRequestLedger(),
+    async (adminEmails, requester) => {
+      const grantUrl = `${resolveAppUrl(origin)}/operator/team?grant=${encodeURIComponent(requester)}`;
+      const { subject, html } = buildAccessRequestEmail(requester, grantUrl);
+      const sender = new ResendEmailSender();
+      const results = await Promise.allSettled(adminEmails.map((to) => sender.send(to, subject, html)));
+      const delivered = results.filter((r) => r.status === 'fulfilled').length;
+      if (delivered === 0) console.error('[access-request] no admin email sent:', results);
+      return delivered;
+    },
+  );
+}
+
+/** Where a learner's address is saved. Admin SDK: browsers cannot reach it. */
+export function learnerContactWriter(): ILearnerContactWriter {
+  return new FirestoreLearnerContactWriter(getFirestoreInstance());
 }
