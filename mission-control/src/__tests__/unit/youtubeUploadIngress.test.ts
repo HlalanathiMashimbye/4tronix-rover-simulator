@@ -118,8 +118,9 @@ describe('satellite automatic-upload ingress', () => {
       const response = await POST(delivery({ outcome: 'completed' }));
 
       expect(response.status).toBe(200);
+      // With the dispatch it filmed, so a re-run gets a run of its own.
       expect(link).toHaveBeenCalledWith(
-        { missionId: 'mission-1', yardId: 'curiosity', videoId: 'abcdefghijk' },
+        { missionId: 'mission-1', yardId: 'curiosity', videoId: 'abcdefghijk', dispatchId: 'dispatch-1' },
         'youtube-auto-upload',
       );
       expect(await response.json()).toMatchObject({ status: 'uploaded', linked: { kind: 'linked' } });

@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A re-run's video gets a run of its own.** Running Quiet Storm Finder
+  again on 25 October uploaded its video to YouTube, and Mission Control still
+  showed one run with the first video. The linker looks for a run without a
+  video, and a mission run before has none left, so the new video was
+  dropped. An automatic upload knows the run it filmed, the dispatch the
+  satellite sent, so it now goes to that run, created when it is not there
+  yet and named for the dispatch so a second delivery lands on the same run.
+  Like an operator's Log another run, the new run is completed and the
+  learner is emailed. Videos found by the scheduled poll, which cannot know
+  their run, are unchanged.
+
 - **No route calls the Admin SDK itself.** After the team route, three more
   held their work inline: sign-in verified tokens, minted cookies and applied
   invites; "Ask an admin" kept its own hourly ledger and emailed the admins;

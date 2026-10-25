@@ -35,14 +35,16 @@ const metadataSchema = z.object({
  * mission.
  */
 async function linkUpload(
-  upload: { missionId: string; yardId: string; outcome?: 'completed' | 'error' },
+  upload: { missionId: string; runId: string; yardId: string; outcome?: 'completed' | 'error' },
   videoId: string,
 ): Promise<VideoLinkResult> {
   if (upload.outcome === 'error') {
     return { kind: 'skipped', reason: 'the rover reported an error; left for the operator' };
   }
+  // With the dispatch it filmed, so a re-run of a mission whose first run
+  // already has its video gets a run of its own instead of being dropped.
   return videoLinker().link(
-    { missionId: upload.missionId, yardId: upload.yardId, videoId },
+    { missionId: upload.missionId, yardId: upload.yardId, videoId, dispatchId: upload.runId },
     'youtube-auto-upload',
   );
 }

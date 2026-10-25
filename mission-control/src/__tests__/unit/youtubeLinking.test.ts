@@ -470,3 +470,66 @@ describe('a mission run more than once at the same yard', () => {
     });
   });
 });
+
+describe('an automatic upload, which names its run', () => {
+  /**
+   * 25 October 2026: Quiet Storm Finder run again on the real rover. Its video
+   * uploaded, and Mission Control still showed one run with the first video.
+   * The linker looks for a run without a video, and a mission run before has
+   * none left, so the new video was dropped. An automatic upload knows which
+   * run it filmed, the dispatch the satellite sent, so that run is the answer.
+   */
+  const FIRST = 'Q6rBdpXeNxM';
+  const SECOND = 'secondRun02';
+  const completedMission = { status: 'completed' as const, yardId: 'curiosity' };
+  const upload = (videoId: string, dispatchId = 'dispatch-2') =>
+    ({ missionId: 'm1', yardId: 'curiosity', videoId, dispatchId });
+  const filmedOnce = [run({ runId: 'r1', completedAt: '2026-10-25T13:24:08Z', youtubeUrl: watchUrl(FIRST) })];
+
+  it('gives a re-run its own run, completed, once the mission is known', () => {
+    expect(planVideoLink(upload(SECOND), filmedOnce, undefined)).toEqual({ kind: 'needs-mission' });
+    expect(planVideoLink(upload(SECOND), filmedOnce, completedMission)).toEqual({
+      kind: 'link', runId: 'dispatch-2', yardId: 'curiosity', completes: true,
+    });
+  });
+
+  it('does not give the same video a second run when it is delivered again', () => {
+    const linked = [...filmedOnce, run({ runId: 'dispatch-2', youtubeUrl: watchUrl(SECOND) })];
+
+    expect(planVideoLink(upload(SECOND), linked, completedMission).kind).toBe('skip');
+  });
+
+  it('goes to the run it names when that run is there and waiting', () => {
+    const runs = [...filmedOnce, run({ runId: 'dispatch-2', status: 'processing' })];
+
+    expect(planVideoLink(upload(SECOND), runs, completedMission)).toEqual({
+      kind: 'link', runId: 'dispatch-2', yardId: 'curiosity', completes: true,
+    });
+  });
+
+  it('leaves the run it names alone when that run already shows another video', () => {
+    const runs = [...filmedOnce, run({ runId: 'dispatch-2', youtubeUrl: watchUrl('somethingEl') })];
+
+    expect(planVideoLink(upload(SECOND), runs, completedMission).kind).toBe('skip');
+  });
+
+  it('still fills a run left waiting before making a new one', () => {
+    const runs = [...filmedOnce, run({ runId: 'r2', completedAt: '2026-10-25T14:00:00Z' })];
+
+    expect(planVideoLink(upload(SECOND), runs, undefined)).toEqual({
+      kind: 'link', runId: 'r2', yardId: 'curiosity', completes: false,
+    });
+  });
+
+  it('records the run for a settled mission with no runs, because the rover ran it', () => {
+    expect(planVideoLink(upload(SECOND), [], completedMission)).toEqual({
+      kind: 'link', runId: 'dispatch-2', yardId: 'curiosity', completes: true,
+    });
+  });
+
+  it('changes nothing for the scheduled poll, which cannot know the run', () => {
+    const fromTheChannel = { missionId: 'm1', yardId: 'curiosity', videoId: SECOND };
+
+    expect(planVideoLink(fromTheChannel, filmedOnce, completedMission).kind).toBe('skip');
+  });
+});
