@@ -2,7 +2,7 @@ import 'server-only';
 
 import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
-import { deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
+import { claimInvite, deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
 import type { OperatorAccount, OperatorInvite, OperatorRole } from '@/core/domain/entities/OperatorAccount';
 import type { IOperatorDirectory, OperatorIdentity } from '@/core/domain/repositories/IOperatorDirectory';
 import { COLLECTIONS } from '@/infrastructure/persistence/collections';
@@ -64,6 +64,10 @@ export class FirebaseOperatorDirectory implements IOperatorDirectory {
 
   deleteInvite(email: string): Promise<boolean> {
     return deleteInvite(email);
+  }
+
+  claimInvite(uid: string, email: string): Promise<OperatorRole | null> {
+    return claimInvite(uid, email);
   }
 
   private ledger(uid: string) {

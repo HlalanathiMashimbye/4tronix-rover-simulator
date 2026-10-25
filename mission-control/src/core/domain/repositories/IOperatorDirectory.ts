@@ -35,4 +35,11 @@ export interface IOperatorDirectory {
 
   /** True when there was an invite to remove. */
   deleteInvite(email: string): Promise<boolean>;
+
+  /**
+   * Turn a waiting invite into the account's role on its first sign-in. The
+   * role granted, or null when there is no invite. The caller must already
+   * know the sign-in may claim it (inviteClaimant).
+   */
+  claimInvite(uid: string, email: string): Promise<OperatorRole | null>;
 }
