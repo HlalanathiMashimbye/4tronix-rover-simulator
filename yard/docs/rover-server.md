@@ -52,6 +52,12 @@ library described in `yard/rover/vendor/README.md` before setting `PYTHONPATH`.
 - Working dir: `/home/mars/4tronix-rover-simulator/real-rover`
 - Starts: `/usr/bin/python3 /home/mars/4tronix-rover-simulator/real-rover/rover_server.py`
 
+Because the server runs as `root` and a learner's Python currently runs inside
+the server's own process, a learner program effectively runs as root on the
+Pi. Closing that is planned but not yet built: see
+[learner-code-isolation.md](learner-code-isolation.md). It includes a one-time
+setup step on this Pi (creating the unprivileged `learner` user).
+
 ### Git Repos on Pi
 - `/home/mars/4tronix-rover-simulator` — main repo
 - `/home/mars/4tronix-rover-simulator-changed` — experimental branch with camera streaming
