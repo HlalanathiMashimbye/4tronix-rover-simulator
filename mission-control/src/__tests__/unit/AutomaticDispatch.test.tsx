@@ -100,7 +100,7 @@ describe('Automatic Route dispatch', () => {
     });
 
     // Pressing it read the yard again rather than trusting the earlier check.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/api/status'))).toHaveLength(2);
     expect(navigate).toHaveBeenCalledTimes(1);
     const target = new URL(navigate.mock.calls[0][0]);
     expect(target.pathname).toBe('/run/');
@@ -115,6 +115,42 @@ describe('Automatic Route dispatch', () => {
       expect.objectContaining({ cache: 'no-store' }),
     );
   }, 10000);
+
+  describe('a handoff Mission Control signed', () => {
+    const signed = { success: true, code: 'rover.forward(60)\nrover.stop()', expires: 1793000000, signature: 'ab'.repeat(32) };
+
+    async function sendSigned(handoffAnswer: unknown) {
+      const fetchMock = jest.fn((url: string) => Promise.resolve(
+        url.endsWith('/handoff') ? handoffAnswer : answer(status()),
+      ));
+      global.fetch = fetchMock as unknown as typeof fetch;
+      const navigate = mount();
+      await checkYard();
+      await waitFor(() => expect(sendButton()).toBeEnabled());
+      fireEvent.click(sendButton());
+      const message = await screen.findByRole('status');
+      await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1), { timeout: 3000 });
+      return { fetchMock, message, target: new URL(navigate.mock.calls[0][0]) };
+    }
+
+    it('carries the signature and the stored code, and says the rover starts by itself', async () => {
+      const { fetchMock, message, target } = await sendSigned(answer(signed));
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/operator/missions/m1/handoff', { method: 'POST' });
+      expect(target.searchParams.get('signature')).toBe(signed.signature);
+      expect(target.searchParams.get('expires')).toBe(String(signed.expires));
+      expect(target.searchParams.get('code')).toBe(signed.code);
+      expect(message).toHaveTextContent('the rover starts as soon as it is ready');
+    }, 10000);
+
+    it('still opens the run station unsigned when signing is refused, and says to press Send there', async () => {
+      const { message, target } = await sendSigned({ ok: false, json: async () => ({ success: false }) });
+
+      expect(target.searchParams.get('signature')).toBeNull();
+      expect(target.searchParams.get('code')).toBe(mission.code);
+      expect(message).toHaveTextContent('press Send to rover there');
+    }, 10000);
+  });
 
   describe('the console opens in the theme the operator is looking at', () => {
     /**

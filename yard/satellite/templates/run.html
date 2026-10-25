@@ -665,7 +665,13 @@
     // say the recording has stopped.
     let recordingFile = null;
     let recordingSince = 0;
+    // A mission handed over from Mission Control, filled in and not sent yet.
+    // `handoffChecking` while the satellite checks its signature, and
+    // `handoffVerified` once it has: then Send presses itself.
     let handoffWaiting = false;
+    let handoffChecking = false;
+    let handoffVerified = false;
+    let runListenerReady = false;
 
     function flash(el, text, tone) {
         el.dataset.tone = tone || '';
@@ -803,11 +809,12 @@
     // clipboard. The yard identity is checked again here so a console opened
     // for the wrong yard cannot run a mission against this rover.
     //
-    // The handoff fills the form and stops there: Send stays a press on this
-    // page. Anything can open a link, so a page that ran whatever its address
-    // carried would let any site a yard browser visited move the rover. The
-    // same-origin check on /api/queue/add cannot help, because the POST comes
-    // from this page.
+    // The operator already pressed Send to Rover in Mission Control, so a
+    // handoff Mission Control signed is sent from here by itself. Anything
+    // else in the address waits for Send: anything can open a link, and a page
+    // that ran whatever its address carried would let any site a yard browser
+    // visited move the rover. The same-origin check on /api/queue/add cannot
+    // help there, because the POST comes from this page.
     const handoff = new URLSearchParams(window.location.search);
     if (handoff.get('handoff') === 'automatic') {
         if (handoff.get('yardId') !== YARD_ID) {
@@ -818,8 +825,36 @@
             code.value = handoff.get('code') || '';
             updateRunIdentity();
             handoffWaiting = true;
-            $('runMsg').dataset.tone = 'ok';
-            $('runMsg').textContent = 'Mission loaded from Mission Control. Press Send to rover to run it.';
+            noteHandoff('Mission loaded from Mission Control. Press Send to rover to run it.');
+            if (handoff.get('signature')) verifyHandoff(handoff);
+        }
+    }
+
+    function noteHandoff(text) {
+        $('runMsg').dataset.tone = 'ok';
+        $('runMsg').textContent = text;
+    }
+
+    async function verifyHandoff(params) {
+        handoffChecking = true;
+        try {
+            const resp = await fetch('/api/handoff/verify', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    missionId: params.get('missionId') || '', code: params.get('code') || '',
+                    expires: params.get('expires'), signature: params.get('signature'),
+                }),
+            });
+            const d = await resp.json();
+            if (resp.ok && d.verified) {
+                handoffVerified = true;
+                noteHandoff('Mission from Mission Control. It starts as soon as the camera and rover are ready.');
+            }
+        } catch (e) {
+            // Unchecked is unverified: the operator presses Send.
+        } finally {
+            handoffChecking = false;
+            continueHandoff();
         }
     }
 
@@ -990,7 +1025,7 @@
                 announceDone(file);
             }
             paintGate();
-            focusSendForHandoff();
+            continueHandoff();
         });
         YardStatus.onError(() => {
             roverOk = false;
@@ -1146,13 +1181,17 @@
         }
     });
 
-    // Once, when the yard is ready, so the operator's next key press is Send.
-    function focusSendForHandoff() {
-        if (!handoffWaiting || $('runBtn').disabled) return;
+    // Once, when the yard is ready and the signature has been checked: a
+    // verified handoff sends, anything else puts the focus on Send.
+    function continueHandoff() {
+        if (!handoffWaiting || handoffChecking || !runListenerReady || $('runBtn').disabled) return;
         handoffWaiting = false;
-        $('runBtn').focus();
+        if (handoffVerified) $('runBtn').click();
+        else $('runBtn').focus();
     }
-    focusSendForHandoff();
+    // The click handler exists from here, so a status that arrives first waits.
+    runListenerReady = true;
+    continueHandoff();
 
     $('stopBtn').addEventListener('click', async () => {
         try {

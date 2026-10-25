@@ -207,6 +207,28 @@ def api_queue_add():
         return jsonify({'error': str(e)}), 500
 
 
+@rover_bp.route('/api/handoff/verify', methods=['POST'])
+def api_handoff_verify():
+    """Whether the run station may send a handed-over mission by itself.
+
+    Checked for this satellite's own yard, not the one the link names, so a
+    signature for another yard never passes here.
+    """
+    import mission_handoff
+    import youtube_upload
+    from satellite_identity import yard_id
+
+    data = request.get_json(silent=True) or {}
+    verified, reason = mission_handoff.verify(
+        youtube_upload.shared_secret(), yard_id(),
+        str(data.get('missionId') or ''), str(data.get('code') or ''),
+        data.get('expires'), data.get('signature'),
+    )
+    if not verified:
+        logging.getLogger(__name__).info('handoff not verified: %s', reason)
+    return jsonify({'verified': verified, 'reason': reason})
+
+
 @rover_bp.route('/api/queue/clear', methods=['POST'])
 def api_queue_clear():
     """Proxy to rover queue/clear endpoint - the emergency stop.

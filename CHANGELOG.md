@@ -11,16 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **A link can no longer start a rover run on its own.** Send to Rover in
-  Mission Control opens the satellite's run station with the mission in the
-  address, and the run station used to press its own Send as soon as the
-  camera and the rover were ready. Anything can open a link, so any page a
-  yard browser visited could have started filming and moved the rover with
-  code of its choosing. The same-origin check on the satellite's POSTs did
-  not cover this, because the POST came from the run station itself. The
-  handoff now fills the run station and puts the focus on Send, with a line
-  saying the mission came from Mission Control, and the operator presses Send.
-  One extra press, at the yard, where the operator already is.
+- **Only a mission Mission Control signed starts a rover run by itself.**
+  Send to Rover opens the satellite's run station with the mission in the
+  address, and the run station pressed its own Send as soon as the camera and
+  rover were ready. Anything can open a link, so any page a yard browser
+  visited could have started filming and moved the rover with code of its
+  choosing; the same-origin check on the satellite's POSTs did not cover it,
+  because the POST came from the run station itself. Mission Control's server
+  now signs the handoff for the operator's yard (the stored code, never the
+  request's, for five minutes) with the upload secret the satellite already
+  holds, and the satellite checks the signature once. A verified handoff
+  still needs only the one press in Mission Control. Anything else, a link
+  from elsewhere or a satellite with no secret set, fills the run station and
+  waits for Send. A shared test vector keeps the two languages' formats in
+  step.
 
 - **When one admin grants a request for access, the others hear about it in
   the same email thread.** Someone who asks for operator access emails every
