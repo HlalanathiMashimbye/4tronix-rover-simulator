@@ -665,9 +665,7 @@
     // say the recording has stopped.
     let recordingFile = null;
     let recordingSince = 0;
-    let automaticRunRequested = false;
-    let automaticRunStarted = false;
-    let runListenerReady = false;
+    let handoffWaiting = false;
 
     function flash(el, text, tone) {
         el.dataset.tone = tone || '';
@@ -804,6 +802,12 @@
     // Automatic Route hands off through the application URL, never through the
     // clipboard. The yard identity is checked again here so a console opened
     // for the wrong yard cannot run a mission against this rover.
+    //
+    // The handoff fills the form and stops there: Send stays a press on this
+    // page. Anything can open a link, so a page that ran whatever its address
+    // carried would let any site a yard browser visited move the rover. The
+    // same-origin check on /api/queue/add cannot help, because the POST comes
+    // from this page.
     const handoff = new URLSearchParams(window.location.search);
     if (handoff.get('handoff') === 'automatic') {
         if (handoff.get('yardId') !== YARD_ID) {
@@ -813,7 +817,9 @@
             setMetaValue(missionName, handoff.get('missionName') || '');
             code.value = handoff.get('code') || '';
             updateRunIdentity();
-            automaticRunRequested = true;
+            handoffWaiting = true;
+            $('runMsg').dataset.tone = 'ok';
+            $('runMsg').textContent = 'Mission loaded from Mission Control. Press Send to rover to run it.';
         }
     }
 
@@ -984,7 +990,7 @@
                 announceDone(file);
             }
             paintGate();
-            maybeAutoRun();
+            focusSendForHandoff();
         });
         YardStatus.onError(() => {
             roverOk = false;
@@ -1140,16 +1146,13 @@
         }
     });
 
-    // The listener must exist before a synchronous status subscriber can
-    // trigger an Automatic Route handoff.
-    runListenerReady = true;
-    maybeAutoRun();
-
-    function maybeAutoRun() {
-        if (!runListenerReady || !automaticRunRequested || automaticRunStarted || !cameraPrimed || !roverOk) return;
-        automaticRunStarted = true;
-        $('runBtn').click();
+    // Once, when the yard is ready, so the operator's next key press is Send.
+    function focusSendForHandoff() {
+        if (!handoffWaiting || $('runBtn').disabled) return;
+        handoffWaiting = false;
+        $('runBtn').focus();
     }
+    focusSendForHandoff();
 
     $('stopBtn').addEventListener('click', async () => {
         try {

@@ -42,9 +42,10 @@ The loop, end to end:
    pass.
 3. Send navigates the browser to the satellite's run station (`/run/`) with
    the mission in the URL (`handoff=automatic`, id, name and code). The
-   station starts recording, waits a second so the first move is on camera,
-   then posts the code to the rover's queue with the mission id in its
-   params. **Copy** remains as the fallback: the mission's Python with its
+   station fills itself in and waits for the operator to press Send there: a
+   link alone never moves the rover. Send starts recording, waits a second so
+   the first move is on camera, then posts the code to the rover's queue with
+   the mission id in its params. **Copy** remains as the fallback: the mission's Python with its
    name and id in `# Mission:` and `# MissionID:` header comments, pasted
    into the station by hand.
 4. The rover runs it and records the outcome in its history, mission id

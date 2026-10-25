@@ -617,7 +617,7 @@ export function AutomaticDispatch({
 
       {success && (
         <p role="status" className="mt-2 rounded-xl border border-emerald-600/30 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-700">
-          All checks passed. Starting mission...
+          All checks passed. Opening the run station: press Send to rover there.
         </p>
       )}
 

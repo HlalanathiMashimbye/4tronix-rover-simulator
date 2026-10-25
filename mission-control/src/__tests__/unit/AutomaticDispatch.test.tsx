@@ -94,7 +94,7 @@ describe('Automatic Route dispatch', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     fireEvent.click(sendButton());
-    expect(await screen.findByRole('status')).toHaveTextContent('Starting mission');
+    expect(await screen.findByRole('status')).toHaveTextContent('press Send to rover there');
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 1600));
     });

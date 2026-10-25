@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A link can no longer start a rover run on its own.** Send to Rover in
+  Mission Control opens the satellite's run station with the mission in the
+  address, and the run station used to press its own Send as soon as the
+  camera and the rover were ready. Anything can open a link, so any page a
+  yard browser visited could have started filming and moved the rover with
+  code of its choosing. The same-origin check on the satellite's POSTs did
+  not cover this, because the POST came from the run station itself. The
+  handoff now fills the run station and puts the focus on Send, with a line
+  saying the mission came from Mission Control, and the operator presses Send.
+  One extra press, at the yard, where the operator already is.
+
 - **When one admin grants a request for access, the others hear about it in
   the same email thread.** Someone who asks for operator access emails every
   admin, and nothing told the rest once one of them had let the person in, so
