@@ -11,6 +11,7 @@ import pytest
 
 import web_server
 import youtube_upload
+from tests.page_source import page_source
 
 SECRET = 'S' * 24 + 'x9Kq-Lw2_Zp7Rt4Vb8Nm3Jh6'  # 48, like Terraform's
 SECRET_API = '/operator/api/config/upload-secret'
@@ -44,7 +45,7 @@ def test_a_saved_secret_is_used_and_never_shown(client):
     assert youtube_upload._secret() == SECRET
     # Nothing the page can fetch carries it.
     for path in (SECRET_API, TUNABLES, '/api/status', '/settings'):
-        assert SECRET not in client.get(path).get_data(as_text=True), path
+        assert SECRET not in page_source(client, path), path
 
 
 def test_it_is_only_sent_to_the_mission_control_it_was_entered_for(client):

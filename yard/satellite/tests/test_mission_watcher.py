@@ -387,6 +387,37 @@ def test_a_finished_run_is_filmed_for_three_seconds_more_then_stops(monkeypatch,
     assert 3.0 <= stopped_at['t'] - 1003.5 <= 3.5
 
 
+def test_the_tail_is_the_one_set_on_settings(monkeypatch, recorder):
+    """Moved on the Settings slider, the next run's video runs that much longer."""
+    import tunables
+    import youtube_upload
+    tunables.save({'recordingTail': 6})
+    monkeypatch.setattr(youtube_upload, 'tick', lambda: None)
+    clock = _Clock(40)
+    monkeypatch.setattr(mission_watcher.time, 'monotonic', clock.monotonic)
+    monkeypatch.setattr(mission_watcher.time, 'sleep', clock.sleep)
+    recorder.start_recording('m1', YARD)
+
+    def rover_reply(*a, **k):
+        status = 'running' if clock.now < 1003.5 else 'completed'
+        return _Reply([{'status': status, 'params': {'mission_id': 'm1'}}])
+
+    monkeypatch.setattr(mission_watcher.requests, 'get', rover_reply)
+    stopped_at = {}
+    real_stop = recorder.stop_recording
+
+    def stop_and_note(*a, **k):
+        stopped_at.setdefault('t', clock.now)
+        return real_stop(*a, **k)
+
+    monkeypatch.setattr(mission_watcher, 'stop_recording', stop_and_note)
+
+    with pytest.raises(_Clock.Done):
+        mission_watcher.start_mission_watcher(lambda: 'http://rover')
+
+    assert 6.0 <= stopped_at['t'] - 1003.5 <= 6.5
+
+
 def test_a_run_in_its_tail_stops_on_time_even_if_the_rover_drops_out(monkeypatch, recorder):
     """Once the rover has said a run is over it is not asked again, so losing
     the rover during the tail cannot leave the camera filming."""

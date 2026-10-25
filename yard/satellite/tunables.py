@@ -132,6 +132,10 @@ TUNABLES = {
     'cameraReadyTimeout': ('camera_ready_timeout', 'CAMERA_READY_TIMEOUT', 2.0, float, (0.5, 30.0)),
     'cameraResolution': ('camera_resolution', 'CAMERA_RESOLUTION', '640x480', str, CAMERA_RESOLUTIONS),
     'cameraRotation': ('camera_rotation', 'CAMERA_ROTATION', '0', str, CAMERA_ROTATIONS),
+    # How long a recording keeps filming after the rover reports its run
+    # over (mission_watcher). Three seconds shows the real rover come to rest;
+    # a yard whose camera sees it stop sooner or later can change it.
+    'recordingTail': ('recording_tail_seconds', 'RECORDING_TAIL_SECONDS', 3.0, float, (0.0, 10.0)),
     'cleanupGracePeriod': ('cleanup_grace_hours', 'CLEANUP_GRACE_HOURS', 72.0, float, (1.0, 168.0)),
     'cleanupMaxAge': ('cleanup_max_days', 'CLEANUP_MAX_DAYS', 21.0, float, (1.0, 60.0)),
     'cleanupMinFreeGB': ('cleanup_min_free_gb', 'CLEANUP_MIN_FREE_GB', 2.0, float, (0.5, 16.0)),

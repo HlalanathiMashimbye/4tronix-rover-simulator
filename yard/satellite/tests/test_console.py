@@ -23,6 +23,7 @@ from console import camera  # noqa: E402
 import recording_control  # noqa: F401,E402
 import camera_control  # noqa: E402
 import tunables  # noqa: E402
+from tests.page_source import page_source
 
 
 @pytest.fixture
@@ -67,7 +68,7 @@ def test_the_console_links_back_to_mission_control(client):
     tablet, so the shared bar carries a door. Default target is the deployed
     hub; MISSION_CONTROL_URL or the config file can repoint it."""
     for path in ('/', '/run/', '/settings'):
-        page = client.get(path).get_data(as_text=True)
+        page = page_source(client, path)
         assert 'class="mc-back"' in page, path
         assert 'https://marsyard.sapient.rocks' in page, path
 
@@ -428,7 +429,7 @@ def test_the_way_back_goes_to_the_operator_console_not_the_learner_feed(client):
     """Mission Control's home page is the learner feed. An operator who sent a
     mission from the console and pressed back landed there, somewhere they had
     never been."""
-    page = client.get('/run/').get_data(as_text=True)
+    page = page_source(client, '/run/')
     back = page.split('class="mc-back"', 1)[1].split('>', 1)[0]
     assert 'href="https://marsyard.sapient.rocks/operator"' in back
     assert 'data-mission-control="https://marsyard.sapient.rocks"' in back

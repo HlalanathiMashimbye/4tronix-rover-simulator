@@ -12,6 +12,7 @@ import pytest
 
 import web_server
 import youtube_upload
+from tests.page_source import page_source
 
 TUNABLES = '/operator/api/config/tunables'
 
@@ -26,7 +27,7 @@ def client():
 
 
 def mission_control_link(client):
-    page = client.get('/run/').get_data(as_text=True)
+    page = page_source(client, '/run/')
     return page.split('class="mc-back"', 1)[1].split('>', 1)[0]
 
 

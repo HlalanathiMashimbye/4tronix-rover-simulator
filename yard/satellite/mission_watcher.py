@@ -48,17 +48,14 @@ from recording_control import (
 
 ROVER_POLL_TIMEOUT = 3.0
 
-# How long a recording keeps going after the rover says its run is over.
-#
-# The rover reports a run finished the moment the program returns, and the
-# camera's picture of that moment arrives a little later, so stopping on the
-# report cut the end off the video. Up to ten seconds of tail was too long and
-# none is too short; three seconds, chosen watching the real rover, shows it
-# come to rest.
-RECORDING_TAIL_SECONDS = 3.0
+# How long a recording keeps going after the rover says its run is over is
+# the `recordingTail` setting (tunables.py), read on every pass so a change on
+# Settings applies to the next run. The rover reports a run finished the
+# moment the program returns, and the camera's picture of that moment arrives
+# a little later, so stopping on the report cut the end off the video.
 
 # How often the rover is asked whether a run is over, while one is filming.
-# Half a second, so the video ends three to three and a half seconds after
+# Half a second, so the video ends within half a second of its tail after
 # the run, where it used to be anything up to ten. It costs nothing when idle,
 # because the rover is only asked while a recording is open.
 ROVER_POLL_SECONDS = 0.5
@@ -148,7 +145,7 @@ def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None,
 
     With a tail, a finished run is filmed for `tail_seconds` more before it
     stops, so the video shows the rover come to rest; the watcher's loop uses
-    RECORDING_TAIL_SECONDS. A run in its tail is not asked about again, so an
+    the recordingTail setting. A run in its tail is not asked about again, so an
     unreachable rover cannot leave it filming.
 
     keep=True for errors as well as successes: a run the rover could not
@@ -235,8 +232,9 @@ def start_mission_watcher(rover_url_getter, interval=ROVER_POLL_SECONDS):
         while True:
             try:
                 from youtube_upload import queue_upload
+                import tunables
                 stop_finished_recordings(rover_url_getter(), on_recording_ready=queue_upload,
-                                         tail_seconds=RECORDING_TAIL_SECONDS)
+                                         tail_seconds=tunables.get('recordingTail'))
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
 

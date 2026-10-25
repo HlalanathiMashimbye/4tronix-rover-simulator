@@ -11,6 +11,26 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **How long a video keeps filming after its run is a slider on Settings.**
+  The tail was a fixed three seconds in `mission_watcher.py`, chosen by
+  watching the real rover come to rest. A yard whose camera sees the rover
+  stop sooner or later had no way to change it without a code change. It is
+  now the `recordingTail` setting, 0 to 10 seconds in half seconds, on the
+  Camera card under "Keep filming after a run for", and the watcher reads it
+  on every pass, so a change applies from the next run. Three seconds stays
+  the default.
+
+- **The satellite's pages keep their scripts in files of their own.** The
+  run station, Settings, the monitor, the code tablet and the shared nav bar
+  each carried their JavaScript inline, 3,450 lines between them (Settings
+  alone was 1,991 lines, 1,244 of them script). Each is now
+  `yard/satellite/static/pages/<page>.js`, loaded from the spot the inline
+  block stood in, so it runs at the same moment as before. The three values
+  the server rendered into those scripts (the yard id and the camera port)
+  travel as `data-` attributes on the script tag. The code tablet's offline
+  cache lists its new file. Behaviour is unchanged; tests that read a page's
+  text read its script file with it (`tests/page_source.py`).
+
 - **Only a mission Mission Control signed starts a rover run by itself.**
   Send to Rover opens the satellite's run station with the mission in the
   address, and the run station pressed its own Send as soon as the camera and
