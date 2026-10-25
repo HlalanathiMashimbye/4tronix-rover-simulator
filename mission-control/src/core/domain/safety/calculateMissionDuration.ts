@@ -17,7 +17,7 @@
  * mean moving the build. See src/lib/README.md.
  */
 
-import { workspaceToCommands } from '@/lib/roverBlockly';
+import { workspaceToCommands, type RoverWorkspace } from '@/lib/roverBlockly';
 
 /**
  * Total seconds a Blockly workspace will run for, loops expanded.
@@ -35,8 +35,7 @@ import { workspaceToCommands } from '@/lib/roverBlockly';
  * model, and is what the simulator itself runs. Summing its durations means
  * this can no longer disagree with the thing it is measuring.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function calculateBlocklyDuration(workspace: any): number {
+export function calculateBlocklyDuration(workspace: RoverWorkspace | null | undefined): number {
   if (!workspace?.getTopBlocks) return 0;
 
   return workspaceToCommands(workspace).reduce(

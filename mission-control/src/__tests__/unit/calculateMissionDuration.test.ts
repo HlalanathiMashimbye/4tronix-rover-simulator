@@ -7,7 +7,7 @@
  */
 
 import { calculateBlocklyDuration, calculatePythonDuration } from '@/core/domain/safety/calculateMissionDuration';
-import { workspaceToPython } from '@/lib/roverBlockly';
+import { workspaceToPython, type RoverWorkspace } from '@/lib/roverBlockly';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
 
 type Block = Record<string, unknown>;
@@ -32,11 +32,13 @@ const repeat = (times: number, body: Block | null, next: Block | null = null) =>
   getNextBlock: () => next,
 });
 
+// Test doubles carry only what the generator reads, so they are typed at the
+// workspace boundary rather than built out to Blockly's full shape.
 const workspace = (chain: Block | null) => ({
   getTopBlocks: () => [
     { type: 'rover_on_receive', getInputTargetBlock: () => chain, getNextBlock: () => null },
   ],
-});
+}) as unknown as RoverWorkspace;
 
 describe('calculateBlocklyDuration', () => {
   it('is zero for an empty workspace', () => {

@@ -13,8 +13,6 @@ import { spinDegreesForSeconds, spinSecondsForDegrees } from './rover-physics';
  * rover program the yard would run (low-level servo + time.sleep sequences).
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 // Dropdown values are "R, G, B" strings consumed by the generator.
 const LED_COLOURS: [string, string][] = [
   ['red', '255, 0, 0'],
@@ -37,10 +35,47 @@ const LED_POSITIONS: [string, string][] = [
 ];
 
 /**
+ * What defining the blocks needs from Blockly. A type only, erased when
+ * compiled, for the hub and the yard's copy alike: Blockly itself arrives at
+ * runtime (see loadBlockly), never through this file.
+ */
+type BlockRegistry = Pick<typeof import('blockly'), 'Blocks' | 'FieldDropdown' | 'FieldNumber'>;
+
+/**
+ * The parts of a Blockly block and workspace this file uses, and no more.
+ *
+ * Narrow on purpose. The generator reads a block's type, its fields and what
+ * is connected to it, so it runs against Blockly's own blocks, the yard's copy
+ * of Blockly, or a plain object in a test, without depending on the hundreds
+ * of members Blockly's Block carries. These were `any`, which said nothing
+ * about what the code needs and let anything through.
+ */
+export interface RoverConnection {
+  connect(other: RoverConnection | null): unknown;
+}
+
+export interface RoverBlock {
+  readonly id: string;
+  readonly type: string;
+  getFieldValue(name: string): unknown;
+  getNextBlock(): RoverBlock | null;
+  getInputTargetBlock(name: string): RoverBlock | null;
+  getInput?(name: string): { connection: RoverConnection | null } | null;
+  readonly previousConnection?: RoverConnection | null;
+  readonly nextConnection?: RoverConnection | null;
+  getPreviousBlock?(): RoverBlock | null;
+  dispose?(healStack?: boolean, animate?: boolean): void;
+}
+
+export interface RoverWorkspace {
+  getTopBlocks(ordered: boolean): RoverBlock[];
+}
+
+/**
  * Register every rover block on the given Blockly instance.
  * Safe to call more than once (definitions are idempotent assignments).
  */
-export function defineRoverBlocks(Blockly: any): void {
+export function defineRoverBlocks(Blockly: BlockRegistry): void {
   Blockly.Blocks['rover_on_receive'] = {
     init: function () {
       this.appendDummyInput().appendField('🛰️ On uplink');
@@ -318,17 +353,15 @@ export const ROVER_TOOLBOX = {
   ],
 };
 
-function getOrderedUplinkHats(workspace: any): any[] {
+function getOrderedUplinkHats(workspace: RoverWorkspace): RoverBlock[] {
   return workspace
     .getTopBlocks(true)
-    .filter((block: any) => block.type === 'rover_on_receive');
+    .filter((block) => block.type === 'rover_on_receive');
 }
 
-function getStatementTail(block: any): any {
+function getStatementTail(block: RoverBlock): RoverBlock {
   let tail = block;
-  while (tail?.getNextBlock()) {
-    tail = tail.getNextBlock();
-  }
+  for (let next = tail.getNextBlock(); next; next = next.getNextBlock()) tail = next;
   return tail;
 }
 
@@ -344,12 +377,12 @@ function getStatementTail(block: any): any {
  * likely real one - got silently re-disposed from the live workspace on
  * every single load without the cleanup ever reaching storage.
  */
-export function mergeUplinkHats(workspace: any): boolean {
+export function mergeUplinkHats(workspace: RoverWorkspace): boolean {
   const hats = getOrderedUplinkHats(workspace);
   if (hats.length <= 1) return false;
 
   const primaryHat = hats[0];
-  const primaryInput = primaryHat.getInput('DO');
+  const primaryInput = primaryHat.getInput?.('DO');
   let primaryBody = primaryHat.getInputTargetBlock('DO');
 
   for (const hat of hats.slice(1)) {
@@ -357,15 +390,15 @@ export function mergeUplinkHats(workspace: any): boolean {
 
     if (body) {
       if (!primaryBody) {
-        primaryInput?.connection?.connect(body.previousConnection);
+        primaryInput?.connection?.connect(body.previousConnection ?? null);
         primaryBody = body;
       } else {
-        getStatementTail(primaryBody)?.nextConnection?.connect(body.previousConnection);
+        getStatementTail(primaryBody).nextConnection?.connect(body.previousConnection ?? null);
         primaryBody = getStatementTail(body);
       }
     }
 
-    hat.dispose(false, false);
+    hat.dispose?.(false, false);
   }
 
   return true;
@@ -389,10 +422,10 @@ function seconds(value: unknown): string {
   return `${value} second${String(value) === '1' ? '' : 's'}`;
 }
 
-export function workspaceToPython(workspace: any): string {
+export function workspaceToPython(workspace: RoverWorkspace): string {
   const lines: string[] = [];
 
-  function blockToLines(block: any, indent: number): void {
+  function blockToLines(block: RoverBlock | null, indent: number): void {
     if (!block) return;
     const pad = '    '.repeat(indent);
     const type = block.type;
@@ -507,7 +540,7 @@ export function workspaceToPython(workspace: any): string {
       case 'rover_mast_turn': {
         // Mast servo is 0; positive degrees = left, negative = right
         const dir = block.getFieldValue('DIR');
-        const deg = block.getFieldValue('DEGREES');
+        const deg = Number(block.getFieldValue('DEGREES'));
         const angle = dir === 'LEFT' ? deg : dir === 'RIGHT' ? -deg : 0;
         lines.push(`${pad}# Turn the camera mast to ${angle} degrees`);
         lines.push(`${pad}rover.setServo(0, ${angle})`);
@@ -525,7 +558,7 @@ export function workspaceToPython(workspace: any): string {
         break;
       }
       case 'rover_leds_all': {
-        const rgb = block.getFieldValue('COLOUR');
+        const rgb = String(block.getFieldValue('COLOUR'));
         lines.push(`${pad}# Light up every LED in this colour`);
         lines.push(`${pad}rover.setColor(rover.fromRGB(${rgb}))`);
         lines.push(`${pad}rover.show()`);
@@ -533,7 +566,7 @@ export function workspaceToPython(workspace: any): string {
       }
       case 'rover_led_one': {
         const led = block.getFieldValue('LED');
-        const rgb = block.getFieldValue('COLOUR');
+        const rgb = String(block.getFieldValue('COLOUR'));
         lines.push(`${pad}# Light up LED number ${led} in this colour`);
         lines.push(`${pad}rover.setPixel(${led}, rover.fromRGB(${rgb}))`);
         lines.push(`${pad}rover.show()`);
@@ -558,8 +591,8 @@ export function workspaceToPython(workspace: any): string {
 
   workspace
     .getTopBlocks(true)
-    .filter((b: any) => b.type === 'rover_on_receive')
-    .forEach((b: any) => blockToLines(b, 0));
+    .filter((b) => b.type === 'rover_on_receive')
+    .forEach((b) => blockToLines(b, 0));
 
   return lines.join('\n') + '\n';
 }
@@ -736,20 +769,20 @@ export const LED_COUNT = 4;
  * of them. It does now: a child who lights the rover up should see it light up,
  * and there are four real lamps on the corners of the chassis to match.
  */
-export function workspaceToCommands(workspace: any): SimulationCommand[] {
+export function workspaceToCommands(workspace: RoverWorkspace): SimulationCommand[] {
   const commands: SimulationCommand[] = [];
 
   // The Repeat blocks the current block sits inside, outermost first.
   const loops: string[] = [];
 
-  function processChain(block: any, out: SimulationCommand[]): void {
+  function processChain(block: RoverBlock | null, out: SimulationCommand[]): void {
     while (block) {
       processOne(block, out);
       block = block.getNextBlock();
     }
   }
 
-  function processOne(block: any, out: SimulationCommand[]): void {
+  function processOne(block: RoverBlock, out: SimulationCommand[]): void {
     const before = out.length;
     emit(block, out);
     // Tag here, once, rather than in every case below. A Repeat's own pushes
@@ -760,7 +793,7 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
     }
   }
 
-  function emit(block: any, out: SimulationCommand[]): void {
+  function emit(block: RoverBlock, out: SimulationCommand[]): void {
     switch (block.type) {
       case 'rover_on_receive':
         processChain(block.getInputTargetBlock('DO'), out);
@@ -805,12 +838,12 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
         out.push({ command: 'stop' });
         break;
       case 'rover_leds_all': {
-        const rgb = block.getFieldValue('COLOUR');
+        const rgb = String(block.getFieldValue('COLOUR'));
         out.push({ command: 'leds', leds: Array(LED_COUNT).fill(rgb) });
         break;
       }
       case 'rover_led_one': {
-        const rgb = block.getFieldValue('COLOUR');
+        const rgb = String(block.getFieldValue('COLOUR'));
         const which = Number(block.getFieldValue('LED'));
         // Only the chosen lamp changes; the others keep whatever they were.
         const leds: (string | null)[] = Array(LED_COUNT).fill(null);
@@ -855,8 +888,8 @@ export function workspaceToCommands(workspace: any): SimulationCommand[] {
 
   workspace
     .getTopBlocks(true)
-    .filter((b: any) => b.type === 'rover_on_receive')
-    .forEach((b: any) => processOne(b, commands));
+    .filter((b) => b.type === 'rover_on_receive')
+    .forEach((b) => processOne(b, commands));
 
   return commands;
 }

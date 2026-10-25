@@ -17,6 +17,7 @@ import { RunningBlockOverlay, useRunningBlockMarks } from '@/components/mission/
 import { BlockCanvasControls, fitBlocks, useBlockBin } from '@/components/mission/blockCanvasControls';
 import { calculateBlocklyDuration } from '@/core/domain/safety/calculateMissionDuration';
 import { MISSION_TIME_LIMIT_SECONDS } from '@/core/domain/safety/limits';
+import type { Events, WorkspaceSvg } from 'blockly';
 
 interface BlocklyEditorProps {
   onGenerateCommands: (commands: SimulationCommand[]) => void;
@@ -47,8 +48,10 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   const blocklyDivRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   // Holds the Blockly workspace instance (untyped CDN global).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const workspaceRef = useRef<any>(null);
+  const workspaceRef = useRef<WorkspaceSvg | null>(null);
+  // Read once, at inject, as the prop says: a ref, so the inject effect does
+  // not depend on it and a change of layout never re-injects the workspace.
+  const phoneAtInject = useRef(phone);
   const binRef = useRef<HTMLDivElement>(null);
   const flyoutObserverRef = useRef<MutationObserver | null>(null);
   const mergedNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,7 +101,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
 
       // Initialize workspace with the shared category toolbox. Read once:
       // EditorPanel remounts this component when the layout changes.
-      const workspace = Blockly.inject(blocklyDivRef.current, blocklyInjectOptions(phone));
+      const workspace = Blockly.inject(blocklyDivRef.current, blocklyInjectOptions(phoneAtInject.current));
 
       workspaceRef.current = workspace;
       setIsInitialized(true);
@@ -197,10 +200,9 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       //
       // Warning instead of undoing keeps the learner's work theirs. Submit is
       // still a hard refusal, which is where the story puts the stop.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      workspace.addChangeListener((event: any) => {
+      workspace.addChangeListener((event: Events.Abstract) => {
         // Selections and viewport moves change nothing worth measuring.
-        if (event?.isUiEvent) return;
+        if (event.isUiEvent) return;
         try {
           localStorage.setItem(
             STORAGE_KEY,
