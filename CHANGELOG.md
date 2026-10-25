@@ -11,6 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Only a mission Mission Control signed starts a rover run by itself.**
+  Send to Rover opens the satellite's run station with the mission in the
+  address, and the run station pressed its own Send as soon as the camera and
+  rover were ready. Anything can open a link, so any page a yard browser
+  visited could have started filming and moved the rover with code of its
+  choosing; the same-origin check on the satellite's POSTs did not cover it,
+  because the POST came from the run station itself. Mission Control's server
+  now signs the handoff for the operator's yard (the stored code, never the
+  request's, for five minutes) with the upload secret the satellite already
+  holds, and the satellite checks the signature once. A verified handoff
+  still needs only the one press in Mission Control. Anything else, a link
+  from elsewhere or a satellite with no secret set, fills the run station and
+  waits for Send. A shared test vector keeps the two languages' formats in
+  step.
 - **A mission is an entity with its own lifecycle, not a record that any
   layer may change.** `Mission` was an interface of about 25 public fields,
   and the rules for changing it lived in loose functions beside it

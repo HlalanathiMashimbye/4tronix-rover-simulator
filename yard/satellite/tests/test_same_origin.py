@@ -34,6 +34,7 @@ STATE_CHANGING_ROUTES = [
     '/api/config/rover_url',
     '/api/queue/add',
     '/api/queue/clear',
+    '/api/handoff/verify',
     '/api/recording/start',
     '/api/recording/stop',
     '/api/recordings/delete',

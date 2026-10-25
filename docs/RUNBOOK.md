@@ -108,6 +108,11 @@ satellite sends it only to the address it was entered for, so repointing the
 yard asks for it again. Do not put any YouTube OAuth credential on the
 satellite.
 
+The same secret signs Send to Rover's handoff, so the run station starts a
+mission from Mission Control by itself. A satellite without it, or with a
+different value from Mission Control's, still loads the mission and waits for
+someone to press Send there.
+
 The team's accounts can add a version of a secret but not read one, so the
 way to get a value for the satellite without asking Werner is to set a new
 one and give both sides the same:

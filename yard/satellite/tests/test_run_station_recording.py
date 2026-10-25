@@ -31,8 +31,12 @@ class FakeSatellite:
     was already on its way when something changed.
     """
 
-    def __init__(self, page: Page, hold_start=False, uploads=None):
+    def __init__(self, page: Page, hold_start=False, uploads=None, verified=False):
         self.page = page
+        # What the satellite says about the handoff's signature, and what the
+        # page asked it to check.
+        self.verified = verified
+        self.verify_asks = []
         self.filming = []
         # The satellite's automatic upload, as /api/status sums it up, and
         # this run's video's note, as /api/recordings reports it. None is a
@@ -43,10 +47,13 @@ class FakeSatellite:
         self.hold_status = False
         self.held_starts = []
         self.held_statuses = []
+        self.sent = []
+        self.starts = 0
         page.route('**/api/status', self._status)
         page.route('**/api/recording/start', self._start)
         page.route('**/api/recording/stop', self._stop)
-        page.route('**/api/queue/add', lambda route: route.fulfill(json={'status': 'ok'}))
+        page.route('**/api/queue/add', self._add)
+        page.route('**/api/handoff/verify', self._verify)
         page.route('**/api/queue/clear', lambda route: route.fulfill(json={'status': 'ok'}))
         # Newest first, as the satellite lists them, and something newer than
         # this run on the card: a recording somebody started by hand.
@@ -78,7 +85,16 @@ class FakeSatellite:
             return
         route.fulfill(json=self.payload())
 
+    def _verify(self, route):
+        self.verify_asks.append(route.request.post_data_json)
+        route.fulfill(json={'verified': self.verified, 'reason': None if self.verified else 'signature does not match'})
+
+    def _add(self, route):
+        self.sent.append(route.request.post_data_json)
+        route.fulfill(json={'status': 'ok'})
+
     def _start(self, route):
+        self.starts += 1
         if self.hold_start:
             self.held_starts.append(route)
             return
@@ -108,18 +124,80 @@ class FakeSatellite:
         self.page.evaluate('() => { YardStatus.refreshNow(); }')
 
 
-def handoff(live_server):
-    """Mission Control's Send to Rover: the page runs the mission by itself
-    once the camera and the rover are ready."""
+def handoff(live_server, signed=False):
+    """Mission Control's Send to Rover: the page opens with the mission filled in."""
     from satellite_identity import yard_id
     params = {'handoff': 'automatic', 'yardId': yard_id(), 'missionId': 'm1',
               'missionName': 'Rock Lover', 'code': 'rover.forward(60)\ntime.sleep(1)\nrover.stop()'}
+    if signed:
+        params.update(expires='1793000000', signature='ab' * 32)
     return f'{live_server}/run/?{urlencode(params)}'
 
 
-def open_run(page: Page, live_server, width=1366, height=768):
+def load_handoff(page: Page, live_server, width=1366, height=768):
     page.set_viewport_size({'width': width, 'height': height})
     page.goto(handoff(live_server))
+    page.wait_for_function("!document.getElementById('runBtn').disabled")
+
+
+def open_run(page: Page, live_server, width=1366, height=768):
+    """The handoff, then the operator's press of Send."""
+    load_handoff(page, live_server, width, height)
+    page.click('#runBtn')
+
+
+def test_a_handoff_fills_the_run_station_and_waits_for_send(page: Page, live_server):
+    """A link can come from any page a yard browser opens, so arriving with a
+    mission in the address must not move the rover or start filming."""
+    fake = FakeSatellite(page)
+    load_handoff(page, live_server)
+    page.wait_for_timeout(1500)
+
+    assert fake.sent == [] and fake.starts == 0 and fake.verify_asks == []
+    assert page.eval_on_selector('#code', 'el => el.value').startswith('rover.forward(60)')
+    assert 'Press Send' in page.text_content('#runMsg')
+    assert page.evaluate('document.activeElement.id') == 'runBtn'
+
+
+def test_a_handoff_mission_control_signed_runs_with_no_press_here(page: Page, live_server):
+    """The operator pressed Send to Rover in Mission Control. That is the one
+    press: once the satellite has checked the signature, the run station
+    records and sends by itself as soon as the yard is ready."""
+    fake = FakeSatellite(page, verified=True)
+    page.goto(handoff(live_server, signed=True))
+    wait_recording(page)
+    page.wait_for_function("document.getElementById('runMsg').textContent.includes('sent to the rover')")
+
+    [asked] = fake.verify_asks
+    assert asked['missionId'] == 'm1' and asked['signature'] == 'ab' * 32
+    assert asked['code'].startswith('rover.forward(60)') and asked['expires'] == '1793000000'
+    [[instruction]] = fake.sent
+    assert instruction['params']['mission_id'] == 'm1'
+
+
+def test_a_signature_the_satellite_rejects_waits_for_send(page: Page, live_server):
+    fake = FakeSatellite(page, verified=False)
+    page.goto(handoff(live_server, signed=True))
+    page.wait_for_function("!document.getElementById('runBtn').disabled")
+    page.wait_for_timeout(1500)
+
+    assert len(fake.verify_asks) == 1
+    assert fake.sent == [] and fake.starts == 0
+    assert 'Press Send' in page.text_content('#runMsg')
+    assert page.evaluate('document.activeElement.id') == 'runBtn'
+
+
+def test_pressing_send_after_a_handoff_runs_that_mission(page: Page, live_server):
+    fake = FakeSatellite(page)
+    open_run(page, live_server)
+    wait_recording(page)
+    page.wait_for_function("document.getElementById('runMsg').textContent.includes('sent to the rover')")
+
+    assert fake.starts == 1
+    [[instruction]] = fake.sent
+    assert instruction['cmd'] == 'run_python'
+    assert instruction['params']['mission_id'] == 'm1'
+    assert instruction['params']['code'].startswith('rover.forward(60)')
 
 
 def wait_recording(page: Page):
