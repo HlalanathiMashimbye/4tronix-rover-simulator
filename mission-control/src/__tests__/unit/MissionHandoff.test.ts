@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { MissionHandoffService } from '@/core/application/services/MissionHandoffService';
-import type { MissionRecord } from '@/core/domain/entities/Mission';
+import type { Mission } from '@/core/domain/entities/Mission';
 import type { IMissionReader } from '@/core/domain/repositories/IMissionRepository';
 import { HmacHandoffSigner } from '@/infrastructure/yard/HmacHandoffSigner';
 
@@ -37,9 +37,9 @@ describe('the handoff', () => {
   const stored = {
     id: 'm1', yardId: 'curiosity', code: 'rover.forward(60)', status: 'queued',
     learnerRef: 'r', sessionId: 's', submittedAt: '2026-10-25T10:00:00Z',
-  } as MissionRecord;
+  } as Mission;
 
-  function service(found: MissionRecord | null) {
+  function service(found: Mission | null) {
     const missions = { findById: jest.fn().mockResolvedValue(found) } as unknown as IMissionReader;
     const signer = { sign: jest.fn().mockReturnValue('sig') };
     const now = () => new Date('2026-10-26T08:00:00Z');
