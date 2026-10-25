@@ -19,7 +19,7 @@ SERVER_PORT = int(os.environ.get('SATELLITE_PORT', 3001))
 
 
 def local_ip():
-    # UDP connect never sends a packet — OS just picks the right source
+    # UDP connect never sends a packet: the OS just picks the right source
     # interface from the routing table. Try private ranges then fall back.
     for dest in ('10.255.255.255', '192.168.255.255', '172.16.255.255'):
         try:

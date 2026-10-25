@@ -255,7 +255,7 @@ def api_queue_status():
 
 @rover_bp.route('/api/queue/events', methods=['GET'])
 def api_queue_events():
-    """SSE proxy — forwards rover event stream to browser"""
+    """SSE proxy: forwards the rover event stream to the browser"""
     try:
         rover_resp = requests.get(
             f'{rover_url()}/queue/events',
