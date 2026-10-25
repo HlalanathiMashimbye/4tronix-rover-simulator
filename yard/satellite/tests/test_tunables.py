@@ -109,6 +109,18 @@ class TestReadersUseIt:
         assert _ready_timeout() == 7.5
 
 
+class TestRecordingTail:
+    """How long a video keeps filming after its run: three seconds unless an
+    operator moves the slider, and never outside 0 to 10."""
+
+    def test_three_seconds_until_someone_changes_it(self):
+        assert tunables.get('recordingTail') == 3.0
+
+    def test_it_is_held_to_zero_to_ten_seconds(self):
+        assert tunables.save({'recordingTail': 25})['recordingTail'] == 10.0
+        assert tunables.save({'recordingTail': -1})['recordingTail'] == 0.0
+
+
 class TestWhichWayUp:
     """The camera's picture, half a turn round or as it is mounted.
 

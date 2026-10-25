@@ -143,6 +143,7 @@ YardStatus.subscribe((data) => paintCamera(data.camera));
 // CAMERA_HOST environment variable.
 const TUNABLE_FIELDS = {
     cameraReadyTimeout: 'tunCameraReady',
+    recordingTail: 'tunRecordingTail',
 };
 
 const CLEANUP_FIELDS = {
@@ -253,19 +254,20 @@ async function chooseRotation(value) {
     }
 }
 
-// The slider's own readout, since a range input shows no number on
+// Each slider's own readout, since a range input shows no number on
 // its own. Kept in sync on every drag and every time something
 // programmatic sets .value (page load, a save's repaint) - a range
 // input fires no 'input' event for the latter, so those call sites
 // call this directly rather than relying on the listener alone.
 const camReadySlider = document.getElementById('tunCameraReady');
-const camReadyVal = document.getElementById('tunCameraReadyVal');
-function syncCamReadyVal() {
-    if (camReadySlider && camReadyVal) {
-        camReadyVal.textContent = Number(camReadySlider.value).toFixed(1) + 's';
+const sliders = [...document.querySelectorAll('.slider-row input[type="range"]')];
+function syncSliderVals() {
+    for (const slider of sliders) {
+        const readout = document.getElementById(slider.id + 'Val');
+        if (readout) readout.textContent = Number(slider.value).toFixed(1) + 's';
     }
 }
-camReadySlider?.addEventListener('input', syncCamReadyVal);
+sliders.forEach((slider) => slider.addEventListener('input', syncSliderVals));
 
 async function loadTunables() {
     try {
@@ -281,7 +283,7 @@ async function loadTunables() {
             if (el && d.values[name] !== undefined) el.value = d.values[name];
         }
         paintUploadSummary();
-        syncCamReadyVal();
+        syncSliderVals();
         // A range input silently clamps what it DISPLAYS, so a value
         // set before this slider existed, or through the API, shows
         // as 5.0s over a yard that is really waiting 7.5. Say the
@@ -369,7 +371,7 @@ async function commit(name, el, statusEl) {
         // screen that is true nowhere else is worse than no number.
         const inForce = (d.values || {})[name];
         const adjusted = inForce !== undefined && String(inForce) !== String(value);
-        if (inForce !== undefined) { el.value = inForce; syncCamReadyVal(); }
+        if (inForce !== undefined) { el.value = inForce; syncSliderVals(); }
         frameOf(el).classList.remove('save-failed');
         flashSaved(frameOf(el));
         setStatus(statusEl,
