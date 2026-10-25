@@ -85,14 +85,14 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     # tests. A test that cares about camera state patches this itself.
     monkeypatch.setattr(camera_state, '_listening', lambda host, port: False)
 
-    # Nor may a test reach for the rover. /api/status health-checks ROVER_URL,
+    # Nor may a test reach for the rover. /api/status health-checks the rover,
     # which defaults to the mDNS name marspi.local - and resolving a .local
     # name that is not on the network takes about five seconds before it gives
     # up. Four tests calling /api/status was twenty seconds of the suite spent
     # waiting for DNS. Pointed at a closed local port, the same call refuses
     # instantly and the code path is identical.
     import web_server
-    monkeypatch.setattr(web_server, 'ROVER_URL', 'http://127.0.0.1:9')
+    monkeypatch.setitem(web_server.app.config, 'ROVER_URL', 'http://127.0.0.1:9')
 
     # Nor may a test go looking for a rover. Saving an address probes it, and
     # discovery can sweep a whole /24 - neither belongs in a unit test, and
@@ -100,7 +100,7 @@ def _isolate_satellite_state(tmp_path, monkeypatch):
     import rover_discovery
     monkeypatch.setattr(rover_discovery, '_health', lambda url, timeout=None: None)
     monkeypatch.setattr(rover_discovery, '_port_open', lambda *a, **k: False)
-    # Same five-second .local lookup as ROVER_URL above, once per rover found.
+    # Same five-second .local lookup as the rover address above, once per rover found.
     monkeypatch.setattr(rover_discovery, '_resolve', lambda host: host)
 
     yield

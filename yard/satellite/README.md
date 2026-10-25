@@ -21,7 +21,8 @@ for what the Firestore mirror used to do and why it went.
 
 | File | Role |
 |------|------|
-| `web_server.py` | Flask server. Serves every page, proxies the rover queue and camera, owns the recording endpoints. |
+| `web_server.py` | The app factory, `create_app()`: configuration, the rover's address (app config, saved from Settings), and the blueprints. `python web_server.py` serves it. |
+| `routes/` | Every route outside `/operator`, as three blueprints: `pages` (hub, run station, settings, code, monitor), `rover` (health, discovery, the rover's address, the queue proxy, photos) and `recordings` (camera readiness, start, stop, list, download, delete). |
 | `operator_console.py` / `console/` | What is left of `/operator/`: camera control, the satellite's tunables, and shutting down. The mission queue, the login and the review flow went with the mirror. |
 | `recording_control.py` | Opens and closes recordings, and answers whether one is running. Files are named `<mission>__<yard>__<UTC stamp>.mp4`, so a re-run never overwrites the last attempt. Owns `recording_key()`, the one rule for turning a mission id into a recording name, and remembers which rover instructions each recording dispatched. |
 | `mission_watcher.py` | Polls the rover and releases the camera when a recording's own run finishes, not any run of that mission. Stops any recording older than ten minutes, for the rover that loses power mid-run. The only background thread. |

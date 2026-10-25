@@ -116,7 +116,8 @@ yard/
 │   ├── test_*.py             # pytest
 │   └── requirements.txt
 ├── satellite/
-│   ├── web_server.py         # Flask server for mro.local (port 3001)
+│   ├── web_server.py         # Flask app factory for mro.local (port 3001)
+│   ├── routes/               # pages, rover proxy and recordings blueprints
 │   ├── camera_server.py      # Pi AI camera WebSocket stream (port 8890)
 │   ├── camera_control.py     # starts and stops the camera server
 │   ├── camera_state.py       # the one answer to "is the camera ready"

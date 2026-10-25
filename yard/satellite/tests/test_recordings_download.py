@@ -13,6 +13,8 @@ import pytest
 
 import recording_control
 import web_server
+import routes.rover
+from routes.recordings import recording_name
 
 
 @pytest.fixture
@@ -116,27 +118,27 @@ class TestRecordingACopyPasteRun:
     to take away. Dispatching from the queue always did."""
 
     def test_name_is_reduced_to_something_safe_for_a_path(self):
-        assert web_server._recording_name("Thabo's square!") == 'Thabo-s-square'
-        assert web_server._recording_name('../../etc/passwd') == 'etc-passwd'
-        assert web_server._recording_name('   ') == ''
+        assert recording_name("Thabo's square!") == 'Thabo-s-square'
+        assert recording_name('../../etc/passwd') == 'etc-passwd'
+        assert recording_name('   ') == ''
 
     def test_an_id_keeps_a_dash_at_either_end(self):
         # Mission ids are nanoid's, and a dash is one of its characters. It
         # used to be trimmed along with the dashes the reduction leaves
         # behind, and the file was then named for a mission that does not
         # exist.
-        assert web_server._recording_name('-BQwFDUWvyhpbQ4ZI8het') == '-BQwFDUWvyhpbQ4ZI8het'
-        assert web_server._recording_name('BQwFDUWvyhpbQ4ZI8he-') == 'BQwFDUWvyhpbQ4ZI8he-'
+        assert recording_name('-BQwFDUWvyhpbQ4ZI8het') == '-BQwFDUWvyhpbQ4ZI8het'
+        assert recording_name('BQwFDUWvyhpbQ4ZI8he-') == 'BQwFDUWvyhpbQ4ZI8he-'
 
     def test_a_name_already_reduced_is_not_reduced_again(self):
         # Stop sends back the name start returned, and that name is reduced a
         # second time on the way in. So reducing twice has to be reducing once.
         # A long name cut at 60 on a dash was not: the second pass trimmed it
         # to 59, and stop then looked for a recording nobody had started.
-        once = web_server._recording_name('a' * 59 + '!' + 'b')
+        once = recording_name('a' * 59 + '!' + 'b')
 
         assert len(once) == 60
-        assert web_server._recording_name(once) == once
+        assert recording_name(once) == once
 
     def test_start_and_stop_file_an_id_with_a_leading_dash_whole(self, client, monkeypatch):
         """The file name is what YouTube makes the title from, and the title is
@@ -190,7 +192,7 @@ class TestRecordingACopyPasteRun:
                     'params': {'mission_id': sent, 'code': 'rover.stop()'},
                 }]}
 
-        monkeypatch.setattr(web_server.requests, 'post', lambda *a, **k: Reply())
+        monkeypatch.setattr(routes.rover.requests, 'post', lambda *a, **k: Reply())
 
         resp = client.post('/api/queue/add', json=[{
             'cmd': 'run_python',

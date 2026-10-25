@@ -1,22 +1,22 @@
 """
-Satellite Web Server - Flask server for web interfaces
+Satellite Web Server - the Flask app for the yard's web interfaces.
 
-Runs on mro.local:3001 (override with the SATELLITE_PORT env var).
-Serves tablet Blockly interface and TV monitor display.
-Proxies API calls to rover server.
+Runs on mro.local:3001 (override with the SATELLITE_PORT env var). Serves the
+station hub, the run station, Settings, the tablet editor and the TV monitor,
+and proxies the rover's API.
+
+This file is the app factory and nothing else. It used to be the app, its
+configuration, its state and every route in one module, built as a side
+effect of importing it, with the rover's address in a `global`. The routes
+are blueprints in routes/ and console/; the address is app config.
 """
 
-import os
-import json
 import logging
-import socket
-from datetime import datetime, timezone
+import os
 from pathlib import Path
 
-import requests
 from dotenv import load_dotenv
-from flask import (Flask, render_template, request, jsonify, Response,
-                   stream_with_context, redirect, send_file)
+from flask import Flask
 
 # Load this file's own .env before anything below reads os.environ - Flask
 # has no built-in equivalent of Next.js's automatic .env loading. Load by
@@ -24,99 +24,12 @@ from flask import (Flask, render_template, request, jsonify, Response,
 # different .env from a parent directory (e.g. mission-control's).
 load_dotenv(Path(__file__).resolve().parent / '.env')
 
-CAMERA_PORT = int(os.environ.get('CAMERA_PORT', 8890))
+import operator_console  # noqa: E402  (after .env: reads the environment)
+from routes import BLUEPRINTS  # noqa: E402
+from routes.network import SERVER_PORT  # noqa: E402
+from satellite_identity import _load  # noqa: E402
 
-# Read here rather than only in __main__ so the monitor can print the address
-# a tablet should actually be typing. The TV footer used to hard-code :5050,
-# which stopped being true when the default moved to 3001 - a wrong number on
-# a wall-mounted screen is worse than no number at all.
-SERVER_PORT = int(os.environ.get('SATELLITE_PORT', 3001))
-
-# Runtime config persisted across restarts (e.g. rover URL edited on /status)
-CONFIG_FILE = os.environ.get(
-    'SATELLITE_CONFIG',
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'satellite_config.json')
-)
-
-
-def _load_config():
-    try:
-        with open(CONFIG_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_config(cfg):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(cfg, f, indent=2)
-
-
-def _recording_name(raw):
-    """An operator-supplied name reduced to something safe to put in a path.
-
-    The rule is recording_control.recording_key. It lives there because the
-    watcher must reduce the mission id the rover reports in exactly the same
-    way to find the recording again; see that function for what happened when
-    the two sides disagreed.
-    """
-    from recording_control import recording_key
-    return recording_key(raw)
-
-
-def _note_recorded_dispatches(body):
-    """Tell recording_control which rover instructions belong to which recording.
-
-    The rover gives each instruction an id, and this proxy is the only place
-    that sees that id next to the mission it was sent for. Best effort: the
-    rover has already accepted the dispatch, so nothing here may turn it into
-    an error.
-    """
-    try:
-        from recording_control import note_dispatch, recording_key
-        from satellite_identity import yard_id
-
-        yard = yard_id()
-        for instruction in (body or {}).get('instructions') or []:
-            params = instruction.get('params') or {}
-            if params.get('mission_id') and instruction.get('id'):
-                note_dispatch(recording_key(params['mission_id']), yard, instruction['id'])
-    except Exception as e:
-        logging.getLogger(__name__).warning('Could not note a dispatch for its recording: %s', e)
-
-
-def _local_ip():
-    # UDP connect never sends a packet — OS just picks the right source
-    # interface from the routing table. Try private ranges then fall back.
-    for dest in ('10.255.255.255', '192.168.255.255', '172.16.255.255'):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((dest, 1))
-            ip = s.getsockname()[0]
-            s.close()
-            if not ip.startswith('127.'):
-                return ip
-        except Exception:
-            pass
-    try:
-        return socket.gethostbyname(socket.gethostname())
-    except Exception:
-        return 'unknown'
-
-app = Flask(__name__)
-
-# Operator console sessions. A stable secret keeps operators signed in across
-# restarts; without one, sessions just reset on restart (re-login).
-# Nothing on this server touches the Flask session any more - the operator
-# login that used it is gone - so there is nothing to keep across a restart and
-# no reason to configure a secret. A per-process random key keeps flash() and
-# anything else that reaches for `session` working without asking a deployment
-# to hold a secret it has no use for. OPERATOR_SESSION_SECRET is retired.
-app.secret_key = os.urandom(32)
-
-# Rover server URL — a value saved from the /status page wins over the
-# environment default, so field edits survive a systemd restart
-ROVER_URL = _load_config().get('rover_url') or os.environ.get('ROVER_URL', 'http://marspi.local:8523')
+DEFAULT_ROVER_URL = 'http://marspi.local:8523'
 
 
 def _restore_camera_index():
@@ -126,589 +39,46 @@ def _restore_camera_index():
     restart quietly returned to camera 0, which on a Mac with an iPhone nearby
     is often not the camera anyone chose. Same precedence as the rover URL.
     """
-    index = _load_config().get('camera_index')
+    index = _load().get('camera_index')
     if isinstance(index, int) and not isinstance(index, bool) and 0 <= index <= 15:
         os.environ['CAMERA_INDEX'] = str(index)
 
 
-_restore_camera_index()
-
-# What is left of /operator/: camera control and the satellite's tunables. The
-# mission queue that used to live there went with the Firestore mirror. The
-# getter indirection means a rover path edited on Settings applies everywhere.
-app.config['ROVER_URL_GETTER'] = lambda: ROVER_URL
-import operator_console  # noqa: E402  (needs app + config above)
-import tunables  # noqa: E402
-app.register_blueprint(operator_console.operator_bp)
-
-# Request timeout for rover API calls
-ROVER_TIMEOUT = 5.0
-
-@app.context_processor
-def _console_chrome():
-    """Context every page gets, because _nav.html is included by every page.
-
-    A per-route render_template argument would have to be repeated in five
-    places and forgotten in the sixth.
-    """
-    # Read per page, like every tunable: a yard repointed on the Settings page
-    # links to the new Mission Control on its next page, not its next restart.
-    mission_control = tunables.get('missionControlUrl')
-    return {
-        'mission_control_url': mission_control,
-        # The operator console, not the hub's home page: that is the learner
-        # feed, and an operator pressing "back" was never there.
-        'mission_control_back_url': mission_control + '/operator',
-    }
-
-
-@app.route('/')
-def index():
-    """The station hub.
-
-    No sign-in and no Firestore. This used to open on the Firestore-backed
-    mission queue, behind a sign-in, which made the one thing a yard has to be
-    able to do - run a mission - depend on reaching Firebase, on a box whose
-    whole point is working when the venue wifi does not. Pasting code into
-    /code/ and pressing run talks to the rover over the LAN and needs nothing
-    else, so that is the door now.
-
-    /code/ and /monitor/ are login-free for the same reason: tablets and the
-    TV are pointed at those URLs once during setup and never sign in.
-    """
-    return render_template('home.html', server_ip=_local_ip(), server_port=SERVER_PORT)
-
-
-@app.route('/run/')
-def run_station():
-    """The operator's station for one mission, start to handover.
-
-    Deliberately not /code/. That is an editor, used on a tablet mid-activity
-    with a child watching, and its job is to get code onto the rover. This is
-    the bookkeeping around a run: which mission it is, recording it, getting
-    the video off the box, and the YouTube description that makes the upload
-    link itself back.
-
-    No "mark complete" here on purpose: closing a mission is Mission Control's
-    job, and having two places to do it is how a mission ends up completed in
-    one and processing in the other.
-
-    Login-free like the rest of the console, for the same reason: none of this
-    can depend on reaching Firebase.
-    """
-    from satellite_identity import yard_id
-    # camera_port for the same reason the monitor gets it: the live view dials
-    # the camera stream from the browser, and the port is server config.
-    return render_template('run.html', yard_id=yard_id(),
-                           camera_port=CAMERA_PORT)
-
-
-@app.route('/settings')
-def settings():
-    """Diagnostics and the satellite's tunables.
-
-    Was /status, and that URL still works: it is written on setup sheets and
-    bookmarked on the yard's tablets, so it redirects here rather than 404ing.
-    """
-    return render_template('settings.html', rover_url=ROVER_URL)
-
-
-@app.route('/status')
-def status():
-    return redirect('/settings')
-
-
-@app.route('/api/status', methods=['GET'])
-def api_status():
-    from recording_cleanup import disk_stats
-    from recording_control import active_recordings, readiness
-
-    satellite = {
-        'hostname': socket.gethostname(),
-        'ip': _local_ip(),
-        'disk': disk_stats(),
-    }
-
-    rover = {'reachable': False, 'driver': None, 'queue_size': None, 'url': ROVER_URL}
-    try:
-        resp = requests.get(f'{ROVER_URL}/health', timeout=2.0)
-        if resp.status_code == 200:
-            data = resp.json()
-            rover['reachable'] = True
-            rover['driver'] = data.get('driver')
-            rover['queue_size'] = data.get('queue_size')
-            rover['status'] = data.get('status')
-            rover['processor_alive'] = data.get('processor_alive')
-            rover['hardware'] = data.get('hardware')
-            rover['camera'] = data.get('camera')
-    except Exception:
-        pass
-
-    # The one camera answer, shared with every other endpoint and page. It
-    # carries whether the port is open AND whether frames are arriving, which
-    # used to be two separate endpoints that pages mixed and matched until
-    # they contradicted each other.
-    from camera_state import snapshot
-    camera = snapshot()
-
-    recording_ready, recording_detail = readiness()
-    from youtube_upload import summary as upload_summary
-    response = jsonify({
-        'satellite': satellite,
-        'rover': rover,
-        'camera': camera,
-        # The top bar's upload chip, on every page. Read from the notes on the
-        # card; nothing here goes out to the internet.
-        'uploads': upload_summary(),
-        # Read now, not from the camera's snapshot. The snapshot is kept for
-        # up to four seconds to save probing the camera, and the run station
-        # takes this list's word for when a run has finished: a snapshot from
-        # before Send, without the new recording in it, read as the rover
-        # finishing a second after it set off. Reading a dict costs nothing.
-        'recording': {
-            'active': active_recordings(),
-            'ready': recording_ready,
-            'detail': recording_detail,
-        },
-    })
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    return response
-
-
-@app.route('/api/rover/discover', methods=['GET'])
-def api_rover_discover():
-    """Rovers answering on this network.
-
-    So the normal way to set the address is picking one that demonstrably
-    works, rather than typing three things correctly from memory.
-    """
-    from rover_discovery import discover
-
-    found = discover(current_url=ROVER_URL)
-    return jsonify({'rovers': [
-        {
-            'url': f['url'],
-            'addresses': f['addresses'],
-            'driver': f['health'].get('driver'),
-            'hardware': f['health'].get('hardware'),
-            'queueSize': f['health'].get('queue_size'),
-            # Any of its addresses, not only the one shown: the saved address
-            # is often the IP while the rover is listed by its mDNS name.
-            'current': any(u.rstrip('/') == ROVER_URL.rstrip('/') for u in f['addresses']),
-        }
-        for f in found
-    ]})
-
-
-@app.route('/api/config/rover_url', methods=['POST'])
-def api_set_rover_url():
-    """Set the rover URL at runtime (from the /status page) and persist it.
-
-    Not gated, and that is a reversal. The old reasoning was that repointing
-    the rover is a control action: anyone on the venue network could aim this
-    satellite at a different machine and the console would carry on reporting
-    success. True, but it assumed the gate was free, and it is not.
-    require_operator meant a Firebase sign-in, which meant internet, and the
-    field edit this endpoint exists for is the one an operator makes when the
-    rover has moved to a new address - which is exactly when the yard is least
-    likely to have working wifi. A control that only unlocks when the network
-    is healthy is missing on the night it is needed.
-
-    The same call was made for camera start: on a box whose whole point is
-    working offline, an auth gate that bites only when the wifi is down
-    protects nothing worth the cost. What is left is the network boundary
-    itself - the satellite serves the yard's own LAN - plus validation below,
-    which still rejects anything that is not an http(s) URL.
-    """
-    global ROVER_URL
-    from rover_discovery import normalise, probe
-
-    data = request.get_json(silent=True) or {}
-    url = normalise(data.get('url'))
-    if not url:
-        return jsonify({'error': 'Give the rover an address, like curiosity.local'}), 400
-
-    # Check something is actually there before saving it.
-    #
-    # This used to accept anything beginning with http, so a mistyped address
-    # saved happily and the yard looked broken with nothing on the page saying
-    # why. That is exactly what happened at a demo. A wrong address is the
-    # likely mistake here, not a malformed one.
-    #
-    # `force` exists for setting an address before the rover is switched on,
-    # which is legitimate - it just should not be the accident.
-    if not data.get('force'):
-        ok, detail = probe(url)
-        if not ok:
-            return jsonify({
-                'error': f'{url} did not answer as a rover: {detail}.',
-                'url': url,
-                'unreachable': True,
-            }), 409
-
-    ROVER_URL = url
-    persisted = True
-    try:
-        cfg = _load_config()
-        cfg['rover_url'] = url
-        _save_config(cfg)
-    except Exception:
-        persisted = False
-
-    return jsonify({'status': 'ok', 'rover_url': url, 'persisted': persisted})
-
-
-@app.route('/code/')
-def code():
-    """Tablet Blockly interface"""
-    return render_template('code.html')
-
-
-@app.route('/monitor/')
-def monitor():
-    """TV display interface"""
-    return render_template('monitor.html',
-                           server_hostname=socket.gethostname(),
-                           server_ip=_local_ip(),
-                           camera_port=CAMERA_PORT,
-                           server_port=SERVER_PORT)
-
-
-@app.route('/api/queue/add', methods=['POST'])
-def api_queue_add():
-    """Proxy to rover queue/add endpoint"""
-    try:
-        data = request.get_json()
-        resp = requests.post(
-            f'{ROVER_URL}/queue/add',
-            json=data,
-            timeout=ROVER_TIMEOUT
-        )
-        body = resp.json()
-        if resp.status_code < 400:
-            _note_recorded_dispatches(body)
-        return jsonify(body), resp.status_code
-    except requests.exceptions.ConnectionError:
-        return jsonify({'error': 'Cannot connect to rover server'}), 503
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Rover server timeout'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/queue/clear', methods=['POST'])
-def api_queue_clear():
-    """Proxy to rover queue/clear endpoint - the emergency stop.
-
-    UNAUTHENTICATED, and always was: even back when other controls on this
-    server sat behind require_operator (gone now with the rest of the login,
-    see satellite_identity.py), this one deliberately did not. The tablets at
-    /code/ never sign in (see index()), and this is the stop button a child or
-    a facilitator hits when the rover is heading for a table leg. An auth gate
-    here would mean the one control that has to work for anyone in the room is
-    the one that asks for a password first.
-
-    The worst an unauthenticated caller can do is stop the robot. That is the
-    safe direction to fail in, so it stays open on purpose.
-    """
-    try:
-        resp = requests.post(
-            f'{ROVER_URL}/queue/clear',
-            timeout=ROVER_TIMEOUT
-        )
-        return jsonify(resp.json()), resp.status_code
-    except requests.exceptions.ConnectionError:
-        return jsonify({'error': 'Cannot connect to rover server'}), 503
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Rover server timeout'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/queue/status', methods=['GET'])
-def api_queue_status():
-    """Proxy to rover queue/status endpoint"""
-    try:
-        resp = requests.get(
-            f'{ROVER_URL}/queue/status',
-            timeout=ROVER_TIMEOUT
-        )
-        return jsonify(resp.json()), resp.status_code
-    except requests.exceptions.ConnectionError:
-        return jsonify({'error': 'Cannot connect to rover server'}), 503
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Rover server timeout'}), 504
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/queue/events', methods=['GET'])
-def api_queue_events():
-    """SSE proxy — forwards rover event stream to browser"""
-    try:
-        rover_resp = requests.get(
-            f'{ROVER_URL}/queue/events',
-            stream=True,
-            # Rover heartbeats every 30s of idle, so a 45s read timeout only
-            # fires when the rover died without closing the socket
-            timeout=(3.05, 45)
-        )
-    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-        return Response('Rover unreachable', status=503)
-
-    def generate():
-        try:
-            for chunk in rover_resp.iter_content(chunk_size=None):
-                if chunk:
-                    yield chunk
-        except (requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,
-                requests.exceptions.ReadTimeout):
-            # End the stream; the browser's EventSource reconnects (~3s)
-            pass
-        finally:
-            rover_resp.close()
-
-    return Response(
-        stream_with_context(generate()),
-        content_type='text/event-stream',
-        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
-    )
-
-
-@app.route('/api/photo', methods=['GET'])
-def api_photo():
-    """Proxy the rover's latest photo (taken by the take-a-picture block)"""
-    try:
-        resp = requests.get(f'{ROVER_URL}/photo', timeout=ROVER_TIMEOUT)
-        return Response(
-            resp.content,
-            status=resp.status_code,
-            content_type=resp.headers.get('Content-Type', 'image/jpeg'),
-            headers={'Cache-Control': 'no-cache'}
-        )
-    except requests.exceptions.ConnectionError:
-        return jsonify({'error': 'Cannot connect to rover server'}), 503
-    except requests.exceptions.Timeout:
-        return jsonify({'error': 'Rover server timeout'}), 504
-
-
-@app.route('/api/camera/ready', methods=['GET'])
-def api_camera_ready():
-    """Whether frames are actually arriving, not just whether the port is open.
-
-    Now a thin view of the same snapshot /api/status serves, so the two cannot
-    disagree. It stays because it is the honest name for the question and the
-    run station's gate reads it, but it is no longer a second source of truth.
-    """
-    from camera_state import snapshot
-
-    state = snapshot()
-    return jsonify({'ready': state['ready'], 'detail': state['detail']})
-
-
-@app.route('/api/recording/start', methods=['POST'])
-def api_recording_start():
-    """Start recording a copy-paste run.
-
-    /run/ is the only path that records: the operator names the run and this
-    starts it before they press Send. Pasting straight into /code/ never
-    records at all, so that manual flow produces no video: the operator runs
-    the rover and there is nothing to take away and upload.
-
-    The name is the operator's, not a mission id, because a pasted run has no
-    mission. Whatever they type is what the file is called and what they will
-    recognise later when matching it to a mission in Mission Control.
-    """
-    from recording_control import is_ready, start_recording
-    from satellite_identity import yard_id
-
-    data = request.get_json(silent=True) or {}
-    name = _recording_name(data.get('name'))
-    if not name:
-        return jsonify({'error': 'Give the recording a name'}), 400
-
-    # Without this, the manual loop was the one path that would happily
-    # report 'recording' with no frames arriving, and the operator found out
-    # at the end of the night when there was no file to upload. A camera that
-    # is merely listening is not a camera that is recording.
-    ready, detail = is_ready()
-    if not ready:
-        return jsonify({
-            'error': f'Camera is not ready ({detail}). Fix the camera feed before '
-                     'you run - a run with no video cannot be handed over later.',
-        }), 503
-
-    ok, detail = start_recording(name, yard_id())
-    if not ok:
-        return jsonify({'error': detail}), 503
-    # `name` is the key the caller stops with; `file` is what the run actually
-    # wrote, which now carries a per-run timestamp so a re-run cannot land on
-    # the previous attempt's video. The operator needs the second one to find
-    # the file, so it is returned rather than left to be guessed.
-    return jsonify({'status': 'recording', 'name': name,
-                    'file': os.path.basename(detail)})
-
-
-@app.route('/api/recording/stop', methods=['POST'])
-def api_recording_stop():
-    """Stop a copy-paste run's recording, keeping the file unless told not to."""
-    from recording_control import stop_recording
-    from satellite_identity import yard_id
-
-    data = request.get_json(silent=True) or {}
-    name = _recording_name(data.get('name'))
-    if not name:
-        return jsonify({'error': 'Give the recording a name'}), 400
-
-    keep = data.get('keep', True)
-    ok, detail = stop_recording(name, yard_id(), keep=bool(keep))
-    return jsonify({'status': 'stopped', 'kept': bool(keep), 'detail': detail}), (200 if ok else 200)
-
-
-@app.route('/api/recordings', methods=['GET'])
-def api_recordings():
-    """The videos sitting on this satellite, newest first.
-
-    Step five of the manual loop: the operator takes the file to their own
-    device, uploads it to YouTube and pastes the link into Mission Control.
-    Until this existed the recordings were written and then unreachable, so
-    the loop could not be closed by hand at all.
-
-    Deliberately unauthenticated, like /code/ and /monitor/. The whole point
-    is that this works when the venue wifi cannot reach Firebase, and an
-    operator who can already drive the rover from this network gains nothing
-    by being able to read a video of it.
-    """
-    from recording_control import RECORDINGS_DIR
-    from recording_cleanup import is_downloaded, disk_stats
-
-    try:
-        names = os.listdir(RECORDINGS_DIR)
-    except OSError:
-        return jsonify({'recordings': [], 'disk': disk_stats()})
-
-    files = []
-    for name in names:
-        if not name.endswith('.mp4'):
-            continue
-        path = os.path.join(RECORDINGS_DIR, name)
-        try:
-            stat = os.stat(path)
-        except OSError:
-            continue
-        dl, dl_at = is_downloaded(path)
-        from youtube_upload import state_of as upload_state
-        files.append({
-            'name': name,
-            'bytes': stat.st_size,
-            'modified': datetime.fromtimestamp(stat.st_mtime, timezone.utc)
-                .isoformat().replace('+00:00', 'Z'),
-            'downloaded': dl,
-            'downloadedAt': dl_at.isoformat().replace('+00:00', 'Z') if dl_at else None,
-            'upload': upload_state(path),
-        })
-
-    files.sort(key=lambda f: f['modified'], reverse=True)
-    return jsonify({'recordings': files, 'disk': disk_stats()})
-
-
-@app.route('/api/recordings/<path:name>', methods=['GET'])
-def api_recording_download(name):
-    """Download one recording.
-
-    The name is resolved and then checked to be inside the recordings
-    directory, rather than trusted or merely sanitised: this is a path taken
-    straight from a URL on a network the satellite does not control, and
-    ../../ is the oldest trick there is.
-    """
-    from recording_control import RECORDINGS_DIR
-
-    root = os.path.realpath(RECORDINGS_DIR)
-    target = os.path.realpath(os.path.join(root, name))
-    if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
-        return jsonify({'error': 'No such recording'}), 404
-    if not os.path.isfile(target):
-        return jsonify({'error': 'No such recording'}), 404
-
-    from recording_cleanup import mark_downloaded
-    mark_downloaded(target)
-
-    return send_file(target, mimetype='video/mp4', as_attachment=True,
-                     download_name=os.path.basename(target))
-
-
-@app.route('/api/recordings/delete', methods=['POST'])
-def api_recordings_delete():
-    """Delete one or more recordings from the SD card.
-
-    Accepts {"names": ["file1.mp4", "file2.mp4"]}. Each name gets the same
-    path-traversal and active-recording checks the download endpoint applies.
-    Returns which files were deleted and which were skipped, so the UI can
-    report partial success rather than all-or-nothing.
-    """
-    from recording_control import RECORDINGS_DIR, active_paths
-    from recording_cleanup import delete_recording
-
-    data = request.get_json(silent=True) or {}
-    names = data.get('names')
-    if not names or not isinstance(names, list):
-        return jsonify({'error': 'Provide a list of recording names'}), 400
-
-    root = os.path.realpath(RECORDINGS_DIR)
-    protected = active_paths()
-    deleted = []
-    skipped = []
-
-    for name in names:
-        if not isinstance(name, str):
-            skipped.append({'name': str(name), 'reason': 'invalid name'})
-            continue
-        target = os.path.realpath(os.path.join(root, name))
-        if os.path.commonpath([root, target]) != root or not target.endswith('.mp4'):
-            skipped.append({'name': name, 'reason': 'not found'})
-            continue
-        if not os.path.isfile(target):
-            skipped.append({'name': name, 'reason': 'not found'})
-            continue
-        if target in protected:
-            skipped.append({'name': name, 'reason': 'currently recording'})
-            continue
-        if delete_recording(target, 'operator'):
-            deleted.append(name)
-        else:
-            skipped.append({'name': name, 'reason': 'delete failed'})
-
-    return jsonify({'deleted': deleted, 'skipped': skipped})
-
-
-@app.route('/api/health', methods=['GET'])
-def api_health():
-    """Health check - also checks rover connectivity"""
-    rover_status = 'unknown'
-    try:
-        resp = requests.get(f'{ROVER_URL}/health', timeout=2.0)
-        if resp.status_code == 200:
-            rover_status = 'connected'
-        else:
-            rover_status = 'error'
-    except requests.exceptions.ConnectionError:
-        rover_status = 'disconnected'
-    except requests.exceptions.Timeout:
-        rover_status = 'timeout'
-
-    return jsonify({
-        'status': 'ok',
-        'rover_url': ROVER_URL,
-        'rover_status': rover_status
-    })
+def create_app() -> Flask:
+    """The satellite's Flask app, configured from Settings and the environment."""
+    app = Flask(__name__)
+
+    # Nothing on this server touches the Flask session any more - the operator
+    # login that used it is gone - so there is nothing to keep across a
+    # restart and no reason to configure a secret. A per-process random key
+    # keeps flash() and anything else that reaches for `session` working.
+    app.secret_key = os.urandom(32)
+
+    # The rover's address: a value saved from Settings wins over the
+    # environment default, so field edits survive a systemd restart. The
+    # getter is what the console and the mission watcher read, so an address
+    # changed on Settings applies everywhere at once.
+    app.config['ROVER_URL'] = _load().get('rover_url') or os.environ.get('ROVER_URL', DEFAULT_ROVER_URL)
+    app.config['ROVER_URL_GETTER'] = lambda: app.config['ROVER_URL']
+
+    _restore_camera_index()
+
+    # /operator: the camera, the tunables and shutdown. Everything else is in routes/.
+    app.register_blueprint(operator_console.operator_bp)
+    for blueprint in BLUEPRINTS:
+        app.register_blueprint(blueprint)
+    return app
+
+
+# What `python web_server.py` serves and what the tests drive.
+app = create_app()
 
 
 if __name__ == '__main__':
     logging.getLogger('werkzeug').setLevel(logging.ERROR)
     port = SERVER_PORT
     print(f"[satellite] serving on port {port}")
-    print(f"[satellite] rover url {ROVER_URL}")
+    print(f"[satellite] rover url {app.config['ROVER_URL']}")
     import flask.cli
     flask.cli.show_server_banner = lambda *args, **kwargs: None
     # Releases the camera when the rover reports a run is over, so a recording
@@ -716,8 +86,6 @@ if __name__ == '__main__':
     # thread left: the mirror, its sync worker and the startup recovery that
     # went with them are gone.
     from mission_watcher import run_watcher_thread
-    run_watcher_thread(lambda: app.config.get(
-        'ROVER_URL_GETTER',
-        lambda: os.environ.get('ROVER_URL', 'http://marspi.local:8523'))())
+    run_watcher_thread(app.config['ROVER_URL_GETTER'])
 
     app.run(host='0.0.0.0', port=port, threaded=True, use_reloader=False)
