@@ -15,6 +15,8 @@
  *
  * If cloud dispatch is ever built, it belongs in its own route with its own
  * arming precondition, and this test should keep passing untouched.
+ *
+ * Who may delete is checked through the handlers in operatorRouteRoles.test.ts.
  */
 
 import { readFileSync } from 'fs';
@@ -72,20 +74,5 @@ describe('the bookkeeping route is inert', () => {
     // No direct Firestore handle means no path to a collection this route has
     // no business in.
     expect(routeAndService).not.toContain('.collection(');
-  });
-
-  it('restricts delete to an admin, and nothing else to an admin', () => {
-    // AB#379 puts delete alone behind the admin role. Getting this backwards
-    // would either lock operators out of their own job or hand everyone the
-    // one irreversible action.
-    const deleteHandler = source.slice(source.indexOf('export async function DELETE'));
-    expect(deleteHandler).toContain('requireAdmin()');
-
-    const postHandler = source.slice(
-      source.indexOf('export async function POST'),
-      source.indexOf('export async function DELETE'),
-    );
-    expect(postHandler).toContain('requireOperator()');
-    expect(postHandler).not.toContain('requireAdmin()');
   });
 });
