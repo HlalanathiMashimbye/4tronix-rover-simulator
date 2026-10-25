@@ -36,7 +36,8 @@ import { OperatorMissionCommands } from '@/core/application/services/OperatorMis
 import { VideoLinker } from '@/core/application/services/VideoLinker';
 import { OperatorTeamService } from '@/core/application/services/OperatorTeamService';
 import { FirebaseOperatorDirectory } from '@/infrastructure/auth/FirebaseOperatorDirectory';
-import { buildAccessGrantedEmail, buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { buildAccessGrantedEmail, buildAccessRequestEmail, buildAccessResolvedEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { accessRequestReplies } from '@/core/domain/entities/OperatorAccount';
 import { OperatorSessionService } from '@/core/application/services/OperatorSessionService';
 import { OperatorAccessRequests } from '@/core/application/services/OperatorAccessRequests';
 import { FirebaseOperatorAuth } from '@/infrastructure/auth/FirebaseOperatorAuth';
@@ -108,16 +109,41 @@ export function videoLinker(): VideoLinker {
  * still links to itself.
  */
 export function operatorTeamService(origin?: string): OperatorTeamService {
-  return new OperatorTeamService(new FirebaseOperatorDirectory(), async (to, role) => {
-    try {
-      const { subject, html } = buildAccessGrantedEmail(role, `${resolveAppUrl(origin)}/operator`);
-      await new ResendEmailSender().send(to, subject, html);
-      return true;
-    } catch (error) {
-      console.error('[operator/team] grant email failed:', error);
-      return false;
-    }
-  });
+  const ledger = new FirestoreAccessRequestLedger();
+  return new OperatorTeamService(
+    new FirebaseOperatorDirectory(),
+    async (to, role) => {
+      try {
+        const { subject, html } = buildAccessGrantedEmail(role, `${resolveAppUrl(origin)}/operator`);
+        await new ResendEmailSender().send(to, subject, html);
+        return true;
+      } catch (error) {
+        console.error('[operator/team] grant email failed:', error);
+        return false;
+      }
+    },
+    async (uid, requesterEmail, role, handledBy) => {
+      try {
+        const request = await ledger.close(uid);
+        if (!request?.subject) return 0;
+
+        const replies = accessRequestReplies(request.sent, handledBy);
+        if (replies.length === 0) return 0;
+
+        const { html } = buildAccessResolvedEmail(requesterEmail, role, handledBy, `${resolveAppUrl(origin)}/operator/team`);
+        const sender = new ResendEmailSender();
+        const results = await Promise.allSettled(
+          replies.map((r) => sender.send(r.to, request.subject!, html, { answering: r.answering })),
+        );
+        const failed = results.filter((r) => r.status === 'rejected');
+        if (failed.length > 0) console.error('[operator/team] request reply failed:', failed);
+        return results.length - failed.length;
+      } catch (error) {
+        console.error('[operator/team] closing the access request failed:', error);
+        return 0;
+      }
+    },
+  );
 }
 
 /** Operator sign-in and sign-out on Firebase Auth, applying invites on first sign-in. */
@@ -138,10 +164,12 @@ export function operatorAccessRequests(origin?: string): OperatorAccessRequests 
       const grantUrl = `${resolveAppUrl(origin)}/operator/team?grant=${encodeURIComponent(requester)}`;
       const { subject, html } = buildAccessRequestEmail(requester, grantUrl);
       const sender = new ResendEmailSender();
-      const results = await Promise.allSettled(adminEmails.map((to) => sender.send(to, subject, html)));
-      const delivered = results.filter((r) => r.status === 'fulfilled').length;
-      if (delivered === 0) console.error('[access-request] no admin email sent:', results);
-      return delivered;
+      const results = await Promise.allSettled(
+        adminEmails.map(async (to) => ({ to, emailId: await sender.send(to, subject, html) })),
+      );
+      const sent = results.flatMap((r) => r.status === 'fulfilled' ? [r.value] : []);
+      if (sent.length === 0) console.error('[access-request] no admin email sent:', results);
+      return { subject, sent };
     },
   );
 }

@@ -5,17 +5,25 @@
  * the one the identity provider verified, never one typed into a form, so
  * nobody can ask in somebody else's name. Nothing is granted here: the email
  * links to Manage access and the admin decides.
+ *
+ * The record keeps which email went to which admin, so granting the access
+ * can reply to each in the thread it arrived in.
  */
 
-import { isOperatorRole } from '@/core/domain/entities/OperatorAccount';
+import { isOperatorRole, type AccessRequestEmail } from '@/core/domain/entities/OperatorAccount';
 import type { IAccessRequestLedger } from '@/core/domain/repositories/IAccessRequestLedger';
 import type { IOperatorDirectory } from '@/core/domain/repositories/IOperatorDirectory';
 import type { IOperatorAuth } from '@/core/domain/services/IOperatorAuth';
 
 export const ACCESS_REQUEST_INTERVAL_MS = 60 * 60 * 1000;
 
-/** Email each admin about `requester`, and say how many emails went. */
-export type AdminNotifier = (adminEmails: string[], requester: string) => Promise<number>;
+export interface AdminNotifyResult {
+  subject: string;
+  sent: AccessRequestEmail[];
+}
+
+/** Email each admin about `requester`, returning the subject used and which emails went. */
+export type AdminNotifier = (adminEmails: string[], requester: string) => Promise<AdminNotifyResult>;
 
 export type AccessRequestOutcome =
   | { outcome: 'sent'; notified: number }
@@ -49,8 +57,9 @@ export class OperatorAccessRequests {
     if (isOperatorRole(signIn.role)) return { outcome: 'has-access' };
     if (!signIn.email || !signIn.emailVerified) return { outcome: 'unverified' };
 
-    const lastAt = await this.ledger.lastRequestedAt(signIn.uid);
-    if (lastAt !== null && this.now() - lastAt < ACCESS_REQUEST_INTERVAL_MS) {
+    const earlier = await this.ledger.find(signIn.uid);
+    const lastAt = earlier?.requestedAt ? Date.parse(earlier.requestedAt) : NaN;
+    if (!Number.isNaN(lastAt) && this.now() - lastAt < ACCESS_REQUEST_INTERVAL_MS) {
       return { outcome: 'already-asked' };
     }
 
@@ -59,10 +68,10 @@ export class OperatorAccessRequests {
       .map((a) => a.email!);
     if (admins.length === 0) return { outcome: 'no-admin' };
 
-    const delivered = await this.notifyAdmins(admins, signIn.email);
-    if (delivered === 0) return { outcome: 'undelivered' };
+    const result = await this.notifyAdmins(admins, signIn.email);
+    if (result.sent.length === 0) return { outcome: 'undelivered' };
 
-    await this.ledger.record(signIn.uid, signIn.email, delivered);
-    return { outcome: 'sent', notified: delivered };
+    await this.ledger.record(signIn.uid, signIn.email, result.subject, result.sent, earlier?.sent ?? []);
+    return { outcome: 'sent', notified: result.sent.length };
   }
 }

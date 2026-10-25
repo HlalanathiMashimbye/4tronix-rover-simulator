@@ -7,5 +7,9 @@
  */
 
 export interface IEmailSender {
-  send(to: string, subject: string, html: string): Promise<void>;
+  /**
+   * Resolves to the sender's id for the email. Most callers ignore it; a reply
+   * in the same thread needs it (see ResendEmailSender's `answering`).
+   */
+  send(to: string, subject: string, html: string): Promise<string>;
 }

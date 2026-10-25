@@ -50,10 +50,20 @@ export class TeamChangeFailed extends Error {
  */
 export type GrantAnnouncer = (to: string, role: OperatorRole) => Promise<boolean>;
 
+/**
+ * Close this person's request for access and reply to the other admins who
+ * were asked. Returns how many admins were told.
+ *
+ * Must not throw: like the grant announcement, a failed reply never fails
+ * the grant.
+ */
+export type RequestCloser = (uid: string, requesterEmail: string, role: OperatorRole, handledBy: string) => Promise<number>;
+
 export class OperatorTeamService {
   constructor(
     private readonly directory: IOperatorDirectory,
     private readonly announceGrant: GrantAnnouncer,
+    private readonly closeAccessRequest: RequestCloser = async () => 0,
   ) {}
 
   async listing(): Promise<{ accounts: OperatorAccount[]; invites: OperatorInvite[] }> {
@@ -79,8 +89,6 @@ export class OperatorTeamService {
 
     const who = identity.email ?? identity.uid;
     if (isNoOpChange(change)) {
-      // Not written: setting the claim and revoking tokens would sign the
-      // person out to give them what they already had.
       return { outcome: 'unchanged', message: `${who} already has this access.` };
     }
 
@@ -94,6 +102,10 @@ export class OperatorTeamService {
       // Only a grant is announced. A removal is usually deliberate and is not
       // something to explain to the person by email.
       const emailed = nextRole !== null && identity.email ? await this.announceGrant(identity.email, nextRole) : false;
+      const adminsTold =
+        nextRole !== null
+          ? await this.closeAccessRequest(identity.uid, identity.email ?? email, nextRole, actor.label)
+          : 0;
 
       // An invite for an address that has an account now is stale either way:
       // the change above is the decision, and a leftover invite would re-grant
@@ -102,13 +114,12 @@ export class OperatorTeamService {
 
       return {
         outcome: 'changed',
-        // Claims ride on the ID token, so a grant is not live until it
-        // refreshes. Saying so prevents "it did not work" reports for
-        // something working exactly as designed.
         message:
           nextRole === null
             ? `Access removed for ${who}. They have been signed out.`
-            : `${who} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}They need to sign out and back in for it to take effect.`,
+            : `${who} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}` +
+              `${adminsTold > 0 ? 'The other admins they asked have been told. ' : ''}` +
+              'They need to sign out and back in for it to take effect.',
       };
     } catch (cause) {
       throw new TeamChangeFailed('Could not apply that change', cause);

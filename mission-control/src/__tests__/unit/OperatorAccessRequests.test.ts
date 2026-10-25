@@ -4,17 +4,22 @@
  */
 
 import { ACCESS_REQUEST_INTERVAL_MS, OperatorAccessRequests } from '@/core/application/services/OperatorAccessRequests';
-import type { OperatorAccount } from '@/core/domain/entities/OperatorAccount';
+import type { OperatorAccount, AccessRequestEmail } from '@/core/domain/entities/OperatorAccount';
 import type { IOperatorAuth, VerifiedSignIn } from '@/core/domain/services/IOperatorAuth';
+import type { IAccessRequestLedger, AccessRequestRecord } from '@/core/domain/repositories/IAccessRequestLedger';
 
 const NOW = 1_800_000_000_000;
 const ADMIN: OperatorAccount = { uid: 'a1', email: 'admin@rover.org', role: 'admin' };
+const SUBJECT = 'new@rover.org is asking for operator access';
 
-function setUp({ signIn = {}, accounts = [ADMIN], lastAt = null as number | null, delivered = 1 }: {
-  signIn?: Partial<VerifiedSignIn> | Error; accounts?: OperatorAccount[]; lastAt?: number | null; delivered?: number;
+function setUp({ signIn = {}, accounts = [ADMIN], existing = null as AccessRequestRecord | null, delivered = 1 }: {
+  signIn?: Partial<VerifiedSignIn> | Error; accounts?: OperatorAccount[]; existing?: AccessRequestRecord | null; delivered?: number;
 } = {}) {
-  const recorded: Array<[string, string, number]> = [];
-  const notify = jest.fn(async () => delivered);
+  const recorded: Array<{ uid: string; email: string; subject: string; sent: AccessRequestEmail[]; earlier: AccessRequestEmail[] }> = [];
+  const notify = jest.fn(async () => ({
+    subject: SUBJECT,
+    sent: delivered > 0 ? [{ to: 'admin@rover.org', emailId: 'id-1' }].slice(0, delivered) : [] as AccessRequestEmail[],
+  }));
   const auth: IOperatorAuth = {
     verifySignIn: async () => {
       if (signIn instanceof Error) throw signIn;
@@ -23,10 +28,16 @@ function setUp({ signIn = {}, accounts = [ADMIN], lastAt = null as number | null
     createSession: async () => '',
     endSession: async () => {},
   };
+  const ledger: IAccessRequestLedger = {
+    lastRequestedAt: async () => existing?.requestedAt ? Date.parse(existing.requestedAt) : null,
+    find: async () => existing,
+    record: async (uid, email, subject, sent, earlier) => void recorded.push({ uid, email, subject, sent, earlier }),
+    close: async () => null,
+  };
   const requests = new OperatorAccessRequests(
     auth,
     { listAccounts: async () => accounts },
-    { lastRequestedAt: async () => lastAt, record: async (...r) => void recorded.push(r) },
+    ledger,
     notify,
     () => NOW,
   );
@@ -38,18 +49,23 @@ it('emails every admin with the verified address and records that it asked', asy
 
   expect(await requests.request('t')).toEqual({ outcome: 'sent', notified: 1 });
   expect(notify).toHaveBeenCalledWith(['admin@rover.org'], 'new@rover.org');
-  expect(recorded).toEqual([['u1', 'new@rover.org', 1]]);
+  expect(recorded).toEqual([{ uid: 'u1', email: 'new@rover.org', subject: SUBJECT, sent: [{ to: 'admin@rover.org', emailId: 'id-1' }], earlier: [] }]);
 });
 
 it('answers a second request within the hour without emailing again', async () => {
-  const { requests, notify } = setUp({ lastAt: NOW - ACCESS_REQUEST_INTERVAL_MS + 1000 });
+  const existing: AccessRequestRecord = { email: 'new@rover.org', subject: SUBJECT, requestedAt: new Date(NOW - ACCESS_REQUEST_INTERVAL_MS + 1000).toISOString(), sent: [] };
+  const { requests, notify } = setUp({ existing });
 
   expect((await requests.request('t')).outcome).toBe('already-asked');
   expect(notify).not.toHaveBeenCalled();
 });
 
-it('asks again once the hour is up', async () => {
-  expect((await setUp({ lastAt: NOW - ACCESS_REQUEST_INTERVAL_MS - 1 }).requests.request('t')).outcome).toBe('sent');
+it('asks again once the hour is up and preserves the earlier emails', async () => {
+  const existing: AccessRequestRecord = { email: 'new@rover.org', subject: SUBJECT, requestedAt: new Date(NOW - ACCESS_REQUEST_INTERVAL_MS - 1).toISOString(), sent: [{ to: 'admin@rover.org', emailId: 'old-id' }] };
+  const { requests, recorded } = setUp({ existing });
+
+  expect((await requests.request('t')).outcome).toBe('sent');
+  expect(recorded[0].earlier).toEqual([{ to: 'admin@rover.org', emailId: 'old-id' }]);
 });
 
 it('puts no unverified address in front of an admin', async () => {

@@ -12,6 +12,10 @@
  * ONE REQUEST PER HOUR PER ACCOUNT. Pressing the button again is answered as
  * success without sending, so a nervous double-tap does not become two emails.
  *
+ * The record also keeps which email went to which admin. Granting the access
+ * replies to those emails, so the admins who did not handle it see that it is
+ * done (operator/team/route.ts).
+ *
  * This file maps the outcome to HTTP; the decisions are OperatorAccessRequests.
  */
 

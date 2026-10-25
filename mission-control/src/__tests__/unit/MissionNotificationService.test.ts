@@ -19,11 +19,12 @@ class MockEmailSender implements IEmailSender {
   public calls: Array<{ to: string; subject: string; html: string }> = [];
   private failNext = false;
 
-  async send(to: string, subject: string, html: string): Promise<void> {
+  async send(to: string, subject: string, html: string): Promise<string> {
     if (this.failNext) {
       throw new Error('Resend is down');
     }
     this.calls.push({ to, subject, html });
+    return `email-${this.calls.length}`;
   }
 
   failOnNextSend() {
