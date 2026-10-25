@@ -12,7 +12,7 @@
  * container.server.ts; three routes used to build it by hand.
  */
 
-import { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import { MissionRecord, MissionStatus } from '@/core/domain/entities/Mission';
 import { IEmailSender } from '@/core/domain/services/IEmailSender';
 import { IMissionEmailComposer } from '@/core/domain/services/IMissionEmailComposer';
 import { missionSlug } from '@/core/domain/services/missionSlug';
@@ -58,7 +58,7 @@ export class MissionNotificationService {
     private readonly excludedMissionIds: ReadonlySet<string> = new Set(),
   ) {}
 
-  async notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome> {
+  async notifyStatusChange(mission: MissionRecord, status: MissionStatus): Promise<NotifyOutcome> {
     // Before anyone's address is even read: an excluded mission has nobody it
     // should reach.
     if (this.excludedMissionIds.has(mission.id)) {

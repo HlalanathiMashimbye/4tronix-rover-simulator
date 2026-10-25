@@ -17,10 +17,10 @@ jest.mock('@/components/mission/CodeLines', () => ({
 }));
 
 import { MissionCode } from '@/components/mission/MissionCode';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
-const python = { id: 'm1', name: 'Sand Observer', code: 'rover.forward(60)', status: 'completed' } as Mission;
-const blocks = { ...python, blocklyState: '{"blocks":{}}' } as Mission;
+const python = { id: 'm1', name: 'Sand Observer', code: 'rover.forward(60)', status: 'completed' } as MissionRecord;
+const blocks = { ...python, blocklyState: '{"blocks":{}}' } as MissionRecord;
 
 describe('beside the feed', () => {
   it('shows the code without being asked', () => {

@@ -1,8 +1,7 @@
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
-import type { MissionStatus } from '@/core/domain/entities/Mission';
+import { Mission, type MissionStatus } from '@/core/domain/entities/Mission';
 import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
-import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
 
 /**
  * Matching an uploaded video back to the mission it shows.
@@ -233,7 +232,7 @@ export function claimedMissions(videos: ChannelVideo[]): ClaimedVideo[] {
  */
 export function runToLink(runs: MissionRun[]): MissionRun | null {
   const candidates = runs
-    .filter(stillNeedsVideo)
+    .filter(Mission.stillNeedsVideo)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
   return candidates[0] ?? null;

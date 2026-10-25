@@ -8,7 +8,7 @@
  */
 
 import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 
 type Row = { id: string; data: Record<string, unknown> };
 
@@ -65,7 +65,7 @@ describe('findRecent pagination', () => {
     const db = makeFirestore(rows);
     const repo = new AdminFirestoreMissionRepository(db as never);
 
-    const seen: Mission[] = [];
+    const seen: MissionRecord[] = [];
     let cursor = undefined as undefined | { submittedAt: string; id: string };
     let pages = 0;
 

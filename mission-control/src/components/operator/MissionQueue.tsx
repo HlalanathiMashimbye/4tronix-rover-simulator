@@ -17,7 +17,7 @@ import type { Yard } from '@/core/domain/entities/Yard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { useRegisterSearchFilters, useRegisterSort, useSearch } from '@/contexts/SearchContext';
 import { sortMissions } from '@/core/domain/services/missionSort';
-import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
+import { Mission } from '@/core/domain/entities/Mission';
 import { readConsoleUrl, writeConsoleUrl, YOUTUBE_STUDIO_URL } from '@/lib/yardConsole';
 
 /**
@@ -98,7 +98,7 @@ function rowStatusLine(mission: QueueMission): string {
       // must be visible on the same row.
       return stamp ? `Waiting · ${stamp}` : 'Waiting';
     case 'completed':
-      return stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
+      return Mission.stillNeedsVideo(mission) ? 'Finished · no video attached yet' : 'Finished';
     case 'cancelled':
       return 'Cancelled';
     default:
@@ -232,7 +232,7 @@ function YardQueue({
       // null, not 0, until the settled list has been fetched: this count lives
       // in a list that is only subscribed to on demand, and rendering the
       // unfetched state as a zero is what made "Done 0" read as an empty yard.
-      needsVideo: done === null ? null : done.filter(stillNeedsVideo).length,
+      needsVideo: done === null ? null : done.filter(Mission.stillNeedsVideo).length,
     };
   }, [missions, done]);
 
@@ -356,7 +356,7 @@ function YardQueue({
       // point of typing a name is to find it wherever it is.
       if (!searching) {
         if (activeFilter === 'review' && !m.needsReview) return false;
-        if (activeFilter === 'needs-video' && !stillNeedsVideo(m)) return false;
+        if (activeFilter === 'needs-video' && !Mission.stillNeedsVideo(m)) return false;
         if (activeFilter === 'processing' && m.status !== 'processing') return false;
         return true;
       }

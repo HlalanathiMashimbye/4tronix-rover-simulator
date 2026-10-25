@@ -20,7 +20,7 @@
  * - IMissionRepository: all three, for the privileged server container.
  */
 
-import { Mission, MissionStatus } from '../entities/Mission';
+import { MissionRecord, MissionStatus } from '../entities/Mission';
 import { MissionRun } from '../entities/MissionRun';
 
 export interface IMissionReader {
@@ -29,7 +29,7 @@ export interface IMissionReader {
    * @param id - Mission ID
    * @returns Mission or null if not found
    */
-  findById(id: string): Promise<Mission | null>;
+  findById(id: string): Promise<MissionRecord | null>;
 
   /**
    * Missions whose ID starts with `prefix`, at most `max`, deleted ones left
@@ -37,7 +37,7 @@ export interface IMissionReader {
    * services/missionSlug. Reads one document per match, so one for a link
    * whose prefix is unique, the same as findById.
    */
-  findByIdPrefix(prefix: string, max: number): Promise<Mission[]>;
+  findByIdPrefix(prefix: string, max: number): Promise<MissionRecord[]>;
 
   /**
    * A page of recent missions, newest first. Reads `limit + 1` documents - no
@@ -65,7 +65,7 @@ export interface IMissionWriter {
    * @param mission - Mission data (id will be generated if not provided)
    * @returns Created mission with generated ID and calculated queue position
    */
-  create(mission: Omit<Mission, 'id'>): Promise<Mission>;
+  create(mission: Omit<MissionRecord, 'id'>): Promise<MissionRecord>;
 }
 
 export interface IMissionBookkeeping {
@@ -158,7 +158,7 @@ export interface MissionCursor {
 }
 
 export interface MissionPage {
-  missions: Mission[];
+  missions: MissionRecord[];
   /** null when there is nothing after this page. */
   nextCursor: MissionCursor | null;
 }

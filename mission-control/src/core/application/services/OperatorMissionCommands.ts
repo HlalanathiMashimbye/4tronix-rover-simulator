@@ -3,39 +3,28 @@
  * desk. Complete, cancel, log another run, attach or remove a video, resolve a
  * review, leave feedback, delete a run, delete a mission.
  *
- * WHY THIS IS NOT IN THE ROUTE. It was: one POST handler of 242 lines with a
- * cyclomatic complexity of 41, the most complex function in mission-control.
- * The decisions themselves were already small pure functions in
- * missionBookkeeping.ts. The complexity was everything around them - finding
- * the run in front of the operator, checking every yard and run id the request
- * names, choosing which run to write, and emailing the learner. That is
- * application logic, and inside a route it could only be tested by mocking the
- * auth layer, the container and Next.js request objects. Here it takes a
- * repository, a notifier and an id generator, and the route keeps only what a
+ * The decisions are the Mission entity's. This is the application around
+ * them: checking every yard and run id the request names, choosing which run
+ * to write, and emailing the learner. It takes a repository, a notifier and an
+ * id generator, so it tests without Firebase, and the route keeps only what a
  * route is for: authenticate, parse, and turn a result into HTTP.
  *
  * NOTHING HERE CAN MOVE A ROVER. It records decisions and never dispatches.
  * operator-bookkeeping-inert.test.ts reads this file as well as the route.
  */
 
-import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import {
+  Mission,
+  type Decision,
+  type MissionRecord,
+  type MissionStatus,
+  type ResolveOutcome,
+} from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type {
   IMissionBookkeeping,
   IMissionReader,
 } from '@/core/domain/repositories/IMissionRepository';
-import {
-  decideAnotherRun,
-  decideAttachVideo,
-  decideCancel,
-  decideComplete,
-  decideFeedback,
-  decideRemoveVideo,
-  decideResolve,
-  type Decision,
-  type ResolveOutcome,
-  type RunSnapshot,
-} from '@/core/domain/services/missionBookkeeping';
 import { getYouTubeId } from '@/core/domain/services/youtubeLinking';
 import type { NotifyOutcome } from '@/core/application/services/MissionNotificationService';
 
@@ -70,7 +59,7 @@ export type CommandResult =
 
 /** Emails the learner. MissionNotificationService, in production. */
 export interface LearnerNotifier {
-  notifyStatusChange(mission: Mission, status: MissionStatus): Promise<NotifyOutcome>;
+  notifyStatusChange(mission: MissionRecord, status: MissionStatus): Promise<NotifyOutcome>;
 }
 
 type BookkeepingCommand = Exclude<OperatorCommand, { action: 'delete-run' }>;
@@ -99,26 +88,22 @@ export class OperatorMissionCommands {
   ) {}
 
   async run(missionId: string, command: OperatorCommand, operator: Operator): Promise<CommandResult> {
-    const mission = await this.missions.findById(missionId);
-    if (!mission || mission.deleted) {
+    const record = await this.missions.findById(missionId);
+    if (!record || record.deleted) {
       return refuse('not-found', 'Mission not found');
     }
 
     // A missing run is ordinary, not an error: a yard with no network never
-    // flushed one. The decision falls back to the mission's own status and the
+    // flushed one. The entity falls back to the mission's own status and the
     // write creates the run.
-    const runs = await this.missions.findRuns(missionId);
+    const mission = Mission.restore(record, await this.missions.findRuns(missionId));
 
     if (command.action === 'delete-run') {
-      return this.deleteRun(missionId, command, runs, operator);
+      return this.deleteRun(mission, command, operator);
     }
 
-    const run = latestRunAt(runs, command.yardId);
-    const decided = decide(command, {
-      runStatus: run?.status ?? null,
-      missionStatus: mission.status,
-      needsReview: run?.needsReview ?? mission.needsReview ?? false,
-    });
+    const run = mission.latestRunAt(command.yardId);
+    const decided = decide(mission, command);
     if (!('decision' in decided)) {
       return decided;
     }
@@ -128,7 +113,7 @@ export class OperatorMissionCommands {
     // attach a video to - or clear one from - another yard's attempt at the
     // same mission.
     if ('runId' in command && command.runId) {
-      const named = runs.find((r) => r.runId === command.runId);
+      const named = mission.run(command.runId);
       if (!named) return refuse('not-found', 'Run not found');
       if (named.yardId !== operator.yardId) return refuse('forbidden', ANOTHER_YARDS_RUN);
     }
@@ -171,9 +156,9 @@ export class OperatorMissionCommands {
    * to run". Delete is for a mission that should not exist at all.
    */
   async deleteMission(missionId: string, admin: Pick<Operator, 'name'>): Promise<CommandResult> {
-    const mission = await this.missions.findById(missionId);
-    if (!mission) return refuse('not-found', 'Mission not found');
-    if (mission.deleted) return refuse('conflict', 'This mission is already deleted');
+    const record = await this.missions.findById(missionId);
+    if (!record) return refuse('not-found', 'Mission not found');
+    if (Mission.restore(record).isDeleted) return refuse('conflict', 'This mission is already deleted');
 
     await this.missions.softDeleteMission(missionId, this.now().toISOString(), admin.name);
     return { ok: true, missionId };
@@ -188,19 +173,18 @@ export class OperatorMissionCommands {
    * child's work, and the yard checks are what keep it to their own.
    */
   private async deleteRun(
-    missionId: string,
+    mission: Mission,
     command: Extract<OperatorCommand, { action: 'delete-run' }>,
-    runs: MissionRun[],
     operator: Operator,
   ): Promise<CommandResult> {
     if (command.yardId !== operator.yardId) return refuse('forbidden', ANOTHER_YARD);
 
-    const target = runs.find((r) => r.runId === command.runId);
+    const target = mission.run(command.runId);
     if (!target) return refuse('not-found', 'Run not found');
     if (target.yardId !== command.yardId) return refuse('forbidden', ANOTHER_YARDS_RUN);
 
-    await this.missions.softDeleteRun(missionId, command.runId, this.now().toISOString(), operator.name);
-    return { ok: true, missionId };
+    await this.missions.softDeleteRun(mission.id, command.runId, this.now().toISOString(), operator.name);
+    return { ok: true, missionId: mission.id };
   }
 
   /**
@@ -234,7 +218,7 @@ export class OperatorMissionCommands {
    */
   private async emailLearner(mission: Mission): Promise<NotifyOutcome | null> {
     try {
-      return await this.notifier.notifyStatusChange({ ...mission, status: 'completed' }, 'completed');
+      return await this.notifier.notifyStatusChange(mission.toRecord(), 'completed');
     } catch (error) {
       console.error('[operator/bookkeeping] notification failed:', error);
       return null;
@@ -242,42 +226,29 @@ export class OperatorMissionCommands {
   }
 }
 
-/**
- * The LATEST run at this yard, not the first match. Runs are keyed by runId so
- * a yard can attempt a mission twice, and an operator pressing "mark complete"
- * means the run in front of them, not the one from last week that happens to
- * sort first.
- */
-function latestRunAt(runs: MissionRun[], yardId: string): MissionRun | null {
-  return (
-    runs
-      .filter((r) => r.yardId === yardId)
-      .sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''))[0] ?? null
-  );
-}
-
-/** The pure decision for each action, plus what the write needs alongside it. */
-function decide(command: BookkeepingCommand, snapshot: RunSnapshot): Decided | CommandResult {
+/** The entity's decision for each action, plus what the write needs alongside it. */
+function decide(mission: Mission, command: BookkeepingCommand): Decided | CommandResult {
+  const { yardId } = command;
   switch (command.action) {
     case 'complete':
-      return { decision: decideComplete(snapshot) };
+      return { decision: mission.complete(yardId) };
     case 'cancel':
-      return { decision: decideCancel(snapshot) };
+      return { decision: mission.cancel(yardId) };
     case 'another-run':
-      return { decision: decideAnotherRun(snapshot) };
+      return { decision: mission.logAnotherRun(yardId) };
     case 'attach-video':
       // Parsed rather than pattern-matched, with the same helper the learner's
       // player uses. If the id cannot be read out of the link, the mission page
       // could not embed it either, so accepting it would store a link that
       // renders as an empty frame.
       return getYouTubeId(command.url)
-        ? { decision: decideAttachVideo(snapshot), youtubeUrl: command.url }
+        ? { decision: mission.attachVideo(yardId), youtubeUrl: command.url }
         : refuse('invalid', 'Use a youtube.com/watch?v=... or youtu.be/... link.');
     case 'remove-video':
-      return { decision: decideRemoveVideo(snapshot), clearsVideo: true };
+      return { decision: mission.removeVideo(yardId), clearsVideo: true };
     case 'resolve':
-      return { decision: decideResolve(snapshot, command.outcome) };
+      return { decision: mission.resolve(yardId, command.outcome) };
     case 'feedback':
-      return { decision: decideFeedback(snapshot), feedback: command.text };
+      return { decision: mission.leaveFeedback(yardId), feedback: command.text };
   }
 }

@@ -11,6 +11,22 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A mission is an entity with its own lifecycle, not a record that any
+  layer may change.** `Mission` was an interface of about 25 public fields,
+  and the rules for changing it lived in loose functions beside it
+  (`missionBookkeeping.ts`), fed a hand-built snapshot by whoever called them.
+  It is now a class that holds a mission's record and runs privately and
+  answers every operator action itself: complete, cancel, log another run,
+  attach or remove a video, leave feedback, resolve a review. `Mission.submit`
+  is the one place a new mission is given its first status. The stored shape
+  keeps its plain form as `MissionRecord`, because it crosses Firestore and
+  the server-to-browser boundary and neither carries a class; the feed and
+  the cards read that. A new rule in `architecture.test.ts` fails on a
+  mission status written anywhere else in core or persistence. Behaviour is
+  unchanged: the bookkeeping tests moved onto the entity with the same
+  expectations, and gained cases for which run is acted on and for the
+  record not being changeable from outside.
+
 - **When one admin grants a request for access, the others hear about it in
   the same email thread.** Someone who asks for operator access emails every
   admin, and nothing told the rest once one of them had let the person in, so
