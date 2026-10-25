@@ -17,8 +17,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminLeaderboardRepository } from '@/infrastructure/container.server';
+import { adminLeaderboardRepository, learnerAccounts } from '@/infrastructure/container.server';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 import { calculateScore } from '@/core/domain/services/scoreCalculation';
 import { challengeKind } from '@/infrastructure/config/challenges';
@@ -56,7 +55,6 @@ export async function POST(_request: NextRequest) {
   }
 
   try {
-    const db = getFirestoreInstance();
     const leaderboardRepo = adminLeaderboardRepository();
 
     const stats: MigrationStats = {
@@ -67,29 +65,19 @@ export async function POST(_request: NextRequest) {
       errors: [],
     };
 
-    // Query all learner documents
-    const snapshot = await db.collection('learners').get();
+    const learners = await learnerAccounts().challengeCompletions();
 
-    console.log(`[Migration] Found ${snapshot.size} learner documents`);
+    console.log(`[Migration] Found ${learners.length} learner documents`);
 
-    for (const learnerDoc of snapshot.docs) {
+    for (const { learnerId, challengeIds: completedChallengeIds } of learners) {
       try {
-        const learnerId = learnerDoc.id;
-        const learnerData = learnerDoc.data();
-        const progress = learnerData.progress;
-
         // Skip learners with no challenge progress
-        if (!progress?.completions || progress.completions.length === 0) {
+        if (completedChallengeIds.length === 0) {
           stats.skipped++;
           continue;
         }
 
         stats.processed++;
-
-        // Extract challenge IDs from completions
-        const completedChallengeIds = progress.completions.map(
-          (c: { challengeId: string }) => c.challengeId
-        );
 
         // Hash the learner ID for privacy
         const learnerRefHash = await hashLearnerId(learnerId);
@@ -139,8 +127,8 @@ export async function POST(_request: NextRequest) {
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        stats.errors.push(`Learner ${learnerDoc.id}: ${errorMsg}`);
-        console.error(`[Migration] Error processing learner ${learnerDoc.id}:`, error);
+        stats.errors.push(`Learner ${learnerId}: ${errorMsg}`);
+        console.error(`[Migration] Error processing learner ${learnerId}:`, error);
       }
     }
 

@@ -8,7 +8,7 @@ import {
   normaliseRecoveryCode,
   RECOVERY_CODE_LENGTH,
 } from '@/core/domain/services/recoveryCode';
-import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
+import { browserAuth } from '@/infrastructure/container.browser';
 
 type Variant = 'default' | 'welcome';
 
@@ -102,9 +102,9 @@ export function RestoreProfileContent({
       );
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      const credential = await signInWithPopup(browserAuth(), provider);
       const idToken = await credential.user.getIdToken(true);
-      const auth = getFirebaseAuth();
+      const auth = browserAuth();
       await auth.signOut();
       const result = await restoreFromParent(idToken);
       if (result.success && result.learners && result.learners.length > 0) {

@@ -8,7 +8,7 @@
  */
 
 const requireAdmin = jest.fn();
-const getFirestoreInstance = jest.fn();
+const challengeCompletions = jest.fn();
 
 class UnauthorizedError extends Error {}
 class ForbiddenError extends Error {}
@@ -19,12 +19,9 @@ jest.mock('@/infrastructure/auth/dal', () => ({
   ForbiddenError,
 }));
 
-jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
-  getFirestoreInstance: () => getFirestoreInstance(),
-}));
-
 jest.mock('@/infrastructure/container.server', () => ({
   adminLeaderboardRepository: () => ({}),
+  learnerAccounts: () => ({ challengeCompletions }),
 }));
 
 import { NextRequest } from 'next/server';
@@ -52,7 +49,7 @@ describe('POST /api/admin/migrate-challenges-to-leaderboard', () => {
     const res = await POST(post());
 
     expect(res.status).toBe(401);
-    expect(getFirestoreInstance).not.toHaveBeenCalled();
+    expect(challengeCompletions).not.toHaveBeenCalled();
   });
 
   it('refuses an operator who is not an admin', async () => {
@@ -61,14 +58,12 @@ describe('POST /api/admin/migrate-challenges-to-leaderboard', () => {
     const res = await POST(post());
 
     expect(res.status).toBe(403);
-    expect(getFirestoreInstance).not.toHaveBeenCalled();
+    expect(challengeCompletions).not.toHaveBeenCalled();
   });
 
   it('runs for an admin', async () => {
     requireAdmin.mockResolvedValue({ uid: 'a1', role: 'admin' });
-    getFirestoreInstance.mockReturnValue({
-      collection: () => ({ get: async () => ({ size: 0, docs: [] }) }),
-    });
+    challengeCompletions.mockResolvedValue([]);
 
     const res = await POST(post());
 

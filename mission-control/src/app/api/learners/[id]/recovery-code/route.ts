@@ -7,8 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminRecoveryCodeRepository } from '@/infrastructure/container.server';
+import { adminRecoveryCodeRepository, learnerAccounts } from '@/infrastructure/container.server';
 import { generateRecoveryCode, hashRecoveryCode, formatRecoveryCode } from '@/core/domain/services/recoveryCode';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
 
@@ -26,15 +25,7 @@ export async function POST(
   }
 
   try {
-    const firestore = getFirestoreInstance();
-    const learnerRef$ = firestore.collection('learners').doc(id);
-    const learnerSnap = await learnerRef$.get();
-    if (!learnerSnap.exists) {
-      await learnerRef$.set(
-        { createdAt: new Date().toISOString() },
-        { merge: true },
-      );
-    }
+    await learnerAccounts().ensureExists(id, new Date().toISOString());
 
     const learnerRef = await hashLearnerId(id);
     const code = generateRecoveryCode();

@@ -13,11 +13,15 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminParentLinkRepository } from '@/infrastructure/container.server';
+import { adminParentLinkRepository, learnerAccounts, parentSignIn } from '@/infrastructure/container.server';
 import { CURRENT_CONSENT_VERSION } from '@/core/domain/services/parentLink';
 
-const MAX_SIGN_IN_AGE_MS = 5 * 60 * 1000;
+function refusedSignIn(reason: 'stale' | 'invalid') {
+  return NextResponse.json(
+    { success: false, error: reason === 'stale' ? 'Please sign in again' : 'Invalid or expired sign-in' },
+    { status: 401 },
+  );
+}
 
 const linkSchema = z.object({
   idToken: z.string().min(1, 'Firebase ID token is required'),
@@ -68,28 +72,12 @@ export async function POST(
     );
   }
 
-  let parentUid: string;
-  try {
-    const decoded = await getFirebaseAdminAuth().verifyIdToken(idToken, true);
-
-    if (Date.now() - decoded.auth_time * 1000 > MAX_SIGN_IN_AGE_MS) {
-      return NextResponse.json(
-        { success: false, error: 'Please sign in again' },
-        { status: 401 },
-      );
-    }
-
-    parentUid = decoded.uid;
-  } catch {
-    return NextResponse.json(
-      { success: false, error: 'Invalid or expired sign-in' },
-      { status: 401 },
-    );
-  }
+  const signIn = await parentSignIn().verifyRecent(idToken);
+  if (!signIn.ok) return refusedSignIn(signIn.reason);
+  const parentUid = signIn.uid;
 
   try {
-    const learnerSnap = await getFirestoreInstance().collection('learners').doc(id).get();
-    if (!learnerSnap.exists) {
+    if (!(await learnerAccounts().exists(id))) {
       return NextResponse.json(
         { success: false, error: 'Learner not found' },
         { status: 404 },
@@ -153,24 +141,9 @@ export async function DELETE(
     );
   }
 
-  let parentUid: string;
-  try {
-    const decoded = await getFirebaseAdminAuth().verifyIdToken(validation.data.idToken, true);
-
-    if (Date.now() - decoded.auth_time * 1000 > MAX_SIGN_IN_AGE_MS) {
-      return NextResponse.json(
-        { success: false, error: 'Please sign in again' },
-        { status: 401 },
-      );
-    }
-
-    parentUid = decoded.uid;
-  } catch {
-    return NextResponse.json(
-      { success: false, error: 'Invalid or expired sign-in' },
-      { status: 401 },
-    );
-  }
+  const signIn = await parentSignIn().verifyRecent(validation.data.idToken);
+  if (!signIn.ok) return refusedSignIn(signIn.reason);
+  const parentUid = signIn.uid;
 
   try {
     const repo = adminParentLinkRepository();

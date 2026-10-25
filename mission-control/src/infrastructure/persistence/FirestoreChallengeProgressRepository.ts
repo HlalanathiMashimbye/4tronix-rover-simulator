@@ -14,6 +14,7 @@ import { doc, Firestore, getDoc, setDoc } from 'firebase/firestore';
 import { ChallengeId } from '@/core/domain/entities/Challenge';
 import { ChallengeProgress } from '@/core/domain/entities/ChallengeProgress';
 import { IChallengeProgressRepository } from '@/core/domain/repositories/IChallengeProgressRepository';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 const EMPTY_PROGRESS: ChallengeProgress = { completions: [] };
 
@@ -21,7 +22,7 @@ export class FirestoreChallengeProgressRepository implements IChallengeProgressR
   constructor(private readonly db: Firestore) {}
 
   async getProgress(learnerId: string): Promise<ChallengeProgress> {
-    const snapshot = await getDoc(doc(this.db, 'learners', learnerId));
+    const snapshot = await getDoc(doc(this.db, COLLECTIONS.learners, learnerId));
     if (!snapshot.exists()) return EMPTY_PROGRESS;
 
     const progress = snapshot.data().progress as ChallengeProgress | undefined;
@@ -45,6 +46,6 @@ export class FirestoreChallengeProgressRepository implements IChallengeProgressR
     // it may be the first write to a learner doc that doesn't exist yet (a
     // create, under the same rules-allowlisted `progress` key) just as
     // easily as an update to one LearnerContext already created.
-    await setDoc(doc(this.db, 'learners', learnerId), { progress: next }, { merge: true });
+    await setDoc(doc(this.db, COLLECTIONS.learners, learnerId), { progress: next }, { merge: true });
   }
 }

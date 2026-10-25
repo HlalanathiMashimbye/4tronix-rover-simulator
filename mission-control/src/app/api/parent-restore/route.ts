@@ -12,10 +12,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
-import { adminParentLinkRepository } from '@/infrastructure/container.server';
-
-const MAX_SIGN_IN_AGE_MS = 5 * 60 * 1000;
+import { adminParentLinkRepository, learnerAccounts, parentSignIn } from '@/infrastructure/container.server';
 
 const bodySchema = z.object({
   idToken: z.string().min(1, 'Firebase ID token is required'),
@@ -83,26 +80,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let parentUid: string;
-  try {
-    const decoded = await getFirebaseAdminAuth().verifyIdToken(validation.data.idToken, true);
-
-    if (Date.now() - decoded.auth_time * 1000 > MAX_SIGN_IN_AGE_MS) {
-      recordFailure(ip);
-      return NextResponse.json(
-        { success: false, error: 'Please sign in again' },
-        { status: 401 },
-      );
-    }
-
-    parentUid = decoded.uid;
-  } catch {
+  const signIn = await parentSignIn().verifyRecent(validation.data.idToken);
+  if (!signIn.ok) {
     recordFailure(ip);
     return NextResponse.json(
-      { success: false, error: 'Invalid or expired sign-in' },
+      { success: false, error: signIn.reason === 'stale' ? 'Please sign in again' : 'Invalid or expired sign-in' },
       { status: 401 },
     );
   }
+  const parentUid = signIn.uid;
 
   try {
     const repo = adminParentLinkRepository();
@@ -116,18 +102,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const db = getFirestoreInstance();
-    const learners = await Promise.all(
-      learnerIds.map(async (learnerId) => {
-        const snap = await db.collection('learners').doc(learnerId).get();
-        const data = snap.data();
-        return {
-          learnerId,
-          displayName: (data?.displayName as string) || undefined,
-          avatar: data?.avatar as { style: string; seed: string } | undefined,
-        };
-      }),
-    );
+    const learners = await learnerAccounts().profiles(learnerIds);
 
     return NextResponse.json({ success: true, learners });
   } catch (error) {

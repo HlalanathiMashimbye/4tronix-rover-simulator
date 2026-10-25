@@ -9,11 +9,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { isGeneratedDisplayName } from '@/core/domain/services/displayNameGenerator';
 import { AVATAR_STYLES } from '@/core/domain/entities/Learner';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
-import { adminLeaderboardRepository } from '@/infrastructure/container.server';
+import { adminLeaderboardRepository, learnerAccounts } from '@/infrastructure/container.server';
 
 const bodySchema = z.object({
   displayName: z
@@ -71,14 +70,7 @@ export async function POST(
   const { displayName, avatar } = validation.data;
 
   try {
-    const firestore = getFirestoreInstance();
-    await firestore
-      .collection('learners')
-      .doc(id)
-      .set(
-        { displayName, avatar, lastActiveAt: new Date().toISOString() },
-        { merge: true },
-      );
+    await learnerAccounts().saveProfile(id, displayName, avatar, new Date().toISOString());
 
     // Keep the leaderboard entry in sync if one exists.
     try {

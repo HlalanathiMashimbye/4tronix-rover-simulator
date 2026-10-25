@@ -31,7 +31,11 @@ import { IRecoveryCodeRepository } from '@/core/domain/repositories/IRecoveryCod
 import { FirestoreRecoveryCodeRepository } from '@/infrastructure/persistence/FirestoreRecoveryCodeRepository';
 import { IParentLinkRepository } from '@/core/domain/repositories/IParentLinkRepository';
 import { FirestoreParentLinkRepository } from '@/infrastructure/persistence/FirestoreParentLinkRepository';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import type { ILearnerAccounts } from '@/core/domain/repositories/ILearnerAccounts';
+import type { IParentSignIn } from '@/core/domain/services/IParentSignIn';
+import { AdminFirestoreLearnerAccounts } from '@/infrastructure/persistence/AdminFirestoreLearnerAccounts';
+import { FirebaseParentSignIn } from '@/infrastructure/auth/FirebaseParentSignIn';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { EXCLUDED_MISSION_IDS } from '@/infrastructure/config/notificationExclusions';
 import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
@@ -117,6 +121,15 @@ export function adminRecoveryCodeRepository(): IRecoveryCodeRepository {
 }
 
 /** Privileged. Parent links are never browser-accessible. */
+/** Learner records for the server routes: profiles, recovery, parent restore. */
+export function learnerAccounts(): ILearnerAccounts {
+  return new AdminFirestoreLearnerAccounts(getFirestoreInstance());
+}
+
+export function parentSignIn(): IParentSignIn {
+  return new FirebaseParentSignIn(getFirebaseAdminAuth());
+}
+
 export function adminParentLinkRepository(): IParentLinkRepository {
   return new FirestoreParentLinkRepository(getFirestoreInstance());
 }

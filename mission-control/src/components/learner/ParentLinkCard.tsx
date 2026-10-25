@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ShieldCheck, Unlink } from 'lucide-react';
 import { useLearner } from '@/contexts/LearnerContext';
-import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
+import { browserAuth } from '@/infrastructure/container.browser';
 
 const EXIT_MS = 200;
 
@@ -53,10 +53,10 @@ export function ParentLinkCard({ open, onClose }: Props) {
       const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      const credential = await signInWithPopup(browserAuth(), provider);
       const idToken = await credential.user.getIdToken(true);
 
-      const auth = getFirebaseAuth();
+      const auth = browserAuth();
       await auth.signOut();
 
       const result = await linkParent(idToken);
@@ -80,10 +80,10 @@ export function ParentLinkCard({ open, onClose }: Props) {
       const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      const credential = await signInWithPopup(browserAuth(), provider);
       const idToken = await credential.user.getIdToken(true);
 
-      const auth = getFirebaseAuth();
+      const auth = browserAuth();
       await auth.signOut();
 
       const result = await unlinkParent(idToken);
