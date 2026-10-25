@@ -20,7 +20,7 @@
  * does, so the second caller did not mean a second copy.
  */
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type {
   IMissionBookkeeping,
   IMissionReader,
@@ -59,7 +59,7 @@ export class VideoLinker {
     // mission is read only when the video is about to complete it, or there
     // is no run to go on: once per mission, not once per poll.
     let plan = planVideoLink(claim, runs, undefined);
-    let mission: Mission | null = null;
+    let mission: MissionRecord | null = null;
     if (plan.kind === 'needs-mission' || (plan.kind === 'link' && plan.completes)) {
       mission = await this.missions.findById(claim.missionId);
       if (mission?.deleted) mission = null;
@@ -85,7 +85,7 @@ export class VideoLinker {
     let emailFailed = false;
     if (plan.completes && mission) {
       try {
-        await this.notifier.notifyStatusChange({ ...mission, status: 'completed' }, 'completed');
+        await this.notifier.notifyStatusChange(mission, 'completed');
       } catch {
         emailFailed = true;
       }

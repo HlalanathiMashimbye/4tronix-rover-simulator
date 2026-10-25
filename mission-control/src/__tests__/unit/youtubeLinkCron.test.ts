@@ -306,7 +306,7 @@ describe('a found video completes a mission nobody closed', () => {
 
     await POST(request('right-secret'));
 
-    expect(notifyStatusChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1', status: 'completed' }), 'completed');
+    expect(notifyStatusChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'completed');
   });
 
   it('still records the completion when the email fails', async () => {

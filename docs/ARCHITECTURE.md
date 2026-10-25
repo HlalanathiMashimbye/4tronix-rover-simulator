@@ -113,19 +113,24 @@ Controller, and `core/domain` is the Model.
 
 Paths in this section are relative to `mission-control/src`.
 
-- **`core/domain/entities`** - `Mission`, `MissionRun`, `Learner`,
-  `OperatorAccount`, `Yard` are plain records, because they cross Firestore
-  and the server-to-browser boundary and neither carries a class. Their
-  behaviour lives on two value objects. `MissionState` answers what a status
+- **`core/domain/entities`** - `Mission` is the entity the server acts
+  through: it holds a mission's stored record and its runs privately, and its
+  methods (`complete`, `cancel`, `logAnotherRun`, `attachVideo`,
+  `removeVideo`, `leaveFeedback`, `resolve`) are the only place an operator's
+  request becomes a status change. `Mission.submit` is the only place a new
+  mission gets its first status, and `architecture.test.ts` fails on a status
+  written anywhere else in core or persistence. `MissionRecord`, `MissionRun`,
+  `Learner`, `OperatorAccount` and `Yard` are plain records, because they
+  cross Firestore and the server-to-browser boundary and neither carries a
+  class. Two value objects go with them. `MissionState` answers what a status
   means (open or settled, what a learner sees, what an operator may do next),
   and the operator console and the server's bookkeeping both ask it, so the
   console never offers an action the server refuses. `YouTubeVideoId` is the
   one reading of a pasted link and the one builder of watch and thumbnail
   addresses. A mission's status changes only through `IMissionBookkeeping`:
-  there is no free-form update that could set any field to anything.
-  `missionBookkeeping.ts` in `core/domain/services` turns an operator's request
-  into a typed decision using `MissionState`, fully testable with no Firestore
-  anywhere near it.
+  there is no free-form update that could set any field to anything, and
+  what it applies is a decision the `Mission` entity made, fully testable with
+  no Firestore anywhere near it.
 - **`core/domain/safety`** - the allowlist, the code checker, the duration
   calculator, the speed and time ceilings. These were under `infrastructure`
   and `lib`. They touch no database, network or framework: they are the rules
@@ -203,8 +208,8 @@ the sign-in form without a session, the console with one.
   the clipboard as the fallback; `test_mission_import.py` keeps the yard's
   parsing of that clipboard payload in agreement with what this emits.
 - **Desk actions only.** Complete, cancel, log another run, attach or remove a
-  video, resolve a review, and feedback, decided in `missionBookkeeping.ts`
-  and applied through the Admin SDK in `api/operator/missions/[id]/route.ts`.
+  video, resolve a review, and feedback, decided by the `Mission` entity
+  (`core/domain/entities/Mission.ts`) and applied through the Admin SDK in `api/operator/missions/[id]/route.ts`.
   Nothing in that route can move a rover, and a test asserts it. Deleting a
   mission is admin-only, as are `/operator/team` (who may operate) and
   `/operator/settings` (email, YouTube, the auto-link interval, the yards).
@@ -331,8 +336,8 @@ rather than by surprise:
 1. `ROADMAP.md` - the constraints. Nothing below makes sense without them.
 2. `yard/rover/service.py` - the smallest complete example of the layering
    this project is aiming at.
-3. `mission-control/src/core/domain/services/missionBookkeeping.ts` - the
-   cleanest domain code in the repository, and the pattern to copy.
+3. `mission-control/src/core/domain/entities/Mission.ts` - the mission
+   entity and its lifecycle, and the pattern to copy.
 4. `yard/satellite/mission_watcher.py` - the yard's one background thread:
    how a run's end closes its recording, and why reading an outcome the rover
    reported is allowed where dispatching is not.

@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Rocket, Star } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
 import { missionSlug, parseMissionSlug, pickLinkedMission } from '@/core/domain/services/missionSlug';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import Link from 'next/link';
 import { useMissionTrajectory } from '@/hooks/useMissionTrajectory';
 import { useYardLayout } from '@/hooks/useYardLayout';
@@ -39,7 +39,7 @@ export default function MissionVideoClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const autoRemix = searchParams.get('autoRemix') === 'true';
-  const [mission, setMission] = useState<Mission | null>(null);
+  const [mission, setMission] = useState<MissionRecord | null>(null);
   // Every yard's attempt, so the feed can show more than the one video the
   // mission document carries. Empty is ordinary - a mission nobody has run.
   const [missionRuns, setMissionRuns] = useState<MissionRun[]>([]);

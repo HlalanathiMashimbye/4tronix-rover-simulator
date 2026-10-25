@@ -18,7 +18,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import { learnerMissionFeed } from '@/infrastructure/container.browser';
 
 const SEEN_KEY = 'mars-rover-notifications-seen';
@@ -39,7 +39,7 @@ export interface CompletionNotification {
  * in ways that either nag forever or never light up at all.
  */
 export function selectUnread(
-  completions: Mission[],
+  completions: MissionRecord[],
   seenAt: string | null,
   dismissed: string[]
 ): CompletionNotification[] {
@@ -68,7 +68,7 @@ function readDismissed(): string[] {
 }
 
 export function useCompletionNotifications() {
-  const [completions, setCompletions] = useState<Mission[]>([]);
+  const [completions, setCompletions] = useState<MissionRecord[]>([]);
   const [seenAt, setSeenAt] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<string[]>([]);
 

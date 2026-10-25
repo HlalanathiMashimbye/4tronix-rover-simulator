@@ -11,11 +11,11 @@
 
 import { render } from '@testing-library/react';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
 jest.mock('@/hooks/useYardLayout', () => ({ useYardLayout: () => ({ layout: null }) }));
 
-function mission(youtubeUrl: string): Mission {
+function mission(youtubeUrl: string): MissionRecord {
   return {
     id: 'm1',
     yardId: 'curiosity',

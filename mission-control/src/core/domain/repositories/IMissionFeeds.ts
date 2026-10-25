@@ -13,7 +13,7 @@
  * empty queue, which looks exactly like a quiet one.
  */
 
-import type { Mission, MissionStatus } from '../entities/Mission';
+import type { MissionRecord, MissionStatus } from '../entities/Mission';
 import type { MissionRun } from '../entities/MissionRun';
 
 export type Unsubscribe = () => void;
@@ -66,11 +66,11 @@ export interface IOperatorQueueFeed {
 
 export interface ILearnerMissionFeed {
   /** A learner's own missions, found by the hash of their id. */
-  subscribeMissionsByLearnerId(learnerId: string, callback: (missions: Mission[]) => void): Promise<Unsubscribe>;
+  subscribeMissionsByLearnerId(learnerId: string, callback: (missions: MissionRecord[]) => void): Promise<Unsubscribe>;
 
   /** Missions sent from another device, found by the hash of the learner's address. */
-  subscribeMissionsByLearnerEmail(learnerEmail: string, callback: (missions: Mission[]) => void): Promise<Unsubscribe>;
+  subscribeMissionsByLearnerEmail(learnerEmail: string, callback: (missions: MissionRecord[]) => void): Promise<Unsubscribe>;
 
   /** The latest completions, for the bell. */
-  subscribeRecentCompletions(callback: (missions: Mission[]) => void, max?: number): Unsubscribe;
+  subscribeRecentCompletions(callback: (missions: MissionRecord[]) => void, max?: number): Unsubscribe;
 }

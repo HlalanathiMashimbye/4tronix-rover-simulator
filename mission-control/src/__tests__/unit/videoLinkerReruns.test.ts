@@ -5,14 +5,14 @@
  */
 
 import { VideoLinker } from '@/core/application/services/VideoLinker';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { watchUrl } from '@/core/domain/services/youtubeLinking';
 
 function setUp(runs: MissionRun[]) {
   const writes: Array<{ runId: string; status: unknown; youtubeUrl: unknown }> = [];
   const notify = jest.fn(async () => ({ sent: true as const }));
-  const mission = { id: 'm1', yardId: 'curiosity', status: 'completed', learnerRef: 'r', sessionId: 's', code: '', submittedAt: '' } as Mission;
+  const mission = { id: 'm1', yardId: 'curiosity', status: 'completed', learnerRef: 'r', sessionId: 's', code: '', submittedAt: '' } as MissionRecord;
   const linker = new VideoLinker(
     {
       findRuns: async () => runs,

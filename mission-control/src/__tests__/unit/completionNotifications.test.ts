@@ -7,11 +7,11 @@
  */
 
 import { selectUnread } from '@/hooks/useCompletionNotifications';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 
 const SEEN_AT = '2026-08-10T12:00:00.000Z';
 
-function completion(id: string, completedAt: string, name?: string): Mission {
+function completion(id: string, completedAt: string, name?: string): MissionRecord {
   return {
     id,
     name,
@@ -22,7 +22,7 @@ function completion(id: string, completedAt: string, name?: string): Mission {
     sessionId: 'session',
     code: 'rover.stop()',
     submittedAt: '2026-08-10T10:00:00.000Z',
-  } as unknown as Mission;
+  } as unknown as MissionRecord;
 }
 
 describe('selectUnread', () => {
@@ -68,7 +68,7 @@ describe('selectUnread', () => {
     // A mission with no completedAt cannot be placed against the seen marker.
     // Counting it as unread would mean a dot that never clears, because
     // marking things seen moves a marker it can never fall behind.
-    const noTimestamp = { ...completion('m1', ''), completedAt: undefined } as Mission;
+    const noTimestamp = { ...completion('m1', ''), completedAt: undefined } as MissionRecord;
 
     expect(selectUnread([noTimestamp], SEEN_AT, [])).toEqual([]);
   });

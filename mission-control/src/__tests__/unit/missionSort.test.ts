@@ -8,7 +8,7 @@
  * currently selected filter; and cancelled missions were in no list at all.
  */
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import {
   MISSION_SORTS,
   DEFAULT_MISSION_SORT,
@@ -166,7 +166,7 @@ describe('the ordering is safe to use', () => {
     // demanded a whole Mission the console would need its own copy, which is
     // how the two ends up disagreeing about what "most recent" means.
     const queueShaped = { id: 'q1', name: 'Queue', submittedAt: at(2) };
-    const full = { id: 'm1', name: 'Full', submittedAt: at(1) } as Mission;
+    const full = { id: 'm1', name: 'Full', submittedAt: at(1) } as MissionRecord;
 
     expect(sortMissions([queueShaped, full], 'newest').map((m) => m.id)).toEqual(['q1', 'm1']);
   });

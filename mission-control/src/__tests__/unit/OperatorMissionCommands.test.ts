@@ -17,14 +17,14 @@ import type {
   IMissionBookkeeping,
   IMissionReader,
 } from '@/core/domain/repositories/IMissionRepository';
-import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import type { MissionRecord, MissionStatus } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 
 const HERE = 'curiosity';
 const OPERATOR: Operator = { name: 'op@uct.ac.za', yardId: HERE };
 const NOW = new Date('2026-09-14T10:00:00.000Z');
 
-function mission(overrides: Partial<Mission> = {}): Mission {
+function mission(overrides: Partial<MissionRecord> = {}): MissionRecord {
   return {
     id: 'm1',
     yardId: HERE,
@@ -48,7 +48,7 @@ function run(runId: string, overrides: Partial<MissionRun> = {}): MissionRun {
   };
 }
 
-function setUp(found: Mission | null, runs: MissionRun[] = [], notifier?: LearnerNotifier) {
+function setUp(found: MissionRecord | null, runs: MissionRun[] = [], notifier?: LearnerNotifier) {
   const written: Array<Parameters<IMissionBookkeeping['applyBookkeeping']>> = [];
   const deletedRuns: Array<Parameters<IMissionBookkeeping['softDeleteRun']>> = [];
   const deletedMissions: Array<Parameters<IMissionBookkeeping['softDeleteMission']>> = [];
@@ -240,7 +240,7 @@ describe("what the mission's state allows", () => {
 
   it.each([
     ['missing', null],
-    ['deleted', mission({ deleted: true } as Partial<Mission>)],
+    ['deleted', mission({ deleted: true } as Partial<MissionRecord>)],
   ])('reports a %s mission as not found', async (_label, found) => {
     const { commands } = setUp(found);
 
@@ -312,7 +312,7 @@ describe('deleting', () => {
       .resolves.toEqual({ ok: true, missionId: 'm1' });
     expect(first.deletedMissions).toEqual([['m1', NOW.toISOString(), 'admin@uct.ac.za']]);
 
-    const again = setUp(mission({ deleted: true } as Partial<Mission>));
+    const again = setUp(mission({ deleted: true } as Partial<MissionRecord>));
     await expect(again.commands.deleteMission('m1', { name: 'admin@uct.ac.za' }))
       .resolves.toMatchObject({ ok: false, failure: 'conflict' });
     expect(again.deletedMissions).toEqual([]);
