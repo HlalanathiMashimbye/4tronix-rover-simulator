@@ -17,7 +17,9 @@
 
 import 'server-only';
 
-import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
+import { IMissionRepository, IQueuedNotificationRecorder } from '@/core/domain/repositories/IMissionRepository';
+import type { IRateLimiter } from '@/core/domain/services/IRateLimiter';
+import { FirestoreRateLimiter } from '@/infrastructure/persistence/FirestoreRateLimiter';
 import { MissionService } from '@/core/application/services/MissionService';
 import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
 import { FirestoreMissionNameRegistry } from '@/infrastructure/persistence/FirestoreMissionNameRegistry';
@@ -51,6 +53,22 @@ export function adminMissionRepository(): IMissionRepository {
 /** The application service, wired to the privileged repository. */
 export function missionService(): MissionService {
   return new MissionService(adminMissionRepository(), new FirestoreMissionNameRegistry(getFirestoreInstance()));
+}
+
+/**
+ * Records that a mission's queued email has been sent, once. The notify route
+ * reaches the Admin write only through here, never the SDK directly.
+ */
+export function queuedNotificationRecorder(): IQueuedNotificationRecorder {
+  return adminMissionRepository();
+}
+
+/**
+ * The rate limiter the public routes key their floods against. Firestore-backed
+ * and fails open, so a counter outage never stops a child submitting a mission.
+ */
+export function rateLimiter(): IRateLimiter {
+  return new FirestoreRateLimiter(getFirestoreInstance());
 }
 
 /** Privileged. Yards are world-readable but only ever written through here. */

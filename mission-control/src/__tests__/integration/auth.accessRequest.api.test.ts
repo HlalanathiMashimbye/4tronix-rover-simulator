@@ -15,6 +15,14 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
   getFirebaseAdminAuth: () => ({ verifyIdToken }),
   getFirestoreInstance: () => ({
     collection: () => ({ doc: () => ({ get: docGet, set: docSet }) }),
+    // The route now rate-limits before verifying the token. The limiter runs a
+    // transaction; this fresh-window stub lets it through so these tests stay
+    // about the access request, not the limit (rateLimit.api.test.ts covers that).
+    runTransaction: async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn({
+        get: async () => ({ exists: false, data: () => undefined }),
+        set: () => undefined,
+      }),
   }),
 }));
 jest.mock('@/infrastructure/auth/operatorAccounts', () => ({

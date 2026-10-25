@@ -18,8 +18,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { operatorAccessRequests } from '@/infrastructure/container.server';
+import { clientIp, rateLimited } from '@/app/api/rateLimit';
+
+// Per client IP, on top of the per-account hourly ledger inside
+// OperatorAccessRequests: the ledger stops one account asking repeatedly, this
+// stops one machine spraying tokens for many accounts. Ten in ten minutes is
+// well above a person retrying a flaky sign-in.
+const REQUEST_LIMIT = 10;
+const REQUEST_WINDOW_SECONDS = 600;
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimited(
+    `access-request:${clientIp(request)}`,
+    REQUEST_LIMIT,
+    REQUEST_WINDOW_SECONDS,
+    'Too many requests. Please wait a few minutes before asking again.',
+  );
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();
