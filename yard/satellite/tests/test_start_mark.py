@@ -12,6 +12,7 @@ should not fail this, but moving the reminder away from Send should.
 from html.parser import HTMLParser
 
 import pytest
+from tests.page_source import page_source
 
 VOID = {'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'}
 
@@ -44,7 +45,7 @@ def walk():
 
     web_server.app.config['TESTING'] = True
     with web_server.app.test_client() as client:
-        html = client.get('/run/').get_data(as_text=True)
+        html = page_source(client, '/run/')
     parsed = _Walk()
     parsed.feed(html)
     return parsed

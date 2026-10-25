@@ -15,6 +15,7 @@ import recording_control
 import web_server
 import routes.rover
 from routes.recordings import recording_name
+from tests.page_source import page_source
 
 
 @pytest.fixture
@@ -265,7 +266,7 @@ class TestRunStation:
         assert resp.status_code == 200
 
     def test_it_carries_the_pieces_of_the_manual_loop(self, client):
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         for piece in ('importBtn', 'missionId', 'recBtn', 'recordings', 'ytDesc'):
             assert piece in page, piece
@@ -273,7 +274,7 @@ class TestRunStation:
     def test_it_does_not_offer_to_complete_the_mission(self, client):
         """Closing a mission is Mission Control's job. Two places to do it is
         how one ends up completed in one and still running in the other."""
-        page = client.get('/run/').get_data(as_text=True).lower()
+        page = page_source(client, '/run/').lower()
 
         assert 'mark complete' not in page
         assert '/complete' not in page
@@ -281,14 +282,14 @@ class TestRunStation:
     def test_the_description_template_carries_the_linking_line(self, client):
         """`MissionID: <id>` is matched literally by the auto-linker, so the
         page must build that exact shape rather than something near it."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'MissionID: ${id}' in page
 
     def test_it_offers_a_picker_and_a_download_not_a_wall_of_links(self, client):
         """The operator has just recorded one thing and wants that one thing on
         their device, so this is a choice plus an action, not a file listing."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'id="videoPick"' in page
         assert 'id="videoGet"' in page
@@ -297,7 +298,7 @@ class TestRunStation:
     def test_every_identifier_can_be_copied(self, client):
         """These buttons shipped with no handler at all: three controls that
         looked live and did nothing."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         for field in ('missionName', 'missionId', 'runId'):
             assert f'data-copy="{field}"' in page, field
@@ -307,7 +308,7 @@ class TestRunStation:
         """The station refuses to record until the camera is primed, so it has
         to offer a way to prime it. Priming used to need a Firebase login,
         which needs internet, on the page that exists for when there is none."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'id="camStart"' in page
         assert '/operator/api/camera/start' in page
@@ -321,7 +322,7 @@ class TestRunStation:
         import satellite_identity
         monkeypatch.setattr(satellite_identity, 'yard_id', lambda: 'curiosity')
 
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert '"curiosity"' in page
         assert 'Yard: ${YARD_ID}' in page
@@ -508,7 +509,7 @@ class TestSendRecordsFirst:
         earlier in the source than the dispatch, which stays true if the branch
         around it is disabled - it passed against a deliberately broken build.
         """
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
         handler = page[page.index("$('runBtn').addEventListener"):]
         dispatch = handler.index('/api/queue/add')
         before_dispatch = handler[:dispatch]
@@ -521,7 +522,7 @@ class TestSendRecordsFirst:
     def test_it_waits_before_moving_the_rover(self, client):
         """The writer opens on the first real frame, so a dispatch in the same
         tick puts the first move on the frame before the video starts."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'LEAD_IN_MS = 1000' in page
         assert 'setTimeout(r, LEAD_IN_MS)' in page
@@ -529,7 +530,7 @@ class TestSendRecordsFirst:
     def test_a_failed_recording_stops_the_send(self, client):
         """Dispatching anyway would produce the unrecorded run this exists to
         prevent, and moving the rover is not undoable."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
         handler = page[page.index("$('runBtn').addEventListener"):]
         body = handler[:handler.index('/api/queue/add')]
 
@@ -543,7 +544,7 @@ class TestSendRecordsFirst:
     def test_stopping_the_rover_stops_the_recording(self, client):
         """Send starts it, so Stop ends it. Otherwise the operator who would
         have forgotten to press record is left recording for ever."""
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
         handler = page[page.index("$('stopBtn').addEventListener"):]
 
         assert 'stopRecording()' in handler[:600]
@@ -556,7 +557,7 @@ class TestSendRecordsFirst:
         Send without it and the rover finishes, the watcher sees an entry it
         cannot identify, and the recording runs until somebody presses stop.
         """
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
         handler = page[page.index("$('runBtn').addEventListener"):]
         before_dispatch = handler[:handler.index('/api/queue/add')]
 
@@ -564,7 +565,7 @@ class TestSendRecordsFirst:
         assert 'JSON.stringify([{ cmd: \'run_python\', params }])' in handler
 
     def test_the_page_no_longer_asks_anyone_to_press_record(self, client):
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert 'Start recording first' not in page
 
@@ -579,7 +580,7 @@ class TestReadinessIndicators:
     """
 
     def test_the_surface_is_not_tinted_by_state(self, client):
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert '.ready[data-state="ok"]   { border-left-color' not in page
         assert 'background: var(--ok-weak); }' not in page
@@ -590,7 +591,7 @@ class TestReadinessIndicators:
         operator reads those tiles in Mission Control just before arriving
         here, so the two should look like one instrument."""
         import re
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         assert re.search(r'\.status-dot\.ok\s*\{[^}]*background:\s*var\(--ok\)', page)
         assert re.search(r'\.status-dot\.bad\s*\{[^}]*background:\s*var\(--bad\)', page)
@@ -602,7 +603,7 @@ class TestReadinessIndicators:
         This used to be one joined strip with a hairline between the two,
         which was the only place the pair differed from Mission Control's."""
         import re
-        page = client.get('/run/').get_data(as_text=True)
+        page = page_source(client, '/run/')
 
         tile = re.search(r'\n\s*\.ready\s*\{([^}]*)\}', page).group(1)
         assert re.search(r'(^|;)\s*border:', tile) and 'border-radius' in tile

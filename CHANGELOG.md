@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The satellite's pages keep their scripts in files of their own.** The
+  run station, Settings, the monitor, the code tablet and the shared nav bar
+  each carried their JavaScript inline, 3,450 lines between them (Settings
+  alone was 1,991 lines, 1,244 of them script). Each is now
+  `yard/satellite/static/pages/<page>.js`, loaded from the spot the inline
+  block stood in, so it runs at the same moment as before. The three values
+  the server rendered into those scripts (the yard id and the camera port)
+  travel as `data-` attributes on the script tag. The code tablet's offline
+  cache lists its new file. Behaviour is unchanged; tests that read a page's
+  text read its script file with it (`tests/page_source.py`).
+
 - **Only a mission Mission Control signed starts a rover run by itself.**
   Send to Rover opens the satellite's run station with the mission in the
   address, and the run station pressed its own Send as soon as the camera and

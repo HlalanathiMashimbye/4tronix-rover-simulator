@@ -92,7 +92,7 @@ the API keys.
 components, but it is worth knowing that its output is a contract, not a
 convenience: the yard's run station parses the header it writes to fill the
 mission id, and from that the run id, which is the filename the recording is
-saved under. The yard's half is in `yard/satellite/templates/run.html`, and
+saved under. The yard's half is in `yard/satellite/static/pages/run.js`, and
 `yard/satellite/tests/test_mission_import.py` checks the two halves still
 agree. There were two Copy buttons writing two different payloads before this
 existed, and copying from the mission page produced a paste the run station

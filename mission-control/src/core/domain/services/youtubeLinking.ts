@@ -161,7 +161,7 @@ export const MISSION_VIDEO_TITLE_SUFFIX = ' · Mars Yard rover run';
  * An automatic upload's title: "Cheerful Pebble Ranger · Mars Yard rover run".
  *
  * The words the run station suggests for a manual upload (`paintYouTube` in
- * yard/satellite/templates/run.html, held to these by a test), so the channel
+ * yard/satellite/static/pages/run.js, held to these by a test), so the channel
  * reads the same whichever way a video got there. It used to be the
  * recording's file name, which nobody can read.
  *
