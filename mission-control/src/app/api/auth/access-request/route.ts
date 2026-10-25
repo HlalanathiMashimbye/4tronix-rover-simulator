@@ -10,15 +10,19 @@
  * filled in, and the admin decides.
  *
  * ONE REQUEST PER HOUR PER ACCOUNT. Recorded in operatorAccessRequests/{uid}
- * (server-only: firestore.rules matches nothing there, so it is denied to
- * browsers). Pressing the button again is answered as success without
- * sending, so a nervous double-tap does not become two emails.
+ * (see operatorAccessRequests). Pressing the button again is answered as
+ * success without sending, so a nervous double-tap does not become two emails.
+ *
+ * The record also keeps which email went to which admin. Granting the access
+ * replies to those emails, so the admins who did not handle it see that it is
+ * done (operator/team/route.ts).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
+import { findAccessRequest, recordAccessRequest } from '@/infrastructure/auth/operatorAccessRequests';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
@@ -60,10 +64,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const db = getFirestoreInstance();
-    const ref = db.collection('operatorAccessRequests').doc(decoded.uid);
-    const previous = await ref.get();
-    const lastAt = previous.exists ? Date.parse(previous.data()?.requestedAt ?? '') : NaN;
+    const previous = await findAccessRequest(decoded.uid);
+    const lastAt = Date.parse(previous?.requestedAt ?? '');
     if (!Number.isNaN(lastAt) && Date.now() - lastAt < ONE_HOUR_MS) {
       return NextResponse.json({ success: true, alreadyAsked: true });
     }
@@ -79,16 +81,18 @@ export async function POST(request: NextRequest) {
     const grantUrl = `${resolveAppUrl(request.nextUrl.origin)}/operator/team?grant=${encodeURIComponent(email)}`;
     const { subject, html } = buildAccessRequestEmail(email, grantUrl);
     const sender = new ResendEmailSender();
-    const results = await Promise.allSettled(admins.map((a) => sender.send(a.email!, subject, html)));
-    const delivered = results.filter((r) => r.status === 'fulfilled').length;
+    const results = await Promise.allSettled(
+      admins.map(async (a) => ({ to: a.email!, emailId: await sender.send(a.email!, subject, html) })),
+    );
+    const sent = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
 
-    if (delivered === 0) {
+    if (sent.length === 0) {
       console.error('[access-request] no admin email sent:', results);
       return NextResponse.json({ success: false, error: 'Could not email an admin. Try again in a few minutes.' }, { status: 502 });
     }
 
-    await ref.set({ email, requestedAt: new Date().toISOString(), notified: delivered });
-    return NextResponse.json({ success: true, notified: delivered });
+    await recordAccessRequest(decoded.uid, { email, subject, sent }, previous);
+    return NextResponse.json({ success: true, notified: sent.length });
   } catch (error) {
     console.error('[access-request] failed:', error);
     return NextResponse.json({ success: false, error: 'Could not send the request' }, { status: 500 });

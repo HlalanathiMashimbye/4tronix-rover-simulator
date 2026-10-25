@@ -1,4 +1,5 @@
 import {
+  accessRequestReplies,
   changeBlocker,
   inviteClaimant,
   inviteKey,
@@ -198,5 +199,42 @@ describe('invites for an address that has never signed in', () => {
     const older = { email: 'a@x.org', role: 'operator' as const, invitedAt: '2026-09-01T00:00:00Z', invitedBy: null };
     const newer = { email: 'b@x.org', role: 'admin' as const, invitedAt: '2026-10-01T00:00:00Z', invitedBy: null };
     expect(sortInvites([older, newer]).map((i) => i.email)).toEqual(['b@x.org', 'a@x.org']);
+  });
+});
+
+describe('telling the admins a request was handled', () => {
+  it('tells every admin who was asked except the one who handled it', () => {
+    const replies = accessRequestReplies(
+      [
+        { to: 'admin@rover.com', emailId: 'e1' },
+        { to: 'second@rover.com', emailId: 'e2' },
+        { to: 'third@rover.com', emailId: 'e3' },
+      ],
+      'admin@rover.com',
+    );
+
+    expect(replies).toEqual([
+      { to: 'second@rover.com', answering: ['e2'] },
+      { to: 'third@rover.com', answering: ['e3'] },
+    ]);
+  });
+
+  it('knows the admin who handled it however their address was typed', () => {
+    const replies = accessRequestReplies([{ to: 'Admin@Rover.com', emailId: 'e1' }], ' admin@rover.com');
+    expect(replies).toEqual([]);
+  });
+
+  it('answers both emails, oldest first, for someone who asked twice', () => {
+    // One reply, not two: it answers the pair and joins them into one thread.
+    const replies = accessRequestReplies(
+      [
+        { to: 'second@rover.com', emailId: 'first-ask' },
+        { to: 'admin@rover.com', emailId: 'x' },
+        { to: 'SECOND@rover.com', emailId: 'second-ask' },
+      ],
+      'admin@rover.com',
+    );
+
+    expect(replies).toEqual([{ to: 'second@rover.com', answering: ['first-ask', 'second-ask'] }]);
   });
 });

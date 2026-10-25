@@ -27,11 +27,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
 import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 import { deleteInvite, listInvites, saveInvite } from '@/infrastructure/auth/operatorInvites';
+import { closeAccessRequest } from '@/infrastructure/auth/operatorAccessRequests';
 import { ResendEmailSender } from '@/infrastructure/email/resend-client';
-import { buildAccessGrantedEmail } from '@/infrastructure/email/accessRequestTemplate';
+import { buildAccessGrantedEmail, buildAccessResolvedEmail } from '@/infrastructure/email/accessRequestTemplate';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { requireAdmin, ForbiddenError, UnauthorizedError } from '@/infrastructure/auth/dal';
 import {
+  accessRequestReplies,
   changeBlocker,
   isNoOpChange,
   isOperatorRole,
@@ -80,6 +82,47 @@ async function emailGrant(to: string, role: OperatorRole, origin: string): Promi
   } catch (error) {
     console.error('[operator/team] grant email failed:', error);
     return false;
+  }
+}
+
+/**
+ * Close this person's request for access, if they made one, with a reply to
+ * every other admin it went to, in the thread it arrived in.
+ *
+ * David asked for this. A request emails every admin, and nothing told the
+ * rest when one of them had granted it, so each was left to find out by
+ * opening Manage access, or to go and do it again.
+ *
+ * Only reached from a grant to an account. A request is made from a Google
+ * sign-in, so the person asking always has one; the invite path is for
+ * addresses that have never signed in. Like emailGrant it never fails the
+ * grant, and returns how many admins were told.
+ */
+async function answerAccessRequest(
+  uid: string,
+  requesterEmail: string,
+  role: OperatorRole,
+  handledBy: string,
+  origin: string,
+): Promise<number> {
+  try {
+    const request = await closeAccessRequest(uid);
+    if (!request?.subject) return 0;
+
+    const replies = accessRequestReplies(request.sent, handledBy);
+    if (replies.length === 0) return 0;
+
+    const { html } = buildAccessResolvedEmail(requesterEmail, role, handledBy, `${resolveAppUrl(origin)}/operator/team`);
+    const sender = new ResendEmailSender();
+    const results = await Promise.allSettled(
+      replies.map((r) => sender.send(r.to, request.subject!, html, { answering: r.answering })),
+    );
+    const failed = results.filter((r) => r.status === 'rejected');
+    if (failed.length > 0) console.error('[operator/team] request reply failed:', failed);
+    return results.length - failed.length;
+  } catch (error) {
+    console.error('[operator/team] closing the access request failed:', error);
+    return 0;
   }
 }
 
@@ -183,6 +226,16 @@ export async function POST(request: NextRequest) {
     // something to explain to the person by email.
     const emailed =
       nextRole !== null && user.email ? await emailGrant(user.email, nextRole, request.nextUrl.origin) : false;
+    const adminsTold =
+      nextRole !== null
+        ? await answerAccessRequest(
+            user.uid,
+            user.email ?? email.trim(),
+            nextRole,
+            session.email ?? session.uid,
+            request.nextUrl.origin,
+          )
+        : 0;
 
     // An invite for an address that has an account now is stale either way:
     // the change above is the decision, and a leftover invite would re-grant
@@ -199,7 +252,9 @@ export async function POST(request: NextRequest) {
       message:
         nextRole === null
           ? `Access removed for ${user.email ?? user.uid}. They have been signed out.`
-          : `${user.email ?? user.uid} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}They need to sign out and back in for it to take effect.`,
+          : `${user.email ?? user.uid} is now ${nextRole}. ${emailed ? 'They have been emailed. ' : ''}` +
+            `${adminsTold > 0 ? 'The other admins they asked have been told. ' : ''}` +
+            'They need to sign out and back in for it to take effect.',
     });
   } catch (error) {
     console.error('[operator/team] write failed:', error);

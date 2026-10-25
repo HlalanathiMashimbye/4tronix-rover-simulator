@@ -11,6 +11,20 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **When one admin grants a request for access, the others hear about it in
+  the same email thread.** Someone who asks for operator access emails every
+  admin, and nothing told the rest once one of them had let the person in, so
+  each was left to check Manage access or to do it again. David suggested a
+  reply in the thread. Granting the access now sends one to every admin who
+  got the request, except the one who granted it: "Re:" under the request's
+  subject, saying who gave which access and that there is nothing to do. It
+  lands in the thread because it names the request's Message-ID, which Resend
+  is asked for at the time, since its send response gives only its own id. So
+  the request now records which email went to which admin, and keeps an
+  earlier ask's emails when the person asks again after the hour, so the one
+  reply answers both. Requests made before this change have no such record and
+  get no reply. A reply that fails never fails the grant.
+
 - **A satellite that uploads keeps a clean `git status`.** Each video's
   upload note (`<name>.mp4.upload.json`) was not ignored, so after its first
   automatic upload on 24 October the Pi showed untracked files, and an empty
