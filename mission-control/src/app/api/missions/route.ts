@@ -9,8 +9,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { validateMission } from '@/infrastructure/validation/schemas';
 import { missionService, notificationService } from '@/infrastructure/container.server';
+import { clientIp, rateLimited } from '@/app/api/rateLimit';
+
+// Per client IP, not per learner: a whole class shares one school IP, so the
+// window is set high enough that a class iterating hard is never blocked (a
+// child submits a mission every few minutes at most, so 60 in 10 minutes is
+// far above a real room and far below a script hammering the endpoint).
+const SUBMIT_LIMIT = 60;
+const SUBMIT_WINDOW_SECONDS = 600;
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimited(
+    `missions:${clientIp(request)}`,
+    SUBMIT_LIMIT,
+    SUBMIT_WINDOW_SECONDS,
+    "You've sent a lot of missions in a short time. Please wait a minute, then try again.",
+  );
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await request.json();

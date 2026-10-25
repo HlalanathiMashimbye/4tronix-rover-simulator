@@ -10,6 +10,9 @@ const save = jest.fn();
 
 jest.mock('@/infrastructure/container.server', () => ({
   learnerContactWriter: () => ({ save: (...a: unknown[]) => save(...a) }),
+  // The route now checks a rate limit; these tests are about the write, so the
+  // limiter always allows. rateLimit.api.test.ts covers the limit itself.
+  rateLimiter: () => ({ allow: async () => true }),
 }));
 
 import { NextRequest } from 'next/server';

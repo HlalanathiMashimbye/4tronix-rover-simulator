@@ -126,8 +126,30 @@ export interface ILearnerEmailStamp {
   stampLearnerEmailHash(missionId: string, emailHash: string): Promise<boolean>;
 }
 
+/** What recordQueuedNotification found and did. */
+export type QueuedNotificationOutcome = 'recorded' | 'already' | 'not-queued' | 'not-found';
+
+/**
+ * Records, once, that the "queued" email has been sent for a mission.
+ *
+ * POST /api/missions/[id]/notify sends that email, and its only caller fires
+ * once per freshly submitted mission (LearnerContext.backfillLatestMissionEmail,
+ * after a learner gives an address). Before this, the route accepted any status
+ * for any mission id from anyone, so a public mission id was a lever for sending
+ * a learner mail. This narrows it: the email is sent only while the mission is
+ * still queued, and only the first time.
+ *
+ * A transaction decides and stamps in one step, so two calls racing cannot both
+ * send. 'recorded' when this call stamped it; 'already' when a previous one did;
+ * 'not-queued' or 'not-found' when there was nothing to notify.
+ */
+export interface IQueuedNotificationRecorder {
+  recordQueuedNotification(missionId: string): Promise<QueuedNotificationOutcome>;
+}
+
 /** Everything, for the server container. Prefer the narrow interface you need. */
-export interface IMissionRepository extends IMissionReader, IMissionWriter, IMissionBookkeeping {}
+export interface IMissionRepository
+  extends IMissionReader, IMissionWriter, IMissionBookkeeping, IQueuedNotificationRecorder {}
 
 /** Where a page ended. Both ordering fields, so ties cannot skip or repeat. */
 export interface MissionCursor {

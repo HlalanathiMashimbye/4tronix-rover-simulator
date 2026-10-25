@@ -367,7 +367,7 @@ describe('Firestore collection names', () => {
   it('are spelled in collections.ts and nowhere else', () => {
     // They were literals in a dozen files, so a rename was a search that
     // could miss a spelling. firestore.rules is the other half of the list.
-    const literal = /(collection|doc)\([^)]*'(missions|runs|automaticUploads|learners|users|operatorInvites|operatorAccessRequests|yards|missionNames)'/;
+    const literal = /(collection|doc)\([^)]*'(missions|runs|automaticUploads|learners|users|operatorInvites|operatorAccessRequests|yards|missionNames|rateLimits)'/;
     const offenders = PRODUCTION_DIRS.flatMap(sourceFiles)
       .filter((file) => literal.test(read(file)));
 

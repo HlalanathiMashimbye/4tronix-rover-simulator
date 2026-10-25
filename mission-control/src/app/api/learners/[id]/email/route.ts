@@ -28,11 +28,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { learnerContactWriter } from '@/infrastructure/container.server';
+import { clientIp, rateLimited } from '@/app/api/rateLimit';
 
 const bodySchema = z.object({
   // null clears the address (the learner removing it).
   email: z.string().email('Must be a valid email address').nullable(),
 });
+
+// Keyed by IP and learner id together, so a class on one school IP is not one
+// bucket: each child saving their own address has their own allowance, while a
+// single id cannot be hammered. Saving an address is a rare thing a learner
+// does a handful of times, so ten in ten minutes is generous.
+const EMAIL_LIMIT = 10;
+const EMAIL_WINDOW_SECONDS = 600;
 
 export async function POST(
   request: NextRequest,
@@ -46,6 +54,14 @@ export async function POST(
       { status: 400 }
     );
   }
+
+  const limited = await rateLimited(
+    `learner-email:${clientIp(request)}:${id}`,
+    EMAIL_LIMIT,
+    EMAIL_WINDOW_SECONDS,
+    'You are changing your email too often. Please wait a minute and try again.',
+  );
+  if (limited) return limited;
 
   let body: unknown;
   try {

@@ -21,6 +21,36 @@ which is often longer than the diff.
   client, the satellite's own recording consumer or a readiness probe, and is
   still allowed, so nothing on the box breaks.
 
+- **Mission Control's public routes cannot be used to spam.** Learners are
+  anonymous by design, so a handful of routes stay open, but nothing limited
+  them. `/api/missions/[id]/notify` accepted any status for any mission id, and
+  mission ids are public on the feed, so it was a lever for mailing a learner.
+  It is now narrowed to the one thing its caller needs: the first queued email,
+  sent only while the mission is still queued and only once (recorded in a
+  transaction so two calls cannot both send). Mission submission, saving a
+  learner's email, and asking an admin for access now carry rate limits, keyed
+  by the caller's real client IP (read from Cloudflare's header, then the
+  forwarded chain). The numbers are set so a class of children behind one
+  school IP is never blocked, and the limiter fails open: if its Firestore
+  store is unreachable, the request is allowed rather than a child being
+  stopped from submitting. The counter lives in a server-only collection the
+  rules deny to browsers outright.
+
+- **The satellite and the rover only take a state change from the yard's own
+  pages.** Neither has a sign-in, on purpose: the yard has to work with no
+  internet. But that left every state-changing endpoint open to any website a
+  browser on the yard's wifi had open in another tab, which could POST to it
+  with no preflight. The worst took no body at all: a cross-site page could
+  power the satellite off (`/operator/api/satellite/shutdown`) or stop the
+  rover mid-run (`/api/queue/clear`). A single gate now sits in front of every
+  route on each server and refuses a POST, PUT, PATCH or DELETE that did not
+  come from the server's own origin, read from the browser's Sec-Fetch-Site
+  and Origin headers. A request with neither header is a non-browser caller
+  (the satellite's own proxy, the tests) and passes, so nothing on the LAN
+  breaks. This is not a sign-in and adds no gate an operator can hit when the
+  wifi is down. A test walks every route so a new endpoint cannot skip the
+  rule.
+
 - **A re-run's video gets a run of its own.** Running Quiet Storm Finder
   again on 25 October uploaded its video to YouTube, and Mission Control still
   showed one run with the first video. The linker looks for a run without a
