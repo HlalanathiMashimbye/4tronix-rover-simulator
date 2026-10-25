@@ -5,8 +5,9 @@ import type { Firestore as AdminFirestore } from 'firebase-admin/firestore';
 import type { Yard, YardLayout } from '@/core/domain/entities/Yard';
 import type { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { checkYardLayout } from '@/infrastructure/validation/yardLayout';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
-const YARDS_COLLECTION = 'yards';
+const YARDS_COLLECTION = COLLECTIONS.yards;
 
 /**
  * Yards in Firestore, written only through the Admin SDK.

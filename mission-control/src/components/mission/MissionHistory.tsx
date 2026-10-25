@@ -5,10 +5,7 @@ import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Rocket, Plus, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { getLearnerID } from '@/infrastructure/browser/getLearnerID';
-import {
-  subscribeMissionsByLearnerId,
-  subscribeMissionsByLearnerEmail,
-} from '@/infrastructure/persistence/missionQueryService';
+import { learnerMissionFeed } from '@/infrastructure/container.browser';
 import { Mission } from '@/core/domain/entities/Mission';
 import { MissionCard } from '@/components/MissionCard/MissionCard';
 import { MobileSearch } from '@/components/layout/MobileSearch';
@@ -44,7 +41,7 @@ export function MissionHistory() {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    subscribeMissionsByLearnerId(getLearnerID(), (missions) => {
+    learnerMissionFeed().subscribeMissionsByLearnerId(getLearnerID(), (missions) => {
       setById(missions);
       setIdLoaded(true);
     })
@@ -81,7 +78,7 @@ export function MissionHistory() {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    subscribeMissionsByLearnerEmail(learnerEmail, (missions) => {
+    learnerMissionFeed().subscribeMissionsByLearnerEmail(learnerEmail, (missions) => {
       setByEmail(missions);
       setEmailLoaded(true);
     })

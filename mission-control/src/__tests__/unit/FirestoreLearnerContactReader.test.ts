@@ -61,9 +61,9 @@ describe('FirestoreLearnerContactReader', () => {
   });
 
   it('reads the address from the private contact record, not the learner document', async () => {
-    // The learner document is readable by anyone holding the learner id, and
-    // those ids are published on world-readable missions - so the address is
-    // kept in a subcollection browsers are denied. This is the primary path.
+    // The learner document is readable by anyone holding the learner id, so
+    // the address is kept in a subcollection browsers are denied. This is the
+    // primary path.
     const stub = makeFirestoreStub({ displayName: 'Ada' }, { learnerEmail: 'ada@school.edu' });
 
     await expect(readerOver(stub).findByLearnerRef('learner-1'))

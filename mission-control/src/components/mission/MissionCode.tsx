@@ -10,7 +10,7 @@ import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
 import { CodeLines } from '@/components/mission/CodeLines';
 
 /**
- * A mission's code, with the line the simulation is running lit up (AB#450).
+ * A mission's code, with the line the simulation is running lit up.
  *
  * Beside the feed where there is room for both. On a phone there is not, and
  * the pictures come first there (RunFeed), so it is `collapsible`: a bar under

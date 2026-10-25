@@ -22,9 +22,10 @@ import type { Firestore } from 'firebase-admin/firestore';
 
 import type { IMissionNameRegistry } from '@/core/domain/repositories/IMissionNameRegistry';
 import { MISSION_NAME_COMBINATIONS, missionNameForNumber } from '@/core/domain/services/missionNameGenerator';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 const COUNTER = { collection: 'counters', doc: 'missionNames' } as const;
-const NAMES_COLLECTION = 'missionNames';
+const NAMES_COLLECTION = COLLECTIONS.missionNames;
 
 /** gRPC's ALREADY_EXISTS, which create() fails with when the document is there. */
 const ALREADY_EXISTS = 6;

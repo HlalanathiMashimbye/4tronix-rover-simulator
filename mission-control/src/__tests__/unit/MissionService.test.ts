@@ -68,15 +68,6 @@ class MockMissionRepository implements IMissionReader, IMissionWriter {
       .sort((a, b) => a.submittedAt.localeCompare(b.submittedAt));
   }
 
-  async update(id: string, updates: Partial<Mission>): Promise<Mission | null> {
-    const mission = this.missions.get(id);
-    if (!mission) return null;
-
-    const updated = { ...mission, ...updates };
-    this.missions.set(id, updated);
-    return updated;
-  }
-
   async getQueueLength(yardId: string): Promise<number> {
     return Array.from(this.missions.values()).filter(
       (m) => m.yardId === yardId && m.status === 'queued'
@@ -253,30 +244,6 @@ describe('MissionService', () => {
       const retrieved = await service.getMissionById('non-existent-id');
 
       expect(retrieved).toBeNull();
-    });
-  });
-
-  describe('updateMission', () => {
-    it('should update mission status', async () => {
-      const submitted = await service.submitMission(
-        makeDto({ yardId: 'yard-1', code: 'rover.forward(100)' })
-      );
-
-      const updated = await service.updateMission(submitted.mission!.id, {
-        status: 'processing',
-        startedAt: new Date().toISOString(),
-      });
-
-      expect(updated?.status).toBe('processing');
-      expect(updated?.startedAt).toBeDefined();
-    });
-
-    it('should return null for non-existent mission', async () => {
-      const updated = await service.updateMission('non-existent-id', {
-        status: 'completed',
-      });
-
-      expect(updated).toBeNull();
     });
   });
 });

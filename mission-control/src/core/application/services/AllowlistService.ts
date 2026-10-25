@@ -1,7 +1,7 @@
 /**
  * Allowlist Service
  *
- * User Story 21, Tasks 22-23: Validate learner code against rover command allowlist
+ * Validate learner code against the rover command allowlist
  *
  * Responsibilities:
  * - Run the pattern analysis in the domain layer

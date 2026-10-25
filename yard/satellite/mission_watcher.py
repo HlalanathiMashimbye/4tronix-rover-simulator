@@ -40,13 +40,34 @@ import requests
 from recording_control import (
     dispatches_for,
     overdue_recordings,
+    started_at,
     recording_key,
     recordings_at,
     stop_recording,
 )
 
 ROVER_POLL_TIMEOUT = 3.0
-DEFAULT_POLL_INTERVAL = 10  # seconds
+
+# How long a recording keeps going after the rover says its run is over.
+#
+# The rover reports a run finished the moment the program returns, and the
+# camera's picture of that moment arrives a little later, so stopping on the
+# report cut the end off the video. Up to ten seconds of tail was too long and
+# none is too short; three seconds, chosen watching the real rover, shows it
+# come to rest.
+RECORDING_TAIL_SECONDS = 3.0
+
+# How often the rover is asked whether a run is over, while one is filming.
+# Half a second, so the video ends three to three and a half seconds after
+# the run, where it used to be anything up to ten. It costs nothing when idle,
+# because the rover is only asked while a recording is open.
+ROVER_POLL_SECONDS = 0.5
+
+# Uploads still waiting and recordings past the cap change over minutes, not
+# seconds, so they keep the old pace on their own timer rather than following
+# the rover check down to one second.
+HOUSEKEEPING_SECONDS = 10
+CLEANUP_SECONDS = 300
 
 # The longest a recording may run before it is stopped whatever the rover says.
 #
@@ -102,8 +123,33 @@ def finished_runs(rover_url):
     return runs
 
 
-def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None):
+# What the watcher knows about each recording, keyed (recording, yard):
+#   started   when that recording started; it is what makes the entry this
+#             recording's, so a re-run under the same name starts afresh
+#   before    ids of the runs already over the first time the rover answered
+#             after this recording started, or None until it has
+#   stop_at   when to stop it, once its run is over and the tail has run
+#   finished  the run that ended it, for the upload
+_watched = {}
+
+
+def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None,
+                             tail_seconds=0.0, now=None):
     """Stop filming every run at this yard the rover says is over. Returns them.
+
+    A recording's run is the one the queue proxy dispatched while it was open
+    (dispatches_for). One started by hand has no dispatch, and falls back to
+    a run of the mission it is named after, but only a run that finished after
+    the recording started. Without that, re-running a mission matched the
+    previous run of it, already completed in the rover's history: the
+    recording stopped in the lead-in second before the rover was sent
+    anything, or, when the send failed, the page said Mission complete for a
+    rover that never moved.
+
+    With a tail, a finished run is filmed for `tail_seconds` more before it
+    stops, so the video shows the rover come to rest; the watcher's loop uses
+    RECORDING_TAIL_SECONDS. A run in its tail is not asked about again, so an
+    unreachable rover cannot leave it filming.
 
     keep=True for errors as well as successes: a run the rover could not
     execute may still have filmed something worth seeing, and that judgement
@@ -112,24 +158,47 @@ def stop_finished_recordings(rover_url, yard_id=None, on_recording_ready=None):
     on_recording_ready gets the rover's status for the run as well, completed
     or error, so the upload can say which: an uploaded video closes its run in
     Mission Control, and a run the rover could not execute is not closed that
-    way.
+    way. Only a dispatched run uploads, because the upload names the run.
     """
     yard_id = _this_yard(yard_id)
-    runs = finished_runs(rover_url)
-    if not runs:
-        return []
+    now = time.monotonic() if now is None else now
+    filming = {recording: started_at(recording, yard_id) for recording in recordings_at(yard_id)}
 
-    stopped = []
-    for recording in recordings_at(yard_id):
+    # Forget any whose recording stopped some other way, or has been replaced
+    # by a new recording under the same name.
+    for key, state in list(_watched.items()):
+        if key[1] == yard_id and filming.get(key[0]) != state['started']:
+            del _watched[key]
+    if not filming:
+        # Nothing to stop, so nothing to ask the rover.
+        return []
+    for recording, started in filming.items():
+        _watched.setdefault((recording, yard_id),
+                            {'started': started, 'before': None, 'stop_at': None, 'finished': []})
+
+    undecided = [recording for recording in filming if _watched[(recording, yard_id)]['stop_at'] is None]
+    runs = finished_runs(rover_url) if undecided else None
+    for recording in undecided if runs is not None else []:
+        state = _watched[(recording, yard_id)]
+        if state['before'] is None:
+            state['before'] = {run[0] for run in runs}
         own = dispatches_for(recording, yard_id)
         if own:
             finished = [run for run in runs if run[0] in own]
-            over = bool(finished)
         else:
-            finished = []
-            over = any(recording_key(mission_id) == recording for _, mission_id, _ in runs)
-        if not over:
+            finished = [run for run in runs
+                        if run[0] not in state['before'] and recording_key(run[1]) == recording]
+        if finished:
+            state['stop_at'] = now + tail_seconds
+            state['finished'] = finished if own else []
+
+    stopped = []
+    for recording in filming:
+        state = _watched[(recording, yard_id)]
+        if state['stop_at'] is None or now < state['stop_at']:
             continue
+        del _watched[(recording, yard_id)]
+        finished = state['finished']
         kept, path = stop_recording(recording, yard_id, keep=True)
         stopped.append(recording)
         print(f'[watcher] Rover finished {recording}; recording saved.')
@@ -154,40 +223,42 @@ def stop_overdue_recordings(yard_id=None, max_seconds=MAX_RECORDING_SECONDS, now
     return stopped
 
 
-CLEANUP_EVERY = 30  # ticks (~5 min at 10s interval)
-
-
-def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
+def start_mission_watcher(rover_url_getter, interval=ROVER_POLL_SECONDS):
     """Poll the rover forever. Intended to run on a daemon thread.
 
     The URL is read through a getter on every pass rather than captured once,
     so a rover path edited on Settings applies without a restart.
     """
     def _loop():
-        tick = 0
+        housekeeping_at = None
+        cleanup_at = time.monotonic()
         while True:
             try:
                 from youtube_upload import queue_upload
-                stop_finished_recordings(rover_url_getter(), on_recording_ready=queue_upload)
+                stop_finished_recordings(rover_url_getter(), on_recording_ready=queue_upload,
+                                         tail_seconds=RECORDING_TAIL_SECONDS)
             except Exception as e:      # never let one bad pass kill the thread
                 print(f'[watcher] pass failed: {e}')
 
-            # Recordings still to be delivered, from this boot or one before
-            # it. Every pass, so a satellite that finds a connection sends
-            # them without waiting for another run to finish.
-            try:
-                from youtube_upload import tick as upload_tick
-                upload_tick()
-            except Exception as e:
-                print(f'[watcher] upload check failed: {type(e).__name__}')
+            now = time.monotonic()
+            if housekeeping_at is None or now - housekeeping_at >= HOUSEKEEPING_SECONDS:
+                housekeeping_at = now
+                # Recordings still to be delivered, from this boot or one
+                # before it, so a satellite that finds a connection sends them
+                # without waiting for another run to finish.
+                try:
+                    from youtube_upload import tick as upload_tick
+                    upload_tick()
+                except Exception as e:
+                    print(f'[watcher] upload check failed: {type(e).__name__}')
 
-            try:
-                stop_overdue_recordings()
-            except Exception as e:
-                print(f'[watcher] overdue check failed: {e}')
+                try:
+                    stop_overdue_recordings()
+                except Exception as e:
+                    print(f'[watcher] overdue check failed: {e}')
 
-            tick += 1
-            if tick % CLEANUP_EVERY == 0:
+            if now - cleanup_at >= CLEANUP_SECONDS:
+                cleanup_at = now
                 try:
                     from recording_cleanup import sweep
                     deleted = sweep()
@@ -201,7 +272,7 @@ def start_mission_watcher(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
     _loop()
 
 
-def run_watcher_thread(rover_url_getter, interval=DEFAULT_POLL_INTERVAL):
+def run_watcher_thread(rover_url_getter, interval=ROVER_POLL_SECONDS):
     thread = threading.Thread(
         target=start_mission_watcher, args=(rover_url_getter,),
         kwargs={'interval': interval}, daemon=True,

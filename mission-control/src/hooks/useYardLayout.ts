@@ -7,7 +7,7 @@ import { DEFAULT_YARD_ID } from '@/infrastructure/config/yard';
 import { YARD } from '@/lib/rover-physics';
 
 /**
- * The layout a yard's simulator draws and drives in (AB#468), and the yard's
+ * The layout a yard's simulator draws and drives in, and the yard's
  * current id, which is the one its floor photo is filed under.
  *
  * The measured yard AT ONCE, then the configured one when it arrives. Nothing

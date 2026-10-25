@@ -1,7 +1,8 @@
 /**
- * Exchange a Firebase ID token for a server session cookie (AB#342).
+ * Exchange a Firebase ID token for a server session cookie.
  *
- * POST establishes the session, DELETE ends it.
+ * POST establishes the session, DELETE ends it. Who may have one is decided in
+ * OperatorSessionService; this file validates the request and sets cookies.
  *
  * Rewritten rather than restored. The version deleted in 30aacc2 stored the raw
  * ID token as the cookie with maxAge 3600, which meant an operator was silently
@@ -12,22 +13,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getFirebaseAdminAuth } from '@/infrastructure/persistence/firebase-admin';
 import { OPERATOR_YARD_COOKIE, SESSION_COOKIE } from '@/infrastructure/auth/dal';
-import { adminYardRepository } from '@/infrastructure/container.server';
-import { claimInvite } from '@/infrastructure/auth/operatorInvites';
+import { adminYardRepository, operatorSessionService } from '@/infrastructure/container.server';
 import { isSelectableYard } from '@/core/domain/entities/Yard';
-import { inviteClaimant } from '@/core/domain/entities/OperatorAccount';
-
-/** Long enough to cover an event day, so nobody is signed out mid-session. */
-const SESSION_DURATION_MS = 12 * 60 * 60 * 1000;
-
-/**
- * Firebase's guidance: only mint a session from a RECENT sign-in. Without this,
- * a stolen but still-valid ID token could be turned into a 12-hour session long
- * after the fact.
- */
-const MAX_SIGN_IN_AGE_MS = 5 * 60 * 1000;
+import { SESSION_DURATION_MS } from '@/core/application/services/OperatorSessionService';
 
 function cookieOptions(maxAgeSeconds: number, name: string = SESSION_COOKIE) {
   return {
@@ -68,73 +57,55 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const auth = getFirebaseAdminAuth();
+  const result = await operatorSessionService().signIn(token);
 
-  try {
-    const decoded = await auth.verifyIdToken(token, true);
+  if (result.outcome === 'stale') {
+    return NextResponse.json({ success: false, error: 'Please sign in again' }, { status: 401 });
+  }
 
-    if (Date.now() - decoded.auth_time * 1000 > MAX_SIGN_IN_AGE_MS) {
-      return NextResponse.json(
-        { success: false, error: 'Please sign in again' },
-        { status: 401 },
-      );
-    }
+  if (result.outcome === 'access-granted') {
+    // The token in hand predates the role, so the browser fetches a fresh one
+    // and comes back: a second or so rather than "sign out and in again".
+    return NextResponse.json(
+      { success: false, refresh: true, error: 'Access granted. Finishing sign-in.' },
+      { status: 409 },
+    );
+  }
 
-    // Refuse before minting anything. dal.ts would reject a session without a
-    // role anyway, but handing out a cookie that can never work turns "you do
-    // not have operator access" into a silent redirect loop.
-    const role = decoded.role;
-    if (role !== 'operator' && role !== 'admin') {
-      // A first Google sign-in has no role yet: the account did not exist
-      // until a moment ago. If an admin invited this address, the role is
-      // written now. The token in hand was minted before it, so the browser
-      // is asked to fetch a fresh one and come back, which is a second or so
-      // rather than "sign out and in again".
-      const claimant = inviteClaimant(decoded);
-      if (claimant && (await claimInvite(decoded.uid, claimant))) {
-        return NextResponse.json(
-          { success: false, refresh: true, error: 'Access granted. Finishing sign-in.' },
-          { status: 409 },
-        );
-      }
+  if (result.outcome === 'no-access') {
+    // Named, because the admin needs to know exactly which address to add:
+    // a Google sign-in may not be the address the person thinks it is.
+    const who = result.email ? ` (${result.email})` : '';
+    return NextResponse.json(
+      {
+        success: false,
+        // The sign-in screen offers "Ask an admin" on this code.
+        code: 'no-access',
+        email: result.email,
+        error:
+          `This account${who} does not have operator access yet. Ask an admin to ` +
+          'add it under Manage access, then sign in again.',
+      },
+      { status: 403 },
+    );
+  }
 
-      // Named, because the admin needs to know exactly which address to add:
-      // a Google sign-in may not be the address the person thinks it is.
-      const who = typeof decoded.email === 'string' ? ` (${decoded.email})` : '';
-      return NextResponse.json(
-        {
-          success: false,
-          // The sign-in screen offers "Ask an admin" on this code.
-          code: 'no-access',
-          email: typeof decoded.email === 'string' ? decoded.email : null,
-          error:
-            `This account${who} does not have operator access yet. Ask an admin to ` +
-            'add it under Manage access, then sign in again.',
-        },
-        { status: 403 },
-      );
-    }
-
-    const sessionCookie = await auth.createSessionCookie(token, {
-      expiresIn: SESSION_DURATION_MS,
-    });
-
-    const response = NextResponse.json({ success: true, role, yardId }, { status: 200 });
-    response.cookies.set({ ...cookieOptions(SESSION_DURATION_MS / 1000), value: sessionCookie });
-    // Same lifetime, same response. httpOnly for the same reason the session
-    // is: nothing in the page needs to read it, and a yard the browser can
-    // rewrite is the localStorage preference this replaced.
-    response.cookies.set({
-      ...cookieOptions(SESSION_DURATION_MS / 1000, OPERATOR_YARD_COOKIE),
-      value: yardId,
-    });
-    return response;
-  } catch (error) {
-    // Expired, revoked, malformed, or issued for another project. The caller
-    // gets one message: anything more specific helps someone guessing.
-    console.warn('[auth] Session exchange refused:', error instanceof Error ? error.message : error);
+  if (result.outcome === 'refused') {
+    // The caller gets one message: anything more specific helps someone guessing.
+    console.warn('[auth] Session exchange refused:', result.reason);
     return NextResponse.json({ success: false, error: 'Could not sign you in' }, { status: 401 });
   }
+
+  const response = NextResponse.json({ success: true, role: result.role, yardId }, { status: 200 });
+  response.cookies.set({ ...cookieOptions(SESSION_DURATION_MS / 1000), value: result.sessionCookie });
+  // Same lifetime, same response. httpOnly for the same reason the session
+  // is: nothing in the page needs to read it, and a yard the browser can
+  // rewrite is the localStorage preference this replaced.
+  response.cookies.set({
+    ...cookieOptions(SESSION_DURATION_MS / 1000, OPERATOR_YARD_COOKIE),
+    value: yardId,
+  });
+  return response;
 }
 
 export async function DELETE(request: NextRequest) {
@@ -147,17 +118,8 @@ export async function DELETE(request: NextRequest) {
   // Cleared with the session, so signing out is what changes yards.
   response.cookies.set({ ...cookieOptions(0, OPERATOR_YARD_COOKIE), value: '' });
 
-  if (existing) {
-    try {
-      const auth = getFirebaseAdminAuth();
-      const decoded = await auth.verifySessionCookie(existing, false);
-      // Revoke so the session is dead everywhere, not just in this browser.
-      // dal.ts verifies with checkRevoked, so this takes effect immediately.
-      await auth.revokeRefreshTokens(decoded.sub);
-    } catch {
-      // Already invalid. The cookie is cleared regardless.
-    }
-  }
+  // Revoked too, so the session is dead everywhere, not just in this browser.
+  await operatorSessionService().signOut(existing);
 
   return response;
 }

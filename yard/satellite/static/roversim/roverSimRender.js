@@ -4,7 +4,7 @@
 /**
  * 2D rover-simulator drawing for the live simulator panel (RoverSimulator).
  *
- * The real yard from above, north up (AB#464): the floor is a photo of it,
+ * The real yard from above, north up: the floor is a photo of it,
  * straightened and measured, with a vector overlay on top so it still reads
  * as a simulator rather than a photo, like a map. The rover is drawn, not
  * photographed, and steers its four wheels to their servo angles.
@@ -62,7 +62,7 @@ const RR = '13';
  */
 const LIGHT = { x: -0.55, y: -0.83 };
 /**
- * The yard STRETCHED to fill the canvas, whatever its shape (AB#464).
+ * The yard STRETCHED to fill the canvas, whatever its shape.
  *
  * The yard is near square and almost no panel is. Three other answers were
  * tried and each lost something: fitting it left bars of empty ground beside
@@ -87,7 +87,7 @@ export function computeLayout(w, h, yard = YARD) {
 const FILL_PAD_CM = 15;
 /**
  * A layout where the yard FILLS the canvas, cropped, for a mission's cover on
- * the home feed (AB#464).
+ * the home feed.
  *
  * Only the covers. Everywhere a rover is driven or watched the yard is
  * stretched to fill (computeLayout), so every rock and corner shows. A cover
@@ -190,7 +190,7 @@ export function interpolate(traj, p) {
 let terrainCache = null;
 /**
  * What the yard looks like, as a string, for the cache key: its size, rocks
- * and zones. A yard's layout is configured per yard now (AB#468) and an admin
+ * and zones. A yard's layout is configured per yard now and an admin
  * edits it with the simulator drawn beside the form, so the ground has to
  * repaint when the layout changes, not only when the canvas does.
  */
@@ -300,7 +300,7 @@ function paintTerrain(ctx, L, P, floor) {
     drawStartMark(ctx, L);
 }
 /**
- * Rising ground (AB#468), drawn like the contours of a map: yellow, orange,
+ * Rising ground, drawn like the contours of a map: yellow, orange,
  * red, each a tint with its edge traced. Gentlest first, so the steeper rings
  * sit on top and their tints deepen where they overlap.
  *
@@ -337,7 +337,7 @@ function drawZones(ctx, L) {
 }
 /**
  * Each rock's name on a tag beside its ring, the rock's marker as a point of
- * interest (AB#468): the name the operator's preview and the learner's crash
+ * interest: the name the operator's preview and the learner's crash
  * line use ("Hits rock R4") is then on the map they are looking at.
  */
 function drawRockMarkers(ctx, L) {
@@ -368,7 +368,7 @@ function drawRockMarkers(ctx, L) {
     ctx.restore();
 }
 /**
- * The start mark (AB#465): a cross of tape where the rover's centre goes, one
+ * The start mark: a cross of tape where the rover's centre goes, one
  * arm along the seam and one across it. In centimetres. yard-measurements.md
  * tells a person how to tape it from the same number, and
  * yardMeasurements.test.ts holds the two together, so the mark on screen is
@@ -850,7 +850,7 @@ function drawReachedRocks(ctx, L, traj, playhead) {
 /**
  * Where a run crashed: the rock it hit ringed in red, or the stretch of wall
  * it ran into. Nothing moves: the real rover stops against a rock and pushes,
- * and the rock stays put, so the simulator shows exactly that (AB#466). An
+ * and the rock stays put, so the simulator shows exactly that. An
  * earlier version shook the yard, bounced the rover back, knocked the rock
  * and threw grit, which made the simulator less like the yard it predicts.
  *

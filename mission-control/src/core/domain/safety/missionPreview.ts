@@ -12,9 +12,9 @@
  * moves, calculatePythonDuration and the limits for how long it runs, and
  * crashCheck for where it hits a rock or the edge of the yard.
  *
- * THE YARD IS THE MEASURED ONE (AB#464), rocks and walls, from the start
+ * THE YARD IS THE MEASURED ONE, rocks and walls, from the start
  * mark, so a crash here means a real rock or a real wall. A crash is a stop:
- * a learner cannot send one any more (the pre-flight check, AB#466), so one
+ * a learner cannot send one any more (the pre-flight check refuses it), so one
  * in the queue predates that, and the operator should not send it as it is.
  * It is still a prediction: the rover is put on the mark by hand and its
  * speed was calibrated on one battery charge, so the wording says where the
@@ -84,7 +84,7 @@ export function previewMission(code: string, trajectory: TrajectoryPoint[]): Pre
           },
   );
 
-  // A slope is something to look at, never a stop (AB#468): the zones are
+  // A slope is something to look at, never a stop: the zones are
   // drawn by eye, the run may still go fine, and the learner was told.
   const slope = findSlope(trajectory);
   const ground = { yellow: 'a gentle slope', orange: 'a steep slope', red: "a mound's top" } as const;

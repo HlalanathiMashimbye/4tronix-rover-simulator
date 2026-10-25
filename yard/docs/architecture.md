@@ -116,7 +116,8 @@ yard/
 │   ├── test_*.py             # pytest
 │   └── requirements.txt
 ├── satellite/
-│   ├── web_server.py         # Flask server for mro.local (port 3001)
+│   ├── web_server.py         # Flask app factory for mro.local (port 3001)
+│   ├── routes/               # pages, rover proxy and recordings blueprints
 │   ├── camera_server.py      # Pi AI camera WebSocket stream (port 8890)
 │   ├── camera_control.py     # starts and stops the camera server
 │   ├── camera_state.py       # the one answer to "is the camera ready"
@@ -222,8 +223,10 @@ through.
 4. The rover runs it; its history entry carries params.mission_id and a status
                     │
                     ▼
-5. mission_watcher polls the rover's GET /queue/status every 10s
-   completed or error, for a mission_id that is being recorded
+5. while a recording is open, mission_watcher polls the rover's GET /queue/status every half second;
+   three seconds after the recording's own dispatch is reported completed or
+   error (or, for one started by hand, a run of its mission that finished
+   after it started)
    → stop_recording(keep=True)
    → recordings/<mission>__<yard>__<UTC stamp>.mp4
                     │

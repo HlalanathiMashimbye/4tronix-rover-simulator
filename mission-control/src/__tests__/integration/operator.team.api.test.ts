@@ -16,7 +16,9 @@ const listInvites = jest.fn();
 const saveInvite = jest.fn();
 const deleteInvite = jest.fn();
 const sendEmail = jest.fn();
-const closeAccessRequest = jest.fn();
+
+/** Access request records stored per uid, returned and deleted by the ledger. */
+const accessRequests = new Map<string, Record<string, unknown>>();
 
 jest.mock('@/infrastructure/email/resend-client', () => ({
   ResendEmailSender: jest.fn().mockImplementation(() => ({ send: (...a: unknown[]) => sendEmail(...a) })),
@@ -28,12 +30,6 @@ jest.mock('@/infrastructure/auth/operatorInvites', () => ({
   listInvites: (...a: unknown[]) => listInvites(...a),
   saveInvite: (...a: unknown[]) => saveInvite(...a),
   deleteInvite: (...a: unknown[]) => deleteInvite(...a),
-}));
-
-// Its own store too. What is under test here is that a grant closes the
-// request and who the route then tells.
-jest.mock('@/infrastructure/auth/operatorAccessRequests', () => ({
-  closeAccessRequest: (...a: unknown[]) => closeAccessRequest(...a),
 }));
 
 jest.mock('@/infrastructure/auth/dal', () => {
@@ -54,11 +50,23 @@ jest.mock('@/infrastructure/persistence/firebase-admin', () => ({
     listUsers,
   }),
   getFirestoreInstance: () => ({
-    collection: () => ({
-      doc: () => ({
-        set: docSet,
-        get: async () => ({ exists: false, data: () => ({}) }),
-      }),
+    collection: (name: string) => ({
+      doc: (id: string) => {
+        if (name === 'operatorAccessRequests') {
+          return {
+            get: async () => {
+              const data = accessRequests.get(id);
+              return { exists: !!data, data: () => data ?? {} };
+            },
+            set: async (data: Record<string, unknown>) => void accessRequests.set(id, data),
+            delete: async () => void accessRequests.delete(id),
+          };
+        }
+        return {
+          set: docSet,
+          get: async () => ({ exists: false, data: () => ({}) }),
+        };
+      },
     }),
   }),
 }));
@@ -90,6 +98,7 @@ function population(users: ReturnType<typeof authUser>[]) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  accessRequests.clear();
   requireAdmin.mockResolvedValue(ADMIN);
   docSet.mockResolvedValue(undefined);
   setCustomUserClaims.mockResolvedValue(undefined);
@@ -98,7 +107,6 @@ beforeEach(() => {
   saveInvite.mockResolvedValue(undefined);
   deleteInvite.mockResolvedValue(false);
   sendEmail.mockResolvedValue('email-id');
-  closeAccessRequest.mockResolvedValue(null);
 });
 
 describe('who may call it', () => {
@@ -422,7 +430,7 @@ describe('telling the other admins a request is done', () => {
 
   /** What the person's request sent: one email to each of three admins. */
   function anOpenRequest() {
-    closeAccessRequest.mockResolvedValue({
+    accessRequests.set('u2', {
       email: 'op@school.org',
       subject: SUBJECT,
       requestedAt: '2026-10-25T08:00:00.000Z',
@@ -447,7 +455,7 @@ describe('telling the other admins a request is done', () => {
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(closeAccessRequest).toHaveBeenCalledWith('u2');
+    expect(accessRequests.has('u2')).toBe(false);
     // The admin who granted it is not told what they just did.
     expect(replies().map(([to, subject, , options]) => [to, subject, options.answering])).toEqual([
       ['second@rover.com', SUBJECT, ['to-second']],
@@ -476,7 +484,7 @@ describe('telling the other admins a request is done', () => {
     // Those records hold no emails, so there is no thread to reply in.
     population([authUser('admin-uid', 'admin@rover.com', 'admin'), authUser('u2', 'op@school.org')]);
     getUserByEmail.mockResolvedValue(authUser('u2', 'op@school.org'));
-    closeAccessRequest.mockResolvedValue({ email: 'op@school.org', subject: null, requestedAt: 'x', sent: [] });
+    accessRequests.set('u2', { email: 'op@school.org', requestedAt: 'x', notified: 2 });
 
     await post({ email: 'op@school.org', role: 'operator' });
 
@@ -491,7 +499,8 @@ describe('telling the other admins a request is done', () => {
     await post({ email: 'op@school.org', role: 'operator' });
     await post({ email: 'op@school.org', role: null });
 
-    expect(closeAccessRequest).not.toHaveBeenCalled();
+    // A no-op and a revoke both leave the request open.
+    expect(accessRequests.has('u2')).toBe(true);
     expect(replies()).toHaveLength(0);
   });
 

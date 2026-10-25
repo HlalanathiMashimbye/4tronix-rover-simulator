@@ -15,7 +15,7 @@ import {
 const OUTCOMES = Object.keys(FEEDBACK_MESSAGES) as FeedbackOutcome[];
 
 /**
- * The reviewed message bank (AB#471), as one dropdown above the note box.
+ * The reviewed message bank, as one dropdown above the note box.
  *
  * A dropdown rather than a list of buttons: seventeen sentences laid out in
  * the panel pushed the note box and the runs below the fold, for a choice an

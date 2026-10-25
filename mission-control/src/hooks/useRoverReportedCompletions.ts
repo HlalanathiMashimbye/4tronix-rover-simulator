@@ -2,7 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
+import { MissionState } from '@/core/domain/entities/MissionState';
 import { finishedRuns, missionsTheRoverFinished } from '@/core/domain/services/roverReports';
 import { localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 
@@ -96,7 +97,7 @@ export function useRoverReportedCompletions({
     async function poll() {
       if (cancelled || inFlight || document.hidden) return;
       const queue = missionsRef.current ?? [];
-      if (!queue.some((m) => m.status === 'queued' || m.status === 'processing')) return;
+      if (!queue.some((m) => MissionState.of(m.status).isOpen())) return;
 
       inFlight = true;
       try {

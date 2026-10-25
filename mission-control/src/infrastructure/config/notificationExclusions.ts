@@ -1,5 +1,5 @@
 /**
- * Missions that must never send a notification email (AB#470).
+ * Missions that must never send a notification email.
  *
  * THE RECORDED DECISION for test data that carries an email hash: it is
  * IGNORED BY ID, here - not deleted and not nulled in Firestore, and not

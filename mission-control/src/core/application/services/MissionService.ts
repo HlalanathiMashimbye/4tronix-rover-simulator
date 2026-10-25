@@ -2,7 +2,7 @@
  * Mission Service
  *
  * Business logic layer for mission management.
- * Handles anonymous mission submission (User Story 35).
+ * Handles anonymous mission submission.
  *
  * Responsibilities:
  * - Coordinate mission creation
@@ -35,7 +35,6 @@ export class MissionService {
 
   /**
    * Submit a new mission (anonymous - no authentication required)
-   * Implements User Story 35 and Task 38
    *
    * @param dto - Validated mission submission data
    * @returns Result with created mission or error
@@ -107,16 +106,4 @@ export class MissionService {
     return this.missionRepository.findById(id);
   }
 
-
-  /**
-   * Update mission status and results
-   * Used by execution agent and operator console
-   *
-   * @param id - Mission ID
-   * @param updates - Fields to update
-   * @returns Updated mission or null if not found
-   */
-  async updateMission(id: string, updates: Partial<Mission>): Promise<Mission | null> {
-    return this.missionRepository.update(id, updates);
-  }
 }

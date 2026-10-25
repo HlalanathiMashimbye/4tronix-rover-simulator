@@ -9,7 +9,7 @@ import { YARD, type Yard } from '@/lib/rover-physics';
 
 /**
  * A stored mission, simulated, knowing which part of the program each moment
- * came from (AB#450).
+ * came from.
  *
  * Simulating the saved Python is enough to draw the run, and is what the page
  * did, but Python only knows line numbers. A mission built with blocks is SHOWN
@@ -30,7 +30,7 @@ interface SimulatableMission {
 }
 
 export function useMissionTrajectory(mission: SimulatableMission | null, yard: Yard = YARD): TrajectoryPoint[] {
-  // In the yard it ran in (AB#468), whose layout the caller has from
+  // In the yard it ran in, whose layout the caller has from
   // useYardLayout, and the same one it draws the run in.
   const fromPython = useMemo(() => (mission ? simulateCommands(parseRoverCode(mission.code), yard) : []), [mission, yard]);
   const [fromBlocks, setFromBlocks] = useState<{ state: string; yard: Yard; trajectory: TrajectoryPoint[] } | null>(null);

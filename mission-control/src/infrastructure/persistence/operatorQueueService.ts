@@ -1,5 +1,5 @@
 /**
- * The live queue for one yard (AB#376).
+ * The live queue for one yard.
  *
  * A Firestore listener rather than a poll, so an operator sees a mission arrive
  * as a learner submits it. The satellite reads none of this now: execution is
@@ -27,8 +27,11 @@ import {
 } from 'firebase/firestore';
 
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
-import type { MissionStatus } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
+import { MissionState } from '@/core/domain/entities/MissionState';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
+import { isLive, runFromDocument } from '@/infrastructure/persistence/missionDocuments';
 
 /**
  * What "the queue" means: waiting, or running right now.
@@ -36,23 +39,10 @@ import type { MissionRun } from '@/core/domain/entities/MissionRun';
  * Finished missions are deliberately absent. An operator watching a queue wants
  * what still needs them; completed work belongs to the bookkeeping views.
  */
-export const ACTIVE_STATUSES: MissionStatus[] = ['queued', 'processing'];
+export const ACTIVE_STATUSES = MissionState.OPEN;
 
-/**
- * Everything that has stopped, not just what succeeded.
- *
- * This used to be 'completed' alone, and a cancelled mission was then visible
- * in no view the console has: not in the queue, because it is not active, and
- * not here. Cancel exists precisely so a child's work is kept rather than
- * deleted - the button's own comment says so and the toast tells the operator
- * "the record is kept" - and the record was kept in Firestore and lost from
- * the only interface that reads it.
- *
- * 'failed' is included for the same reason. Nothing writes it today, but the
- * status exists and the notify endpoint accepts it, so a mission that arrives
- * with it must not silently disappear.
- */
-export const SETTLED_STATUSES: MissionStatus[] = ['completed', 'failed', 'not_completed', 'cancelled'];
+/** The Done list: every status a mission ends in. Why each is there is on MissionState.SETTLED. */
+export const SETTLED_STATUSES = MissionState.SETTLED;
 
 /**
  * Upper bound on the listener.
@@ -79,27 +69,13 @@ export const DONE_LIMIT = 25;
  * Only what the queue renders. Mission documents carry a good deal more.
  *
  * NO LEARNER FIELD, DELIBERATELY. Not even `learnerRef`, which is a one-way
- * hash and therefore harmless in itself. AB#377 asked the queue to show who
+ * hash and therefore harmless in itself. A request asked the queue to show who
  * submitted each mission, and that cuts against the anonymity the platform has
  * held to from the start: learners are not Auth users, ids are hashed before
  * they touch a mission, and addresses live where browsers cannot read them.
  * The mission NAME is the handle an operator needs, and it identifies nobody.
  */
-export interface QueueMission {
-  id: string;
-  name?: string;
-  code: string;
-  blocklyState?: string;
-  status: MissionStatus;
-  submittedAt?: string;
-  /** Set when the mission finished. Absent on anything still open, and on a
-   *  cancelled mission, which is why the query cannot order by it. */
-  completedAt?: string;
-  needsReview?: boolean;
-  reviewReason?: string | null;
-  /** Present once an operator has attached the recording. */
-  youtubeUrl?: string;
-}
+export type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 
 /**
  * Subscribe to one yard's active missions, NEWEST FIRST.
@@ -129,7 +105,7 @@ export function subscribeToYardQueue(
   const db = getFirestoreClient();
 
   const q = query(
-    collection(db, 'missions'),
+    collection(db, COLLECTIONS.missions),
     where('yardId', '==', yardId),
     where('status', 'in', ACTIVE_STATUSES),
     // Newest first, and it has to stay that way: #259 flipped this to asc to
@@ -193,7 +169,7 @@ export function subscribeToYardCompleted(
   const pageSize = pages * DONE_LIMIT;
 
   const q = query(
-    collection(db, 'missions'),
+    collection(db, COLLECTIONS.missions),
     where('yardId', '==', yardId),
     // `in` rather than `==`, and it reuses the same composite index: Firestore
     // serves an `in` as several equality queries against it.
@@ -249,7 +225,7 @@ export function subscribeToMission(
   const db = getFirestoreClient();
 
   return onSnapshot(
-    doc(db, 'missions', missionId),
+    doc(db, COLLECTIONS.missions, missionId),
     (snapshot) => {
       const data = snapshot.data();
       if (!snapshot.exists() || !data || data.deleted) {
@@ -321,7 +297,7 @@ export function subscribeToMissionRuns(
   const db = getFirestoreClient();
 
   return onSnapshot(
-    collection(db, 'missions', missionId, 'runs'),
+    collection(db, COLLECTIONS.missions, missionId, COLLECTIONS.runs),
     (snapshot) => {
       onRuns(
         snapshot.docs
@@ -329,16 +305,10 @@ export function subscribeToMissionRuns(
           // Filtered here rather than in the query because runs written before
           // soft delete existed carry no `deleted` field, and a where() clause
           // would drop every one of them.
-          .filter((doc) => !(doc.data() as { deleted?: boolean }).deleted)
-          .map((doc) => ({
-            ...(doc.data() as Omit<MissionRun, 'runId'>),
-            // The document id IS the runId (PR #139) and is authoritative over
-            // any stored copy. The yard comes from the field; satellite-written
-            // documents that predate the field keyed the doc BY yard, so the
-            // id is the honest fallback rather than an empty string.
-            runId: doc.id,
-            yardId: (doc.data() as { yardId?: string }).yardId ?? doc.id,
-          })),
+          .filter((doc) => isLive(doc.data()))
+          // The same mapper the repository reads runs with, so the console
+          // and the learner's page cannot read one run two ways.
+          .map((doc) => runFromDocument(doc.id, doc.data() as Partial<MissionRun>)),
       );
     },
     (error) => onError(error instanceof Error ? error : new Error(String(error))),

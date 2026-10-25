@@ -55,7 +55,7 @@ const patchSchema = z.object({
   area: z.string().trim().min(1, 'The suburb cannot be blank.').optional(),
   city: z.string().trim().min(1, 'The city cannot be blank. It is what a learner reads.').optional(),
   /**
-   * What the simulator draws and drives in for this yard (AB#468): size,
+   * What the simulator draws and drives in for this yard: size,
    * start, rocks and rising ground. Replaced whole, never merged.
    */
   layout: yardLayoutSchema.optional(),

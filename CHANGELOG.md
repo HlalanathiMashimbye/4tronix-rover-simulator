@@ -25,6 +25,139 @@ which is often longer than the diff.
   reply answers both. Requests made before this change have no such record and
   get no reply. A reply that fails never fails the grant.
 
+- **The camera stream only plays on the satellite's own pages.** The camera
+  server streams the Pi camera over a WebSocket (port 8890) and checked no
+  Origin. Browsers allow cross-origin WebSocket connections, so any website a
+  browser on the yard's wifi had open could open a live view of the yard, which
+  films children. The handshake now checks its Origin: it is served only to the
+  satellite's own pages (its host on the web port, so it works by name or by
+  IP), refused with a 403 otherwise. A handshake with no Origin is a non-browser
+  client, the satellite's own recording consumer or a readiness probe, and is
+  still allowed, so nothing on the box breaks.
+
+- **Mission Control's public routes cannot be used to spam.** Learners are
+  anonymous by design, so a handful of routes stay open, but nothing limited
+  them. `/api/missions/[id]/notify` accepted any status for any mission id, and
+  mission ids are public on the feed, so it was a lever for mailing a learner.
+  It is now narrowed to the one thing its caller needs: the first queued email,
+  sent only while the mission is still queued and only once (recorded in a
+  transaction so two calls cannot both send). Mission submission, saving a
+  learner's email, and asking an admin for access now carry rate limits, keyed
+  by the caller's real client IP (read from Cloudflare's header, then the
+  forwarded chain). The numbers are set so a class of children behind one
+  school IP is never blocked, and the limiter fails open: if its Firestore
+  store is unreachable, the request is allowed rather than a child being
+  stopped from submitting. The counter lives in a server-only collection the
+  rules deny to browsers outright.
+
+- **The satellite and the rover only take a state change from the yard's own
+  pages.** Neither has a sign-in, on purpose: the yard has to work with no
+  internet. But that left every state-changing endpoint open to any website a
+  browser on the yard's wifi had open in another tab, which could POST to it
+  with no preflight. The worst took no body at all: a cross-site page could
+  power the satellite off (`/operator/api/satellite/shutdown`) or stop the
+  rover mid-run (`/api/queue/clear`). A single gate now sits in front of every
+  route on each server and refuses a POST, PUT, PATCH or DELETE that did not
+  come from the server's own origin, read from the browser's Sec-Fetch-Site
+  and Origin headers. A request with neither header is a non-browser caller
+  (the satellite's own proxy, the tests) and passes, so nothing on the LAN
+  breaks. This is not a sign-in and adds no gate an operator can hit when the
+  wifi is down. A test walks every route so a new endpoint cannot skip the
+  rule.
+
+- **A re-run's video gets a run of its own.** Running Quiet Storm Finder
+  again on 25 October uploaded its video to YouTube, and Mission Control still
+  showed one run with the first video. The linker looks for a run without a
+  video, and a mission run before has none left, so the new video was
+  dropped. An automatic upload knows the run it filmed, the dispatch the
+  satellite sent, so it now goes to that run, created when it is not there
+  yet and named for the dispatch so a second delivery lands on the same run.
+  Like an operator's Log another run, the new run is completed and the
+  learner is emailed. Videos found by the scheduled poll, which cannot know
+  their run, are unchanged.
+
+- **A run's video ends three seconds after the run.** The watcher asked the
+  rover whether a run was over every ten seconds, so every recording ran on
+  for up to ten seconds of a rover sitting still. Stopping the moment the
+  rover reported the run over was tried on the real rover and cut the end
+  off, because the camera's picture lags the report. It now asks every half
+  second, only while a recording is open, and films three more seconds once
+  the run is over; uploads, the overdue cap and cleanup keep their own slower
+  timers. Seen on the first real-rover runs after the driver change on 25
+  October.
+
+- **Re-running a mission no longer ends its recording early, or claims a run
+  that never happened.** A recording with no dispatch yet fell back to any
+  completed run of its mission in the rover's history, including the
+  previous one. Re-running from the run station stopped the new recording in
+  the lead-in second before the rover was sent anything, and when the send
+  failed the page said Mission complete for a rover that had not moved. Only
+  a run that finishes after the recording started can end it now. The faster
+  polling made this common; at ten seconds it hit about one re-run in ten.
+
+- **No route calls the Admin SDK itself.** After the team route, three more
+  held their work inline: sign-in verified tokens, minted cookies and applied
+  invites; "Ask an admin" kept its own hourly ledger and emailed the admins;
+  the learner email route walked the private contact path by hand. Each is a
+  controller over a use case or repository now (`OperatorSessionService`,
+  `OperatorAccessRequests`, `ILearnerContactWriter`), with Firebase-free tests,
+  and architecture.test.ts fails if a route imports the Admin SDK again.
+
+- **The satellite is an app factory.** `web_server.py` was the app, its config,
+  its state and every page and API in 723 lines, built on import, with the
+  rover's address in a `global`. It is `create_app()` now (91 lines); the routes
+  are blueprints in `yard/satellite/routes/`, and the address is app config. The
+  Pi needs a pull and a restart of `satellite-web` to pick this up.
+
+- **No `any` in production code, and comments without ticket numbers.** The 29
+  were all Blockly; the generator takes narrow `RoverWorkspace` and `RoverBlock`
+  interfaces and the editors use Blockly's own types. 148 board references in
+  comments became the reason they stood for. Three tests that checked behaviour
+  by reading source text now check the behaviour.
+
+- **The simulator runs a learner's program on the fake rover.** Learner
+  Python was given whichever `rover` library would import, so on the
+  satellite's simulator, a Pi where the hardware library imports, programs
+  went to the real library and the fake driver never saw them: "the same
+  server with one object swapped" was not true for the one thing learners
+  send. Each driver now hands out the learner's `rover` (`learner_rover()`):
+  the real one gives the same hardware library as before, the fake one keeps
+  the calls as its own state. Both hold motion speeds to 0-100, so a speed in
+  a variable, which no validator can read, is refused before a motor sees it.
+  The old import fallback to `legacy/simulator/roversimulator.py`, which
+  needed a web simulator nobody runs, is gone. Needs one run on the real rover
+  to confirm, though in-range calls reach the library unchanged.
+
+- **What a status means is decided once.** The operator card treated only
+  completed and cancelled as settled, while the server treated failed and
+  not_completed as settled too, so a run that did not finish offered Mark
+  complete and Cancel, which the server always refused, and hid the note box
+  on the run whose learner most needs a note. `MissionState` now answers it
+  for both, and architecture.test.ts fails if a status rule is written out at
+  a call site again. `YouTubeVideoId` does the same for video links: the card
+  had its own parser that disagreed with the operator's, and drew broken
+  thumbnails for links that could never be attached.
+
+- **The View no longer talks to Firestore.** Ten components and hooks
+  imported Firestore modules directly, and the learner context read and wrote
+  its record itself. They go through `container.browser.ts` now, behind ports
+  in core (`ILearnerRepository`, the live feeds in `IMissionFeeds`), with a
+  rule in architecture.test.ts. The mission repository is split by SDK: one
+  reader base class, an Admin subclass for the server and a browser subclass,
+  where it used to ask which SDK it held in every method. A contract test runs
+  both against one dataset, so the browser's reads have a test for the first
+  time. The operator team route is a controller over `OperatorTeamService`
+  instead of 250 lines of Firebase calls.
+
+- **Dead code removed.** The idempotency feature that
+  `IMPLEMENTATION_SUMMARY.md` advertised had no production caller, nor did
+  `upsertRun`, the free-form `MissionService.updateMission`, the update
+  schema, the mission lock fields, the learner counters and device list
+  (never written after creation), or the satellite's `satellite_id()`. The
+  seven `it.todo` stubs, both implementation summaries and the five stale
+  plans in `docs/plans/` went with them. Collection names live in one module,
+  and the badge colours moved out of `core/domain`.
+
 - **A satellite that uploads keeps a clean `git status`.** Each video's
   upload note (`<name>.mp4.upload.json`) was not ignored, so after its first
   automatic upload on 24 October the Pi showed untracked files, and an empty

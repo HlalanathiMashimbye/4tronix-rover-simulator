@@ -4,25 +4,13 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Play, Rocket } from 'lucide-react';
 import { Mission } from '@/core/domain/entities/Mission';
-import { getDiscoveryStatus, DISCOVERY_BADGE_CLASS } from '@/core/domain/services/discoveryStatus';
+import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
+import { DiscoveryBadge } from '@/components/ui/DiscoveryBadge';
 import { MissionSimCover } from '@/components/MissionCard/MissionSimCover';
 import { missionCoverTrajectory } from '@/core/domain/services/missionCover';
 import { useYardLayout } from '@/hooks/useYardLayout';
 import { missionSlug } from '@/core/domain/services/missionSlug';
-
-function getYouTubeId(url: string | undefined): string | null {
-  if (!url) return null;
-  const patterns = [
-    /youtube\.com\/watch\?v=([^&]+)/,
-    /youtu\.be\/([^?]+)/,
-    /youtube\.com\/embed\/([^?]+)/,
-  ];
-  for (const p of patterns) {
-    const m = url.match(p);
-    if (m?.[1]) return m[1];
-  }
-  return null;
-}
+import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 
 /** Human-friendly run time: "8s" or "1:23". */
 function formatDuration(ms: number): string {
@@ -98,7 +86,7 @@ interface MissionCardProps {
 export function MissionCard({ mission, tourId }: MissionCardProps) {
   const discoveryStatus = getDiscoveryStatus(mission.status);
   const videoUrl = mission.youtubeUrl || mission.videoUrl;
-  const youtubeId = getYouTubeId(videoUrl);
+  const video = YouTubeVideoId.fromUrl(videoUrl);
   const durationMs = mission.executionMetadata?.duration_ms;
   /**
    * A thumbnail that 404s, or that nobody can reach, is not a cover.
@@ -110,7 +98,7 @@ export function MissionCard({ mission, tourId }: MissionCardProps) {
    */
   const [thumbnailFailed, setThumbnailFailed] = useState(false);
   const youtubeThumbnail =
-    youtubeId && !thumbnailFailed ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg` : null;
+    video && !thumbnailFailed ? video.thumbnailUrl('hq') : null;
 
   // Derived whenever the video is not carrying the tile, which now includes a
   // video whose thumbnail failed to load: every mission that drove somewhere
@@ -187,11 +175,10 @@ export function MissionCard({ mission, tourId }: MissionCardProps) {
           </div>
         )}
 
-        <span
-          className={`absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm ${DISCOVERY_BADGE_CLASS[discoveryStatus]}`}
-        >
-          {discoveryStatus}
-        </span>
+        <DiscoveryBadge
+          status={discoveryStatus}
+          className="absolute left-3 top-3 z-10 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] shadow-sm"
+        />
 
         {durationMs ? (
           <span className="absolute bottom-3 right-3 z-10 rounded-md bg-black/80 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-white">

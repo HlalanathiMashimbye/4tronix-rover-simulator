@@ -53,7 +53,7 @@ function loadFloor(yardId: string): Promise<HTMLImageElement> {
 }
 
 /**
- * A yard's floor photo (AB#464), or null until it has loaded.
+ * A yard's floor photo, or null until it has loaded.
  *
  * ONE LOAD PER YARD FOR THE WHOLE PAGE. The home feed draws a dozen mission
  * covers, and each fetching and decoding its own copy of a 1400px photo would

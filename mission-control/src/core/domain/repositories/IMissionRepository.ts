@@ -7,13 +7,15 @@
  * Split by what callers actually do (Interface Segregation). One nine-method
  * interface used to serve everyone, and no caller used more than five of its
  * methods: the public feed needs findRecent, a mission page findById and
- * findRuns, MissionService create, findById and update. The browser container
+ * findRuns, MissionService create and findById. The browser container
  * handed all nine to client components, so code that ships to a child's
  * browser was typed as able to soft-delete missions. Firestore rules would
  * refuse that write, but nothing stopped anyone writing the call.
  *
  * - IMissionReader: what anyone may read. The browser gets only this.
- * - IMissionWriter: creating and updating a mission.
+ * - IMissionWriter: creating a mission. Status changes go through
+ *   IMissionBookkeeping, never a free-form update, so no caller can set a
+ *   status the lifecycle (MissionState) does not allow.
  * - IMissionBookkeeping: an operator's record of runs, and soft deletion.
  * - IMissionRepository: all three, for the privileged server container.
  */
@@ -64,20 +66,9 @@ export interface IMissionWriter {
    * @returns Created mission with generated ID and calculated queue position
    */
   create(mission: Omit<Mission, 'id'>): Promise<Mission>;
-
-  /**
-   * Update mission status and related fields
-   * @param id - Mission ID
-   * @param updates - Partial mission data to update
-   * @returns Updated mission or null if not found
-   */
-  update(id: string, updates: Partial<Mission>): Promise<Mission | null>;
 }
 
 export interface IMissionBookkeeping {
-  /** Record one yard's attempt, creating or replacing it. */
-  upsertRun(missionId: string, run: MissionRun): Promise<void>;
-
   /**
    * Apply an operator's decision to a run, and roll the mission's own status
    * up from it. One write, because a run and its mission disagreeing is the
@@ -98,33 +89,6 @@ export interface IMissionBookkeeping {
       decidedAt: string;
       decidedBy: string;
     },
-  ): Promise<void>;
-
-  /**
-   * Check if this idempotency key has already been used to create a run,
-   * and if so, return the existing runId. Used to deduplicate concurrent
-   * or retried requests to start a mission.
-   *
-   * @param missionId - The mission being started
-   * @param idempotencyKey - Stable hash representing the start action
-   * @returns The existing runId if one was created for this key, or null
-   */
-  checkIdempotency(missionId: string, idempotencyKey: string): Promise<string | null>;
-
-  /**
-   * Record that this idempotency key was used to create a run. Called after
-   * a run is successfully created to prevent duplicate creation on retry.
-   *
-   * @param missionId - The mission being started
-   * @param idempotencyKey - Stable hash representing the start action
-   * @param runId - The runId created under this key
-   * @param expiresAt - When this entry should be cleaned up (ISO timestamp)
-   */
-  recordIdempotencyKey(
-    missionId: string,
-    idempotencyKey: string,
-    runId: string,
-    expiresAt: string,
   ): Promise<void>;
 
   /**
@@ -151,8 +115,41 @@ export interface IMissionBookkeeping {
   ): Promise<void>;
 }
 
+/**
+ * The one write a browser may make to a mission: stamping the hash of a
+ * learner's email onto a mission submitted before they gave one, so its
+ * completion email can find them. Firestore rules allow it only when the
+ * mission has no hash yet, and only a 64-character hex digest.
+ */
+export interface ILearnerEmailStamp {
+  /** True when this stamped it; false when it was already stamped or there is no such mission. */
+  stampLearnerEmailHash(missionId: string, emailHash: string): Promise<boolean>;
+}
+
+/** What recordQueuedNotification found and did. */
+export type QueuedNotificationOutcome = 'recorded' | 'already' | 'not-queued' | 'not-found';
+
+/**
+ * Records, once, that the "queued" email has been sent for a mission.
+ *
+ * POST /api/missions/[id]/notify sends that email, and its only caller fires
+ * once per freshly submitted mission (LearnerContext.backfillLatestMissionEmail,
+ * after a learner gives an address). Before this, the route accepted any status
+ * for any mission id from anyone, so a public mission id was a lever for sending
+ * a learner mail. This narrows it: the email is sent only while the mission is
+ * still queued, and only the first time.
+ *
+ * A transaction decides and stamps in one step, so two calls racing cannot both
+ * send. 'recorded' when this call stamped it; 'already' when a previous one did;
+ * 'not-queued' or 'not-found' when there was nothing to notify.
+ */
+export interface IQueuedNotificationRecorder {
+  recordQueuedNotification(missionId: string): Promise<QueuedNotificationOutcome>;
+}
+
 /** Everything, for the server container. Prefer the narrow interface you need. */
-export interface IMissionRepository extends IMissionReader, IMissionWriter, IMissionBookkeeping {}
+export interface IMissionRepository
+  extends IMissionReader, IMissionWriter, IMissionBookkeeping, IQueuedNotificationRecorder {}
 
 /** Where a page ended. Both ordering fields, so ties cannot skip or repeat. */
 export interface MissionCursor {

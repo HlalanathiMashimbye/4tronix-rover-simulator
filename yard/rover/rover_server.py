@@ -18,6 +18,7 @@ from werkzeug.exceptions import HTTPException
 import queue as queue_module
 
 from drivers import create_driver
+from same_origin import is_allowed
 from service import RoverQueueService, PHOTO_PATH
 from telemetry import Telemetry, NullTelemetry, create_telemetry
 
@@ -25,6 +26,20 @@ from telemetry import Telemetry, NullTelemetry, create_telemetry
 load_dotenv(Path(__file__).resolve().parent / '.env')
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _same_origin_only():
+    """Refuse a cross-site request that would change the rover's state.
+
+    Registered here, in front of every route, so a new endpoint cannot skip
+    it. same_origin.py has the reasoning and why the proxy is unaffected.
+    """
+    if not is_allowed(request.method, request.host,
+                      request.headers.get('Sec-Fetch-Site'),
+                      request.headers.get('Origin')):
+        return jsonify({'error': 'This request has to come from the yard, '
+                        'not a cross-site page.'}), 403
 
 # Never None. NullTelemetry until create_app picks something, so a call on
 # this is always safe - see telemetry.py.

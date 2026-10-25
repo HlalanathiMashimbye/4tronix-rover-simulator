@@ -1,4 +1,5 @@
 import { MissionStatus } from '@/core/domain/entities/Mission';
+import { MissionState, type LearnerFacingStatus } from '@/core/domain/entities/MissionState';
 
 /**
  * Discovery status: the simplified, learner-facing view of a mission's lifecycle
@@ -9,20 +10,8 @@ import { MissionStatus } from '@/core/domain/entities/Mission';
  * (queued / processing / failed / cancelled) reads as "Pending". The operator
  * console shows the full, accurate status instead.
  */
-export type DiscoveryStatus = 'Completed' | 'Pending';
+export type DiscoveryStatus = LearnerFacingStatus;
 
 export function getDiscoveryStatus(status: MissionStatus): DiscoveryStatus {
-  return status === 'completed' ? 'Completed' : 'Pending';
+  return MissionState.of(status).learnerFacing();
 }
-
-/** Solid pill badge (on thumbnails and next to titles). */
-export const DISCOVERY_BADGE_CLASS: Record<DiscoveryStatus, string> = {
-  Completed: 'bg-emerald-500/85 text-emerald-950',
-  Pending: 'bg-amber-300/85 text-amber-950',
-};
-
-/** Inline status text (e.g. the Status field on the detail page). */
-export const DISCOVERY_TEXT_CLASS: Record<DiscoveryStatus, string> = {
-  Completed: 'text-green-400',
-  Pending: 'text-amber-300',
-};

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Camera, Check, Copy, Crosshair, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
 
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 import { missionClipboardText } from '@/lib/missionClipboard';
 
@@ -501,7 +501,7 @@ export function AutomaticDispatch({
           })}
         </div>
 
-        {/* The start mark (AB#465). A run starts from wherever the rover is
+        {/* The start mark. A run starts from wherever the rover is
             standing, and where it is standing is the one thing none of the
             checks can see. A reminder, not a gate: it is the operator's hand
             on the rover, and a box ticked before every run stops being read.

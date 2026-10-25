@@ -1,5 +1,5 @@
 /**
- * Feedback Message Bank (AB#471)
+ * Feedback Message Bank
  *
  * Ready-written notes an operator can send a learner about a run in one click,
  * so routine runs get a good note without the operator writing one, and the
@@ -18,15 +18,16 @@
  * message says what happened and one thing to do next time.
  *
  * Crash messages name what was hit ({thing}: "a rock" or "the wall"), filled
- * from the crash check the operator's preview already runs (AB#466), because
+ * from the crash check the operator's preview already runs, because
  * "you hit the wall" is something a learner can act on and "you crashed" is
  * not. Stopped messages point at the slopes, which the learner's simulator
- * shows as coloured ground (AB#468): a stalled or tipping rover is almost
+ * shows as coloured ground: a stalled or tipping rover is almost
  * always a route over the mounds.
  */
 
 import type { Crash } from '@/core/domain/safety/crashCheck';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
+import { MissionState } from '@/core/domain/entities/MissionState';
 
 export type FeedbackOutcome = 'success' | 'crash' | 'stopped';
 
@@ -86,7 +87,7 @@ export function fillFeedbackMessage(template: string, crash: Pick<Crash, 'into'>
  */
 export function suggestFeedbackOutcome(status: MissionStatus, crash: Pick<Crash, 'into'> | null): FeedbackOutcome {
   if (crash) return 'crash';
-  if (status === 'failed' || status === 'not_completed' || status === 'cancelled') return 'stopped';
+  if (MissionState.of(status).stoppedShort()) return 'stopped';
   return 'success';
 }
 

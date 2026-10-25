@@ -11,7 +11,7 @@
  * pinned here.
  */
 
-import { render, screen, act, waitFor, renderHook } from '@testing-library/react';
+import { render, screen, waitFor, renderHook } from '@testing-library/react';
 
 let pathname = '/missions/abc123';
 jest.mock('next/navigation', () => ({ usePathname: () => pathname }));

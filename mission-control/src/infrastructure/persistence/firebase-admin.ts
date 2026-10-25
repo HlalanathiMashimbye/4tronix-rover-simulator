@@ -151,7 +151,7 @@ export function getFirestoreInstance(): Firestore {
 /**
  * Firebase Admin Auth, for verifying operator session cookies server-side.
  *
- * Restored for AB#341. It was removed when the operator console moved to the
+ * Restored for the operator console. It was removed when the console moved to the
  * yard satellite and mission-control became learner-only; the console is coming
  * back as a role-gated route, so the server needs to verify sessions again.
  *

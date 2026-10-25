@@ -175,7 +175,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 }
 
 /**
- * Delete a mission. Admin only, per AB#379.
+ * Delete a mission. Admin only: it is the one irreversible action here.
  *
  * Its own verb rather than another action in the union above, so the narrower
  * permission is visible in the handler signature instead of buried in a branch.

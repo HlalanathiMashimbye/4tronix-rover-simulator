@@ -8,6 +8,7 @@ import { RunningBlockOverlay, useRunningBlockMarks } from '@/components/mission/
 import { BlockCanvasControls, fitBlocks } from '@/components/mission/blockCanvasControls';
 import { PHONE_START_SCALE } from '@/components/mission/blocklyInjectOptions';
 import { useIsPhoneLayout } from '@/hooks/useIsPhoneLayout';
+import type { WorkspaceSvg } from 'blockly';
 
 /**
  * Read-only Blockly rendering of a saved workspace (mission.blocklyState).
@@ -49,8 +50,7 @@ export function BlocklyViewer({
   zoomControls?: boolean;
 }) {
   const divRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const workspaceRef = useRef<any>(null);
+  const workspaceRef = useRef<WorkspaceSvg | null>(null);
   const [ready, setReady] = useState(false);
   const phone = useIsPhoneLayout();
   const marks = useRunningBlockMarks({ workspaceRef, hostRef: divRef, highlight, ready });

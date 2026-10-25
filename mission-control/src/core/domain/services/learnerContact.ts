@@ -2,10 +2,11 @@
  * Where a learner's plaintext contact address lives.
  *
  * NOT on the learner document itself. That document is readable by exact id,
- * and learner ids are published on world-readable mission documents, so an
- * address stored there is harvestable in bulk from public data by anyone who
- * reads the feed. Firestore rules cannot hide one field on read, so the
- * address lives in a subcollection browsers are denied outright
+ * and learner ids used to be printed on world-readable mission documents, so
+ * an address stored there was harvestable in bulk by anyone who read the feed.
+ * Missions carry a hash of the id now, but the address does not go back:
+ * Firestore rules cannot hide one field on read, so it lives in a
+ * subcollection browsers are denied outright
  * (`match /learners/{id}/{document=**}` is `read, write: if false`) and only
  * the Admin SDK can reach it.
  *
