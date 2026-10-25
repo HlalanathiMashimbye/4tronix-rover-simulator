@@ -35,6 +35,17 @@ def _rover_says(monkeypatch, history, status_code=200):
                         lambda *a, **k: _Reply(history, status_code))
 
 
+def _watcher_sees_it_before_the_run_ends(monkeypatch, yard_id=YARD):
+    """The watcher's first look at a recording, while its run is still going.
+
+    That is how it goes on the Pi: the watcher looks every half second and the
+    station waits a second before sending anything. A run already over at the
+    first look is a run from before this recording, and cannot end it.
+    """
+    _rover_says(monkeypatch, [])
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=yard_id) == []
+
+
 @pytest.fixture
 def recorder(monkeypatch, tmp_path):
     """The real recording table, with the frame consumer stubbed out.
@@ -50,13 +61,14 @@ def recorder(monkeypatch, tmp_path):
     monkeypatch.setattr(recording_control, '_paths', {})
     monkeypatch.setattr(recording_control, '_started', {})
     monkeypatch.setattr(recording_control, '_dispatches', {})
-    monkeypatch.setattr(mission_watcher, '_ending', {})
+    monkeypatch.setattr(mission_watcher, '_watched', {})
     return recording_control
 
 
 def test_a_finished_run_has_its_recording_released(monkeypatch, recorder):
-    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
     recorder.start_recording('m1', YARD)
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
+    _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
 
     stopped = mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD)
 
@@ -67,11 +79,12 @@ def test_a_finished_run_has_its_recording_released(monkeypatch, recorder):
 def test_a_run_the_rover_could_not_execute_still_keeps_its_film(monkeypatch, recorder):
     """A run the rover refused may still have filmed something worth seeing,
     and that judgement belongs to whoever watches it."""
-    _rover_says(monkeypatch, [{'status': 'error', 'error': 'SyntaxError',
-                               'params': {'mission_id': 'm1'}}])
     recorder.start_recording('m1', YARD)
     path = recorder._paths[('m1', YARD)]
     open(path, 'wb').write(b'x')
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
+    _rover_says(monkeypatch, [{'status': 'error', 'error': 'SyntaxError',
+                               'params': {'mission_id': 'm1'}}])
 
     mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD)
 
@@ -225,9 +238,10 @@ def test_a_mission_id_starting_with_a_dash_still_finds_its_recording(monkeypatch
     The dash is kept now: it is part of the id, and the YouTube linker has to
     read it back out of the file name. So the recording here is filed with it.
     """
+    recorder.start_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
     _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
                                'params': {'mission_id': '-BQwFDUWvyhpbQ4ZI8het'}}])
-    recorder.start_recording('-BQwFDUWvyhpbQ4ZI8het', YARD)
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
         '-BQwFDUWvyhpbQ4ZI8het']
@@ -241,9 +255,10 @@ def test_a_hand_typed_name_is_found_under_what_it_was_filed_as(monkeypatch, reco
     test with an id in it. A name somebody typed is not filed as it is: the
     rover echoes "Thabo's square!" and the recording is Thabo-s-square.
     """
+    recorder.start_recording('Thabo-s-square', YARD)
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
     _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed',
                                'params': {'mission_id': "Thabo's square!"}}])
-    recorder.start_recording('Thabo-s-square', YARD)
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == [
         'Thabo-s-square']
@@ -333,11 +348,11 @@ def _run_watcher_for(monkeypatch, seconds, rover_url_getter=lambda: 'http://rove
     return clock
 
 
-def test_a_finished_run_is_filmed_for_two_seconds_more_then_stops(monkeypatch, recorder):
+def test_a_finished_run_is_filmed_for_three_seconds_more_then_stops(monkeypatch, recorder):
     """The recording is the run's video. Asked every ten seconds, it ran on for
     up to ten seconds of a rover sitting still; stopped the moment the rover
     reported the run over, it cut off before the rover had visibly stopped.
-    Two seconds after the report, never before, is what looked right on the
+    Three seconds after the report, never before, is what looked right on the
     real rover."""
     import youtube_upload
     monkeypatch.setattr(youtube_upload, 'tick', lambda: None)
@@ -365,13 +380,14 @@ def test_a_finished_run_is_filmed_for_two_seconds_more_then_stops(monkeypatch, r
         mission_watcher.start_mission_watcher(lambda: 'http://rover')
 
     assert not recorder.is_recording('m1', YARD)
-    assert 2.0 <= stopped_at['t'] - 1003.5 <= 2.5
+    assert 3.0 <= stopped_at['t'] - 1003.5 <= 3.5
 
 
 def test_a_run_in_its_tail_stops_on_time_even_if_the_rover_drops_out(monkeypatch, recorder):
     """Once the rover has said a run is over it is not asked again, so losing
     the rover during the tail cannot leave the camera filming."""
     recorder.start_recording('m1', YARD)
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
     _rover_says(monkeypatch, [{'status': 'completed', 'params': {'mission_id': 'm1'}}])
 
     assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD, tail_seconds=2, now=100) == []
@@ -443,3 +459,52 @@ def test_uploads_are_still_checked_every_ten_seconds_not_every_pass(monkeypatch,
     _run_watcher_for(monkeypatch, 60)
 
     assert 5 <= len(checks) <= 7
+
+
+def test_a_rerun_is_not_ended_by_the_last_run_before_it_is_sent(monkeypatch, recorder):
+    """25 October 2026, on the real rover: re-running a mission from the run
+    station stopped its recording in the lead-in second, before the rover was
+    sent anything, because the previous run of the same mission was already
+    completed in the rover's history and the new recording had no dispatch
+    yet to match on instead."""
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    recorder.start_recording('m1', YARD)
+
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+    # Then the station sends it, and the rover runs and finishes it.
+    recorder.note_dispatch('m1', YARD, 'run-2')
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed', 'params': {'mission_id': 'm1'}},
+                              {'id': 'run-2', 'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == ['m1']
+
+
+def test_a_send_that_never_reached_the_rover_does_not_complete_the_run(monkeypatch, recorder):
+    """The same day: the rover was unreachable when Send was pressed, so the
+    run never reached it. When it came back, its history showed the previous
+    run of the mission completed, the watcher ended the recording, and the
+    page said Mission complete for a rover that had not moved."""
+    def unreachable(*a, **k):
+        raise mission_watcher.requests.exceptions.ConnectionError('no route')
+    monkeypatch.setattr(mission_watcher.requests, 'get', unreachable)
+    recorder.start_recording('m1', YARD)
+    assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+
+    _rover_says(monkeypatch, [{'id': 'run-1', 'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    for _ in range(3):
+        assert mission_watcher.stop_finished_recordings('http://rover', yard_id=YARD) == []
+    assert recorder.is_recording('m1', YARD)
+
+
+def test_a_hand_started_recording_is_not_uploaded(monkeypatch, recorder):
+    """Only a dispatched run uploads, because the upload names the run; a
+    recording started by hand still stops when its mission's run ends."""
+    recorder.start_recording('m1', YARD)
+    _watcher_sees_it_before_the_run_ends(monkeypatch)
+    _rover_says(monkeypatch, [{'id': 'run-9', 'status': 'completed', 'params': {'mission_id': 'm1'}}])
+    uploads = []
+
+    assert mission_watcher.stop_finished_recordings(
+        'http://rover', yard_id=YARD, on_recording_ready=lambda *a: uploads.append(a)) == ['m1']
+    assert uploads == []

@@ -11,15 +11,24 @@ which is often longer than the diff.
 
 ## Unreleased
 
-- **A run's video ends two seconds after the run.** The watcher asked the
+- **A run's video ends three seconds after the run.** The watcher asked the
   rover whether a run was over every ten seconds, so every recording ran on
   for up to ten seconds of a rover sitting still. Stopping the moment the
   rover reported the run over was tried on the real rover and cut the end
   off, because the camera's picture lags the report. It now asks every half
-  second, only while a recording is open, and films two more seconds once the
-  run is over; uploads, the overdue cap and cleanup keep their own slower
+  second, only while a recording is open, and films three more seconds once
+  the run is over; uploads, the overdue cap and cleanup keep their own slower
   timers. Seen on the first real-rover runs after the driver change on 25
   October.
+
+- **Re-running a mission no longer ends its recording early, or claims a run
+  that never happened.** A recording with no dispatch yet fell back to any
+  completed run of its mission in the rover's history, including the
+  previous one. Re-running from the run station stopped the new recording in
+  the lead-in second before the rover was sent anything, and when the send
+  failed the page said Mission complete for a rover that had not moved. Only
+  a run that finishes after the recording started can end it now. The faster
+  polling made this common; at ten seconds it hit about one re-run in ten.
 
 - **No route calls the Admin SDK itself.** After the team route, three more
   held their work inline: sign-in verified tokens, minted cookies and applied
