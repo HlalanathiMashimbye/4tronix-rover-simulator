@@ -18,7 +18,7 @@ import type { Slope } from '@/core/domain/safety/slopeCheck';
  * they cost the simulator 116px of height and, with its yard kept to its real
  * shape, as much again in width. The card is one fixed height in every mode
  * and this fills it in one shape whatever the checks say, so nothing around
- * it moves (AB#464). Drive mode puts DriveFooter in the same card.
+ * it moves. Drive mode puts DriveFooter in the same card.
  *
  * The "Mission sent" news takes the checks' line rather than appearing under
  * the button: appearing would change the height, and MissionSentDialog is the
@@ -37,9 +37,9 @@ interface MissionSubmitBarProps {
   currentCode: string;
   /** Whether the simulator has run the code currently in the editor. */
   hasRunSimulation: boolean;
-  /** What that run hit, from crashCheck: null for nothing (AB#466). */
+  /** What that run hit, from crashCheck: null for nothing. */
   crash?: Crash | null;
-  /** The steepest ground that run climbs, from slopeCheck: null for flat (AB#468). */
+  /** The steepest ground that run climbs, from slopeCheck: null for flat. */
   slope?: Slope | null;
 }
 

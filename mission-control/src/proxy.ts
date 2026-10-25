@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 import { SESSION_COOKIE } from '@/infrastructure/auth/dal';
 
 /**
- * Optimistic gate for the operator surface (AB#341).
+ * Optimistic gate for the operator surface.
  *
  * This ONLY checks that a session cookie is present. It does not verify it, and
  * it is not the security boundary: `src/lib/auth/dal.ts` is, and every operator

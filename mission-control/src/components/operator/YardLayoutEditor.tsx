@@ -11,7 +11,7 @@ import { YARD, type YardZone, type ZoneLevel } from '@/lib/rover-physics';
 import { computeLayout, drawSimFrame, DARK_SIM_PALETTE, LIGHT_SIM_PALETTE } from '@/lib/roverSimRender';
 
 /**
- * A yard's layout, edited with the yard drawn beside it (AB#468): its size,
+ * A yard's layout, edited with the yard drawn beside it: its size,
  * start, rocks and rising ground.
  *
  * It saves itself. Every change that checks out is sent a moment after the

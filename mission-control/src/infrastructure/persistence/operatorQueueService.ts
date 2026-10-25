@@ -1,5 +1,5 @@
 /**
- * The live queue for one yard (AB#376).
+ * The live queue for one yard.
  *
  * A Firestore listener rather than a poll, so an operator sees a mission arrive
  * as a learner submits it. The satellite reads none of this now: execution is
@@ -69,7 +69,7 @@ export const DONE_LIMIT = 25;
  * Only what the queue renders. Mission documents carry a good deal more.
  *
  * NO LEARNER FIELD, DELIBERATELY. Not even `learnerRef`, which is a one-way
- * hash and therefore harmless in itself. AB#377 asked the queue to show who
+ * hash and therefore harmless in itself. A request asked the queue to show who
  * submitted each mission, and that cuts against the anonymity the platform has
  * held to from the start: learners are not Auth users, ids are hashed before
  * they touch a mission, and addresses live where browsers cannot read them.

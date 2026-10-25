@@ -27,7 +27,7 @@ export function parseRoverCode(code: string): SimulationCommand[] {
  *
  * Loop expansion copies a body N times, so after it the position of a line in
  * the array no longer says where it is in the editor. The editor highlights
- * the line that is running (AB#450), and the second pass of a loop has to
+ * the line that is running, and the second pass of a loop has to
  * light the same line as the first.
  */
 interface Line {

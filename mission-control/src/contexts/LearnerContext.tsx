@@ -180,8 +180,8 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
    * dormant writer for a name is the thing someone wires up to a "name
    * yourself" box without realising what it undoes.
    *
-   * Removed alongside AB#377, which asked the operator queue to show who
-   * submitted each mission and was closed as won't-do for the same reason.
+   * Removed alongside a request for the operator queue to show who submitted
+   * each mission, which was turned down for the same reason.
    *
    * MissionNotificationService still READS displayName when personalising the
    * completion email. That is a message to the learner's own address, it

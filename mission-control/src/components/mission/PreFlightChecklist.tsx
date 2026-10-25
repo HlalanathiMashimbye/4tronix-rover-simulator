@@ -66,7 +66,7 @@ function explainCheck(id: PreFlightCheckId, result: PreFlightResult): string {
         : `Your rover reaches the edge of the yard ${formatSeconds(crash.atSeconds)} in. ` +
             'Make a drive shorter, or turn before the wall: the red mark in the simulator shows where.';
     case 'flat-ground': {
-      // A warning that leaves the choice with the learner (AB#468): what the
+      // A warning that leaves the choice with the learner: what the
       // slope may do to the real rover, and that they can still send it.
       const { slope } = result;
       if (!slope) return 'Press Run to see whether your route climbs a slope.';
@@ -103,7 +103,7 @@ const CHIP: Record<PreFlightCheckId, { icon: LucideIcon; label: string }> = {
  * that says what to do next.
  *
  * ONE FIXED SHAPE. This sits in Create Mission's footer card, which is the
- * same height in every mode so nothing around it moves (AB#464). It was a
+ * same height in every mode so nothing around it moves. It was a
  * titled list of four sentences in one or two columns, plus a hint that
  * wrapped to three lines, and it pushed the yard around as it filled in. Now
  * the four checks are chips (the full sentence is each chip's name and

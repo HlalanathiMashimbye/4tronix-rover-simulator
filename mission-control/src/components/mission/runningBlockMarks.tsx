@@ -6,7 +6,7 @@ import type { CommandSource } from '@/lib/roverBlockly';
 import type { BlockSvg, WorkspaceSvg } from 'blockly';
 
 /**
- * What a block canvas shows while the simulator runs its program (AB#450):
+ * What a block canvas shows while the simulator runs its program:
  * the spotlight, the running block's glow, a "now" tag that glides from block
  * to block, and a "2 / 3" pass badge on each running Repeat.
  *

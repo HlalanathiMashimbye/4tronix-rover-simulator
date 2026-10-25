@@ -2,7 +2,7 @@
  * The learner's Python draft, as kept in this browser.
  *
  * Still under a Monaco-era key on purpose: renaming it would hand every
- * returning learner an empty editor (CodeMirror replaced Monaco in AB#456).
+ * returning learner an empty editor (CodeMirror replaced Monaco since).
  * One home for the key because four places read or write the draft: the
  * Python editor, Show as Python, the Blocks-to-Python tab switch and a
  * mission page's Remix button.

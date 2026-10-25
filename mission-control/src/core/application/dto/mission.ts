@@ -26,7 +26,7 @@ export interface CreateMissionDto {
   learnerEmail?: string;
   /**
    * One of the generated names. Never free text: mission names land on a
-   * world-readable document (AB#402).
+   * world-readable document.
    */
   name: string;
   /** The Python the rover will run. */

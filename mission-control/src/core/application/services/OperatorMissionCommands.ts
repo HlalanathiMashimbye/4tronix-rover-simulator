@@ -164,7 +164,7 @@ export class OperatorMissionCommands {
   }
 
   /**
-   * Delete a mission. The route restricts this to an admin (AB#379), because
+   * Delete a mission. The route restricts this to an admin, because
    * the role is a fact about the session; this records who did it.
    *
    * Cancel is the reversible option and stays the answer to "this is not going

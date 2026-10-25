@@ -42,7 +42,7 @@ export interface Yard {
   /** Who added it, for a list that is now editable by a person. */
   addedBy?: string;
   /**
-   * What the simulator draws and drives in for this yard (AB#468): its size,
+   * What the simulator draws and drives in for this yard: its size,
    * start, rocks and rising ground. Set per yard on the settings page, so a
    * new venue is a form rather than a code change. Absent until an admin
    * saves one; layoutOf says what is used meanwhile.

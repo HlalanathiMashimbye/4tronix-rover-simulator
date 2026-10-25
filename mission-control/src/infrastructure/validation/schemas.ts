@@ -1,15 +1,15 @@
 /**
- * Validation Schemas (Task 37, Task 23)
+ * Validation Schemas
  *
  * Uses Zod for runtime validation with full TypeScript inference.
  * Validates mission submissions to ensure data integrity and security.
  *
  * Validation Layers:
  * 1. Schema validation (Zod): Required fields, types, formats
- * 2. Allowlist validation (Task 23): Approved rover commands only
+ * 2. Allowlist validation: Approved rover commands only
  * 3. Length/size limits: Prevent resource exhaustion
  *
- * User Story 21 Integration:
+ * Allowlist integration:
  * - Code validation includes allowlist check
  * - Blocks disallowed imports (os, sys, subprocess, etc.)
  * - Only permits approved rover commands
@@ -55,7 +55,7 @@ export const createMissionSchema = z.object({
     .optional(),
 
   /**
-   * The name must be one the generator could have produced (AB#402).
+   * The name must be one the generator could have produced.
    *
    * This is the boundary, not the input control. The browser has shown a
    * read-only name with a re-roll button for a while, but the API accepted any
@@ -97,8 +97,8 @@ export type { CreateMissionDto } from '@/core/application/dto/mission';
  *
  * Performs three-phase validation:
  * 1. Schema validation (Zod)
- * 2. Allowlist validation (User Story 21)
- * 3. Mission time limit validation (AB#401)
+ * 2. Allowlist validation
+ * 3. Mission time limit validation
  *
  * There is deliberately no speed phase here. ROVER_ARGUMENT_LIMITS already
  * caps every motion command at 0-100 in phase 2, with a message that names the
@@ -128,7 +128,7 @@ export function validateMission(data: unknown): {
     return { success: false, errors };
   }
 
-  // Phase 2: Allowlist validation (User Story 21, Task 23)
+  // Phase 2: Allowlist validation
   // Check code against approved rover commands
   const allowlistService = new AllowlistService();
   const allowlistResult = allowlistService.analyze(result.data.code);
@@ -151,7 +151,7 @@ export function validateMission(data: unknown): {
     return { success: false, errors: allowlistErrors };
   }
 
-  // Phase 3: mission time limit (AB#401). The allowlist caps a single sleep at
+  // Phase 3: mission time limit. The allowlist caps a single sleep at
   // 60 seconds but never adds them up, so a loop is how a mission gets long.
   const duration = calculatePythonDuration(result.data.code);
   if (duration > MISSION_TIME_LIMIT_SECONDS) {

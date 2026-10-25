@@ -501,7 +501,7 @@ export function AutomaticDispatch({
           })}
         </div>
 
-        {/* The start mark (AB#465). A run starts from wherever the rover is
+        {/* The start mark. A run starts from wherever the rover is
             standing, and where it is standing is the one thing none of the
             checks can see. A reminder, not a gate: it is the operator's hand
             on the rover, and a box ticked before every run stops being read.

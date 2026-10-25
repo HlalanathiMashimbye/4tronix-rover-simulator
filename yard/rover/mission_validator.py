@@ -1,5 +1,5 @@
 """
-Mission validation for time and speed limits (User Story 401), and for calls
+Mission validation for time and speed limits, and for calls
 the rover cannot actually make.
 """
 

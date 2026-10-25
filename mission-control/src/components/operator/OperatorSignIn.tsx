@@ -9,7 +9,7 @@ import { browserAuth } from '@/infrastructure/container.browser';
 import { selectableYards, type Yard } from '@/core/domain/entities/Yard';
 
 /**
- * Operator sign-in (AB#342).
+ * Operator sign-in.
  *
  * Rendered at /operator itself when there is no session, so there is one route
  * to give an operator and no separate /login to stumble across.

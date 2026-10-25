@@ -1,5 +1,5 @@
 /**
- * What a yard's layout may be (AB#468): one rulebook for the API that saves
+ * What a yard's layout may be: one rulebook for the API that saves
  * it and the settings form that edits it, so the form marks a field for the
  * same reason the server would refuse it.
  *

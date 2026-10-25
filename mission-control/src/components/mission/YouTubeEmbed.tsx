@@ -27,7 +27,7 @@ interface YouTubeEmbedProps {
   youtubeId: string;
   title: string;
   showFallbackLink?: boolean;
-  /** Start muted, and follow the learner's choice while playing (AB#409). */
+  /** Start muted, and follow the learner's choice while playing. */
   muted?: boolean;
   /**
    * Fires when the facade hands over to the real iframe.

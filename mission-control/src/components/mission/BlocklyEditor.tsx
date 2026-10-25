@@ -25,7 +25,7 @@ interface BlocklyEditorProps {
   onBlocklyStateChange?: (state: string) => void;
   /** Switch to the Python tab, showing what these blocks generate. */
   onShowAsPython?: () => void;
-  /** What the simulator is running right now (AB#450). */
+  /** What the simulator is running right now. */
   highlight?: CommandSource | null;
   /**
    * Inject the phone options (blocklyInjectOptions), read once at inject, and
@@ -186,7 +186,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
       flyoutObserverRef.current = flyoutObserver;
 
       // Auto-save on every change, and keep the running time in view so the
-      // ceiling is never a surprise at submit (AB#401).
+      // ceiling is never a surprise at submit.
       //
       // This used to undo the offending change and raise an alert(). Two
       // problems with that. Blockly fires this listener for UI events too -
@@ -238,7 +238,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
     // ran on every one of those frames for the whole drag.
     let rafId: number | null = null;
     // NEVER MEASURE A HIDDEN CANVAS. The phone's launch view collapses the
-    // editor to nothing while the simulator plays (AB#455), and a Blockly
+    // editor to nothing while the simulator plays, and a Blockly
     // workspace resized to zero keeps its scroll position for a zero-sized
     // viewport: back in the editor, the program sat in the top-left corner.
     // So below a usable size this stops resizing altogether, and when the
@@ -353,7 +353,7 @@ export function BlocklyEditor({ onGenerateCommands, onCodeChange, onBlocklyState
   }, [isInitialized, onCodeChange, onBlocklyStateChange]);
 
   // The running block's spotlight, glow, NOW tag and loop pass badges
-  // (AB#450). Shared with the read-only viewer: see runningBlockMarks.tsx.
+  //. Shared with the read-only viewer: see runningBlockMarks.tsx.
   const marks = useRunningBlockMarks({ workspaceRef, hostRef: blocklyDivRef, highlight, ready: isInitialized });
 
   if (loadError) {

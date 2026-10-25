@@ -41,7 +41,7 @@ interface RoverSimulatorProps {
   frameless?: boolean;
   /**
    * Told which part of the program the playhead is on, so the editor can light
-   * it up (AB#450). null when nothing is running: before the first frame,
+   * it up. null when nothing is running: before the first frame,
    * after the last one, and after a reset. A pause keeps the highlight, so a
    * learner can stop on a step and look at what caused it.
    */
@@ -65,7 +65,7 @@ interface RoverSimulatorProps {
    */
   pauseVersion?: number;
   /**
-   * The yard the run is in (AB#468): its layout is what is drawn, and its
+   * The yard the run is in: its layout is what is drawn, and its
    * photo the floor. The trajectory must have been simulated in the same yard,
    * which useYardLayout guarantees by giving every caller the same layout.
    * Defaults to the yard this site submits to.
@@ -247,7 +247,7 @@ export function RoverSimulator({
     reportSource(isManual ? null : traj[Math.round(playhead)]?.source ?? null);
     const st = interpolate(traj, playhead);
     // Crashed from the crash frame on, not only while it is still pushing:
-    // a run that backs off and carries on has still crashed (AB#466).
+    // a run that backs off and carries on has still crashed.
     const crashAt = crashFrame(traj);
     const crashed = crashAt >= 0 && playhead >= crashAt ? (traj[crashAt].hitRock ? 'rock' : 'wall') : null;
     setHud({
@@ -257,7 +257,7 @@ export function RoverSimulator({
       frame: Math.round(playhead) + 1,
       total: traj.length,
       crashed,
-      // The ground it is on right now (AB#468), so the simulator says so while
+      // The ground it is on right now, so the simulator says so while
       // it is there and not once it has driven off.
       zone: traj[Math.round(playhead)]?.zone ?? null,
       // The rock it is at right now: said while it is there, like the slope.
@@ -475,7 +475,7 @@ export function RoverSimulator({
         </div>
       )}
       {!hud.crashed && !hud.reached && hud.zone && (
-        // Rising ground (AB#468): said while the rover is on it, in the
+        // Rising ground: said while the rover is on it, in the
         // simulator itself, since this is where the learner watches the run.
         // A warning, still: the run goes on and can still be sent.
         <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-2" role="status">
@@ -553,7 +553,7 @@ function ResetIcon() {
   );
 }
 
-/** What a slope may do to the real rover, as the simulator says it (AB#468). */
+/** What a slope may do to the real rover, as the simulator says it. */
 const SLOPE_WORDS: Record<ZoneLevel, string> = {
   yellow: 'Gentle slope: the real rover may drift here.',
   orange: 'Steep slope: the real rover may slip here.',

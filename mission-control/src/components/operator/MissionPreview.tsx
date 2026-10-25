@@ -29,7 +29,7 @@ export function MissionPreview({
   trajectory: given,
 }: {
   mission: QueueMission;
-  /** The yard the operator signed in at, whose queue this is (AB#468). */
+  /** The yard the operator signed in at, whose queue this is. */
   yardId: string;
   onSourceChange?: (source: CommandSource | null) => void;
   /**

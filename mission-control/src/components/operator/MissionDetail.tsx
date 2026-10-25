@@ -50,7 +50,7 @@ export function MissionDetail({
   const recordRef = useRef<HTMLDivElement>(null);
 
   // Simulated once, here, for the two things below that need it: the preview
-  // draws it, and the feedback bank reads what it hit (AB#471). Each running
+  // draws it, and the feedback bank reads what it hit. Each running
   // its own simulation meant a block mission built its hidden Blockly
   // workspace twice for one mission.
   const { layout } = useYardLayout(yardId);

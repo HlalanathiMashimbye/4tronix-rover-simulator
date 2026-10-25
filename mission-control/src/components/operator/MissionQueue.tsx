@@ -33,7 +33,7 @@ import { readConsoleUrl, writeConsoleUrl, YOUTUBE_STUDIO_URL } from '@/lib/yardC
 const YOUTUBE_RED = '#E60000';
 
 /**
- * The live queue for the yard this operator SIGNED IN AT (AB#375/376/377).
+ * The live queue for the yard this operator SIGNED IN AT.
  *
  * The yard comes from the session, chosen at sign-in, so it cannot change
  * tears this subscription down and opens one against the new yard. That is the
@@ -41,7 +41,7 @@ const YOUTUBE_RED = '#E60000';
  *
  * NOTHING HERE IDENTIFIES THE LEARNER, ON PURPOSE.
  *
- * AB#377 asked for "who submitted each mission". That was written against the
+ * A request asked for "who submitted each mission". That was written against the
  * grain of the entire platform: learners are not Firebase Auth users, missions
  * carry `learnerRef` (a one-way hash) rather than an id, email addresses are
  * hashed and kept in a subcollection browsers cannot reach, and no learner has

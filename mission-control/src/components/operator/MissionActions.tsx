@@ -14,7 +14,7 @@ import type { Crash } from '@/core/domain/safety/crashCheck';
 import { FeedbackBank } from './FeedbackBank';
 
 /**
- * The five desk actions for one mission (AB#379).
+ * The five desk actions for one mission.
  *
  * Deliberately inside the expanded panel rather than on the row. An operator
  * about to cancel or delete a child's work should have that child's code in
@@ -43,7 +43,7 @@ export function MissionActions({
   crash = null,
 }: {
   mission: QueueMission;
-  /** What the preview's simulation of this mission hits, if anything (AB#466), for the feedback bank. */
+  /** What the preview's simulation of this mission hits, if anything, for the feedback bank. */
   crash?: Crash | null;
   yardId: string;
   isAdmin: boolean;

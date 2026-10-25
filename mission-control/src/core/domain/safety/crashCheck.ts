@@ -1,5 +1,5 @@
 /**
- * Whether a simulated run crashes, and where (AB#466).
+ * Whether a simulated run crashes, and where.
  *
  * The one answer to that question. The learner's pre-flight checks ask it to
  * decide whether Send is allowed, and the operator's preview asks it to say
@@ -8,7 +8,7 @@
  *
  * A crash is the first frame the physics stopped the rover: at the edge of
  * the yard, or against a rock. Both are real: the simulator's yard is the
- * measured one, rocks and all (AB#464), and the real rover in either case
+ * measured one, rocks and all, and the real rover in either case
  * pushes, climbs or stalls until an operator rescues it.
  */
 

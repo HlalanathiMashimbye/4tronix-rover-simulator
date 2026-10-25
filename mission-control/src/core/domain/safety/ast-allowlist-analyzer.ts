@@ -1,7 +1,7 @@
 /**
  * Allowlist Analyzer
  *
- * User Story 21, Task 23: Static analysis of Python code for security violations
+ * Static analysis of learner Python against the rover allowlist
  *
  * Despite the file name, there is no syntax tree here - see "Why not full AST
  * parsing" below. The name predates that decision and is imported widely.

@@ -5,7 +5,7 @@
  * history). Uses NEXT_PUBLIC_* environment variables accessible in the
  * browser.
  *
- * Learners remain anonymous and never touch Auth. Auth is here for AB#342 and
+ * Learners remain anonymous and never touch Auth. Auth is here for
  * exactly one job: an operator signs in, and the resulting ID token is
  * exchanged once for a server session cookie. After that the SERVER session is
  * the source of truth, so nothing outside the sign-in form depends on client

@@ -1,7 +1,7 @@
 /**
  * How long a mission will actually take to run.
  *
- * Used for the safety ceiling (AB#401) in two places: the Blockly editor warns
+ * Used for the safety ceiling in two places: the Blockly editor warns
  * while the learner builds, and validateMission refuses at submit.
  *
  * This is domain logic - how long a mission may run is a rule about missions,

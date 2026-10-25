@@ -1,5 +1,5 @@
 /**
- * Exchange a Firebase ID token for a server session cookie (AB#342).
+ * Exchange a Firebase ID token for a server session cookie.
  *
  * POST establishes the session, DELETE ends it. Who may have one is decided in
  * OperatorSessionService; this file validates the request and sets cookies.

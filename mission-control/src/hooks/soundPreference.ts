@@ -1,5 +1,5 @@
 /**
- * Whether rover videos start muted, remembered across visits (AB#409).
+ * Whether rover videos start muted, remembered across visits.
  *
  * The sound in question is the REAL RUN'S VIDEO, not anything the app
  * generates: there is no audio of our own anywhere in the product. A learner

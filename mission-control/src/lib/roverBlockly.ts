@@ -611,7 +611,7 @@ export interface SimulationCommand {
    * 3 rear-right.
    */
   leds?: (string | null)[];
-  /** Which part of the learner's program produced this command (AB#450). */
+  /** Which part of the learner's program produced this command. */
   source?: CommandSource;
 }
 

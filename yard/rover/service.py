@@ -192,7 +192,7 @@ class RoverQueueService(RoverQueuePort):
         if not isinstance(instructions, list):
             instructions = [instructions]
 
-        # Check the whole batch against the time and speed ceilings (AB#401)
+        # Check the whole batch against the time and speed ceilings
         # BEFORE queueing any of it. Validating inside the append loop meant a
         # batch whose second instruction was rejected had already queued the
         # first: the rover ran it, the reply said 'added': 0, and

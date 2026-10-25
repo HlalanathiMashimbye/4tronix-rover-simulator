@@ -78,7 +78,7 @@ export interface MissionRun {
    * turn was too small, try 90 degrees for a square".
    *
    * Free text on a world-readable document, which mission names deliberately
-   * are not (AB#402). The difference is the author: an operator is an
+   * are not. The difference is the author: an operator is an
    * authenticated adult holding a role claim, not an anonymous child, and the
    * text is length-capped and attributed at the API boundary. See
    * docs/THREAT-MODEL.md.

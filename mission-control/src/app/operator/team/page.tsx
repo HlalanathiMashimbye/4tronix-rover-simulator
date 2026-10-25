@@ -8,7 +8,7 @@ import { listOperatorAccounts } from '@/infrastructure/auth/operatorAccounts';
 import { listInvites } from '@/infrastructure/auth/operatorInvites';
 
 /**
- * Managing who can operate, without a shell (AB#341 follow-on).
+ * Managing who can operate, without a shell.
  *
  * A server component, so an operator who is not an admin is redirected before
  * any of this renders. They are never sent the markup and told not to look at

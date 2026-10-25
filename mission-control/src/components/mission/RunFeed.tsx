@@ -41,7 +41,7 @@ import { readStoredSound, serverSoundSnapshot, setMuted, subscribeToSound } from
  * the video's under it so the two can be compared (globals.css has the cost).
  *
  * The simulation comes first because it is the one the code on this page is
- * about: its playhead is what lights the running line (AB#450). `codeSlot` is
+ * about: its playhead is what lights the running line. `codeSlot` is
  * where a phone puts that code, under the simulation, closed until asked for.
  * While it is open (`codeOpen`) the videos are folded away and the feed does
  * not scroll, so the simulation stays put above the line it is running.
@@ -74,11 +74,11 @@ export function RunFeed({
   trajectory: TrajectoryPoint[];
   /** How long the program runs, said beside the simulation that runs it. */
   simDuration: string;
-  /** What the simulation is running, so the page can light up the code (AB#450). */
+  /** What the simulation is running, so the page can light up the code. */
   onSimSourceChange?: (source: CommandSource | null) => void;
   /** The simulation has been watched to its end. */
   onSimFinished?: () => void;
-  /** The yard the mission ran in, for the simulator to draw (AB#468). */
+  /** The yard the mission ran in, for the simulator to draw. */
   yardId?: string;
   /** The code, on a phone: it sits under the simulation rather than beside the feed. */
   codeSlot?: ReactNode;
