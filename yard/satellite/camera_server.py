@@ -7,6 +7,7 @@ Streams JPEG frames with IMX500 object detection over WebSocket.
 
 import asyncio
 import base64
+import http
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ import signal
 import sys
 import time
 import weakref
+from urllib.parse import urlsplit
 
 import websockets
 
@@ -464,6 +466,65 @@ async def frame_producer():
         await asyncio.sleep(frame_interval)
 
 
+def _web_port():
+    """The satellite web server's port, which its pages are served from.
+
+    The same env var web_server reads (routes.network.SERVER_PORT); default
+    3001. Read per handshake rather than cached so a restart with a changed
+    port is honoured without special-casing.
+    """
+    return int(os.environ.get('SATELLITE_PORT', 3001))
+
+
+def _host_without_port(host_header):
+    """The host out of a Host header, dropping the port. None if unusable."""
+    if not host_header:
+        return None
+    if host_header.startswith('['):  # IPv6 literal, e.g. [::1]:8890
+        end = host_header.find(']')
+        return host_header[:end + 1] if end != -1 else None
+    return host_header.rsplit(':', 1)[0] if ':' in host_header else host_header
+
+
+def origin_is_allowed(host_header, origin_header, web_port):
+    """Whether a camera-stream handshake may be served.
+
+    This stream films children, and a browser on the yard's open wifi can open
+    a cross-origin WebSocket to any site, so only the satellite's own pages may
+    watch it. Those pages (the monitor and the run station) are served from the
+    same host as this server, on the web port, so a browser's Origin is that
+    host and web_port. Compared against the handshake's own Host, so it works
+    whether a page was loaded by name or by IP.
+
+    A handshake with no Origin is not a browser page: it is the satellite's own
+    recording consumer or a readiness probe (both Python websockets clients,
+    which send no Origin), and is allowed. The frames carry no secret; what is
+    guarded is who may open a live view of the yard.
+    """
+    if not origin_header:
+        return True
+    host_only = _host_without_port(host_header)
+    if host_only is None:
+        return False
+    return urlsplit(origin_header).netloc == f'{host_only}:{web_port}'
+
+
+def reject_foreign_origin(connection, request):
+    """websockets process_request hook: refuse a cross-origin handshake.
+
+    Returns None to let the handshake proceed, or a 403 response to refuse it
+    before any frame is sent.
+    """
+    if origin_is_allowed(request.headers.get('Host'),
+                         request.headers.get('Origin'), _web_port()):
+        return None
+    logger.warning('Refused a camera-stream connection from a foreign origin')
+    return connection.respond(
+        http.HTTPStatus.FORBIDDEN,
+        "The camera stream is for the satellite's own pages.\n",
+    )
+
+
 async def handle_client(websocket):
     """Handle new WebSocket client connection"""
     client_addr = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
@@ -507,6 +568,7 @@ async def main():
     port = int(os.environ.get('CAMERA_PORT', 8890))
     logger.info(f"Starting WebSocket server on port {port}")
     async with websockets.serve(handle_client, "0.0.0.0", port,
+                                process_request=reject_foreign_origin,
                                 logger=_quiet_probe_logger()):
         while running:
             await asyncio.sleep(0.1)

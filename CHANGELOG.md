@@ -11,6 +11,16 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The camera stream only plays on the satellite's own pages.** The camera
+  server streams the Pi camera over a WebSocket (port 8890) and checked no
+  Origin. Browsers allow cross-origin WebSocket connections, so any website a
+  browser on the yard's wifi had open could open a live view of the yard, which
+  films children. The handshake now checks its Origin: it is served only to the
+  satellite's own pages (its host on the web port, so it works by name or by
+  IP), refused with a 403 otherwise. A handshake with no Origin is a non-browser
+  client, the satellite's own recording consumer or a readiness probe, and is
+  still allowed, so nothing on the box breaks.
+
 - **Mission Control's public routes cannot be used to spam.** Learners are
   anonymous by design, so a handful of routes stay open, but nothing limited
   them. `/api/missions/[id]/notify` accepted any status for any mission id, and
