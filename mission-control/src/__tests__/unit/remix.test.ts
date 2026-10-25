@@ -11,7 +11,7 @@
  */
 
 import { buildMissionStatusEmail } from '@/infrastructure/email/missionStatusTemplates';
-import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import type { MissionRecord, MissionStatus } from '@/core/domain/entities/Mission';
 
 describe('Remix Feature', () => {
   describe('Email Template', () => {
@@ -79,7 +79,7 @@ describe('Remix Feature', () => {
 
   describe('Mission Remix Logic', () => {
     it('should determine mission type correctly for remix', () => {
-      const blockMission: Mission = {
+      const blockMission: MissionRecord = {
         id: 'block-mission-1',
         yardId: 'curiosity',
         learnerRef: 'hash123',
@@ -92,7 +92,7 @@ describe('Remix Feature', () => {
         completedAt: '2026-10-06T12:01:00Z',
       };
 
-      const pythonMission: Mission = {
+      const pythonMission: MissionRecord = {
         id: 'python-mission-1',
         yardId: 'curiosity',
         learnerRef: 'hash456',
@@ -109,7 +109,7 @@ describe('Remix Feature', () => {
     });
 
     it('should verify completed missions have completion timestamp', () => {
-      const completedMission: Mission = {
+      const completedMission: MissionRecord = {
         id: 'completed-1',
         yardId: 'curiosity',
         learnerRef: 'hash123',
@@ -121,7 +121,7 @@ describe('Remix Feature', () => {
         completedAt: '2026-10-06T12:01:00Z',
       };
 
-      const pendingMission: Mission = {
+      const pendingMission: MissionRecord = {
         id: 'pending-1',
         yardId: 'curiosity',
         learnerRef: 'hash456',
@@ -139,7 +139,7 @@ describe('Remix Feature', () => {
     });
 
     it('should verify remix does not modify original mission', () => {
-      const originalMission: Mission = {
+      const originalMission: MissionRecord = {
         id: 'mission-1',
         yardId: 'curiosity',
         learnerRef: 'learner-hash-1',
@@ -152,7 +152,7 @@ describe('Remix Feature', () => {
         youtubeUrl: 'https://youtube.com/watch?v=abc123',
       };
 
-      const remixMission: Mission = {
+      const remixMission: MissionRecord = {
         id: 'remix-mission-1',
         yardId: 'curiosity',
         learnerRef: 'learner-hash-2', // Different learner
@@ -171,7 +171,7 @@ describe('Remix Feature', () => {
     });
 
     it('should verify anyone can remix completed missions', () => {
-      const completedMission: Mission = {
+      const completedMission: MissionRecord = {
         id: 'public-mission-1',
         yardId: 'curiosity',
         learnerRef: 'original-learner-hash',
@@ -218,7 +218,7 @@ describe('Remix Feature', () => {
       ];
 
       statuses.forEach(({ status, shouldShow }) => {
-        const mission: Mission = {
+        const mission: MissionRecord = {
           id: `mission-${status}`,
           yardId: 'curiosity',
           learnerRef: 'hash123',

@@ -361,6 +361,21 @@ describe('the meaning of a mission status', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('is set only by the Mission entity, in core and persistence', () => {
+    /**
+     * A new mission's first status and every operator's change to it are the
+     * entity's decisions (Mission.submit and its methods). A status literal
+     * written into a mission anywhere else is a decision the entity never saw.
+     * 'failed' is left out because YouTube uploads use the same word.
+     */
+    const write = /status:\s*'(?:queued|processing|completed|not_completed|cancelled)'/;
+    const offenders = ['core', join('infrastructure', 'persistence')].flatMap(sourceFiles)
+      .filter((file) => file !== join('core', 'domain', 'entities', 'Mission.ts'))
+      .filter((file) => write.test(read(file)));
+
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('Firestore collection names', () => {

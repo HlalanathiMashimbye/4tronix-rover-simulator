@@ -7,7 +7,7 @@
  */
 
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type {
   IMissionReader,
   IMissionBookkeeping,
@@ -20,7 +20,7 @@ const OPERATOR_A: Operator = { name: 'op-a@example.com', yardId: HERE };
 const OPERATOR_B: Operator = { name: 'op-b@example.com', yardId: DURBAN };
 const NOW = new Date('2026-09-14T10:00:00.000Z');
 
-function mission(overrides: Partial<Mission> = {}): Mission {
+function mission(overrides: Partial<MissionRecord> = {}): MissionRecord {
   return {
     id: 'mission-1',
     yardId: HERE,
@@ -44,7 +44,7 @@ function run(runId: string, yardId: string = HERE, overrides: Partial<MissionRun
   };
 }
 
-function setUp(foundMission: Mission | null = null, initialRuns: MissionRun[] = []) {
+function setUp(foundMission: MissionRecord | null = null, initialRuns: MissionRun[] = []) {
   const runs = new Map<string, MissionRun[]>([['mission-1', [...initialRuns]]]);
   const bookkeepingWrites: Array<[string, string, string, unknown]> = [];
 
@@ -152,8 +152,8 @@ describe('Concurrent runs of one mission', () => {
       const { repository } = setUp(mission({ yardId: HERE }));
 
       // Create runs at two different yards
-      const missionHere: Mission = mission({ yardId: HERE });
-      const missionDurban: Mission = {
+      const missionHere: MissionRecord = mission({ yardId: HERE });
+      const missionDurban: MissionRecord = {
         ...mission(),
         yardId: DURBAN,
       };

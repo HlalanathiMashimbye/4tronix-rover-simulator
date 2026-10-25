@@ -13,7 +13,7 @@ import {
   ILearnerContactReader,
   LearnerContact,
 } from '@/core/domain/services/ILearnerContactReader';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 
 class MockEmailSender implements IEmailSender {
   public calls: Array<{ to: string; subject: string; html: string }> = [];
@@ -39,7 +39,7 @@ function contactsOf(contact: LearnerContact) {
   return { reader, findByLearnerRef };
 }
 
-function makeMission(overrides: Partial<Mission> = {}): Mission {
+function makeMission(overrides: Partial<MissionRecord> = {}): MissionRecord {
   return {
     id: 'mission-1',
     yardId: 'yard-1',

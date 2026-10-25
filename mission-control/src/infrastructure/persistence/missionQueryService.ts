@@ -20,7 +20,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import { MissionState } from '@/core/domain/entities/MissionState';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
@@ -59,7 +59,7 @@ export const HISTORY_LIMIT = 50;
  */
 export async function subscribeMissionsByLearnerId(
   learnerId: string,
-  callback: (missions: Mission[]) => void
+  callback: (missions: MissionRecord[]) => void
 ): Promise<Unsubscribe> {
   const learnerRef = await hashLearnerId(learnerId);
   const db = getFirestoreClient();
@@ -74,7 +74,7 @@ export async function subscribeMissionsByLearnerId(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
         const mission = missionFromDocument(doc.id, doc.data());
         if (!mission.deleted) missions.push(mission);
@@ -105,7 +105,7 @@ export async function subscribeMissionsByLearnerId(
  */
 export async function subscribeMissionsByLearnerEmail(
   learnerEmail: string,
-  callback: (missions: Mission[]) => void
+  callback: (missions: MissionRecord[]) => void
 ): Promise<Unsubscribe> {
   const learnerEmailHash = await hashLearnerEmail(learnerEmail);
 
@@ -121,7 +121,7 @@ export async function subscribeMissionsByLearnerEmail(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
         const mission = missionFromDocument(doc.id, doc.data());
         if (!mission.deleted) missions.push(mission);
@@ -167,7 +167,7 @@ export const COMPLETION_FEED_LIMIT = 8;
  * client-side status check is belt and braces, not the load-bearing part.
  */
 export function subscribeRecentCompletions(
-  callback: (missions: Mission[]) => void,
+  callback: (missions: MissionRecord[]) => void,
   max: number = COMPLETION_FEED_LIMIT
 ): Unsubscribe {
   const db = getFirestoreClient();
@@ -180,7 +180,7 @@ export function subscribeRecentCompletions(
   return onSnapshot(
     q,
     (snapshot) => {
-      const missions: Mission[] = [];
+      const missions: MissionRecord[] = [];
       snapshot.forEach((doc) => {
         const mission = missionFromDocument(doc.id, doc.data());
         if (!mission.deleted && MissionState.of(mission.status).isCompleted()) missions.push(mission);

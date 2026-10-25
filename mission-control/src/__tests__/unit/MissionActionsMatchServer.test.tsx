@@ -15,8 +15,7 @@
 import { render, screen } from '@testing-library/react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
-import type { MissionStatus } from '@/core/domain/entities/Mission';
-import { decideCancel, decideComplete, decideFeedback } from '@/core/domain/services/missionBookkeeping';
+import { Mission, type MissionRecord, type MissionStatus } from '@/core/domain/entities/Mission';
 
 const ALL: MissionStatus[] = ['queued', 'processing', 'completed', 'failed', 'not_completed', 'cancelled'];
 
@@ -32,17 +31,19 @@ function mount(status: MissionStatus) {
   );
 }
 
-const snapshot = (status: MissionStatus) => ({ runStatus: status, missionStatus: status, needsReview: false });
+// The server's view of the same mission, with the operator's run at this yard.
+const server = (status: MissionStatus) =>
+  Mission.restore({ id: 'm1', status } as MissionRecord, [{ runId: 'r1', yardId: 'curiosity', status }]);
 
 it.each(ALL)('a %s mission offers Mark complete and Cancel only when the server accepts them', (status) => {
   mount(status);
 
-  expect(screen.queryByRole('button', { name: /mark complete/i }) !== null).toBe(decideComplete(snapshot(status)).ok);
-  expect(screen.queryByRole('button', { name: /^cancel$/i }) !== null).toBe(decideCancel(snapshot(status)).ok);
+  expect(screen.queryByRole('button', { name: /mark complete/i }) !== null).toBe(server(status).complete('curiosity').ok);
+  expect(screen.queryByRole('button', { name: /^cancel$/i }) !== null).toBe(server(status).cancel('curiosity').ok);
 });
 
 it.each(ALL)('a %s mission offers a note for the learner only when the server accepts one', (status) => {
   mount(status);
 
-  expect(screen.queryByLabelText(/leave a note for the learner/i) !== null).toBe(decideFeedback(snapshot(status)).ok);
+  expect(screen.queryByLabelText(/leave a note for the learner/i) !== null).toBe(server(status).leaveFeedback('curiosity').ok);
 });

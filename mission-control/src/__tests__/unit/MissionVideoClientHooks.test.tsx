@@ -6,7 +6,7 @@ import type React from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import MissionVideoClient from '@/app/missions/[missionId]/MissionVideoClient';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import { missionSlug } from '@/core/domain/services/missionSlug';
 import { allGeneratedMissionNames } from '@/core/domain/services/missionNameGenerator';
 
@@ -124,7 +124,7 @@ const mission = {
   code: 'print("hello")',
   status: 'completed',
   submittedAt: '2026-10-06T00:00:00.000Z',
-} as Mission;
+} as MissionRecord;
 
 it('keeps the hook order stable when a mission finishes loading', async () => {
   (browserMissionRepository as jest.Mock).mockReturnValue({
@@ -137,7 +137,7 @@ it('keeps the hook order stable when a mission finishes loading', async () => {
   expect(await screen.findByRole('button', { name: /remix/i })).toBeInTheDocument();
 });
 describe('the note and Remix', () => {
-  const load = async (status: Mission['status'], { video = true }: { video?: boolean } = {}) => {
+  const load = async (status: MissionRecord['status'], { video = true }: { video?: boolean } = {}) => {
     if (!video) roverRuns.length = 0;
     (browserMissionRepository as jest.Mock).mockReturnValue({
       findById: jest.fn().mockResolvedValue({ ...mission, status }),
@@ -323,7 +323,7 @@ describe('where the code goes', () => {
 });
 
 describe('opened from a name link', () => {
-  const named = { ...mission, id: 'jLSLqPhCp1RuUo2CpfQUA', name: allGeneratedMissionNames()[0] } as Mission;
+  const named = { ...mission, id: 'jLSLqPhCp1RuUo2CpfQUA', name: allGeneratedMissionNames()[0] } as MissionRecord;
   const slug = missionSlug(named);
 
   it('finds the mission by its ID prefix and loads its runs by its real ID', async () => {

@@ -8,7 +8,7 @@
  * the run's feedback fields were added to the entity and not to the mapper.
  */
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
@@ -31,7 +31,7 @@ function isoTime(value: unknown): string | undefined {
   return value as string | undefined;
 }
 
-export function missionFromDocument(id: string, data: MissionDocData): Mission {
+export function missionFromDocument(id: string, data: MissionDocData): MissionRecord {
   return {
     id,
     yardId: data.yardId as string,
@@ -41,13 +41,13 @@ export function missionFromDocument(id: string, data: MissionDocData): Mission {
     name: data.name as string | undefined,
     code: data.code as string,
     blocklyState: data.blocklyState as string | undefined,
-    origin: data.origin as Mission['origin'],
+    origin: data.origin as MissionRecord['origin'],
     challengeId: data.challengeId as string | undefined,
-    status: data.status as Mission['status'],
+    status: data.status as MissionRecord['status'],
     deleted: (data.deleted as boolean) ?? false,
     deletedAt: data.deletedAt as string | undefined,
-    executionResult: data.executionResult as Mission['executionResult'],
-    executionMetadata: data.executionMetadata as Mission['executionMetadata'],
+    executionResult: data.executionResult as MissionRecord['executionResult'],
+    executionMetadata: data.executionMetadata as MissionRecord['executionMetadata'],
     videoUrl: data.videoUrl as string | undefined,
     // Coerced, because removing a video writes null and this field is
     // typed as optional. Leaving the null would make every consumer's
@@ -95,7 +95,7 @@ export function isLive(data: MissionDocData): boolean {
   return !data.deleted;
 }
 
-export function missionToDocument(mission: Partial<Mission>): Record<string, unknown> {
+export function missionToDocument(mission: Partial<MissionRecord>): Record<string, unknown> {
   const persistedFields: Record<string, unknown> = { ...mission };
 
   if (typeof persistedFields.code === 'string') {

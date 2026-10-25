@@ -10,7 +10,7 @@
  * Supporting another SDK means another subclass, not another branch.
  */
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type {
   IMissionReader,
@@ -34,14 +34,14 @@ export abstract class FirestoreMissionReader implements IMissionReader {
   protected abstract readRecent(max: number, cursor?: MissionCursor): Promise<DocumentLike[]>;
   protected abstract readRuns(missionId: string): Promise<DocumentLike[]>;
 
-  async findById(id: string): Promise<Mission | null> {
+  async findById(id: string): Promise<MissionRecord | null> {
     const data = await this.readMission(id);
     // A deleted mission reads as absent, so a shared link 404s rather than
     // showing work an operator removed.
     return data && isLive(data) ? missionFromDocument(id, data) : null;
   }
 
-  async findByIdPrefix(prefix: string, max: number): Promise<Mission[]> {
+  async findByIdPrefix(prefix: string, max: number): Promise<MissionRecord[]> {
     // A range on the document ID uses the index every collection has, so this
     // needs no composite index. '' sorts after every ID character.
     return this.liveMissions(await this.readIdRange(prefix, prefix + '', max));
@@ -80,7 +80,7 @@ export abstract class FirestoreMissionReader implements IMissionReader {
       .map((d) => runFromDocument(d.id, d.data() as Partial<MissionRun>));
   }
 
-  private liveMissions(docs: DocumentLike[]): Mission[] {
+  private liveMissions(docs: DocumentLike[]): MissionRecord[] {
     return docs.filter((d) => isLive(d.data())).map((d) => missionFromDocument(d.id, d.data()));
   }
 }

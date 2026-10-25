@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Play, Rocket } from 'lucide-react';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import { getDiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { DiscoveryBadge } from '@/components/ui/DiscoveryBadge';
 import { MissionSimCover } from '@/components/MissionCard/MissionSimCover';
@@ -65,7 +65,7 @@ export function codePeek(code: string): string {
 }
 
 interface MissionCardProps {
-  mission: Mission;
+  mission: MissionRecord;
   /** Show the learner identifier - intended for operator views */
   showLearnerId?: boolean;
   /** Stable anchor for the platform tour overlay. */

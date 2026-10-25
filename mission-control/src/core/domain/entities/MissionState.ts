@@ -1,7 +1,7 @@
 /**
  * What a mission's status means, answered in one place.
  *
- * The status itself stays a plain string on the Mission record, because that
+ * The status itself stays a plain string on MissionRecord, because that
  * record crosses the Firestore and server-to-browser boundaries, and neither
  * carries a class. This is the behaviour that goes with it. It exists because
  * the meaning was being re-derived wherever someone needed it, and the copies
@@ -11,8 +11,8 @@
  * refused, and hid the note box, on the one kind of run whose learner most
  * needs a note.
  *
- * Every operator rule below is the one missionBookkeeping enforces on the
- * server, so the console offers exactly what the server will accept.
+ * The Mission entity decides operator actions with these same rules, so the
+ * console offers exactly what the server will accept.
  */
 
 import type { MissionStatus } from './Mission';

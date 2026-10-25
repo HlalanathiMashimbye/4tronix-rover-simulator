@@ -10,7 +10,7 @@
 
 import type { Firestore } from 'firebase-admin/firestore';
 import { nanoid } from 'nanoid';
-import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
+import type { MissionRecord, MissionStatus } from '@/core/domain/entities/Mission';
 import type { IMissionRepository, MissionCursor, QueuedNotificationOutcome } from '@/core/domain/repositories/IMissionRepository';
 import { FirestoreMissionReader } from './FirestoreMissionReader';
 import {
@@ -26,10 +26,10 @@ export class AdminFirestoreMissionRepository extends FirestoreMissionReader impl
     super();
   }
 
-  async create(mission: Omit<Mission, 'id' | 'submittedAt'>): Promise<Mission> {
+  async create(mission: Omit<MissionRecord, 'id' | 'submittedAt'>): Promise<MissionRecord> {
     const id = nanoid();
     const submittedAt = (mission as { submittedAt?: string }).submittedAt || new Date().toISOString();
-    const newMission: Mission = { ...mission, id, submittedAt };
+    const newMission: MissionRecord = { ...mission, id, submittedAt };
 
     await this.db.collection(MISSIONS_COLLECTION).doc(id).set(missionToDocument(newMission));
 

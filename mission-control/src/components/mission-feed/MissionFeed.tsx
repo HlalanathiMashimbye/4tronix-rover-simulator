@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useReducedMotion } from 'motion/react';
 import { Plus, Rocket, Star, Grid2x2, CircleCheckBig, Hourglass } from 'lucide-react';
 import { browserMissionRepository } from '@/infrastructure/container.browser';
-import { Mission } from '@/core/domain/entities/Mission';
+import { MissionRecord } from '@/core/domain/entities/Mission';
 import { MissionCursor } from '@/core/domain/repositories/IMissionRepository';
 import { getDiscoveryStatus, type DiscoveryStatus } from '@/core/domain/services/discoveryStatus';
 import { useFavorites } from '@/hooks/useFavorites';
@@ -40,7 +40,7 @@ const FEED_SIZE = 24;
 const ARCHIVE_SEARCH_PAGES = 20;
 
 /** The one definition of what the search box matches. */
-function matchesQuery(missions: Mission[], query: string): Mission[] {
+function matchesQuery(missions: MissionRecord[], query: string): MissionRecord[] {
   const q = query.trim().toLowerCase();
   if (!q) return missions;
   return missions.filter(
@@ -56,7 +56,7 @@ function matchesQuery(missions: Mission[], query: string): Mission[] {
  * real platform is wanted rather than a lookalike of it.
  */
 export function MissionFeed() {
-  const [missions, setMissions] = useState<Mission[]>([]);
+  const [missions, setMissions] = useState<MissionRecord[]>([]);
   const [cursor, setCursor] = useState<MissionCursor | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchingArchive, setSearchingArchive] = useState(false);
@@ -186,7 +186,7 @@ export function MissionFeed() {
       const repository = browserMissionRepository();
       let nextCursor = cursor;
       let pagesFetched = 0;
-      let pool: Mission[] = missions;
+      let pool: MissionRecord[] = missions;
 
       while (nextCursor && pagesFetched < ARCHIVE_SEARCH_PAGES) {
         const page = await repository.findRecent(FEED_SIZE, nextCursor);

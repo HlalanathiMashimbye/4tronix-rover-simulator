@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, Code2 } from 'lucide-react';
 
-import type { Mission } from '@/core/domain/entities/Mission';
+import type { MissionRecord } from '@/core/domain/entities/Mission';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { missionClipboardText } from '@/lib/missionClipboard';
 import { BlocklyViewer } from '@/components/mission/BlocklyViewer';
@@ -39,7 +39,7 @@ export function MissionCode({
   footer,
   tourId,
 }: {
-  mission: Mission;
+  mission: MissionRecord;
   highlight: CommandSource | null;
   collapsible?: boolean;
   open?: boolean;
