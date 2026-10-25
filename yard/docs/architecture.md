@@ -224,7 +224,7 @@ through.
                     │
                     ▼
 5. while a recording is open, mission_watcher polls the rover's GET /queue/status every half second;
-   three seconds after the recording's own dispatch is reported completed or
+   the Settings tail (three seconds unless changed) after the recording's own dispatch is reported completed or
    error (or, for one started by hand, a run of its mission that finished
    after it started)
    → stop_recording(keep=True)

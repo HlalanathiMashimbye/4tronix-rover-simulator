@@ -611,6 +611,19 @@
                     </label>
                     <div class="info-pop" id="tip-camready" role="tooltip">How long "Send to rover" waits for a real frame before refusing.</div>
 
+                    <div class="settings-divider"></div>
+                    <label class="sync-field num-field">
+                        <span class="sync-label">Keep filming after a run for
+                            <button class="info-tip" type="button" aria-expanded="false" aria-describedby="tip-rectail" aria-label="About filming after a run"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+                        </span>
+                        <span class="sync-input-row slider-row">
+                            <input type="range" id="tunRecordingTail" min="0" max="10" step="0.5" value="3"
+                                   aria-label="Keep filming after a run for, seconds">
+                            <output for="tunRecordingTail" id="tunRecordingTailVal" class="slider-val">3.0s</output>
+                        </span>
+                    </label>
+                    <div class="info-pop" id="tip-rectail" role="tooltip">How long the video keeps going after the rover finishes, so it shows the rover come to rest. Applies from the next run.</div>
+
                     <!-- What the card has to say about itself, and the only
                          thing here that was ever a Save button's job. Takes
                          no room until it has something to report. -->

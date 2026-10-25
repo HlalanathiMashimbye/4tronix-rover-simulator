@@ -11,6 +11,15 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **How long a video keeps filming after its run is a slider on Settings.**
+  The tail was a fixed three seconds in `mission_watcher.py`, chosen by
+  watching the real rover come to rest. A yard whose camera sees the rover
+  stop sooner or later had no way to change it without a code change. It is
+  now the `recordingTail` setting, 0 to 10 seconds in half seconds, on the
+  Camera card under "Keep filming after a run for", and the watcher reads it
+  on every pass, so a change applies from the next run. Three seconds stays
+  the default.
+
 - **The satellite's pages keep their scripts in files of their own.** The
   run station, Settings, the monitor, the code tablet and the shared nav bar
   each carried their JavaScript inline, 3,450 lines between them (Settings
