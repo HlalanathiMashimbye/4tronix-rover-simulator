@@ -98,8 +98,10 @@ behave identically against it, which is exactly why "switch to the simulator"
 is a button and not a separate mode.
 
 That claim is checked, not asserted: `yard/rover/test_driver_contract.py` runs
-one set of expectations against both drivers - wheel angles, motor state, and
-the 0-100 speed range. Matching method signatures is not substitutability; for
+one set of expectations against both drivers - wheel angles, motor state, the
+0-100 speed range, and the `rover` a learner's Python is given, which the
+driver owns (`learner_rover()`), so a program sent to the simulator drives the
+fake and not whatever hardware library happens to import. Matching method signatures is not substitutability; for
 most of the project the fake had the right signatures, printed its commands,
 and kept no state a test could compare. If you add a driver, add it to that
 fixture.
