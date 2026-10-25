@@ -356,8 +356,14 @@ def test_a_finished_run_is_filmed_for_three_seconds_more_then_stops(monkeypatch,
     real rover."""
     import youtube_upload
     monkeypatch.setattr(youtube_upload, 'tick', lambda: None)
-    recorder.start_recording('m1', YARD)
     clock = _Clock(30)
+    monkeypatch.setattr(mission_watcher.time, 'monotonic', clock.monotonic)
+    monkeypatch.setattr(mission_watcher.time, 'sleep', clock.sleep)
+    # Started on the simulated clock too. Started on the real one, the
+    # recording's age is the machine's uptime against 1000 simulated seconds:
+    # on a CI runner booted minutes ago it read as over the ten-minute cap and
+    # was stopped on the first pass, while on a laptop up for days it passed.
+    recorder.start_recording('m1', YARD)
 
     def rover_reply(*a, **k):
         # Running for the first 3.5 simulated seconds, then over.
@@ -365,8 +371,6 @@ def test_a_finished_run_is_filmed_for_three_seconds_more_then_stops(monkeypatch,
         return _Reply([{'status': status, 'params': {'mission_id': 'm1'}}])
 
     monkeypatch.setattr(mission_watcher.requests, 'get', rover_reply)
-    monkeypatch.setattr(mission_watcher.time, 'monotonic', clock.monotonic)
-    monkeypatch.setattr(mission_watcher.time, 'sleep', clock.sleep)
     stopped_at = {}
     real_stop = recorder.stop_recording
 
