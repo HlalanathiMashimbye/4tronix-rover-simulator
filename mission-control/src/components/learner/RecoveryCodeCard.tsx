@@ -15,7 +15,7 @@ interface Props {
 }
 
 export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
-  const { generateRecoveryCode } = useLearner();
+  const { generateRecoveryCode, markProfileSaved } = useLearner();
   const [recoveryCode, setRecoveryCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +196,10 @@ export function RecoveryCodeCard({ open, onClose, onSkip, onBack }: Props) {
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                if (recoveryCode) markProfileSaved();
+                onClose();
+              }}
               className="clay clay-press rounded-xl bg-gradient-mars px-6 py-2.5 text-sm font-bold text-primary-foreground"
             >
               Done
