@@ -2,29 +2,20 @@
  * Unit Tests: Learner Entity
  */
 
-import {
-  createAnonymousLearner,
-  isActiveLearner,
-} from '@/core/domain/entities/Learner';
+import { createAnonymousLearner } from '@/core/domain/entities/Learner';
 
 describe('Learner Entity', () => {
   describe('createAnonymousLearner', () => {
-    it('creates a learner with valid defaults', () => {
-      const sessionId = 'test-session-123';
-      const learner = createAnonymousLearner(sessionId);
+    it('uses the learner id as both the id and the session id', () => {
+      const learner = createAnonymousLearner('test-session-123');
 
-      expect(learner.id).toBe(sessionId);
-      expect(learner.sessionId).toBe(sessionId);
-      expect(learner.missionCount).toBe(0);
-      expect(learner.completedMissions).toBe(0);
-      expect(learner.devices).toHaveLength(1);
-      expect(learner.devices[0].sessionId).toBe(sessionId);
+      expect(learner.id).toBe('test-session-123');
+      expect(learner.sessionId).toBe('test-session-123');
     });
 
     it('assigns a random avatar color', () => {
       const learner = createAnonymousLearner('test-123');
 
-      expect(learner.avatarColor).toBeDefined();
       expect(learner.avatarColor).toMatch(/^#[0-9A-F]{6}$/i);
     });
 
@@ -40,104 +31,12 @@ describe('Learner Entity', () => {
       expect(learner.lastActiveAt).toBe(learner.createdAt);
     });
 
-    it('initializes device array with first device', () => {
-      const sessionId = 'test-123';
-      const learner = createAnonymousLearner(sessionId);
-
-      expect(learner.devices).toHaveLength(1);
-      expect(learner.devices[0]).toEqual({
-        sessionId,
-        firstSeenAt: learner.createdAt,
-        lastSeenAt: learner.createdAt,
-      });
-    });
-  });
-
-  describe('isActiveLearner', () => {
-    it('returns false for new learner with no missions', () => {
+    it('carries nothing that collects personal data', () => {
+      // Learners are anonymous by design: no name, no address on creation.
       const learner = createAnonymousLearner('test-123');
 
-      expect(isActiveLearner(learner)).toBe(false);
-    });
-
-    it('returns true for learner with missions', () => {
-      const learner = createAnonymousLearner('test-123');
-      learner.missionCount = 5;
-
-      expect(isActiveLearner(learner)).toBe(true);
-    });
-
-    it('returns true even with zero completions', () => {
-      const learner = createAnonymousLearner('test-123');
-      learner.missionCount = 1;
-      learner.completedMissions = 0;
-
-      expect(isActiveLearner(learner)).toBe(true);
-    });
-  });
-
-
-  describe('Learner statistics', () => {
-    it('calculates success rate correctly', () => {
-      const learner = createAnonymousLearner('test-123');
-      learner.missionCount = 10;
-      learner.completedMissions = 8;
-
-      const successRate = (learner.completedMissions / learner.missionCount) * 100;
-
-      expect(successRate).toBe(80);
-    });
-
-    it('handles zero missions for success rate', () => {
-      const learner = createAnonymousLearner('test-123');
-
-      const successRate =
-        learner.missionCount > 0
-          ? (learner.completedMissions / learner.missionCount) * 100
-          : 0;
-
-      expect(successRate).toBe(0);
-    });
-
-    it('handles perfect success rate', () => {
-      const learner = createAnonymousLearner('test-123');
-      learner.missionCount = 5;
-      learner.completedMissions = 5;
-
-      const successRate = (learner.completedMissions / learner.missionCount) * 100;
-
-      expect(successRate).toBe(100);
-    });
-  });
-
-  describe('Multi-device support', () => {
-    it('can track multiple devices', () => {
-      const learner = createAnonymousLearner('test-123');
-
-      learner.devices.push({
-        sessionId: 'device-2',
-        firstSeenAt: new Date().toISOString(),
-        lastSeenAt: new Date().toISOString(),
-      });
-
-      expect(learner.devices).toHaveLength(2);
-    });
-
-    it('maintains device history', () => {
-      const learner = createAnonymousLearner('test-123');
-      const device1Time = learner.devices[0].firstSeenAt;
-
-      // Simulate second device
-      const laterTime = new Date(Date.now() + 1000).toISOString();
-      learner.devices.push({
-        sessionId: 'device-2',
-        firstSeenAt: laterTime,
-        lastSeenAt: laterTime,
-      });
-
-      expect(new Date(learner.devices[1].firstSeenAt).getTime()).toBeGreaterThan(
-        new Date(device1Time).getTime()
-      );
+      expect(learner).not.toHaveProperty('displayName');
+      expect(learner).not.toHaveProperty('learnerEmail');
     });
   });
 });

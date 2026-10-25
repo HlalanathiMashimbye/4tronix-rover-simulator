@@ -193,6 +193,9 @@ def test_a_new_driver_inherits_the_speed_check_without_writing_it():
         def stop(self):
             pass
 
+        def learner_rover(self):
+            raise NotImplementedError
+
         def set_leds(self, pattern):
             pass
 
@@ -219,3 +222,91 @@ def test_the_queue_reports_a_refused_speed_rather_than_driving_it():
     assert instruction['status'] == 'error'
     assert 'Speed must be a number from 0 to 100' in instruction['error']
     assert driver.motion is None
+
+
+class TestTheLearnersRover:
+    """What a learner's program drives, the same on both drivers.
+
+    Learner Python gets the library's own API, not the driver's methods. On
+    the satellite's simulator it used to get the real hardware library,
+    because that was chosen by whether it would import, so the fake driver
+    never saw a learner's program at all.
+    """
+
+    def test_forward_drives_without_touching_the_wheels(self, rover):
+        # The library's semantics, which the browser simulator copies: a
+        # program that spun last leaves the wheels toed in until it says so.
+        driver, observe = rover
+        learner = driver.learner_rover()
+
+        learner.setServo(9, 50)
+        learner.forward(60)
+
+        wheels, motion = observe()
+        assert wheels[9] == 50
+        assert motion == ('forward', 60)
+
+    def test_set_servo_points_the_wheel_it_names(self, rover):
+        driver, observe = rover
+        learner = driver.learner_rover()
+
+        for servo in STRAIGHT:
+            learner.setServo(servo, 0)
+        learner.setServo(15, -20)
+
+        assert observe()[0] == {9: 0, 11: 0, 13: 0, 15: -20}
+
+    @pytest.mark.parametrize('command', ['forward', 'reverse', 'spinLeft', 'spinRight'])
+    def test_each_motion_reaches_the_motors(self, rover, command):
+        driver, observe = rover
+        getattr(driver.learner_rover(), command)(40)
+
+        assert observe()[1] == (command, 40)
+
+    def test_stop_halts_the_motors(self, rover):
+        driver, observe = rover
+        learner = driver.learner_rover()
+
+        learner.forward(60)
+        learner.stop()
+
+        assert observe()[1] is None
+
+    @pytest.mark.parametrize('speed', [500, -1, 101, '60', True])
+    def test_a_speed_held_in_a_variable_is_still_refused_before_anything_moves(self, rover, speed):
+        # No validator can read a speed in a variable, so the range is held
+        # here, at the last step before the motors.
+        driver, observe = rover
+        learner = driver.learner_rover()
+
+        with pytest.raises(ValueError):
+            learner.forward(speed)
+
+        assert observe()[1] is None
+
+
+def test_the_simulator_runs_a_learner_program_on_the_fake_driver():
+    """End to end through the queue: a program sent to the simulator moves the fake.
+
+    No rover_module is injected, so the service asks the driver, as it does
+    on the satellite.
+    """
+    driver = FakeRoverDriver()
+    service = RoverQueueService(driver)
+    seen = []
+    original = driver.learner_rover
+
+    def learner_rover():
+        learner = original()
+        seen.append(learner)
+        return learner
+
+    driver.learner_rover = learner_rover
+
+    service._execute_instruction({
+        'cmd': 'run_python',
+        'params': {'code': 'rover.setServo(9, 30)\nrover.forward(60)\n'},
+    })
+
+    assert len(seen) == 1
+    assert driver.wheels[9] == 30

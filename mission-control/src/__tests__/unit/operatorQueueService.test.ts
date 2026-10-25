@@ -30,6 +30,7 @@ import {
   subscribeToYardCompleted,
   QUEUE_LIMIT,
   DONE_LIMIT,
+  subscribeToMissionRuns,
 } from '@/infrastructure/persistence/operatorQueueService';
 
 function doc(id: string, data: Record<string, unknown>) {
@@ -294,5 +295,25 @@ describe('anonymity', () => {
     subscribeToYardQueue('curiosity', (m) => { got = m; }, () => {});
     emit([doc('m1', { status: 'queued', code: 'x', name: 'Rock Lover' })]);
     expect(got[0].name).toBe('Rock Lover');
+  });
+});
+
+describe("a mission's runs, live", () => {
+  it('leaves out a deleted run, as the server read does, so it cannot vanish here and return on refresh', () => {
+    const onRuns = jest.fn();
+    subscribeToMissionRuns('m1', onRuns, jest.fn());
+
+    emit([doc('run-a', { yardId: 'curiosity', status: 'completed' }), doc('run-b', { yardId: 'curiosity', status: 'completed', deleted: true })]);
+
+    expect(onRuns.mock.calls[0][0].map((r: { runId: string }) => r.runId)).toEqual(['run-a']);
+  });
+
+  it('names the yard from the document id for a run written before runs carried one', () => {
+    const onRuns = jest.fn();
+    subscribeToMissionRuns('m1', onRuns, jest.fn());
+
+    emit([doc('curiosity', { status: 'completed' })]);
+
+    expect(onRuns.mock.calls[0][0][0]).toMatchObject({ runId: 'curiosity', yardId: 'curiosity' });
   });
 });

@@ -1,6 +1,8 @@
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
+import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 import { isGeneratedMissionName } from '@/core/domain/services/missionNameGenerator';
+import { stillNeedsVideo } from '@/core/domain/services/missionBookkeeping';
 
 /**
  * Matching an uploaded video back to the mission it shows.
@@ -142,7 +144,7 @@ export function missionFromVideo(
 }
 
 export function watchUrl(videoId: string): string {
-  return `https://www.youtube.com/watch?v=${videoId}`;
+  return YouTubeVideoId.of(videoId).watchUrl();
 }
 
 /** What every run's video is called after its mission's name. */
@@ -176,9 +178,7 @@ export function missionVideoTitle(name: string | null | undefined): string {
  * it, so the learner's player and the operator still read links the same way.
  */
 export function getYouTubeId(url: string | undefined | null): string | null {
-  if (!url) return null;
-  const match = url.match(/^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/);
-  return match && match[2].length === 11 ? match[2] : null;
+  return YouTubeVideoId.fromUrl(url)?.value ?? null;
 }
 
 /**
@@ -225,7 +225,7 @@ export function claimedMissions(videos: ChannelVideo[]): ClaimedVideo[] {
  */
 export function runToLink(runs: MissionRun[]): MissionRun | null {
   const candidates = runs
-    .filter((run) => run.status === 'completed' && !run.youtubeUrl)
+    .filter(stillNeedsVideo)
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
 
   return candidates[0] ?? null;

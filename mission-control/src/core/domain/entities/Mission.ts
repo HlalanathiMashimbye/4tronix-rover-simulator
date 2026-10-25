@@ -54,7 +54,6 @@ export interface Mission {
   // already know. The real address lives on the learner record.
   // See core/domain/services/learnerEmailHash.ts
   learnerEmailHash?: string;
-  learnerUid?: string;               // Optional - for when auth is added in future iterations
 
   // Payload
   name?: string;                     // Optional - mission name given by learner
@@ -81,16 +80,11 @@ export interface Mission {
   executionResult?: ExecutionResult;
   executionMetadata?: ExecutionMetadata;
 
-  //Locking (offline-sync lease mechanisms)
-  lockOwner?: string | null;                 // Which rover is currently executing this mission (if any)
-  lockedAt?: string | null;                   // When the mission was locked for execution (if any)
-  leaseExpiresAt?: string | null;             // When the lock lease expires (if any)
-
-  //Review
+  // Review
   needsReview?: boolean;              // Whether the mission needs review (e.g., for failed missions)
   reviewReason?: string | null;              // Optional - reason for review (e.g., "syntax error", "failed test case")
 
-  //Confilct Resolution
+  // Conflict resolution
   statusUpdatedAt?: string | null;          // When the status was last updated (for conflict resolution)
 
   // Media artifacts
@@ -101,18 +95,4 @@ export interface Mission {
   submittedAt: string;               // When mission was submitted
   startedAt?: string;                // When execution began
   completedAt?: string;              // When execution finished
-}
-
-/**
- * Type guard to check if a mission is in an active state
- */
-export function isActiveMission(mission: Mission): boolean {
-  return mission.status === 'queued' || mission.status === 'processing';
-}
-
-/**
- * Type guard to check if a mission is terminal (no further state changes)
- */
-export function isTerminalMission(mission: Mission): boolean {
-  return mission.status === 'completed' || mission.status === 'failed' || mission.status === 'not_completed' || mission.status === 'cancelled';
 }

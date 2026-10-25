@@ -23,6 +23,7 @@ import { ResendEmailSender } from '@/infrastructure/email/resend-client';
 import { buildAccessRequestEmail } from '@/infrastructure/email/accessRequestTemplate';
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { isOperatorRole } from '@/core/domain/entities/OperatorAccount';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const db = getFirestoreInstance();
-    const ref = db.collection('operatorAccessRequests').doc(decoded.uid);
+    const ref = db.collection(COLLECTIONS.operatorAccessRequests).doc(decoded.uid);
     const previous = await ref.get();
     const lastAt = previous.exists ? Date.parse(previous.data()?.requestedAt ?? '') : NaN;
     if (!Number.isNaN(lastAt) && Date.now() - lastAt < ONE_HOUR_MS) {

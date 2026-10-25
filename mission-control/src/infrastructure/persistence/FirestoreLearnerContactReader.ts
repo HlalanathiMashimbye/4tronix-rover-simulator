@@ -15,8 +15,9 @@ import {
   LEARNER_PRIVATE_COLLECTION,
   LEARNER_CONTACT_DOC,
 } from '@/core/domain/services/learnerContact';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
-const LEARNERS_COLLECTION = 'learners';
+const LEARNERS_COLLECTION = COLLECTIONS.learners;
 
 export class FirestoreLearnerContactReader implements ILearnerContactReader {
   constructor(private readonly firestore: Firestore) {}

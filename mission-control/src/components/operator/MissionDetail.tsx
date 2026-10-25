@@ -1,15 +1,15 @@
 'use client';
 
-import { ArrowDown, ArrowLeft, MapPin, Video } from 'lucide-react';
+import { ArrowDown, ArrowLeft, Video } from 'lucide-react';
 
 import { MissionActions } from '@/components/operator/MissionActions';
 import { AutomaticDispatch } from '@/components/operator/AutomaticDispatch';
 import { MissionRuns } from '@/components/operator/MissionRuns';
 import { useMemo, useRef, useState } from 'react';
 import { MissionPreview } from '@/components/operator/MissionPreview';
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 import type { ConsoleMode } from '@/core/domain/services/consoleMode';
-import { yardLabelOf, findYardIn, type Yard } from '@/core/domain/entities/Yard';
+import type { Yard } from '@/core/domain/entities/Yard';
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
 import { findCrash } from '@/core/domain/safety/crashCheck';
 import { useYardLayout } from '@/hooks/useYardLayout';

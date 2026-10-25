@@ -6,6 +6,7 @@ import {
   sortAccounts,
   type OperatorAccount,
 } from '@/core/domain/entities/OperatorAccount';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 /**
  * Everyone holding operator access, read from Firebase Auth.
@@ -51,7 +52,7 @@ export async function listOperatorAccounts(): Promise<OperatorAccount[]> {
   await Promise.all(
     accounts.map(async (account) => {
       try {
-        const doc = await db.collection('users').doc(account.uid).get();
+        const doc = await db.collection(COLLECTIONS.users).doc(account.uid).get();
         if (doc.exists) {
           account.grantedAt = doc.data()?.grantedAt ?? null;
           account.grantedBy = doc.data()?.grantedBy ?? null;

@@ -19,7 +19,7 @@ from typing import Optional, Callable
 
 from drivers import RoverDriver
 from mission_validator import validate_mission_code
-from python_runner import StudentCodeRunner, import_rover_module
+from python_runner import StudentCodeRunner
 
 logger = logging.getLogger(__name__)
 
@@ -331,11 +331,12 @@ class RoverQueueService(RoverQueuePort):
 
             elif cmd == 'run_python':
                 # `is not None`, not `or`: an injected test double may be
-                # falsy, and falling through to the real import would then
-                # quietly drive whatever hardware is attached.
+                # falsy. Otherwise the driver says what the program drives, so
+                # the simulator's learner programs go to the fake, not to
+                # whatever hardware library happens to import.
                 rover_module = (
                     self._rover_module if self._rover_module is not None
-                    else import_rover_module()
+                    else self.driver.learner_rover()
                 )
                 runner = StudentCodeRunner(
                     interruptible_wait=self._interruptible_wait,

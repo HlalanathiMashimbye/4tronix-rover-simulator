@@ -107,10 +107,18 @@ Controller, and `core/domain` is the Model.
 Paths in this section are relative to `mission-control/src`.
 
 - **`core/domain/entities`** - `Mission`, `MissionRun`, `Learner`,
-  `OperatorAccount`, `Yard`. Interfaces plus pure functions rather than
-  classes with behaviour. `missionBookkeeping.ts` in `core/domain/services` is
-  the pattern worth copying: pure decision functions returning a typed result,
-  fully testable with no Firestore anywhere near them.
+  `OperatorAccount`, `Yard` are plain records, because they cross Firestore
+  and the server-to-browser boundary and neither carries a class. Their
+  behaviour lives on two value objects. `MissionState` answers what a status
+  means (open or settled, what a learner sees, what an operator may do next),
+  and the operator console and the server's bookkeeping both ask it, so the
+  console never offers an action the server refuses. `YouTubeVideoId` is the
+  one reading of a pasted link and the one builder of watch and thumbnail
+  addresses. A mission's status changes only through `IMissionBookkeeping`:
+  there is no free-form update that could set any field to anything.
+  `missionBookkeeping.ts` in `core/domain/services` turns an operator's request
+  into a typed decision using `MissionState`, fully testable with no Firestore
+  anywhere near it.
 - **`core/domain/safety`** - the allowlist, the code checker, the duration
   calculator, the speed and time ceilings. These were under `infrastructure`
   and `lib`. They touch no database, network or framework: they are the rules
@@ -147,13 +155,20 @@ passed throughout the period when the arrows were backwards. The iteration 2
 marksheet scored separation of concerns 2.2/4 on a codebase with a completely
 green build.
 
-### Two Firestore SDKs, one repository class
+### Two Firestore SDKs, one set of reading rules
 
-`FirestoreMissionRepository` accepts either the Admin SDK or the browser SDK.
-That is deliberate, so the same query logic serves a privileged server write
-and an unprivileged browser read, and it is exactly why choosing between them
-happens in one place. Realtime subscriptions (`onSnapshot`) run browser-side
-against Firestore rules; anything privileged goes through an API route.
+`FirestoreMissionReader` holds the rules of reading a mission (deleted reads
+as absent, pages by cursor, one extra document to learn whether there is a
+next page) and asks a subclass for four fetches.
+`AdminFirestoreMissionRepository` supplies them on the Admin SDK and adds the
+writes; `BrowserFirestoreMissionReader` supplies them on the browser SDK, where
+Firestore rules apply, and adds only the email stamp those rules allow. It used
+to be one class holding either SDK and asking which in every method, so each
+read was written twice and the browser's half had no test.
+`missionReaderContract.test.ts` now runs both against one dataset. Realtime
+subscriptions (`onSnapshot`) run browser-side against Firestore rules and reach
+components through `container.browser.ts`; anything privileged goes through
+an API route.
 
 ### The operator console
 
@@ -218,10 +233,12 @@ program and managing a queue change for entirely different reasons.
 
 ### The satellite
 
-The satellite is the yard's control panel, and it is deliberately small. It
-holds no cloud credential, talks to nothing beyond the rover and the camera on
-the LAN, and asks nobody to sign in: an auth gate that only works when the
-venue wifi does protects nothing on a box whose job is to run without it.
+The satellite is the yard's control panel, and it is deliberately small. A
+run talks to nothing beyond the rover and the camera on the LAN, and nobody
+signs in: an auth gate that only works when the venue wifi does protects
+nothing on a box whose job is to run without it. The one credential it can
+hold is the optional upload secret, which sends a finished recording outbound
+to Mission Control after the run, never during it.
 
 | Path | For |
 |---|---|

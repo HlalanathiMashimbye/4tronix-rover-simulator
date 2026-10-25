@@ -18,7 +18,7 @@
  * year or two of ordinary use rather than a fantasy.
  */
 
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
 
 type Row = { id: string; data: Record<string, unknown> };
 
@@ -85,7 +85,7 @@ describe(`the feed at ${SCALE} missions`, () => {
 
   it('walks every mission exactly once, with no gaps and no repeats', async () => {
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     const seen: string[] = [];
     let cursor = undefined;
@@ -107,7 +107,7 @@ describe(`the feed at ${SCALE} missions`, () => {
     // The property that makes the feed survive growth. Constant reads per page
     // means the thousandth mission is as cheap to reach as the first.
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     const firstPage = await repo.findRecent(PAGE);
     const readsForFirst = db.meter.docsRead;
@@ -129,7 +129,7 @@ describe(`the feed at ${SCALE} missions`, () => {
 
   it('reads only what it shows, rather than the whole collection', async () => {
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     await repo.findRecent(PAGE);
 
@@ -144,7 +144,7 @@ describe(`the feed at ${SCALE} missions`, () => {
     // Firestore bills documents an OFFSET skips. Paging to the end of 2000
     // missions with offsets would cost the sum of every page before it.
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     let cursor = undefined;
     do {
@@ -177,7 +177,7 @@ describe('finding a mission that is not on the first page', () => {
   /** What the page's "Search older missions" walk does, in miniature. */
   async function walkUntilFound(target: string) {
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     let pool = (await repo.findRecent(PAGE)).missions;
     let cursor = (await repo.findRecent(PAGE)).nextCursor ?? undefined;
@@ -197,7 +197,7 @@ describe('finding a mission that is not on the first page', () => {
 
   it('does not find it in the first page alone, which is why the walk exists', async () => {
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     const first = await repo.findRecent(PAGE);
 

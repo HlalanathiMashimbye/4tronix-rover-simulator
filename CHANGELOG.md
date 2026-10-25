@@ -11,6 +11,49 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **The simulator runs a learner's program on the fake rover.** Learner
+  Python was given whichever `rover` library would import, so on the
+  satellite's simulator, a Pi where the hardware library imports, programs
+  went to the real library and the fake driver never saw them: "the same
+  server with one object swapped" was not true for the one thing learners
+  send. Each driver now hands out the learner's `rover` (`learner_rover()`):
+  the real one gives the same hardware library as before, the fake one keeps
+  the calls as its own state. Both hold motion speeds to 0-100, so a speed in
+  a variable, which no validator can read, is refused before a motor sees it.
+  The old import fallback to `legacy/simulator/roversimulator.py`, which
+  needed a web simulator nobody runs, is gone. Needs one run on the real rover
+  to confirm, though in-range calls reach the library unchanged.
+
+- **What a status means is decided once.** The operator card treated only
+  completed and cancelled as settled, while the server treated failed and
+  not_completed as settled too, so a run that did not finish offered Mark
+  complete and Cancel, which the server always refused, and hid the note box
+  on the run whose learner most needs a note. `MissionState` now answers it
+  for both, and architecture.test.ts fails if a status rule is written out at
+  a call site again. `YouTubeVideoId` does the same for video links: the card
+  had its own parser that disagreed with the operator's, and drew broken
+  thumbnails for links that could never be attached.
+
+- **The View no longer talks to Firestore.** Ten components and hooks
+  imported Firestore modules directly, and the learner context read and wrote
+  its record itself. They go through `container.browser.ts` now, behind ports
+  in core (`ILearnerRepository`, the live feeds in `IMissionFeeds`), with a
+  rule in architecture.test.ts. The mission repository is split by SDK: one
+  reader base class, an Admin subclass for the server and a browser subclass,
+  where it used to ask which SDK it held in every method. A contract test runs
+  both against one dataset, so the browser's reads have a test for the first
+  time. The operator team route is a controller over `OperatorTeamService`
+  instead of 250 lines of Firebase calls.
+
+- **Dead code removed.** The idempotency feature that
+  `IMPLEMENTATION_SUMMARY.md` advertised had no production caller, nor did
+  `upsertRun`, the free-form `MissionService.updateMission`, the update
+  schema, the mission lock fields, the learner counters and device list
+  (never written after creation), or the satellite's `satellite_id()`. The
+  seven `it.todo` stubs, both implementation summaries and the five stale
+  plans in `docs/plans/` went with them. Collection names live in one module,
+  and the badge colours moved out of `core/domain`.
+
 - **A satellite that uploads keeps a clean `git status`.** Each video's
   upload note (`<name>.mp4.upload.json`) was not ignored, so after its first
   automatic upload on 24 October the Pi showed untracked files, and an empty

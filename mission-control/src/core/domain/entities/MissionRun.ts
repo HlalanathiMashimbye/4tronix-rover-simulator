@@ -27,6 +27,7 @@
  */
 
 import type { MissionStatus } from './Mission';
+import { MissionState } from './MissionState';
 
 export interface AutomaticUploadStatusView {
   missionId: string;
@@ -114,7 +115,7 @@ export function watchableRuns(runs: MissionRun[]): MissionRun[] {
  * and it stays true however many yards attempted it.
  */
 export function isCompletedAnywhere(runs: MissionRun[]): boolean {
-  return runs.some((r) => r.status === 'completed');
+  return runs.some((r) => MissionState.of(r.status).isCompleted());
 }
 
 /**

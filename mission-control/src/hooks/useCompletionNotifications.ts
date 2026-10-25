@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Mission } from '@/core/domain/entities/Mission';
-import { subscribeRecentCompletions } from '@/infrastructure/persistence/missionQueryService';
+import { learnerMissionFeed } from '@/infrastructure/container.browser';
 
 const SEEN_KEY = 'mars-rover-notifications-seen';
 const DISMISSED_KEY = 'mars-rover-notifications-dismissed';
@@ -96,7 +96,7 @@ export function useCompletionNotifications() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = subscribeRecentCompletions(setCompletions);
+    const unsubscribe = learnerMissionFeed().subscribeRecentCompletions(setCompletions);
     return () => unsubscribe();
   }, []);
 

@@ -27,6 +27,7 @@
 
 import type { Crash } from '@/core/domain/safety/crashCheck';
 import type { MissionStatus } from '@/core/domain/entities/Mission';
+import { MissionState } from '@/core/domain/entities/MissionState';
 
 export type FeedbackOutcome = 'success' | 'crash' | 'stopped';
 
@@ -86,7 +87,7 @@ export function fillFeedbackMessage(template: string, crash: Pick<Crash, 'into'>
  */
 export function suggestFeedbackOutcome(status: MissionStatus, crash: Pick<Crash, 'into'> | null): FeedbackOutcome {
   if (crash) return 'crash';
-  if (status === 'failed' || status === 'not_completed' || status === 'cancelled') return 'stopped';
+  if (MissionState.of(status).stoppedShort()) return 'stopped';
   return 'success';
 }
 

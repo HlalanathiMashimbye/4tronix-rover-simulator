@@ -19,6 +19,7 @@
  */
 
 import type { MissionStatus } from '../entities/Mission';
+import { MissionState } from '../entities/MissionState';
 
 export type ResolveOutcome = 'completed' | 'requeue';
 
@@ -41,15 +42,8 @@ export type ResolveOutcome = 'completed' | 'requeue';
 export function stillNeedsVideo(
   mission: { status: MissionStatus; youtubeUrl?: string | null },
 ): boolean {
-  return mission.status === 'completed' && !mission.youtubeUrl;
+  return MissionState.of(mission.status).canAttachVideo() && !mission.youtubeUrl;
 }
-
-/**
- * Statuses an operator may still act on. A mission that already settled is not
- * work waiting for anyone, and re-completing it would move timestamps around
- * for no reason.
- */
-const OPEN_STATUSES: readonly MissionStatus[] = ['queued', 'processing'];
 
 export interface RunSnapshot {
   /**
@@ -88,13 +82,14 @@ export function effectiveStatus(snapshot: RunSnapshot): MissionStatus {
   return snapshot.runStatus ?? snapshot.missionStatus;
 }
 
-function isOpen(snapshot: RunSnapshot): boolean {
-  return OPEN_STATUSES.includes(effectiveStatus(snapshot));
+/** What the status an operator is acting on allows. The rules live on MissionState. */
+function stateOf(snapshot: RunSnapshot): MissionState {
+  return MissionState.of(effectiveStatus(snapshot));
 }
 
 /** The operator checked, and the run finished. */
 export function decideComplete(snapshot: RunSnapshot): Decision {
-  if (!isOpen(snapshot)) {
+  if (!stateOf(snapshot).canComplete()) {
     return {
       ok: false,
       error: `This mission is already ${effectiveStatus(snapshot)}, so there is nothing to complete.`,
@@ -121,7 +116,7 @@ export function decideComplete(snapshot: RunSnapshot): Decision {
  * operator can read it.
  */
 export function decideCancel(snapshot: RunSnapshot): Decision {
-  if (!isOpen(snapshot)) {
+  if (!stateOf(snapshot).canCancel()) {
     return {
       ok: false,
       error: `This mission is already ${effectiveStatus(snapshot)}, so there is nothing to cancel.`,
@@ -155,7 +150,7 @@ export function decideCancel(snapshot: RunSnapshot): Decision {
  * finish. A run that did not finish produces no video and needs no record.
  */
 export function decideAnotherRun(snapshot: RunSnapshot): Decision {
-  if (isOpen(snapshot)) {
+  if (!stateOf(snapshot).canLogAnotherRun()) {
     return {
       ok: false,
       error: `This mission is still ${effectiveStatus(snapshot)}. Settle the current run before logging another.`,
@@ -174,7 +169,7 @@ export function decideAnotherRun(snapshot: RunSnapshot): Decision {
  * Pending.
  */
 export function decideAttachVideo(snapshot: RunSnapshot): Decision {
-  if (effectiveStatus(snapshot) !== 'completed') {
+  if (!stateOf(snapshot).canAttachVideo()) {
     return {
       ok: false,
       error: 'Mark the mission complete before attaching its video.',
@@ -197,7 +192,7 @@ export function decideAttachVideo(snapshot: RunSnapshot): Decision {
  * first place.
  */
 export function decideRemoveVideo(snapshot: RunSnapshot): Decision {
-  if (isOpen(snapshot)) {
+  if (!stateOf(snapshot).canRemoveVideo()) {
     return {
       ok: false,
       error: 'This run has not finished, so it has no video to remove.',
@@ -222,8 +217,7 @@ export function decideRemoveVideo(snapshot: RunSnapshot): Decision {
  * too small, try 90 degrees" can reach them at all.
  */
 export function decideFeedback(snapshot: RunSnapshot): Decision {
-  const status = effectiveStatus(snapshot);
-  if (status !== 'completed' && status !== 'failed' && status !== 'not_completed') {
+  if (!stateOf(snapshot).canTakeFeedback()) {
     return {
       ok: false,
       error: 'Wait until the mission has run before leaving feedback on it.',

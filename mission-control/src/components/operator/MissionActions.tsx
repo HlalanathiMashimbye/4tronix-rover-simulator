@@ -8,7 +8,8 @@ import {
   isHandledAutomatically,
   type ConsoleMode,
 } from '@/core/domain/services/consoleMode';
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
+import { MissionState } from '@/core/domain/entities/MissionState';
 import type { Crash } from '@/core/domain/safety/crashCheck';
 import { FeedbackBank } from './FeedbackBank';
 
@@ -65,7 +66,9 @@ export function MissionActions({
   const [confirmingComplete, setConfirmingComplete] = useState(false);
   const completeIsOverride = isHandledAutomatically('complete', mode);
 
-  const settled = mission.status === 'completed' || mission.status === 'cancelled';
+  // The same rules the server's bookkeeping enforces, so nothing offered here
+  // is refused there.
+  const state = MissionState.of(mission.status);
 
   async function run(action: Action, key: string, body: Record<string, unknown> = {}) {
     setPending(key);
@@ -153,26 +156,26 @@ export function MissionActions({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {!settled && (
-          <>
-            <ActionButton
-              icon={<Check className="h-3.5 w-3.5" />}
-              label="Mark complete"
-              success
-              busy={pending === 'complete'}
-              disabled={confirmingComplete}
-              title={completeIsOverride ? automatedReason('complete') : undefined}
-              onClick={() =>
-                completeIsOverride ? setConfirmingComplete(true) : run('complete', 'complete')
-              }
-            />
-            <ActionButton
-              icon={<X className="h-3.5 w-3.5" />}
-              label="Cancel"
-              busy={pending === 'cancel'}
-              onClick={() => run('cancel', 'cancel')}
-            />
-          </>
+        {state.canComplete() && (
+          <ActionButton
+            icon={<Check className="h-3.5 w-3.5" />}
+            label="Mark complete"
+            success
+            busy={pending === 'complete'}
+            disabled={confirmingComplete}
+            title={completeIsOverride ? automatedReason('complete') : undefined}
+            onClick={() =>
+              completeIsOverride ? setConfirmingComplete(true) : run('complete', 'complete')
+            }
+          />
+        )}
+        {state.canCancel() && (
+          <ActionButton
+            icon={<X className="h-3.5 w-3.5" />}
+            label="Cancel"
+            busy={pending === 'cancel'}
+            onClick={() => run('cancel', 'cancel')}
+          />
         )}
 
         {isAdmin && (
@@ -197,7 +200,7 @@ export function MissionActions({
         )}
       </div>
 
-      {confirmingComplete && !settled && (
+      {confirmingComplete && state.canComplete() && (
         <div role="alert" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
           <p className="text-xs font-semibold text-foreground">Mark it complete yourself?</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -220,14 +223,14 @@ export function MissionActions({
       {/* Cancel is bookkeeping, and saying so is the whole reason it is safe to
           offer on a running mission. An operator who thinks this stops a rover
           would use it as an emergency control, and it is not one. */}
-      {!settled && (
+      {(state.canComplete() || state.canCancel()) && (
         <p className="text-[11px] text-muted-foreground">
           Mark complete and Cancel only change the record. Neither stops the rover,
           so use the yard&apos;s own stop button if it is still moving.
         </p>
       )}
 
-      {settled && (
+      {state.canTakeFeedback() && (
         <div className="rounded-xl border border-border/60 bg-background/40 p-2.5">
           <label
             htmlFor={`feedback-${mission.id}`}

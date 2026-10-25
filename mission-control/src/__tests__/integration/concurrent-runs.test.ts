@@ -1,14 +1,9 @@
 /**
- * Concurrency and Idempotency Integration Tests (Tasks 47-53)
+ * Two operators, one mission: each run is its own record.
  *
- * Tests the complete flow for:
- * - Duplicate request idempotency (Task 48: double-click protection)
- * - Same rover FIFO behavior (Task 49)
- * - Different rovers parallel execution (Task 50)
- * - Per-run isolation (Task 51-53)
- *
- * Uses in-memory mock of the repository to simulate Firestore behavior
- * without requiring real Firebase credentials.
+ * Runs at the same yard and at different yards must never complete, cancel or
+ * take the video of each other. Uses an in-memory repository, so no Firebase
+ * credentials are needed.
  */
 
 import type { MissionRun } from '@/core/domain/entities/MissionRun';
@@ -18,7 +13,6 @@ import type {
   IMissionBookkeeping,
 } from '@/core/domain/repositories/IMissionRepository';
 import { OperatorMissionCommands, type Operator } from '@/core/application/services/OperatorMissionCommands';
-import { generateIdempotencyKey, IDEMPOTENCY_WINDOW_SECONDS } from '@/core/domain/services/idempotencyKey';
 
 const HERE = 'curiosity';
 const DURBAN = 'durban';
@@ -50,24 +44,13 @@ function run(runId: string, yardId: string = HERE, overrides: Partial<MissionRun
   };
 }
 
-interface InMemoryRepository extends IMissionReader, IMissionBookkeeping {
-  // For testing: raw access to stored data
-  _idempotencyKeys: Map<string, Map<string, { runId: string; expiresAt: string }>>;
-  _runs: Map<string, MissionRun[]>;
-}
-
 function setUp(foundMission: Mission | null = null, initialRuns: MissionRun[] = []) {
-  const idempotencyKeys: Map<string, Map<string, { runId: string; expiresAt: string }>> = new Map();
-  idempotencyKeys.set('mission-1', new Map()); // Initialize mission-1's idempotency key map
   const runs = new Map<string, MissionRun[]>([['mission-1', [...initialRuns]]]);
   const bookkeepingWrites: Array<[string, string, string, unknown]> = [];
 
   let nextRunId = 0;
 
-  const repository: InMemoryRepository = {
-    _idempotencyKeys: idempotencyKeys,
-    _runs: runs,
-
+  const repository: IMissionReader & IMissionBookkeeping = {
     // Reader methods
     findById: async () => foundMission,
     findByIdPrefix: async () => [],
@@ -75,43 +58,12 @@ function setUp(foundMission: Mission | null = null, initialRuns: MissionRun[] = 
     findRuns: async (missionId) => runs.get(missionId) ?? [],
 
     // Bookkeeping methods
-    upsertRun: async (missionId, newRun) => {
-      const current = runs.get(missionId) ?? [];
-      const idx = current.findIndex((r) => r.runId === newRun.runId);
-      if (idx >= 0) {
-        current[idx] = newRun;
-      } else {
-        current.push(newRun);
-      }
-      runs.set(missionId, current);
-    },
-
     applyBookkeeping: async (missionId, runId, yardId, change) => {
       bookkeepingWrites.push([missionId, runId, yardId, change]);
     },
 
     softDeleteRun: async () => {},
     softDeleteMission: async () => {},
-
-    // Idempotency methods
-    checkIdempotency: async (missionId, idempotencyKey) => {
-      if (!idempotencyKeys.has(missionId)) {
-        return null;
-      }
-      const keys = idempotencyKeys.get(missionId)!;
-      const entry = keys.get(idempotencyKey);
-      if (!entry) return null;
-      const expiresAt = new Date(entry.expiresAt);
-      if (expiresAt < new Date()) return null;
-      return entry.runId;
-    },
-
-    recordIdempotencyKey: async (missionId, idempotencyKey, runId, expiresAt) => {
-      if (!idempotencyKeys.has(missionId)) {
-        idempotencyKeys.set(missionId, new Map());
-      }
-      idempotencyKeys.get(missionId)!.set(idempotencyKey, { runId, expiresAt });
-    },
   };
 
   const commands = new OperatorMissionCommands(
@@ -126,53 +78,7 @@ function setUp(foundMission: Mission | null = null, initialRuns: MissionRun[] = 
   return { commands, repository, bookkeepingWrites };
 }
 
-describe('Concurrency and Idempotency Integration', () => {
-  describe('Test 1: Double-click / Duplicate Request Idempotency', () => {
-    it('two requests with the same key within the window generate the same key', () => {
-      const time1 = NOW;
-      const time2 = new Date(NOW.getTime() + 2000); // 2 seconds later, same bucket
-
-      const key1 = generateIdempotencyKey('mission-1', HERE, OPERATOR_A.name, time1);
-      const key2 = generateIdempotencyKey('mission-1', HERE, OPERATOR_A.name, time2);
-
-      // Both requests should generate the same key
-      expect(key1).toBe(key2);
-    });
-
-    it('two requests with different time buckets generate different keys', () => {
-      const time1 = NOW;
-      const time2 = new Date(NOW.getTime() + IDEMPOTENCY_WINDOW_SECONDS * 1000 + 2000); // Outside window
-
-      const key1 = generateIdempotencyKey('mission-1', HERE, OPERATOR_A.name, time1);
-      const key2 = generateIdempotencyKey('mission-1', HERE, OPERATOR_A.name, time2);
-
-      // Keys should be different
-      expect(key1).not.toBe(key2);
-    });
-
-    it('recordIdempotencyKey stores and retrieves keys in the repository', async () => {
-      const { repository } = setUp(mission());
-
-      const key = generateIdempotencyKey('mission-1', HERE, OPERATOR_A.name, NOW);
-      const runId = 'run-1';
-
-      // Before recording, no entry exists
-      const keyMap1 = repository._idempotencyKeys.get('mission-1');
-      expect(keyMap1?.get(key)).toBeUndefined();
-
-      // Record the key with a far-future expiration
-      const farFuture = new Date(NOW.getTime() + 24 * 60 * 60 * 1000).toISOString();
-      await repository.recordIdempotencyKey('mission-1', key, runId, farFuture);
-
-      // After recording, the entry exists in the repository
-      const keyMap2 = repository._idempotencyKeys.get('mission-1');
-      const entry = keyMap2?.get(key);
-      expect(entry).toBeDefined();
-      expect(entry?.runId).toBe(runId);
-      expect(entry?.expiresAt).toBe(farFuture);
-    });
-  });
-
+describe('Concurrent runs of one mission', () => {
   describe('Test 2: Two operators, same rover - FIFO and isolation', () => {
     it('another-run always creates a new run, never reusing an old one', async () => {
       const { commands } = setUp(mission({ status: 'completed' }), [
@@ -273,7 +179,7 @@ describe('Concurrency and Idempotency Integration', () => {
 
   describe('Test 4: Intentional rerun creates new run', () => {
     it('another-run always generates a fresh runId', async () => {
-      const { commands, repository } = setUp(mission({ status: 'completed' }), [
+      const { commands } = setUp(mission({ status: 'completed' }), [
         run('run-1', HERE, { status: 'completed' }),
       ]);
 

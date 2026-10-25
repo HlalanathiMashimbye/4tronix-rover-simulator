@@ -17,6 +17,7 @@ import type { TrajectoryPoint } from '@/lib/simulateCommands';
 import type { CommandSource } from '@/lib/roverBlockly';
 import { RoverSimulator } from '@/components/mission/RoverSimulator';
 import { YouTubeEmbed } from '@/components/mission/YouTubeEmbed';
+import { YouTubeVideoId } from '@/core/domain/entities/YouTubeVideoId';
 import { readStoredSound, serverSoundSnapshot, setMuted, subscribeToSound } from '@/hooks/soundPreference';
 
 /**
@@ -399,7 +400,7 @@ function RoverRunTile({
           </IconButton>
           {run.youtubeId && (
             <a
-              href={`https://www.youtube.com/watch?v=${run.youtubeId}`}
+              href={YouTubeVideoId.of(run.youtubeId).watchUrl()}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open this video on YouTube"

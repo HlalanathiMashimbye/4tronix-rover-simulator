@@ -107,16 +107,4 @@ export class MissionService {
     return this.missionRepository.findById(id);
   }
 
-
-  /**
-   * Update mission status and results
-   * Used by execution agent and operator console
-   *
-   * @param id - Mission ID
-   * @param updates - Fields to update
-   * @returns Updated mission or null if not found
-   */
-  async updateMission(id: string, updates: Partial<Mission>): Promise<Mission | null> {
-    return this.missionRepository.update(id, updates);
-  }
 }
