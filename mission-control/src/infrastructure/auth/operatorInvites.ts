@@ -8,6 +8,7 @@ import {
   type OperatorInvite,
   type OperatorRole,
 } from '@/core/domain/entities/OperatorAccount';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 /**
  * Access waiting for someone's first sign-in. See OperatorInvite for why.
@@ -18,7 +19,7 @@ import {
  * denies whatever is not matched, so no browser can read who is about to be
  * given access or write itself an invite.
  */
-const COLLECTION = 'operatorInvites';
+const COLLECTION = COLLECTIONS.operatorInvites;
 
 export async function listInvites(): Promise<OperatorInvite[]> {
   const snapshot = await getFirestoreInstance().collection(COLLECTION).get();
@@ -80,7 +81,7 @@ export async function claimInvite(uid: string, email: string): Promise<OperatorR
 
   // The same ledger the team page writes, so an account that arrived by
   // invite reads "granted by" whoever invited it, like any other.
-  await db.collection('users').doc(uid).set(
+  await db.collection(COLLECTIONS.users).doc(uid).set(
     {
       role,
       email: inviteKey(email),

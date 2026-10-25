@@ -5,7 +5,7 @@ import { AlertTriangle, Check, Lock, Mail, MapPin } from 'lucide-react';
 
 import type { User } from 'firebase/auth';
 
-import { getFirebaseAuth } from '@/infrastructure/persistence/firebase-client';
+import { browserAuth } from '@/infrastructure/container.browser';
 import { selectableYards, type Yard } from '@/core/domain/entities/Yard';
 
 /**
@@ -63,7 +63,7 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
    * provider proved the identity.
    */
   async function startSession(user: User) {
-    const auth = getFirebaseAuth();
+    const auth = browserAuth();
 
     const exchange = async () => {
       // Force-refresh so the token carries the CURRENT custom claims. Without
@@ -132,7 +132,7 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
     setNoAccess(null);
     setRequest('idle');
     setRequestError(null);
-    getFirebaseAuth().signOut().catch(() => {});
+    browserAuth().signOut().catch(() => {});
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -142,7 +142,7 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
 
     try {
       const { signInWithEmailAndPassword } = await import('firebase/auth');
-      const credential = await signInWithEmailAndPassword(getFirebaseAuth(), email, password);
+      const credential = await signInWithEmailAndPassword(browserAuth(), email, password);
       await startSession(credential.user);
     } catch (err) {
       setError(messageFor(err));
@@ -162,7 +162,7 @@ export function OperatorSignIn({ yards, next }: { yards: Yard[]; next?: string }
       // using it would sign the wrong person in, or refuse them for no
       // reason they can see.
       provider.setCustomParameters({ prompt: 'select_account' });
-      const credential = await signInWithPopup(getFirebaseAuth(), provider);
+      const credential = await signInWithPopup(browserAuth(), provider);
       await startSession(credential.user);
     } catch (err) {
       if (err instanceof NoAccessError) {

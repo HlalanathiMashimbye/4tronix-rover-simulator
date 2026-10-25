@@ -37,6 +37,7 @@ import {
   LEARNER_PRIVATE_COLLECTION,
   LEARNER_CONTACT_DOC,
 } from '@/core/domain/services/learnerContact';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 const bodySchema = z.object({
   // null clears the address (the learner removing it).
@@ -82,7 +83,7 @@ export async function POST(
   try {
     const firestore = getFirestoreInstance();
     const contactRef = firestore
-      .collection('learners')
+      .collection(COLLECTIONS.learners)
       .doc(id)
       .collection(LEARNER_PRIVATE_COLLECTION)
       .doc(LEARNER_CONTACT_DOC);
@@ -100,7 +101,7 @@ export async function POST(
     // old client-side write. Without this, existing learners stay exposed
     // even though nothing writes there any more.
     await firestore
-      .collection('learners')
+      .collection(COLLECTIONS.learners)
       .doc(id)
       .set({ learnerEmail: null }, { merge: true });
 

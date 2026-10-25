@@ -8,7 +8,7 @@ import { useYardLayout } from '@/hooks/useYardLayout';
 import { previewMission, type FindingLevel } from '@/core/domain/safety/missionPreview';
 import type { CommandSource } from '@/lib/roverBlockly';
 import type { TrajectoryPoint } from '@/lib/simulateCommands';
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 
 /**
  * What the mission will do, before it goes to the real rover.

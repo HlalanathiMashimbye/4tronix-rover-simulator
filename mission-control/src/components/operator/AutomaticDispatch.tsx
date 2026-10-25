@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bot, Camera, Check, Copy, Crosshair, Loader2, Rocket, RotateCcw, Video, WifiOff, X } from 'lucide-react';
 
-import type { QueueMission } from '@/infrastructure/persistence/operatorQueueService';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 import { browserBlocksYard, localNetworkPermission, readConsoleUrl, yardApiUrl } from '@/lib/yardConsole';
 import { missionClipboardText } from '@/lib/missionClipboard';
 

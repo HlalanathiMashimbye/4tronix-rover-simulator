@@ -3,13 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, Layers, Loader2, Play, Radio, Rocket, SatelliteDish, Video } from 'lucide-react';
 
-import {
-  subscribeToMissionRuns,
-  subscribeToYardCompleted,
-  subscribeToMission,
-  subscribeToYardQueue,
-  type QueueMission,
-} from '@/infrastructure/persistence/operatorQueueService';
+import { operatorQueueFeed } from '@/infrastructure/container.browser';
+import type { QueueMission } from '@/core/domain/repositories/IMissionFeeds';
 
 import { MissionDetail } from '@/components/operator/MissionDetail';
 import { useRoverReportedCompletions } from '@/hooks/useRoverReportedCompletions';
@@ -301,7 +296,7 @@ function YardQueue({
     if (!selectedId) return;
 
     const id = selectedId;
-    return subscribeToMission(
+    return operatorQueueFeed().subscribeToMission(
       id,
       (mission) => setWatched(mission ? { id, mission } : { id, mission: null }),
       // A failed watch is not worth emptying the pane over: the lists still
@@ -314,7 +309,7 @@ function YardQueue({
     if (!selectedId) return;
 
     const id = selectedId;
-    return subscribeToMissionRuns(
+    return operatorQueueFeed().subscribeToMissionRuns(
       id,
       (next) => setRunsFor({ id, runs: next }),
       // A mission with no runs subcollection is ordinary, not an error worth
@@ -379,7 +374,7 @@ function YardQueue({
   useEffect(() => {
     if (!listeningToSettled) return;
 
-    return subscribeToYardCompleted(
+    return operatorQueueFeed().subscribeToYardCompleted(
       yardId,
       (next, hasMore) => {
         setDoneFor({ yardId, pages: donePages, missions: next, hasMore });
@@ -401,7 +396,7 @@ function YardQueue({
   };
 
   useEffect(() => {
-    const unsubscribe = subscribeToYardQueue(
+    const unsubscribe = operatorQueueFeed().subscribeToYardQueue(
       yardId,
       (next, olderHidden) => {
         setMissions(next);

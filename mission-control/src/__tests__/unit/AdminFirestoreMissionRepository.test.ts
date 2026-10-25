@@ -1,5 +1,5 @@
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
-import type { Firestore } from 'firebase/firestore';
+import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
+import type { Firestore } from 'firebase-admin/firestore';
 
 jest.mock('nanoid', () => ({
   nanoid: jest.fn(() => 'testmissionid12345'),
@@ -27,13 +27,12 @@ describe('FirestoreMissionRepository', () => {
       })),
     } as unknown as Firestore;
 
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = new AdminFirestoreMissionRepository(firestore);
 
     await repository.create({
       yardId: 'yard-1',
       learnerRef: 'learner-1',
       sessionId: 'session-1',
-      learnerUid: undefined,
       code: 'rover.forward(100)',
       status: 'queued',
       executionResult: {
@@ -63,7 +62,6 @@ describe('FirestoreMissionRepository', () => {
     });
 
     expect(writtenMission).not.toHaveProperty('challengeId');
-    expect(writtenMission).not.toHaveProperty('learnerUid');
     expect(writtenMission).not.toHaveProperty('videoUrl');
     expect(writtenMission).not.toHaveProperty('youtubeUrl');
     expect(writtenMission).not.toHaveProperty('startedAt');
@@ -92,13 +90,12 @@ describe('FirestoreMissionRepository', () => {
       })),
     } as unknown as Firestore;
 
-    const repository = new FirestoreMissionRepository(firestore);
+    const repository = new AdminFirestoreMissionRepository(firestore);
 
     await repository.create({
       yardId: 'yard-1',
       learnerRef: 'learner-1',
       sessionId: 'session-1',
-      learnerUid: undefined,
       code: '# comment line\nrover.forward(100)  # move\n\n# another comment\nrover.stop()',
       status: 'queued',
       executionResult: {

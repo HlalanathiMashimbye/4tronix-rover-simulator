@@ -7,7 +7,7 @@
  * silently wrong.
  */
 
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
 import { Mission } from '@/core/domain/entities/Mission';
 
 type Row = { id: string; data: Record<string, unknown> };
@@ -63,7 +63,7 @@ describe('findRecent pagination', () => {
       row(`m${i}`, `2026-07-${String((i % 28) + 1).padStart(2, '0')}T08:00:00.000Z`)
     );
     const db = makeFirestore(rows);
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     const seen: Mission[] = [];
     let cursor = undefined as undefined | { submittedAt: string; id: string };
@@ -85,7 +85,7 @@ describe('findRecent pagination', () => {
   it('reads only one document more than the page size', async () => {
     const rows = Array.from({ length: 200 }, (_, i) => row(`m${i}`, `2026-07-01T08:${String(i % 60).padStart(2, '0')}:00.000Z`));
     const meter = { docsRead: 0 };
-    const repo = new FirestoreMissionRepository(makeFirestore(rows, meter) as never);
+    const repo = new AdminFirestoreMissionRepository(makeFirestore(rows, meter) as never);
 
     await repo.findRecent(24);
 
@@ -96,7 +96,7 @@ describe('findRecent pagination', () => {
   it('does not skip or repeat missions that share a submittedAt', async () => {
     // A cursor keyed only on submittedAt loses its place here.
     const rows = Array.from({ length: 10 }, (_, i) => row(`tie${i}`, '2026-07-14T08:00:00.000Z'));
-    const repo = new FirestoreMissionRepository(makeFirestore(rows) as never);
+    const repo = new AdminFirestoreMissionRepository(makeFirestore(rows) as never);
 
     const first = await repo.findRecent(4);
     const second = await repo.findRecent(4, first.nextCursor!);
@@ -107,7 +107,7 @@ describe('findRecent pagination', () => {
   });
 
   it('reports no next cursor on the last page', async () => {
-    const repo = new FirestoreMissionRepository(
+    const repo = new AdminFirestoreMissionRepository(
       makeFirestore([row('a', '2026-07-02T08:00:00.000Z'), row('b', '2026-07-01T08:00:00.000Z')]) as never
     );
 
@@ -118,7 +118,7 @@ describe('findRecent pagination', () => {
   });
 
   it('returns an empty page rather than throwing when there is nothing', async () => {
-    const repo = new FirestoreMissionRepository(makeFirestore([]) as never);
+    const repo = new AdminFirestoreMissionRepository(makeFirestore([]) as never);
 
     const page = await repo.findRecent(24);
 
@@ -141,7 +141,7 @@ describe('soft-deleted missions', () => {
   });
 
   it('are kept out of the feed', async () => {
-    const repo = new FirestoreMissionRepository(
+    const repo = new AdminFirestoreMissionRepository(
       makeFirestore([
         row('visible', '2026-07-03T08:00:00.000Z'),
         deletedRow('removed', '2026-07-02T08:00:00.000Z'),
@@ -166,7 +166,7 @@ describe('soft-deleted missions', () => {
       }),
     };
 
-    const repo = new FirestoreMissionRepository(db as never);
+    const repo = new AdminFirestoreMissionRepository(db as never);
 
     await expect(repo.findById('removed')).resolves.toBeNull();
   });

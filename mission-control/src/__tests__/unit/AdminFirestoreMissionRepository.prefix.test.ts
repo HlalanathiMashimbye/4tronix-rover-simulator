@@ -3,7 +3,7 @@
  * Driven through the admin SDK's shape, the simpler of the two to fake.
  */
 
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
 
 type Doc = { id: string; data: () => Record<string, unknown> };
 
@@ -29,7 +29,7 @@ const mission = (id: string, extra: Record<string, unknown> = {}): Doc => ({
 
 it('asks for exactly the IDs that start with the prefix, capped', async () => {
   const { db, calls } = fakeAdmin([mission('jLSLqPa'), mission('jLSLqQz'), mission('jLSLqO1')]);
-  const repo = new FirestoreMissionRepository(db as never);
+  const repo = new AdminFirestoreMissionRepository(db as never);
   const found = await repo.findByIdPrefix('jLSLqP', 5);
   expect(found.map((m) => m.id)).toEqual(['jLSLqPa']);
   expect(calls.where[0]).toEqual(['__name__', '>=', 'jLSLqP']);
@@ -40,6 +40,6 @@ it('asks for exactly the IDs that start with the prefix, capped', async () => {
 
 it('leaves out a deleted mission, so its link stops working like its old one did', async () => {
   const { db } = fakeAdmin([mission('jLSLqPa', { deleted: true })]);
-  const repo = new FirestoreMissionRepository(db as never);
+  const repo = new AdminFirestoreMissionRepository(db as never);
   expect(await repo.findByIdPrefix('jLSLqP', 5)).toEqual([]);
 });

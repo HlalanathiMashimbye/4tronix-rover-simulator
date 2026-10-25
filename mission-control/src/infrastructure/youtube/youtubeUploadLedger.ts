@@ -5,6 +5,7 @@ import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
 
 import type { AutomaticUploadStatusView } from '@/core/domain/entities/MissionRun';
 import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { COLLECTIONS } from '@/infrastructure/persistence/collections';
 
 const MAX_ATTEMPTS = 3;
 const LEASE_MS = 15 * 60 * 1000;
@@ -15,7 +16,7 @@ interface UploadLedgerEntry extends AutomaticUploadStatusView {
 }
 
 function uploadRef(db: Firestore, missionId: string, dispatchId: string): DocumentReference {
-  return db.collection('missions').doc(missionId).collection('automaticUploads').doc(dispatchId);
+  return db.collection(COLLECTIONS.missions).doc(missionId).collection(COLLECTIONS.automaticUploads).doc(dispatchId);
 }
 
 export type UploadClaim =
@@ -112,9 +113,9 @@ export async function recordAutomaticUploadFailure(
 
 export async function listAutomaticUploads(missionId: string): Promise<AutomaticUploadStatusView[]> {
   const snapshot = await getFirestoreInstance()
-    .collection('missions')
+    .collection(COLLECTIONS.missions)
     .doc(missionId)
-    .collection('automaticUploads')
+    .collection(COLLECTIONS.automaticUploads)
     .orderBy('updatedAt', 'desc')
     .limit(20)
     .get();

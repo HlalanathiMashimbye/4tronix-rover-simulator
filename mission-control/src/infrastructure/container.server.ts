@@ -19,7 +19,7 @@ import 'server-only';
 
 import { IMissionRepository } from '@/core/domain/repositories/IMissionRepository';
 import { MissionService } from '@/core/application/services/MissionService';
-import { FirestoreMissionRepository } from '@/infrastructure/persistence/FirestoreMissionRepository';
+import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/AdminFirestoreMissionRepository';
 import { FirestoreMissionNameRegistry } from '@/infrastructure/persistence/FirestoreMissionNameRegistry';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
@@ -32,11 +32,14 @@ import { missionEmailComposer } from '@/infrastructure/email/missionStatusTempla
 import { resolveAppUrl } from '@/infrastructure/config/appUrl';
 import { OperatorMissionCommands } from '@/core/application/services/OperatorMissionCommands';
 import { VideoLinker } from '@/core/application/services/VideoLinker';
+import { OperatorTeamService } from '@/core/application/services/OperatorTeamService';
+import { FirebaseOperatorDirectory } from '@/infrastructure/auth/FirebaseOperatorDirectory';
+import { buildAccessGrantedEmail } from '@/infrastructure/email/accessRequestTemplate';
 import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
 export function adminMissionRepository(): IMissionRepository {
-  return new FirestoreMissionRepository(getFirestoreInstance());
+  return new AdminFirestoreMissionRepository(getFirestoreInstance());
 }
 
 /** The application service, wired to the privileged repository. */
@@ -73,4 +76,22 @@ export function operatorMissionCommands(): OperatorMissionCommands {
 /** A found or uploaded video, attached to its run: the linker and automatic upload both. */
 export function videoLinker(): VideoLinker {
   return new VideoLinker(adminMissionRepository(), notificationService(), nanoid);
+}
+
+/**
+ * Operator access, announced by email with a link to the console. APP_URL
+ * wins; `origin`, the request's, is the fallback, so an unconfigured staging
+ * still links to itself.
+ */
+export function operatorTeamService(origin?: string): OperatorTeamService {
+  return new OperatorTeamService(new FirebaseOperatorDirectory(), async (to, role) => {
+    try {
+      const { subject, html } = buildAccessGrantedEmail(role, `${resolveAppUrl(origin)}/operator`);
+      await new ResendEmailSender().send(to, subject, html);
+      return true;
+    } catch (error) {
+      console.error('[operator/team] grant email failed:', error);
+      return false;
+    }
+  });
 }
