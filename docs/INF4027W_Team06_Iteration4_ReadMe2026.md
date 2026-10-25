@@ -68,9 +68,9 @@ all of this.
 --------
 
     Suite                     Command                                          Tests
-    Mission Control (Jest)    cd mission-control && npx jest                   {JEST}
-    Yard satellite (pytest)   python -m pytest yard/satellite/tests -q         {SAT}
-    Rover server (pytest)     python -m pytest yard/rover -q                   {ROVER}
+    Mission Control (Jest)    cd mission-control && npx jest                   1,919 passing
+    Yard satellite (pytest)   python -m pytest yard/satellite/tests -q         697 passing
+    Rover server (pytest)     python -m pytest yard/rover -q                   323 passing
 
 Counts are for this zip. The satellite count includes browser tests that
 drive the real pages in Chromium.
