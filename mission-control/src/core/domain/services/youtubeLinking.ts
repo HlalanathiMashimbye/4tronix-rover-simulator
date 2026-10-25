@@ -126,7 +126,15 @@ export interface VideoClaim {
  * upload is seen again on every poll for as long as it stays among the
  * channel's recent uploads.
  */
-export type ClaimedVideo = VideoClaim & { videoId: string };
+export type ClaimedVideo = VideoClaim & {
+  videoId: string;
+  /**
+   * The run the video filmed, when whoever found it knows: an automatic
+   * upload carries the dispatch the satellite sent. The scheduled poll reads
+   * videos off the channel and cannot know, so it leaves this out.
+   */
+  dispatchId?: string;
+};
 
 export function missionFromVideo(
   video: Pick<ChannelVideo, 'title' | 'description'>,
@@ -279,6 +287,18 @@ export function planVideoLink(
     return { kind: 'skip', reason: 'video already linked' };
   }
 
+  // The run the upload names, when it is already there.
+  const named = claim.dispatchId ? runs.find((r) => r.runId === claim.dispatchId) : undefined;
+  if (named) {
+    if (named.youtubeUrl) return { kind: 'skip', reason: 'its run already has a video' };
+    if (!OPEN.includes(named.status)) {
+      return { kind: 'link', runId: named.runId, yardId: named.yardId, completes: false };
+    }
+    if (mission === undefined) return { kind: 'needs-mission' };
+    if (mission === null) return { kind: 'skip', reason: 'mission not found' };
+    return { kind: 'link', runId: named.runId, yardId: named.yardId, completes: true };
+  }
+
   const candidates = claim.yardId ? runs.filter((r) => r.yardId === claim.yardId) : runs;
   const withoutVideo = candidates.filter((r) => !r.youtubeUrl);
 
@@ -296,10 +316,19 @@ export function planVideoLink(
     return { kind: 'link', runId: open.runId, yardId: open.yardId, completes: true };
   }
 
-  if (candidates.length > 0) return { kind: 'skip', reason: 'nothing to link' };
+  // Every run here has its video and none is waiting. A video found on the
+  // channel stops here, because it cannot say which run it is. An automatic
+  // upload can: the rover has just run this mission again, so the video gets
+  // a run of its own, named for the dispatch, which also makes a second
+  // delivery of it land on the same run. On 25 October a re-run's video was
+  // dropped at this line because the first run already had one.
+  if (candidates.length > 0 && !claim.dispatchId) return { kind: 'skip', reason: 'nothing to link' };
 
   if (mission === undefined) return { kind: 'needs-mission' };
   if (mission === null) return { kind: 'skip', reason: 'mission not found' };
-  if (!OPEN.includes(mission.status)) return { kind: 'skip', reason: `mission is ${mission.status}` };
-  return { kind: 'link', runId: null, yardId: claim.yardId ?? mission.yardId, completes: true };
+  // A settled mission is only reopened on the rover's own word that it ran it.
+  if (!OPEN.includes(mission.status) && !claim.dispatchId) {
+    return { kind: 'skip', reason: `mission is ${mission.status}` };
+  }
+  return { kind: 'link', runId: claim.dispatchId ?? null, yardId: claim.yardId ?? mission.yardId, completes: true };
 }

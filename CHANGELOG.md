@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **A re-run's video gets a run of its own.** Running Quiet Storm Finder
+  again on 25 October uploaded its video to YouTube, and Mission Control still
+  showed one run with the first video. The linker looks for a run without a
+  video, and a mission run before has none left, so the new video was
+  dropped. An automatic upload knows the run it filmed, the dispatch the
+  satellite sent, so it now goes to that run, created when it is not there
+  yet and named for the dispatch so a second delivery lands on the same run.
+  Like an operator's Log another run, the new run is completed and the
+  learner is emailed. Videos found by the scheduled poll, which cannot know
+  their run, are unchanged.
+
 - **A run's video ends three seconds after the run.** The watcher asked the
   rover whether a run was over every ten seconds, so every recording ran on
   for up to ten seconds of a rover sitting still. Stopping the moment the
