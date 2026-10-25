@@ -11,7 +11,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { nanoid } from 'nanoid';
 import type { Mission, MissionStatus } from '@/core/domain/entities/Mission';
-import type { IMissionRepository, MissionCursor } from '@/core/domain/repositories/IMissionRepository';
+import type { IMissionRepository, MissionCursor, QueuedNotificationOutcome } from '@/core/domain/repositories/IMissionRepository';
 import { FirestoreMissionReader } from './FirestoreMissionReader';
 import {
   MISSIONS_COLLECTION,
@@ -165,6 +165,30 @@ export class AdminFirestoreMissionRepository extends FirestoreMissionReader impl
       .collection(MISSIONS_COLLECTION)
       .doc(missionId)
       .set({ deleted: true, deletedAt, deletedBy }, { merge: true });
+  }
+
+  /**
+   * Stamp notifiedQueuedAt once, and only while the mission is still queued.
+   *
+   * The whole check and the write are one transaction so the notify route
+   * cannot send the queued email twice: whoever reads notifiedQueuedAt absent
+   * and writes it wins, and a second caller reads it present and gets
+   * 'already'. The field lives only here, never on the public Mission entity,
+   * so nothing a browser reads changes.
+   */
+  async recordQueuedNotification(missionId: string): Promise<QueuedNotificationOutcome> {
+    const ref = this.db.collection(MISSIONS_COLLECTION).doc(missionId);
+    return this.db.runTransaction(async (tx) => {
+      const snapshot = await tx.get(ref);
+      if (!snapshot.exists) return 'not-found';
+
+      const data = snapshot.data() as { status?: string; notifiedQueuedAt?: string } | undefined;
+      if (data?.status !== 'queued') return 'not-queued';
+      if (data?.notifiedQueuedAt) return 'already';
+
+      tx.set(ref, { notifiedQueuedAt: new Date().toISOString() }, { merge: true });
+      return 'recorded';
+    });
   }
 
   protected async readMission(id: string): Promise<MissionDocData | null> {

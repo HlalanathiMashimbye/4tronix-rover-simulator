@@ -19,4 +19,10 @@ export const COLLECTIONS = {
   operatorAccessRequests: 'operatorAccessRequests',
   yards: 'yards',
   missionNames: 'missionNames',
+  /**
+   * Fixed-window counters for the public routes' rate limits. Server-only:
+   * written only by the Admin SDK (FirestoreRateLimiter), and deliberately
+   * given no rule in firestore.rules, so a browser is denied it outright.
+   */
+  rateLimits: 'rateLimits',
 } as const;
