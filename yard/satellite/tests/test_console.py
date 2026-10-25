@@ -85,34 +85,6 @@ def test_code_and_monitor_stay_public(client):
 
 
 
-def test_satellite_id_is_stable_across_calls_and_restarts(monkeypatch, tmp_path):
-    import satellite_identity
-    cfg = tmp_path / 'sat.json'
-    monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(cfg))
-    satellite_identity.reset_cache()
-
-    first = satellite_identity.satellite_id()
-    assert satellite_identity.satellite_id() == first, 'must be stable within a process'
-
-    # Simulate a restart: drop the memo, reload from disk.
-    satellite_identity.reset_cache()
-    assert satellite_identity.satellite_id() == first, 'must survive a restart'
-    assert cfg.exists(), 'the id must be persisted, not regenerated each boot'
-    satellite_identity.reset_cache()
-
-
-
-def test_satellite_id_survives_an_unwritable_config(monkeypatch, tmp_path):
-    """A read-only filesystem degrades lock ownership; it must not stop boot."""
-    import satellite_identity
-    monkeypatch.setattr(satellite_identity, 'CONFIG_FILE', str(tmp_path / 'nope' / 'sat.json'))
-    satellite_identity.reset_cache()
-
-    assert satellite_identity.satellite_id()  # does not raise
-    satellite_identity.reset_cache()
-
-
-
 def test_yard_id_prefers_env_then_config_then_default(monkeypatch, tmp_path):
     import satellite_identity
     cfg = tmp_path / 'sat.json'

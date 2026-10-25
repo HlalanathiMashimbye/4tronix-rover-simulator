@@ -1,5 +1,5 @@
 /**
- * What the application layer accepts when a mission is submitted or updated.
+ * What the application layer accepts when a mission is submitted.
  *
  * These types used to be inferred from the Zod schemas in
  * infrastructure/validation, which meant MissionService - an application
@@ -37,18 +37,4 @@ export interface CreateMissionDto {
   origin?: 'challenge';
   /** Which challenge this mission's solution came from. Only set alongside origin: 'challenge'. */
   challengeId?: string;
-}
-
-/** An operator or the satellite recording what happened to a mission. */
-export interface UpdateMissionDto {
-  status?: 'queued' | 'processing' | 'completed' | 'failed' | 'not_completed' | 'cancelled';
-  executionResult?: {
-    isSuccessful: boolean;
-    consoleOutput: string;
-    errorMessage?: string;
-  };
-  videoUrl?: string;
-  youtubeUrl?: string;
-  startedAt?: string;
-  completedAt?: string;
 }

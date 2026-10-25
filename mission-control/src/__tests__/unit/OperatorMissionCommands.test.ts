@@ -59,7 +59,6 @@ function setUp(found: Mission | null, runs: MissionRun[] = [], notifier?: Learne
     findByIdPrefix: async () => [],
     findRecent: async () => ({ missions: [], nextCursor: null }),
     findRuns: async () => runs,
-    upsertRun: async () => {},
     applyBookkeeping: async (...args) => {
       written.push(args);
     },
@@ -69,8 +68,6 @@ function setUp(found: Mission | null, runs: MissionRun[] = [], notifier?: Learne
     softDeleteMission: async (...args) => {
       deletedMissions.push(args);
     },
-    checkIdempotency: async () => null,
-    recordIdempotencyKey: async () => {},
   };
 
   const learnerEmail: LearnerNotifier = notifier ?? {

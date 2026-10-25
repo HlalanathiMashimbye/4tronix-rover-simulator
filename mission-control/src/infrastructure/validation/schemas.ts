@@ -90,28 +90,7 @@ export const createMissionSchema = z.object({
  * many existing importers keep working, and asserted against below so the
  * schema cannot drift from the contract without a compile error.
  */
-export type { CreateMissionDto, UpdateMissionDto } from '@/core/application/dto/mission';
-
-/**
- * Schema for mission status updates
- * Used by operator console and execution agent
- */
-export const updateMissionSchema = z.object({
-  status: z.enum(['queued', 'processing', 'completed', 'failed', 'not_completed', 'cancelled']).optional(),
-
-  executionResult: z.object({
-    isSuccessful: z.boolean(),
-    consoleOutput: z.string(),
-    errorMessage: z.string().optional(),
-  }).optional(),
-
-  videoUrl: z.string().url().optional(),
-  youtubeUrl: z.string().url().optional(),
-
-  startedAt: z.string().datetime().optional(),
-  completedAt: z.string().datetime().optional(),
-}).strict();
-
+export type { CreateMissionDto } from '@/core/application/dto/mission';
 
 /**
  * Validation helper that returns formatted error messages
