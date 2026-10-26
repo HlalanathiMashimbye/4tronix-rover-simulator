@@ -1,10 +1,11 @@
 /**
  * Global Navigation Bar
  *
- * Desktop (md+): top bar with explicit Home and My History links,
- * a prominent "Create Mission" button, and the notification bell.
- * Mobile (< md): the destinations move to a fixed bottom tab bar
- * (kid-friendly, always visible, no hidden hamburger menu).
+ * Desktop (md+): top bar with the destinations, a prominent "Create Mission"
+ * button, the theme toggle and the notification bell.
+ * Mobile (< md): top bar shows logo, theme toggle and bell; every destination
+ * moves to a fixed bottom tab bar (kid-friendly, always visible, no hidden
+ * hamburger menu).
  * Both: the Help button opens a small menu with the tour and Sapient's About
  * page. About is not a place in this app, so it is not in either bar: a tab
  * that opens another website takes a learner out of Mission Control.
@@ -22,25 +23,39 @@ import {
   Plus,
   Sun,
   Moon,
+  Target,
+  Trophy,
   HelpCircle,
   Info,
   Compass,
   ShieldCheck,
 } from 'lucide-react';
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useRef, useState, type ComponentProps } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { ActivePillBackground } from '@/components/ui/ActivePillBackground';
 import { Menu, menuItemClass } from '@/components/ui/Menu';
 import { NotificationModal } from './NotificationModal';
 import { NavbarSearch } from './NavbarSearch';
 import { EmailPrompt } from '@/components/learner/EmailPrompt';
+import { Avatar } from '@/components/learner/Avatar';
+import { ProfileModal } from '@/components/learner/ProfileModal';
+import { useLearner } from '@/contexts/LearnerContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { isBuildSurface, isMissionViewSurface, isOperatorSurface } from '@/lib/appSurfaces';
 import { useCompletionNotifications } from '@/hooks/useCompletionNotifications';
+import { useChallengeProgress } from '@/hooks/useChallengeProgress';
 import { useTour } from '@/contexts/TourContext';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', mobileLabel: 'Home', icon: Home },
+  {
+    href: '/challenges',
+    label: 'Challenges',
+    mobileLabel: 'Challenges',
+    // Not the Trophy: below xl these links are icons alone, and Challenges
+    // and Leaderboard wearing the same one could not be told apart.
+    icon: Target,
+  },
   {
     href: '/history',
     label: 'My History',
@@ -49,6 +64,12 @@ const NAV_ITEMS = [
     // same bar and was using the same clock face.
     icon: HistoryIcon,
   },
+  {
+    href: '/leaderboard',
+    label: 'Leaderboard',
+    mobileLabel: 'Board',
+    icon: Trophy,
+  },
 ];
 
 export function Navbar() {
@@ -56,8 +77,19 @@ export function Navbar() {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
 
+  const { learner, profileSaved } = useLearner();
   const { unread, hasUnread, markAllSeen, dismiss } = useCompletionNotifications();
+  const { completedCount, totalCount, loading: challengesLoading } = useChallengeProgress();
   const { start: startTour, active: tourActive } = useTour();
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMounted, setProfileMounted] = useState(false);
+  const profileBtnRef = useRef<HTMLButtonElement>(null);
+  const openProfile = useCallback(() => {
+    setProfileMounted(true);
+    setProfileOpen(true);
+  }, []);
+  const closeProfile = useCallback(() => setProfileOpen(false), []);
 
   // What the open panel shows is captured when it opens, not read live.
   // Opening marks everything seen, so a live list would empty itself in front
@@ -84,7 +116,7 @@ export function Navbar() {
    * On a phone, the operator console wears its own chrome and none of this.
    *
    * Below md this bar, the bottom tab bar and the floating Create Mission
-   * button are the learner's: Home, History, Alerts and a new mission are
+   * button are the learner's: Home, History, the bell and a new mission are
    * places a child goes. They took 128px of an 844px screen from an operator
    * who goes to none of them, and the floating button sat over the corner
    * both console panes end in. OperatorMobileBar and OperatorTabBar stand in
@@ -95,10 +127,15 @@ export function Navbar() {
    * note there for why this file must not contain the string.
    */
   const onOperatorSurface = isOperatorSurface(pathname);
-  // The build page on a phone is a full-screen tool; see isBuildSurface.
-  const hidePhoneChrome = onOperatorSurface || isBuildSurface(pathname) || isMissionViewSurface(pathname);
-  // Including this top bar: the build page brings its own slimmer one with a
-  // way back, and the 64px is a fifth of what the blocks get on a phone.
+  const onBuildSurface = isBuildSurface(pathname);
+  const onMissionView = isMissionViewSurface(pathname);
+  // The build page's own PhoneWorkspace header replaces this top bar, and the
+  // 64px it saves is a fifth of what the blocks get on a phone.
+  const hideTopBar = onOperatorSurface || onBuildSurface || onMissionView;
+  // Tab bar stays on the build surface so a learner arriving from a challenge
+  // can navigate away; the FAB is hidden there (you are already creating).
+  const hideTabBar = onOperatorSurface || onMissionView;
+  const hideFAB = onOperatorSurface || onBuildSurface || onMissionView;
 
   const reduceMotion = useReducedMotion();
 
@@ -107,14 +144,18 @@ export function Navbar() {
     return pathname === path || pathname.startsWith(path + '/');
   };
 
-  // Each destination is a segment inside a single pill-shaped nav group.
+  // Each destination is a segment inside a single pill-shaped nav group, and
+  // a segment is its icon alone: the name is a tooltip and a screen-reader
+  // label. Four labelled segments, Create Mission and two buttons measured
+  // 700px, and at 1024px that pushed the cluster left over the search filters
+  // and the brand. Create Mission keeps its words, as the one action here.
   const desktopLinkClass = (path: string): string => {
     // Deliberately smaller than the Create Mission button beside them: these
     // are wayfinding, that is the action, and at equal weight they competed.
     // The active fill is ActivePillBackground, so it slides from the page
     // you left to the one you opened instead of blinking across.
     const base =
-      'relative isolate flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors';
+      'relative isolate flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[11px] font-semibold transition-colors';
     const active = 'text-primary-foreground';
     const inactive =
       'text-muted-foreground hover:text-foreground hover:bg-card/60';
@@ -135,7 +176,7 @@ export function Navbar() {
           (h-page) do not overflow by a pixel. */}
       <nav
         className={`sticky top-0 z-50 bg-card/90 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_-1px_0_0_var(--border),0_6px_20px_-14px_rgb(0_0_0/0.45)] ${
-          hidePhoneChrome ? 'hidden md:block' : ''
+          hideTopBar ? 'hidden md:block' : ''
         }`}
       >
         {/* Use a balanced three-column layout so the search sits in the true
@@ -155,7 +196,7 @@ export function Navbar() {
                 priority
               />
             </div>
-            <div className="leading-tight">
+            <div className="hidden leading-tight sm:block">
               <p className="whitespace-nowrap font-display text-lg font-bold tracking-tight text-foreground">
                 Mission Control
               </p>
@@ -174,13 +215,21 @@ export function Navbar() {
             {/* Desktop destinations - one segmented pill group */}
             <div className="hidden items-center gap-1 rounded-full border border-border/60 bg-card/40 p-1 md:flex">
               {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-                <Link key={href} href={href} className={desktopLinkClass(href)}>
+                <Link key={href} href={href} title={label} className={desktopLinkClass(href)}>
                   {isActive(href) && (
                     <ActivePillBackground layoutId="nav-pill" className="rounded-full bg-gradient-mars clay" reduceMotion={reduceMotion} />
                   )}
                   <span className="relative z-10 flex items-center gap-1.5">
                     <Icon className="h-4 w-4" />
-                    {label}
+                    <span className="sr-only">{label}</span>
+                    {/* Progress pill: only Challenges carries one, and only once
+                        a count has actually loaded - a "0/0" flash before the
+                        hook resolves would read as broken, not empty. */}
+                    {href === '/challenges' && !challengesLoading && totalCount > 0 && (
+                      <span className="rounded-full bg-background/50 px-1.5 py-0.5 text-[9px] font-bold tabular-nums">
+                        {completedCount}/{totalCount}
+                      </span>
+                    )}
                   </span>
                 </Link>
               ))}
@@ -225,33 +274,21 @@ export function Navbar() {
               </Menu>
             )}
 
-            {/* Theme toggle (desktop; mobile reaches it from the Notifications
-                panel header - the bottom tab bar is a tight 4-slot layout
-                that shouldn't grow a 5th icon). */}
             <button
               onClick={toggleTheme}
-              className="hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
+              className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:p-2.5"
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {/* Mobile theme toggle. Lives here because the mobile top bar has
-                nothing but the logo, so there is room - it used to be buried in
-                the notifications panel, where pressing the bell surprised you
-                with a theme switch. */}
-            <button
-              onClick={toggleTheme}
-              className="rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:text-foreground md:hidden"
-              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-            </button>
-
-            {/* Notification bell (desktop; mobile uses the bottom "Alerts" tab) */}
+            {/* The bell is up here on a phone too. It used to be the bottom
+                bar's fourth slot, which left no room for the Leaderboard: a
+                destination belongs in the tab bar, and a bell in the corner
+                is where every app puts it. */}
             <button
               onClick={openNotifications}
-              className="relative hidden rounded-full border border-border/60 bg-card/40 p-2.5 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:block"
+              className="relative rounded-full border border-border/60 bg-card/40 p-2 text-muted-foreground transition-colors hover:bg-card/70 hover:text-foreground md:p-2.5"
               aria-label="Notifications"
             >
               <Bell className="h-5 w-5" />
@@ -259,59 +296,55 @@ export function Navbar() {
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
               )}
             </button>
+
+            <button
+              ref={profileBtnRef}
+              onClick={openProfile}
+              className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-border/60 transition-colors hover:border-foreground/20 focus:outline-none focus:ring-2 focus:ring-foreground/20 md:h-11 md:w-11"
+              aria-label="Your profile"
+            >
+              <Avatar avatar={learner?.avatar} size={28} />
+              {!profileSaved && (
+                <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-background md:h-3 md:w-3" />
+              )}
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Mobile bottom tab bar: three flat, equal-weight slots. Two are
-          destinations (Home, History) and the third opens the notifications
-          panel in place, which is why Alerts is a button and not a Link.
-          Create Mission is deliberately NOT in this row. It used to sit inline
-          here as an elevated slot, competing with the wayfinding links for
-          attention while not being wayfinding at all, and it is the floating
-          button below instead: an action and a destination should not look
-          alike. feat/challenges adds a fourth slot back here, a Challenges
-          tab - see docs/challenges-branch.md. */}
-      {!hidePhoneChrome && (
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden">
-        <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
-          <Link
-            href="/"
-            className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
-              isActive('/') ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            {isActive('/') && (
-              <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
-            )}
-            <Home className={`h-5 w-5 ${isActive('/') ? 'pop-in' : ''}`} />
-            Home
-          </Link>
-
-          <Link
-            href="/history"
-            className={`relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold transition-colors ${
-              isActive('/history') ? 'text-primary' : 'text-muted-foreground'
-            }`}
-          >
-            {isActive('/history') && (
-              <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
-            )}
-            <HistoryIcon className={`h-5 w-5 ${isActive('/history') ? 'pop-in' : ''}`} />
-            History
-          </Link>
-
-          <button
-            onClick={openNotifications}
-            className="relative flex flex-col items-center gap-0.5 rounded-xl px-3 py-1.5 text-[10px] font-bold text-muted-foreground transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" />
-            Alerts
-            {hasUnread && (
-              <span className="absolute right-2 top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
-            )}
-          </button>
+      {/* Mobile bottom tab bar: every destination, as flat, equal-weight
+          slots, read from NAV_ITEMS so a new page cannot be reachable on a
+          laptop and missing on a phone - which is how the Leaderboard went
+          missing here. Create Mission is deliberately NOT in this row: it is
+          the floating button below, because an action and a destination
+          should not look alike. */}
+      {!hideTabBar && (
+      <nav
+        aria-label="Tabs"
+        className="fixed bottom-0 left-0 right-0 z-50 h-[var(--app-bottom-chrome)] border-t border-border/50 bg-card/85 backdrop-blur-xl backdrop-saturate-150 md:hidden"
+      >
+        <div className="mx-auto flex h-full max-w-md items-center justify-around px-2">
+          {NAV_ITEMS.map(({ href, mobileLabel, icon: Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className={`relative flex flex-col items-center gap-0.5 rounded-xl px-2 py-0.5 text-[10px] leading-none font-bold transition-colors ${
+                isActive(href) ? 'text-primary' : 'text-muted-foreground'
+              }`}
+            >
+              {isActive(href) && (
+                <ActivePillBackground layoutId="tab-bar-mark" className="!inset-x-3 !-top-1.5 !bottom-auto h-1 rounded-full bg-primary" reduceMotion={reduceMotion} />
+              )}
+              <Icon className={`h-5 w-5 ${isActive(href) ? 'pop-in' : ''}`} />
+              {mobileLabel}
+              {href === '/challenges' &&
+                !challengesLoading &&
+                totalCount > 0 &&
+                completedCount < totalCount && (
+                  <span className="absolute right-1 top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background" />
+                )}
+            </Link>
+          ))}
         </div>
       </nav>
       )}
@@ -321,12 +354,12 @@ export function Navbar() {
           bottom half rides over the bar's top edge, matching a standard FAB
           rather than the row's flat tabs. During the tour it also appears on
           mission-view pages so the "Create Your Own!" step has a target. */}
-      {(!hidePhoneChrome || tourActive) && (
+      {(!hideFAB || tourActive) && (
         <Link
           href="/mission"
           aria-label="Create Mission"
           data-tour-id="tour-create-mission"
-          className="clay clay-press fixed bottom-14 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
+          className="clay clay-press fixed bottom-10 right-4 z-[60] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-mars text-primary-foreground ring-4 ring-background md:hidden"
         >
           <Plus className="h-6 w-6" strokeWidth={2.5} />
         </Link>
@@ -340,6 +373,10 @@ export function Navbar() {
       />
 
       <EmailPrompt />
+
+      {profileMounted && (
+        <ProfileModal open={profileOpen} onClose={closeProfile} triggerRef={profileBtnRef} />
+      )}
     </>
   );
 }

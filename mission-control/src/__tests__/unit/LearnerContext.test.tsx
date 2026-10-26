@@ -30,9 +30,9 @@ jest.mock('@/infrastructure/container.browser', () => ({
     create: async (learner: Learner, learnerRef: string) => {
       records.set(learner.id, { ...learner, learnerRef });
     },
-    recordVisit: async (id: string, learnerRef: string, at: string) => {
+    recordVisit: async (id: string, learnerRef: string, at: string, displayName?: string) => {
       visits.push(id);
-      records.set(id, { ...records.get(id)!, learnerRef, lastActiveAt: at });
+      records.set(id, { ...records.get(id)!, learnerRef, lastActiveAt: at, ...(displayName ? { displayName } : {}) });
     },
   }),
   browserLearnerEmailStamp: () => ({
@@ -95,6 +95,21 @@ it('recognises a returning learner and records the visit instead of creating the
   await waitFor(() => expect(screen.getByText('returning-learner')).toBeTruthy());
   expect(visits).toEqual(['returning-learner']);
   expect(records.get('returning-learner')?.createdAt).toBe('2026-01-01T00:00:00Z');
+});
+
+it('gives a new learner a name, and one recorded without a name gets one on its visit', async () => {
+  render(<LearnerProvider><Probe /></LearnerProvider>);
+  await waitFor(() => expect(screen.queryByText('loading')).toBeNull());
+  expect(records.get(context.learner!.id)?.displayName).toBeTruthy();
+
+  localStorage.setItem('mars-rover-learner-id', 'unnamed-learner');
+  records.set('unnamed-learner', {
+    id: 'unnamed-learner', sessionId: 'unnamed-learner', createdAt: '2026-01-01T00:00:00Z', lastActiveAt: '2026-01-01T00:00:00Z',
+  });
+  render(<LearnerProvider><Probe /></LearnerProvider>);
+  await waitFor(() => expect(visits).toContain('unnamed-learner'));
+
+  expect(records.get('unnamed-learner')?.displayName).toBeTruthy();
 });
 
 it('still gives the learner an identity when the record cannot be reached', async () => {

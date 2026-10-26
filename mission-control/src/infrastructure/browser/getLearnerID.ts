@@ -74,6 +74,22 @@ function migrateOldSessionKey(): string | null {
 }
 
 /**
+ * Replace the stored learner ID with a known one — used when restoring
+ * from a recovery code on a new device.
+ */
+export function setLearnerID(id: string): void {
+  if (typeof window === 'undefined') {
+    throw new Error('setLearnerID can only be called in browser context');
+  }
+
+  try {
+    localStorage.setItem(LEARNER_ID_KEY, id);
+  } catch (error) {
+    console.error('Failed to set learner ID:', error);
+  }
+}
+
+/**
  * Clear the stored learner ID (useful for testing or reset)
  */
 export function clearLearnerID(): void {

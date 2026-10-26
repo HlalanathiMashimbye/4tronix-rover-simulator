@@ -25,7 +25,17 @@ import { AdminFirestoreMissionRepository } from '@/infrastructure/persistence/Ad
 import { FirestoreMissionNameRegistry } from '@/infrastructure/persistence/FirestoreMissionNameRegistry';
 import { IYardRepository } from '@/core/domain/repositories/IYardRepository';
 import { FirestoreYardRepository } from '@/infrastructure/persistence/FirestoreYardRepository';
-import { getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import { ILeaderboardRepository } from '@/core/domain/repositories/ILeaderboardRepository';
+import { FirestoreLeaderboardRepository } from '@/infrastructure/persistence/FirestoreLeaderboardRepository';
+import { IRecoveryCodeRepository } from '@/core/domain/repositories/IRecoveryCodeRepository';
+import { FirestoreRecoveryCodeRepository } from '@/infrastructure/persistence/FirestoreRecoveryCodeRepository';
+import { IParentLinkRepository } from '@/core/domain/repositories/IParentLinkRepository';
+import { FirestoreParentLinkRepository } from '@/infrastructure/persistence/FirestoreParentLinkRepository';
+import { getFirebaseAdminAuth, getFirestoreInstance } from '@/infrastructure/persistence/firebase-admin';
+import type { ILearnerAccounts } from '@/core/domain/repositories/ILearnerAccounts';
+import type { IParentSignIn } from '@/core/domain/services/IParentSignIn';
+import { AdminFirestoreLearnerAccounts } from '@/infrastructure/persistence/AdminFirestoreLearnerAccounts';
+import { FirebaseParentSignIn } from '@/infrastructure/auth/FirebaseParentSignIn';
 import { MissionNotificationService } from '@/core/application/services/MissionNotificationService';
 import { EXCLUDED_MISSION_IDS } from '@/infrastructure/config/notificationExclusions';
 import { FirestoreLearnerContactReader } from '@/infrastructure/persistence/FirestoreLearnerContactReader';
@@ -96,6 +106,30 @@ export function notificationService(): MissionNotificationService {
 /** The operator's bookkeeping commands, on the privileged repository. */
 export function operatorMissionCommands(): OperatorMissionCommands {
   return new OperatorMissionCommands(adminMissionRepository(), notificationService(), nanoid);
+}
+
+/** Privileged. Leaderboard writes only through Admin SDK. */
+export function adminLeaderboardRepository(): ILeaderboardRepository {
+  return new FirestoreLeaderboardRepository(getFirestoreInstance());
+}
+
+/** Privileged. Recovery codes are never browser-accessible. */
+export function adminRecoveryCodeRepository(): IRecoveryCodeRepository {
+  return new FirestoreRecoveryCodeRepository(getFirestoreInstance());
+}
+
+/** Privileged. Parent links are never browser-accessible. */
+/** Learner records for the server routes: profiles, recovery, parent restore. */
+export function learnerAccounts(): ILearnerAccounts {
+  return new AdminFirestoreLearnerAccounts(getFirestoreInstance());
+}
+
+export function parentSignIn(): IParentSignIn {
+  return new FirebaseParentSignIn(getFirebaseAdminAuth());
+}
+
+export function adminParentLinkRepository(): IParentLinkRepository {
+  return new FirestoreParentLinkRepository(getFirestoreInstance());
 }
 
 /** A found or uploaded video, attached to its run: the linker and automatic upload both. */

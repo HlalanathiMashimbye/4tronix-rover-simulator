@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { hasSeenWelcome } from '@/infrastructure/browser/platformMilestones';
 
 const COMPLETED_KEY = 'tour-completed';
 const STEP_KEY = 'tour-step';
@@ -163,12 +164,12 @@ export function TourProvider({ children }: { children: ReactNode }) {
       setCompleted(done);
       if (!done) {
         const saved = localStorage.getItem(STEP_KEY);
-        if (saved !== null) {
+        if (saved !== null && hasSeenWelcome()) {
           setActive(true);
           setStep(parseInt(saved, 10));
-        } else if (pathname === '/') {
-          setActive(true);
-          setStep(0);
+        } else if (saved !== null) {
+          // Stale tour-step from another learner on a shared machine.
+          localStorage.removeItem(STEP_KEY);
         }
       }
     } catch { /* localStorage unavailable */ }

@@ -28,6 +28,9 @@ import {
 import { BrowserFirestoreMissionReader } from '@/infrastructure/persistence/BrowserFirestoreMissionReader';
 import { BrowserFirestoreLearnerRepository } from '@/infrastructure/persistence/BrowserFirestoreLearnerRepository';
 import { getFirebaseAuth, getFirestoreClient } from '@/infrastructure/persistence/firebase-client';
+import { IChallengeProgressRepository } from '@/core/domain/repositories/IChallengeProgressRepository';
+import { FirestoreChallengeProgressRepository } from '@/infrastructure/persistence/FirestoreChallengeProgressRepository';
+import { ChallengeProgressService } from '@/core/application/services/ChallengeProgressService';
 
 /**
  * Unprivileged. Firestore rules apply.
@@ -64,4 +67,13 @@ export function learnerMissionFeed(): ILearnerMissionFeed {
 /** Firebase Auth in the browser, for the operator's sign-in. */
 export function browserAuth() {
   return getFirebaseAuth();
+}
+
+/** Unprivileged. Firestore rules apply. */
+export function browserChallengeProgressRepository(): IChallengeProgressRepository {
+  return new FirestoreChallengeProgressRepository(getFirestoreClient());
+}
+
+export function challengeProgressService(): ChallengeProgressService {
+  return new ChallengeProgressService(browserChallengeProgressRepository());
 }

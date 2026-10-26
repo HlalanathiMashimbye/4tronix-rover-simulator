@@ -9,21 +9,36 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { browserLearnerEmailStamp, browserLearnerRepository } from '@/infrastructure/container.browser';
-import { getLearnerID, clearLearnerID } from '@/infrastructure/browser/getLearnerID';
+import { getLearnerID, clearLearnerID, setLearnerID } from '@/infrastructure/browser/getLearnerID';
 import { hashLearnerEmail } from '@/core/domain/services/learnerEmailHash';
 import { hashLearnerId } from '@/core/domain/services/learnerRef';
-import { Learner, createAnonymousLearner } from '@/core/domain/entities/Learner';
+import { Learner, createAnonymousLearner, type LearnerAvatar } from '@/core/domain/entities/Learner';
+import { generateDisplayName } from '@/core/domain/services/displayNameGenerator';
+import { CURRENT_CONSENT_VERSION } from '@/core/domain/services/parentLink';
 
 interface LearnerContextType {
   learner: Learner | null;
   sessionId: string | null;
   loading: boolean;
-  resetSession: () => void;
+  signOut: () => void;
   learnerEmail: string | null;
   setLearnerEmail: (email: string | null) => Promise<void>;
   openEmailPrompt: () => void;
   closeEmailPrompt: () => void;
   showEmailPrompt: boolean;
+  profileSaved: boolean;
+  markProfileSaved: () => void;
+  generateRecoveryCode: () => Promise<string | null>;
+  restoreFromCode: (code: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (displayName: string, avatar: LearnerAvatar) => Promise<boolean>;
+  linkParent: (idToken: string) => Promise<{ success: boolean; error?: string }>;
+  unlinkParent: (idToken: string) => Promise<{ success: boolean; error?: string }>;
+  restoreFromParent: (idToken: string) => Promise<{
+    success: boolean;
+    error?: string;
+    learners?: Array<{ learnerId: string; displayName?: string; avatar?: { style: string; seed: string } }>;
+  }>;
+  adoptLearner: (learnerId: string) => Promise<void>;
 }
 
 const LearnerContext = createContext<LearnerContextType | undefined>(undefined);
@@ -77,6 +92,7 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [learnerEmail, setLearnerEmailState] = useState<string | null>(null);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   // Load any saved email. We never prompt for it on landing (per David); the
   // email ask happens after a mission is submitted, and on the history page.
@@ -89,6 +105,18 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
       // localStorage unavailable - skip
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from localStorage
+      if (localStorage.getItem('rover-profile-saved') === 'true') setProfileSaved(true);
+    } catch {}
+  }, []);
+
+  function markProfileSaved() {
+    try { localStorage.setItem('rover-profile-saved', 'true'); } catch {}
+    setProfileSaved(true);
+  }
 
   /**
    * Save (or clear) the learner's email - persisted to localStorage and, if a
@@ -148,16 +176,19 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
 
       if (existingLearner) {
         const now = new Date().toISOString();
-        await learners.recordVisit(learnerId, learnerRefHash, now);
-        setLearner({ ...existingLearner, lastActiveAt: now });
+        // A learner recorded before names were given gets one on this visit.
+        const displayName = existingLearner.displayName || generateDisplayName();
+        await learners.recordVisit(learnerId, learnerRefHash, now,
+          existingLearner.displayName ? undefined : displayName);
+        setLearner({ ...existingLearner, lastActiveAt: now, displayName });
       } else {
-        const newLearner = createAnonymousLearner(learnerId);
+        const newLearner = { ...createAnonymousLearner(learnerId), displayName: generateDisplayName() };
         await learners.create(newLearner, learnerRefHash);
         setLearner(newLearner);
       }
     } catch (error) {
       console.warn('Firestore learner init unavailable, using local session fallback:', error);
-      setLearner(createAnonymousLearner(learnerId));
+      setLearner({ ...createAnonymousLearner(learnerId), displayName: generateDisplayName() });
     } finally {
       setLoading(false);
     }
@@ -169,34 +200,159 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
     initializeLearnerSession();
   }, []);
 
-  /*
-   * There is deliberately no updateDisplayName.
-   *
-   * One existed, and nothing ever called it: no screen offered a learner a way
-   * to name themselves, so all 170 learner records have no display name. That
-   * is not an oversight to correct. Learners are anonymous here by design -
-   * they are not Firebase Auth users, their id is hashed before it touches a
-   * mission, and their address lives where browsers cannot read it - and a
-   * dormant writer for a name is the thing someone wires up to a "name
-   * yourself" box without realising what it undoes.
-   *
-   * Removed alongside a request for the operator queue to show who submitted
-   * each mission, which was turned down for the same reason.
-   *
-   * MissionNotificationService still READS displayName when personalising the
-   * completion email. That is a message to the learner's own address, it
-   * handles the field being absent, and it is left alone.
-   */
+  async function updateProfile(
+    displayName: string,
+    avatar: LearnerAvatar,
+  ): Promise<boolean> {
+    const learnerId = getLearnerID();
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(learnerId)}/profile`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName, avatar }),
+        },
+      );
+      if (!response.ok) return false;
 
-  /**
-   * Reset session and create new learner identity
-   */
-  function resetSession() {
-    clearLearnerID();
+      setLearner((prev) =>
+        prev ? { ...prev, displayName, avatar } : prev,
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function generateRecoveryCode(): Promise<string | null> {
+    const learnerId = getLearnerID();
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(learnerId)}/recovery-code`,
+        { method: 'POST' },
+      );
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.code ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function restoreFromCode(code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch('/api/recovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error ?? 'Code not recognised' };
+      }
+
+      setLearnerID(data.learnerId);
+      setLearner(null);
+      setSessionId(null);
+      setLoading(true);
+      await initializeLearnerSession();
+      markProfileSaved();
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function linkParent(idToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(getLearnerID())}/parent-link`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken, consentVersion: CURRENT_CONSENT_VERSION }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'Failed to link parent' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function unlinkParent(idToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/learners/${encodeURIComponent(getLearnerID())}/parent-link`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        },
+      );
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'Failed to unlink parent' };
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function restoreFromParent(idToken: string): Promise<{
+    success: boolean;
+    error?: string;
+    learners?: Array<{ learnerId: string; displayName?: string; avatar?: { style: string; seed: string } }>;
+  }> {
+    try {
+      const response = await fetch('/api/parent-restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await response.json();
+      if (!response.ok) return { success: false, error: data.error ?? 'No linked learners found' };
+      return { success: true, learners: data.learners };
+    } catch {
+      return { success: false, error: 'Something went wrong. Please try again.' };
+    }
+  }
+
+  async function adoptLearner(learnerId: string): Promise<void> {
+    setLearnerID(learnerId);
     setLearner(null);
     setSessionId(null);
     setLoading(true);
-    initializeLearnerSession();
+    await initializeLearnerSession();
+    markProfileSaved();
+  }
+
+  /**
+   * Forget this learner on this device, so the next child at a shared machine
+   * starts as a new learner. Only offered once the profile is saved: an
+   * unsaved learner has no recovery code or parent link, so signing out would
+   * lose their missions for good.
+   *
+   * The email and latest mission go too. Left behind, the next learner's
+   * email prompt would show this learner's address, and saving one would
+   * stamp it onto this learner's mission.
+   *
+   * A full page load rather than resetting state in place: the history page
+   * and the leaderboard toggle each read the learner id once when they mount,
+   * and would go on showing this learner's missions to the next one.
+   */
+  function signOut() {
+    clearLearnerID();
+    try {
+      localStorage.removeItem('rover-profile-saved');
+      localStorage.removeItem('learnerEmail');
+      localStorage.removeItem(LATEST_MISSION_KEY);
+    } catch {}
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- router.push keeps this provider and every mounted page's state, which is the stale learner described above
+    window.location.assign('/');
   }
 
   return (
@@ -205,12 +361,21 @@ export function LearnerProvider({ children }: { children: ReactNode }) {
         learner,
         sessionId,
         loading,
-        resetSession,
+        signOut,
         learnerEmail,
         setLearnerEmail,
         openEmailPrompt,
         closeEmailPrompt,
         showEmailPrompt,
+        profileSaved,
+        markProfileSaved,
+        generateRecoveryCode,
+        restoreFromCode,
+        updateProfile,
+        linkParent,
+        unlinkParent,
+        restoreFromParent,
+        adoptLearner,
       }}
     >
       {children}

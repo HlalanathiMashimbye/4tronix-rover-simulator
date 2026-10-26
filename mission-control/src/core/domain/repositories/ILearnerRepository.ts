@@ -21,6 +21,9 @@ export interface ILearnerRepository {
   /** Store a learner seen for the first time. */
   create(learner: Learner, learnerRef: string): Promise<void>;
 
-  /** Note that a returning learner is active again. */
-  recordVisit(id: string, learnerRef: string, at: string): Promise<void>;
+  /**
+   * Note that a returning learner is active again. A display name is written
+   * only when given: one recorded before names existed gets one on its visit.
+   */
+  recordVisit(id: string, learnerRef: string, at: string, displayName?: string): Promise<void>;
 }

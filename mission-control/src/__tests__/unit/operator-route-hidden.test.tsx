@@ -30,6 +30,13 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
 }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
 jest.mock('@/contexts/TourContext', () => ({ useTour: () => ({ start: () => {}, active: false }) }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, profileSaved: false }),
+}));
+// The navbar's challenge count reads Firestore; no test here is about it.
+jest.mock('@/hooks/useChallengeProgress', () => ({
+  useChallengeProgress: () => ({ completedCount: 0, totalCount: 0, loading: false }),
+}));
 
 const read = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 

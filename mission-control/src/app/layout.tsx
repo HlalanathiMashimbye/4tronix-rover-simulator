@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Fredoka } from "next/font/google";
+import { Inter, Fredoka, Nunito } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { Navbar } from "@/components/layout/Navbar";
@@ -7,6 +7,8 @@ import { EnvironmentBanner } from "@/components/layout/EnvironmentBanner";
 import { FirestoreDatabaseMeta } from "@/components/layout/FirestoreDatabaseMeta";
 import { SearchIndexingMeta } from "@/components/layout/SearchIndexingMeta";
 import { ChromeHeight, PAGE_AREA_ID } from "@/components/layout/ChromeHeight";
+import { MilestoneTracker } from "@/components/layout/MilestoneTracker";
+import { PersistentChallengePanel } from "@/components/challenges/PersistentChallengePanel";
 import { LearnerProvider } from "@/contexts/LearnerContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { SearchProvider } from "@/contexts/SearchContext";
@@ -44,6 +46,15 @@ const fredoka = Fredoka({
   variable: "--font-display",
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
+});
+
+// The reading face on the Challenges surface only (see globals.css). Not
+// preloaded: every page shares this layout, and only /challenges uses it, so
+// a preload would spend a font download on every other page for nothing.
+const nunito = Nunito({
+  variable: "--font-rounded",
+  subsets: ["latin"],
+  preload: false,
 });
 
 const APP_TITLE = "Mission Control · Mars Mission Platform";
@@ -87,7 +98,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fredoka.variable} h-full antialiased`}
+      className={`${inter.variable} ${fredoka.variable} ${nunito.variable} h-full antialiased`}
       // data-theme and style are set by the beforeInteractive script above,
       // before hydration - server-rendered HTML never has them, so React
       // correctly sees a diff here on every load. That is the whole point of
@@ -169,11 +180,15 @@ export default function RootLayout({
                   token the full-height pages subtract, so the padding here and
                   the height there cannot disagree - see .h-page. */}
               <div id={PAGE_AREA_ID} className="pb-[var(--app-bottom-chrome)]">
+                <PersistentChallengePanel />
                 <PageTransition>{children}</PageTransition>
               </div>
               {/* Measures the id above and publishes it as --app-chrome, which
                   is what the full-height pages subtract from the viewport. */}
               <ChromeHeight />
+              {/* Renders nothing; records which pages have been opened so the
+                  Level 1 challenges can ask a learner to go and look at one. */}
+              <MilestoneTracker />
               </SearchProvider>
               <TourOverlay />
               </TourProvider>

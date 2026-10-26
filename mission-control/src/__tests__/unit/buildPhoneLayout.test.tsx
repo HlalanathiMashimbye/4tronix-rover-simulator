@@ -37,6 +37,14 @@ jest.mock('@/hooks/useCompletionNotifications', () => ({
   useCompletionNotifications: () => ({ unread: [], hasUnread: false, markAllSeen: () => {}, dismiss: () => {} }),
 }));
 jest.mock('@/components/learner/EmailPrompt', () => ({ EmailPrompt: () => null }));
+jest.mock('@/contexts/LearnerContext', () => ({
+  useLearner: () => ({ learner: null, sessionId: 'test-session', loading: false, updateProfile: jest.fn() }),
+}));
+// feat/challenges: the Navbar reads challenge progress, which would reach
+// Firestore. Nothing here is about challenges, so it loads as empty.
+jest.mock('@/hooks/useChallengeProgress', () => ({
+  useChallengeProgress: () => ({ completedCount: 0, totalCount: 0, loading: true }),
+}));
 
 import { isBuildSurface } from '@/lib/appSurfaces';
 import { Navbar } from '@/components/layout/Navbar';
@@ -68,11 +76,9 @@ describe('the navbar on a phone', () => {
     );
   };
 
-  it('drops the tab bar and the floating button while building', () => {
+  it('keeps the tab bar for navigation but drops the floating button while building', () => {
     renderNavbar('/mission');
-    // Exactly "History": the laptop navbar's "My History" is a different
-    // element and stays, hidden by CSS below md.
-    expect(screen.queryByRole('link', { name: 'History' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'History' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Create Mission')).not.toBeInTheDocument();
   });
 

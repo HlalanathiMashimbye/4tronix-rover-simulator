@@ -172,14 +172,14 @@ service cloud.firestore {
       allow delete: if false;
 
       allow create: if request.resource.data.keys().hasOnly([
-                      'id', 'sessionId', 'avatarColor', 'displayName',
+                      'id', 'sessionId', 'avatar', 'avatarColor', 'displayName',
                       'learnerRef', 'missionCount', 'completedMissions',
                       'createdAt', 'lastActiveAt', 'devices',
                       'learnerId', 'missionsCompleted', 'progress'
                     ]);
 
       allow update: if touchedKeys().hasOnly([
-                      'displayName', 'avatarColor', 'learnerRef',
+                      'displayName', 'avatar', 'avatarColor', 'learnerRef',
                       'lastActiveAt', 'missionCount', 'completedMissions',
                       'missionsCompleted', 'progress', 'devices'
                     ]);
@@ -187,6 +187,20 @@ service cloud.firestore {
 
     match /learners/{learnerId}/{document=**} {
       allow read, write: if false;
+    }
+
+    // Parent-link reverse lookup: a parent can read their own linked learners.
+    //
+    // Written only through the Admin SDK when a parent links or unlinks.
+    // A parent reads this during the restore flow to discover which learner
+    // IDs are theirs. Only the authenticated parent whose UID matches the
+    // document ID may read; everyone else is denied.
+    //
+    // The forward side (learners/{id}/private/parentLink) is already blocked
+    // by the wildcard deny rule above.
+    match /parentLinks/{parentUid} {
+      allow get: if request.auth != null && request.auth.uid == parentUid;
+      allow list, create, update, delete: if false;
     }
 
     // Leaderboard entries: pseudonymous public rankings.

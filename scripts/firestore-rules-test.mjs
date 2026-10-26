@@ -144,6 +144,19 @@ check('users: write blocked even for admin', await attempt('PATCH', 'users/u1', 
 // no longer grants anything, because nothing reads roles from there.
 check('users: self-granting a role is inert', await attempt('PATCH', 'users/learner-1', { body: { role: S('admin') }, mask: ['role'], as: LEARNER }), 'DENY');
 
+// --- parentLinks ------------------------------------------------------------
+// Reverse lookup: a parent can read their own document, nobody else can.
+const PARENT = { uid: 'parent-uid-1' };
+const OTHER_PARENT = { uid: 'other-parent' };
+await seed('parentLinks/parent-uid-1', { learnerIds: { arrayValue: { values: [S('L1')] } } });
+
+check('parentLink: anon read blocked', await attempt('GET', 'parentLinks/parent-uid-1'), 'DENY');
+check('parentLink: wrong parent read blocked', await attempt('GET', 'parentLinks/parent-uid-1', { as: OTHER_PARENT }), 'DENY');
+check('parentLink: own parent read allowed', await attempt('GET', 'parentLinks/parent-uid-1', { as: PARENT }), 'ALLOW');
+check('parentLink: list blocked', await attempt('GET', 'parentLinks'), 'DENY');
+check('parentLink: browser write blocked', await attempt('PATCH', 'parentLinks/parent-uid-1', { body: { learnerIds: { arrayValue: { values: [S('L2')] } } }, mask: ['learnerIds'] }), 'DENY');
+check('parentLink: parent write blocked', await attempt('PATCH', 'parentLinks/parent-uid-1', { body: { learnerIds: { arrayValue: { values: [S('L2')] } } }, mask: ['learnerIds'], as: PARENT }), 'DENY');
+
 // --- unmatched collections --------------------------------------------------
 check('unknown collection: write blocked', await attempt('PATCH', 'anything/x', { body: { a: S('b') }, mask: ['a'] }), 'DENY');
 check('unknown collection: admin write still blocked', await attempt('PATCH', 'anything/y', { body: { a: S('b') }, mask: ['a'], as: ADMIN }), 'DENY');
