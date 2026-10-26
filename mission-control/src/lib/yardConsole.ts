@@ -118,7 +118,15 @@ export async function localNetworkPermission(): Promise<LocalNetworkPermission> 
  * Whether the browser itself stops this page from calling the satellite: an
  * https page may not fetch an http address unless a local network permission
  * lets it, and a browser without that permission never will.
+ *
+ * Chromium is never counted as blocking, even when `localNetworkPermission()`
+ * says unsupported. Chrome on Android asks when the request is made but does
+ * not know the permission's name when asked in advance, so judging it by that
+ * answer hid Check yard and Send to Rover on the phone and told a Chrome user
+ * to open Chrome. `userAgentData` exists only in Chromium browsers.
  */
 export function browserBlocksYard(consoleUrl: string): boolean {
+  const brands = (navigator as { userAgentData?: { brands?: { brand: string }[] } }).userAgentData?.brands ?? [];
+  if (brands.some(({ brand }) => brand === 'Chromium')) return false;
   return window.location.protocol === 'https:' && new URL(consoleUrl).protocol === 'http:';
 }

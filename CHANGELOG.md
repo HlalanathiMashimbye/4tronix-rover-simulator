@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Chrome on a phone can be asked for local network access.** A mission
+  opened on an https page checks, before anything is pressed, whether the
+  browser can reach the http satellite at all, and a browser that could not
+  name the local network permission was told "This browser cannot reach the
+  yard", with Check yard and Send to Rover taken away. Chrome on Android
+  answers that way but still asks when a request is made, so the phone was
+  told to open Chrome, in Chrome, and never got the request that would have
+  asked. Chromium browsers now keep Check yard; pressing it is what lets
+  Chrome ask, and a request that still fails says the yard is offline with
+  Try again. Safari and Firefox are unchanged.
+
 - **How long a video keeps filming after its run is a slider on Settings.**
   The tail was a fixed three seconds in `mission_watcher.py`, chosen by
   watching the real rover come to rest. A yard whose camera sees the rover
