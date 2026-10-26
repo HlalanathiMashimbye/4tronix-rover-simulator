@@ -188,9 +188,6 @@ export function AutomaticDispatch({
   const [failures, setFailures] = useState<CheckResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  // Whether Mission Control signed this handoff, so the run station sends it
-  // by itself. Unsigned, the operator presses Send there.
-  const [signed, setSigned] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [showRocketFeedback, setShowRocketFeedback] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -291,24 +288,6 @@ export function AutomaticDispatch({
   }
 
   /**
-   * The mission's stored code, signed for this yard, or null. Null is a
-   * Mission Control with no shared secret, or a request that failed: the run
-   * station then waits for Send rather than refusing the mission.
-   */
-  async function signedHandoff(missionId: string): Promise<{ code: string; expires: number; signature: string } | null> {
-    try {
-      const response = await fetch(`/api/operator/missions/${encodeURIComponent(missionId)}/handoff`, { method: 'POST' });
-      if (!response.ok) return null;
-      const body = (await response.json()) as { code?: unknown; expires?: unknown; signature?: unknown };
-      return typeof body.code === 'string' && typeof body.expires === 'number' && typeof body.signature === 'string'
-        ? { code: body.code, expires: body.expires, signature: body.signature }
-        : null;
-    } catch {
-      return null;
-    }
-  }
-
-  /**
    * Read the yard, and with `send` go on to the run station if it is ready.
    *
    * Without `send` this is Check yard: the first read in a browser that has
@@ -355,8 +334,6 @@ export function AutomaticDispatch({
         return;
       }
 
-      const handoff = await signedHandoff(mission.id);
-      setSigned(handoff !== null);
       setSuccess(true);
       setShowRocketFeedback(true);
       const target = new URL(readConsoleUrl());
@@ -366,7 +343,7 @@ export function AutomaticDispatch({
         yardId,
         missionId: mission.id,
         missionName: mission.name || '',
-        code: handoff?.code ?? mission.code,
+        code: mission.code,
         // Where the console's "Mission Control" link returns to: this mission,
         // open, rather than Mission Control's home page, which is the learner
         // feed. The console only follows it back to this origin.
@@ -376,10 +353,6 @@ export function AutomaticDispatch({
       // is on another address and cannot read the operator's choice from here;
       // without this it falls back to the laptop's setting, which is wrong for
       // anyone who picked the other theme in Mission Control.
-      if (handoff) {
-        params.set('expires', String(handoff.expires));
-        params.set('signature', handoff.signature);
-      }
       const theme = document.documentElement.getAttribute('data-theme');
       if (theme === 'light' || theme === 'dark') params.set('theme', theme);
       target.search = params.toString();
@@ -644,9 +617,7 @@ export function AutomaticDispatch({
 
       {success && (
         <p role="status" className="mt-2 rounded-xl border border-emerald-600/30 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-700">
-          {signed
-            ? 'All checks passed. Opening the run station: the rover starts as soon as it is ready.'
-            : 'All checks passed. Opening the run station: press Send to rover there.'}
+          All checks passed. Starting mission...
         </p>
       )}
 
