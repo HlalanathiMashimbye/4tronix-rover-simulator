@@ -11,6 +11,15 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Send to Rover is one press again.** The signed handoff (#341) meant the
+  run station only sent by itself when Mission Control and the satellite held
+  the same upload secret; otherwise it filled the mission in and waited for a
+  second press on Send. In practice that second press was what operators got,
+  so the handoff is back to sending by itself once the camera and rover are
+  ready. This reopens what #341 closed: a link that opens the run station
+  with `handoff=automatic` can start a run, so the yard browser should only be
+  used for the yard.
+
 - **How long a video keeps filming after its run is a slider on Settings.**
   The tail was a fixed three seconds in `mission_watcher.py`, chosen by
   watching the real rover come to rest. A yard whose camera sees the rover
@@ -31,20 +40,6 @@ which is often longer than the diff.
   cache lists its new file. Behaviour is unchanged; tests that read a page's
   text read its script file with it (`tests/page_source.py`).
 
-- **Only a mission Mission Control signed starts a rover run by itself.**
-  Send to Rover opens the satellite's run station with the mission in the
-  address, and the run station pressed its own Send as soon as the camera and
-  rover were ready. Anything can open a link, so any page a yard browser
-  visited could have started filming and moved the rover with code of its
-  choosing; the same-origin check on the satellite's POSTs did not cover it,
-  because the POST came from the run station itself. Mission Control's server
-  now signs the handoff for the operator's yard (the stored code, never the
-  request's, for five minutes) with the upload secret the satellite already
-  holds, and the satellite checks the signature once. A verified handoff
-  still needs only the one press in Mission Control. Anything else, a link
-  from elsewhere or a satellite with no secret set, fills the run station and
-  waits for Send. A shared test vector keeps the two languages' formats in
-  step.
 - **A mission is an entity with its own lifecycle, not a record that any
   layer may change.** `Mission` was an interface of about 25 public fields,
   and the rules for changing it lived in loose functions beside it
