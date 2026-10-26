@@ -32,8 +32,8 @@ afterEach(() => {
   delete (navigator as { permissions?: unknown }).permissions;
 });
 
-function open() {
-  render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={jest.fn()} />);
+function open(navigate: (url: string) => void = jest.fn()) {
+  render(<AutomaticDispatch mission={mission} yardId="curiosity" navigate={navigate} />);
 }
 
 it('runs on an https page', () => {
@@ -41,27 +41,54 @@ it('runs on an https page', () => {
   expect(window.location.protocol).toBe('https:');
 });
 
-it('tells a browser with no local network permission to use Chrome or Edge as soon as the mission opens', async () => {
-  // Safari: no permission to ask for, so a request would simply be blocked.
-  Object.defineProperty(navigator, 'permissions', {
-    configurable: true,
-    value: { query: jest.fn().mockRejectedValue(new TypeError('unknown permission')) },
+describe('a browser that blocks the yard check: Safari, Firefox, any iPhone browser', () => {
+  let fetchMock: jest.Mock;
+
+  beforeEach(() => {
+    // No permission to ask for, so a request would simply be blocked.
+    Object.defineProperty(navigator, 'permissions', {
+      configurable: true,
+      value: { query: jest.fn().mockRejectedValue(new TypeError('unknown permission')) },
+    });
+    fetchMock = jest.fn().mockRejectedValue(new TypeError('Load failed'));
+    global.fetch = fetchMock;
   });
-  const fetchMock = jest.fn().mockRejectedValue(new TypeError('Load failed'));
-  global.fetch = fetchMock;
 
-  open();
+  it('says so as soon as the mission opens, without trying a read that cannot work', async () => {
+    open();
 
-  const alert = await screen.findByRole('alert');
-  expect(alert).toHaveTextContent('This browser cannot reach the yard');
-  expect(alert).toHaveTextContent('Chrome or Edge');
-  expect(alert).not.toHaveTextContent('Yard offline');
-  expect(screen.getByRole('button', { name: 'Copy for the run station' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Send to Rover' })).toBeDisabled();
-  // Neither trying again nor checking can change which browser this is.
-  expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Check yard' })).not.toBeInTheDocument();
-  expect(fetchMock).not.toHaveBeenCalled();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('This browser cannot check the yard');
+    expect(alert).not.toHaveTextContent('Yard offline');
+    expect(alert).not.toHaveTextContent('Chrome or Edge');
+    expect(screen.getByRole('button', { name: 'Copy for the run station' })).toBeInTheDocument();
+    // Neither trying again nor checking can change which browser this is.
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Check yard' })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('still sends: Send to Rover opens the run station with the mission, which checks the yard itself', async () => {
+    const navigate = jest.fn();
+    open(navigate);
+    await screen.findByRole('alert');
+
+    const send = screen.getByRole('button', { name: 'Send to Rover' });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Opening the run station');
+    expect(send).toBeDisabled();
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1), { timeout: 3000 });
+    const target = new URL(navigate.mock.calls[0][0]);
+    expect(target.origin + target.pathname).toBe('http://mro.local:3001/run/');
+    expect(target.searchParams.get('handoff')).toBe('automatic');
+    expect(target.searchParams.get('yardId')).toBe('curiosity');
+    expect(target.searchParams.get('missionId')).toBe('m1');
+    expect(target.searchParams.get('code')).toBe('rover.forward(60)');
+    // Straight there: no read of the yard was attempted on the way.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('Chrome that cannot name the permission in advance, as on Android', () => {

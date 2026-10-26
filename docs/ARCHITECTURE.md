@@ -67,9 +67,11 @@ The loop, end to end:
 data behind carrier NAT: no inbound port, no tunnel. The one bridge is the
 operator's browser, a device on the venue LAN with a cloud page open: it can
 fetch the satellite's plain-HTTP status and navigate to the run station,
-though browsers make even that grudging (Safari wants a local-network
-permission, and the console says so when that is the reason a yard check
-failed). The satellite could reach out instead, and it used to, by mirroring
+though browsers make even that grudging. Chrome and Edge ask for local
+network access first; Safari, Firefox and every browser on an iPhone refuse
+the read outright but still allow the navigation, so there Send to Rover
+skips the console's checks and opens the run station, which checks the yard
+id, camera and rover itself before it sends. The satellite could reach out instead, and it used to, by mirroring
 Firestore. That put Firebase
 credentials on a box on venue wifi, and a sync thread and a read quota behind
 a yard that has to work offline anyway, mostly to feed an operator console
