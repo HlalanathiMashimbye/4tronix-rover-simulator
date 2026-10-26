@@ -152,8 +152,8 @@ const UNREACHABLE_MESSAGES: Record<Unreachable, { title: string; body: string }>
     body: 'This browser is not allowed to reach the yard. Click the lock beside the address, open the permissions for this site, set Local network access to Allow, then try again. Or copy the mission and paste it into the run station.',
   },
   'browser-cannot': {
-    title: 'This browser cannot reach the yard',
-    body: 'Sending automatically needs a browser like Chrome or Edge, which can ask for local network access. Open Mission Control in one of them, or copy the mission and paste it into the run station.',
+    title: 'This browser cannot check the yard',
+    body: 'This browser does not let Mission Control read the yard, so the checks stay unknown. Send to Rover still works: it opens the run station, which checks the camera and rover itself and starts the mission once both are ready.',
   },
 };
 
@@ -208,7 +208,8 @@ export function AutomaticDispatch({
 
   useEffect(() => {
     // Everything the browser can say without asking the operator is said on
-    // opening, so nobody presses Send to Rover to learn Safari cannot send.
+    // opening, so in Safari Send to Rover goes straight to the run station
+    // rather than first trying a read that cannot succeed.
     let cancelled = false;
     void localNetworkPermission().then((permission) => {
       if (cancelled) return;
@@ -334,29 +335,7 @@ export function AutomaticDispatch({
         return;
       }
 
-      setSuccess(true);
-      setShowRocketFeedback(true);
-      const target = new URL(readConsoleUrl());
-      target.pathname = '/run/';
-      const params = new URLSearchParams({
-        handoff: 'automatic',
-        yardId,
-        missionId: mission.id,
-        missionName: mission.name || '',
-        code: mission.code,
-        // Where the console's "Mission Control" link returns to: this mission,
-        // open, rather than Mission Control's home page, which is the learner
-        // feed. The console only follows it back to this origin.
-        returnTo: `${window.location.origin}/operator?mission=${encodeURIComponent(mission.id)}`,
-      });
-      // The theme on screen right now, so the console opens in it. The console
-      // is on another address and cannot read the operator's choice from here;
-      // without this it falls back to the laptop's setting, which is wrong for
-      // anyone who picked the other theme in Mission Control.
-      const theme = document.documentElement.getAttribute('data-theme');
-      if (theme === 'light' || theme === 'dark') params.set('theme', theme);
-      target.search = params.toString();
-      window.setTimeout(() => navigate(target.toString()), 1500);
+      goToRunStation();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not check the satellite.');
       setFailures([]);
@@ -364,6 +343,54 @@ export function AutomaticDispatch({
       checkingRef.current = false;
       setChecking(false);
     }
+  }
+
+  /** Hand the mission to the run station, which starts it once the yard is ready. */
+  function goToRunStation() {
+    setSuccess(true);
+    setShowRocketFeedback(true);
+    const target = new URL(readConsoleUrl());
+    target.pathname = '/run/';
+    const params = new URLSearchParams({
+      handoff: 'automatic',
+      yardId,
+      missionId: mission.id,
+      missionName: mission.name || '',
+      code: mission.code,
+      // Where the console's "Mission Control" link returns to: this mission,
+      // open, rather than Mission Control's home page, which is the learner
+      // feed. The console only follows it back to this origin.
+      returnTo: `${window.location.origin}/operator?mission=${encodeURIComponent(mission.id)}`,
+    });
+    // The theme on screen right now, so the console opens in it. The console
+    // is on another address and cannot read the operator's choice from here;
+    // without this it falls back to the laptop's setting, which is wrong for
+    // anyone who picked the other theme in Mission Control.
+    const theme = document.documentElement.getAttribute('data-theme');
+    if (theme === 'light' || theme === 'dark') params.set('theme', theme);
+    target.search = params.toString();
+    window.setTimeout(() => navigate(target.toString()), 1500);
+  }
+
+  // Safari, Firefox and every browser on an iPhone block this https page from
+  // reading the http satellite, but not from opening it: a page may navigate
+  // where it may not fetch. So there Send to Rover skips these checks and
+  // opens the run station, which checks the yard id, camera and rover itself
+  // and only sends once they are ready. Before this, copy and paste was the
+  // only way to send from these browsers, an iPhone included.
+  const unchecked = unreachable === 'browser-cannot';
+  const sendDisabled = unchecked ? !mission.code || success : checking || !mission.code || !allReady;
+  const sendTitle = unchecked
+    ? 'Opens the run station, which checks the yard itself'
+    : allReady ? undefined : 'Unlocks when every yard check is ready';
+  const sendHelp = unchecked
+    ? 'This browser cannot check the yard. Send to Rover opens the run station, which starts the mission once the camera and rover are ready.'
+    : live
+      ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
+      : 'Send to Rover unlocks when every check below is ready.';
+  function send() {
+    if (unchecked) goToRunStation();
+    else void readYard(true);
   }
 
   const notReady = checks.filter((check) => check.state === 'failed');
@@ -391,9 +418,7 @@ export function AutomaticDispatch({
             Yard checks
           </h3>
           <p id="automatic-dispatch-help" className="sr-only">
-            {live
-              ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
-              : 'Send to Rover unlocks when every check below is ready.'}
+            {sendHelp}
           </p>
 
           <ul className="grid grid-cols-3 gap-1.5 @2xl:flex @2xl:flex-1 @2xl:flex-col @2xl:gap-2" aria-live="polite">
@@ -441,10 +466,10 @@ export function AutomaticDispatch({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => readYard(true)}
-                disabled={checking || !mission.code || !allReady}
+                onClick={send}
+                disabled={sendDisabled}
                 aria-describedby="automatic-dispatch-help"
-                title={allReady ? undefined : 'Unlocks when every yard check is ready'}
+                title={sendTitle}
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-md transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {checking && live ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
@@ -472,9 +497,7 @@ export function AutomaticDispatch({
           <span className="@max-md:sr-only">Yard checks</span>
         </h3>
         <p id="automatic-dispatch-help" className="sr-only">
-          {live
-            ? 'Checked every 15 seconds. Send to Rover unlocks when all three are ready.'
-            : 'Send to Rover unlocks when every check below is ready.'}
+          {sendHelp}
         </p>
 
         {/* Icons, coloured by state: the three checks are read at a glance
@@ -531,10 +554,10 @@ export function AutomaticDispatch({
           )}
           <button
             type="button"
-            onClick={() => readYard(true)}
-            disabled={checking || !mission.code || !allReady}
+            onClick={send}
+            disabled={sendDisabled}
             aria-describedby="automatic-dispatch-help"
-            title={allReady ? undefined : 'Unlocks when every yard check is ready'}
+            title={sendTitle}
             className="inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {checking && live ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}
@@ -585,13 +608,16 @@ export function AutomaticDispatch({
           </div>
           <div className={panel ? 'flex w-full gap-2 [&>button]:flex-1 [&>button]:justify-center' : 'flex shrink-0 gap-2'}>
             {/* Short on a phone, so the warning's title still fits beside
-                them; the accessible names stay whole. */}
+                them; the accessible names stay whole. Outlined where Send to
+                Rover still works, so the panel has one green button. */}
             <button
               type="button"
               onClick={copyCode}
               disabled={!mission.code}
               aria-label={copied ? 'Copied' : 'Copy for the run station'}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50 ${unchecked
+                ? 'border border-border font-semibold text-foreground hover:border-primary/70'
+                : 'bg-emerald-600 font-bold text-white hover:bg-emerald-700'}`}
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               <span className="@max-md:hidden">{copied ? 'Copied' : 'Copy for the run station'}</span>
@@ -617,7 +643,9 @@ export function AutomaticDispatch({
 
       {success && (
         <p role="status" className="mt-2 rounded-xl border border-emerald-600/30 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-700">
-          All checks passed. Starting mission...
+          {unchecked
+            ? 'Opening the run station: the mission starts once the camera and rover are ready.'
+            : 'All checks passed. Starting mission...'}
         </p>
       )}
 
