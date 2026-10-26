@@ -44,8 +44,6 @@ import { FirebaseOperatorAuth } from '@/infrastructure/auth/FirebaseOperatorAuth
 import { FirestoreAccessRequestLedger } from '@/infrastructure/auth/FirestoreAccessRequestLedger';
 import { FirestoreLearnerContactWriter } from '@/infrastructure/persistence/FirestoreLearnerContactWriter';
 import type { ILearnerContactWriter } from '@/core/domain/services/ILearnerContactWriter';
-import { MissionHandoffService } from '@/core/application/services/MissionHandoffService';
-import { HmacHandoffSigner } from '@/infrastructure/yard/HmacHandoffSigner';
 import { nanoid } from 'nanoid';
 
 /** Privileged. Firestore rules do not apply: check authorisation yourself. */
@@ -179,12 +177,4 @@ export function operatorAccessRequests(origin?: string): OperatorAccessRequests 
 /** Where a learner's address is saved. Admin SDK: browsers cannot reach it. */
 export function learnerContactWriter(): ILearnerContactWriter {
   return new FirestoreLearnerContactWriter(getFirestoreInstance());
-}
-
-/** Signed with the secret the satellite already holds for uploads. */
-export function missionHandoffService(): MissionHandoffService {
-  return new MissionHandoffService(
-    adminMissionRepository(),
-    new HmacHandoffSigner(() => process.env.YOUTUBE_UPLOAD_INGEST_SECRET),
-  );
 }

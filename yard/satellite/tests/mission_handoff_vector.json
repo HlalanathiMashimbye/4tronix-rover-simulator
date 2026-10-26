@@ -1,8 +1,0 @@
-{
-  "secret": "a-shared-secret-of-48-characters-for-the-yard-xx",
-  "yardId": "curiosity",
-  "missionId": "jLSLqPhCp1RuUo2CpfQUA",
-  "expires": 1793000000,
-  "code": "rover.forward(60)\ntime.sleep(1)\nrover.stop()  # é",
-  "signature": "245d81fb35b5ac473242e0fde8e6a682c206902791f8104e6ae349b3a3a68147"
-}

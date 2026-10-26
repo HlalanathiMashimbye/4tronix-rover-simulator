@@ -114,11 +114,6 @@ def _secret():
     return secret if secret and issued_for == _mission_control() else ''
 
 
-def shared_secret():
-    """The same secret, for checking what Mission Control signs (mission_handoff)."""
-    return _secret()
-
-
 def secret_status():
     """What the Settings page may know about the secret: never the secret."""
     secret, issued_for, source = _issued_secret()

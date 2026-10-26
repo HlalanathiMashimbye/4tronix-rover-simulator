@@ -10,12 +10,8 @@ const PAGE = document.currentScript.dataset;
     // say the recording has stopped.
     let recordingFile = null;
     let recordingSince = 0;
-    // A mission handed over from Mission Control, filled in and not sent yet.
-    // `handoffChecking` while the satellite checks its signature, and
-    // `handoffVerified` once it has: then Send presses itself.
-    let handoffWaiting = false;
-    let handoffChecking = false;
-    let handoffVerified = false;
+    let automaticRunRequested = false;
+    let automaticRunStarted = false;
     let runListenerReady = false;
 
     function flash(el, text, tone) {
@@ -153,13 +149,6 @@ const PAGE = document.currentScript.dataset;
     // Automatic Route hands off through the application URL, never through the
     // clipboard. The yard identity is checked again here so a console opened
     // for the wrong yard cannot run a mission against this rover.
-    //
-    // The operator already pressed Send to Rover in Mission Control, so a
-    // handoff Mission Control signed is sent from here by itself. Anything
-    // else in the address waits for Send: anything can open a link, and a page
-    // that ran whatever its address carried would let any site a yard browser
-    // visited move the rover. The same-origin check on /api/queue/add cannot
-    // help there, because the POST comes from this page.
     const handoff = new URLSearchParams(window.location.search);
     if (handoff.get('handoff') === 'automatic') {
         if (handoff.get('yardId') !== YARD_ID) {
@@ -169,37 +158,7 @@ const PAGE = document.currentScript.dataset;
             setMetaValue(missionName, handoff.get('missionName') || '');
             code.value = handoff.get('code') || '';
             updateRunIdentity();
-            handoffWaiting = true;
-            noteHandoff('Mission loaded from Mission Control. Press Send to rover to run it.');
-            if (handoff.get('signature')) verifyHandoff(handoff);
-        }
-    }
-
-    function noteHandoff(text) {
-        $('runMsg').dataset.tone = 'ok';
-        $('runMsg').textContent = text;
-    }
-
-    async function verifyHandoff(params) {
-        handoffChecking = true;
-        try {
-            const resp = await fetch('/api/handoff/verify', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    missionId: params.get('missionId') || '', code: params.get('code') || '',
-                    expires: params.get('expires'), signature: params.get('signature'),
-                }),
-            });
-            const d = await resp.json();
-            if (resp.ok && d.verified) {
-                handoffVerified = true;
-                noteHandoff('Mission from Mission Control. It starts as soon as the camera and rover are ready.');
-            }
-        } catch (e) {
-            // Unchecked is unverified: the operator presses Send.
-        } finally {
-            handoffChecking = false;
-            continueHandoff();
+            automaticRunRequested = true;
         }
     }
 
@@ -370,7 +329,7 @@ const PAGE = document.currentScript.dataset;
                 announceDone(file);
             }
             paintGate();
-            continueHandoff();
+            maybeAutoRun();
         });
         YardStatus.onError(() => {
             roverOk = false;
@@ -526,17 +485,16 @@ const PAGE = document.currentScript.dataset;
         }
     });
 
-    // Once, when the yard is ready and the signature has been checked: a
-    // verified handoff sends, anything else puts the focus on Send.
-    function continueHandoff() {
-        if (!handoffWaiting || handoffChecking || !runListenerReady || $('runBtn').disabled) return;
-        handoffWaiting = false;
-        if (handoffVerified) $('runBtn').click();
-        else $('runBtn').focus();
-    }
-    // The click handler exists from here, so a status that arrives first waits.
+    // The listener must exist before a synchronous status subscriber can
+    // trigger an Automatic Route handoff.
     runListenerReady = true;
-    continueHandoff();
+    maybeAutoRun();
+
+    function maybeAutoRun() {
+        if (!runListenerReady || !automaticRunRequested || automaticRunStarted || !cameraPrimed || !roverOk) return;
+        automaticRunStarted = true;
+        $('runBtn').click();
+    }
 
     $('stopBtn').addEventListener('click', async () => {
         try {
