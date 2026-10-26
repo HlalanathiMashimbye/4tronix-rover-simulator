@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Check, Download } from 'lucide-react';
+import { X, Check, Copy, Download } from 'lucide-react';
 import { useLearner } from '@/contexts/LearnerContext';
 import { browserAuth } from '@/infrastructure/container.browser';
 import { downloadRecoveryCode } from '@/infrastructure/browser/downloadRecoveryCode';
@@ -210,16 +210,12 @@ export function SaveProfileModal({ open, onClose }: Props) {
                   <button
                     type="button"
                     onClick={handleCopy}
-                    className="flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground transition-colors hover:bg-muted/50 focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    aria-label={copied ? 'Copied' : 'Copy code'}
                   >
-                    {copied ? (
-                      <>
-                        <Check className="h-4 w-4" aria-hidden="true" />
-                        Copied
-                      </>
-                    ) : (
-                      'Copy'
-                    )}
+                    {copied
+                      ? <Check className="h-4 w-4" aria-hidden="true" />
+                      : <Copy className="h-4 w-4" aria-hidden="true" />}
                   </button>
                   <button
                     type="button"
