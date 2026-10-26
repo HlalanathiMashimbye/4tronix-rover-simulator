@@ -11,6 +11,17 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Send to Rover works from an iPhone, Safari and Firefox.** These browsers
+  never let the https Mission Control read the http satellite, so the yard
+  checks could not run and Send to Rover stayed locked; copy and paste was
+  the only way to send, and on an iPhone that was every browser, Chrome
+  included (#348 only helped Chrome on Android). They do let the page open
+  the run station, so there Send to Rover now skips Mission Control's checks
+  and opens it with the mission. The run station already refuses a mission
+  for another yard and waits for the camera and rover before it sends, so
+  nothing moves on a yard that is not ready. Off the yard's wifi, the run
+  station simply does not load.
+
 - **Chrome on a phone can be asked for local network access.** A mission
   opened on an https page checks, before anything is pressed, whether the
   browser can reach the http satellite at all, and a browser that could not
