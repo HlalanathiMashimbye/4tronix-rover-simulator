@@ -54,3 +54,9 @@ output "firestore_backup" {
     service_account = module.firestore_backup.service_account_email
   }
 }
+
+# Records to add in Cloudflare for the DNS-validated certificates (lb.tf),
+# DNS only, not proxied.
+output "certificate_dns_records" {
+  value = module.mission_control.certificate_dns_records
+}

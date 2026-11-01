@@ -13,6 +13,22 @@ locals {
     if contains(keys(var.environments), env) && trimspace(domain) != ""
   }
 
+  # Hostnames behind a proxy get a DNS-validated certificate (see below), and
+  # the ones whose load balancer already uses it.
+  dns_validated = {
+    for env, domain in local.domains : env => domain
+    if contains(keys(var.dns_validated_certificates), env)
+  }
+  uses_certificate_map = {
+    for env, domain in local.dns_validated : env => domain
+    if var.dns_validated_certificates[env]
+  }
+  # Everything else keeps the classic Google-managed certificate.
+  classic_certificates = {
+    for env, domain in local.domains : env => domain
+    if !contains(keys(local.uses_certificate_map), env)
+  }
+
   # Public origin per environment, same rule as the service_urls output.
   # Handed to the container as a RUNTIME env var rather than baked in at build
   # time: prod promotes the exact image digest already serving on staging, and
@@ -108,7 +124,7 @@ resource "google_compute_global_forwarding_rule" "http" {
 # --- HTTPS (only when a hostname is configured) -------------------------------
 
 resource "google_compute_managed_ssl_certificate" "mission_control" {
-  for_each = local.domains
+  for_each = local.classic_certificates
   name     = "mission-control-${each.key}"
 
   managed {
@@ -116,12 +132,64 @@ resource "google_compute_managed_ssl_certificate" "mission_control" {
   }
 }
 
+# --- DNS-validated certificate, for a hostname behind a proxy ----------------
+#
+# A classic managed certificate renews by Google reaching the load balancer at
+# its hostname. Once David moved sapient.rocks to Cloudflare (by 1 Nov 2026),
+# marsyard.sapient.rocks resolved to Cloudflare, and prod's certificate went to
+# FAILED_NOT_VISIBLE with an expiry of 18 Nov 2026. Visitors see Cloudflare's
+# certificate, but Cloudflare still connects to this load balancer over HTTPS.
+#
+# Certificate Manager proves ownership with a CNAME instead, which the proxy
+# does not touch, and it can issue before the load balancer uses it. The record
+# must be DNS only (grey cloud) in Cloudflare: a proxied CNAME is not one.
+
+resource "google_certificate_manager_dns_authorization" "mission_control" {
+  for_each = local.dns_validated
+  name     = "mission-control-${each.key}"
+  domain   = each.value
+}
+
+resource "google_certificate_manager_certificate" "mission_control" {
+  for_each = local.dns_validated
+  name     = "mission-control-${each.key}"
+
+  managed {
+    domains            = [each.value]
+    dns_authorizations = [google_certificate_manager_dns_authorization.mission_control[each.key].id]
+  }
+}
+
+resource "google_certificate_manager_certificate_map" "mission_control" {
+  for_each = local.dns_validated
+  name     = "mission-control-${each.key}"
+}
+
+resource "google_certificate_manager_certificate_map_entry" "mission_control" {
+  for_each     = local.dns_validated
+  name         = "mission-control-${each.key}"
+  map          = google_certificate_manager_certificate_map.mission_control[each.key].name
+  hostname     = each.value
+  certificates = [google_certificate_manager_certificate.mission_control[each.key].id]
+}
+
 resource "google_compute_target_https_proxy" "mission_control" {
   for_each = local.domains
 
-  name             = "mission-control-${each.key}"
-  url_map          = google_compute_url_map.mission_control[each.key].id
-  ssl_certificates = [google_compute_managed_ssl_certificate.mission_control[each.key].id]
+  name    = "mission-control-${each.key}"
+  url_map = google_compute_url_map.mission_control[each.key].id
+
+  # One or the other: a proxy with a certificate map ignores ssl_certificates.
+  certificate_map = (
+    contains(keys(local.uses_certificate_map), each.key)
+    ? "//certificatemanager.googleapis.com/${google_certificate_manager_certificate_map.mission_control[each.key].id}"
+    : null
+  )
+  ssl_certificates = (
+    contains(keys(local.uses_certificate_map), each.key)
+    ? null
+    : [google_compute_managed_ssl_certificate.mission_control[each.key].id]
+  )
 }
 
 resource "google_compute_global_forwarding_rule" "https" {

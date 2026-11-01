@@ -88,6 +88,26 @@ variable "environments" {
   }
 }
 
+variable "dns_validated_certificates" {
+  description = <<-EOT
+    Environments whose hostname sits behind a proxy such as Cloudflare, mapped
+    to whether the load balancer uses the new certificate yet.
+
+    A Google-managed certificate on the load balancer renews by reaching the
+    load balancer at its hostname. Behind Cloudflare's proxy the name resolves
+    to Cloudflare instead, so renewal fails (FAILED_NOT_VISIBLE). These
+    environments get a Certificate Manager certificate validated by a DNS
+    record instead, which the proxy does not affect.
+
+    false: the certificate is created, the load balancer keeps its old one.
+    Add the record from `terraform output certificate_dns_records` and wait for
+    ACTIVE. true: the load balancer switches to it and the old one is deleted.
+    Two applies, so HTTPS never points at a certificate that is not issued.
+  EOT
+  type        = map(bool)
+  default     = {}
+}
+
 variable "domains" {
   description = "Optional public hostname per environment (e.g. staging = mission-control-staging.example.com). When set, Terraform provisions a Google-managed cert and HTTPS on the load balancer; point DNS A records at terraform output lb_ip_addresses first. When empty, that env is HTTP-only on the LB IP (fine for a short demo, not for real mail links)."
   type        = map(string)

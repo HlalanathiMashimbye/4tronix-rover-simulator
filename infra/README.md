@@ -80,6 +80,12 @@ Two things mean stop rather than approve:
 - a destroy of HTTPS certs or target-https-proxies: you forgot
   `-var-file=impact.tfvars`
 
+One destroy is expected, once: when `dns_validated_certificates.prod` goes
+from `false` to `true`, the plan deletes `google_compute_managed_ssl_certificate`
+`["prod"]` and updates prod's target-https-proxy in place to the certificate
+map. Only after `gcloud certificate-manager certificates describe
+mission-control-prod` shows ACTIVE. The steps are in `impact.tfvars`.
+
 There is no soft-deleted `github` Workload Identity pool, so the undelete +
 import caveat in the Notes below does not apply.
 

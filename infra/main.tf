@@ -20,6 +20,8 @@ locals {
     # Firestore itself is provisioned outside Terraform, but the scheduled
     # export calls its admin API, so the API belongs in the managed set.
     "firestore.googleapis.com",
+    # DNS-validated certificates for a hostname behind a proxy (lb.tf).
+    "certificatemanager.googleapis.com",
   ]
 }
 
@@ -45,6 +47,8 @@ module "mission_control" {
   environments       = var.environments
   firestore_location = var.firestore_location
   domains            = var.domains
+
+  dns_validated_certificates = var.dns_validated_certificates
 
   cron_environment  = var.cron_environment
   cron_region       = var.cron_region

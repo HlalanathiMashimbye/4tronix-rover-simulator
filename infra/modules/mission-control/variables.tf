@@ -44,6 +44,17 @@ variable "domains" {
   default     = {}
 }
 
+variable "dns_validated_certificates" {
+  description = "Environments behind a proxy, mapped to whether the load balancer uses the DNS-validated certificate yet. See the root variable."
+  type        = map(bool)
+  default     = {}
+
+  validation {
+    condition     = alltrue([for env in keys(var.dns_validated_certificates) : trimspace(lookup(var.domains, env, "")) != ""])
+    error_message = "Every environment in dns_validated_certificates needs a hostname in domains."
+  }
+}
+
 variable "cron_environment" {
   description = <<-EOT
     Which environment runs the YouTube auto-link schedule, or "" for none.
