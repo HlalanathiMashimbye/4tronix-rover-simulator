@@ -119,7 +119,7 @@ export default function MissionVideoClient({
         }
       } catch (err) {
         console.error('Fetch mission error:', err);
-        setError("This mission couldn't be loaded. Please try again.");
+        setError('Failed to load mission');
       } finally {
         setLoading(false);
       }

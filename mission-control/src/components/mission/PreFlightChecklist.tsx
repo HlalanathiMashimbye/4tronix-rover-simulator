@@ -11,7 +11,7 @@ import {
 /**
  * Plain-English label for a check - presentation only, not domain logic.
  *
- * Same split ChallengeInstructionsPanel uses: the domain says which rules there
+ * The domain says which rules there
  * are and whether they pass, and this says it in words a nine-year-old can act
  * on. Rewording a line touches this file and nothing in core.
  */
@@ -115,10 +115,6 @@ const CHIP: Record<PreFlightCheckId, { icon: LucideIcon; label: string }> = {
  *
  * Only the FIRST unmet check explains itself: the checks are close enough to
  * sequential that the first one is nearly always the one to act on.
- *
- * Deliberately mirrors ChallengeInstructionsPanel's tick vocabulary - filled green
- * CheckCircle2 against a hollow muted Circle. A learner arriving from the
- * challenges flow has already learnt what those two icons mean.
  *
  * Wide (the card under a laptop's editor), the line sits beside the chips
  * rather than under them, which is a row the simulator gets back in height.

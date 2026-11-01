@@ -33,11 +33,7 @@ export class BrowserFirestoreLearnerRepository implements ILearnerRepository {
     });
   }
 
-  async recordVisit(id: string, learnerRef: string, at: string, displayName?: string): Promise<void> {
-    await updateDoc(doc(this.db, LEARNERS_COLLECTION, id), {
-      lastActiveAt: at,
-      learnerRef,
-      ...(displayName ? { displayName } : {}),
-    });
+  async recordVisit(id: string, learnerRef: string, at: string): Promise<void> {
+    await updateDoc(doc(this.db, LEARNERS_COLLECTION, id), { lastActiveAt: at, learnerRef });
   }
 }
