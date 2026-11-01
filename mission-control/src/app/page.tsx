@@ -2,7 +2,6 @@
 
 import { MobileSearch } from '@/components/layout/MobileSearch';
 import { MissionFeed } from '@/components/mission-feed/MissionFeed';
-import { WelcomeCard } from '@/components/challenges/WelcomeCard';
 
 export default function LandingPage() {
   return (
@@ -14,10 +13,6 @@ export default function LandingPage() {
       </div>
 
       <MissionFeed />
-
-      {/* On the home feed only, so a mission link from an email is never
-          interrupted. See WelcomeCard for why this is not a page. */}
-      <WelcomeCard />
     </main>
   );
 }

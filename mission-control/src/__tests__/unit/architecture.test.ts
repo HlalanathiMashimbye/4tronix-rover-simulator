@@ -189,12 +189,13 @@ describe('how tall a full-height page is', () => {
     expect(css).toMatch(/:has\(\[data-surface="mission"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
   });
 
-  it('keeps the tab bar on the build page so a learner can navigate after a challenge', () => {
+  it('drops it on the build page too, where the tab bar is gone on a phone', () => {
+    // Same pairing for Create Mission (AB#455): the navbar stops rendering
+    // the tab bar there, so keeping its 4rem clear would leave a dead band
+    // under the block canvas.
     expect(read('app/mission/page.tsx')).toMatch(/data-surface="build"/);
     const css = readFileSync(join(SRC, 'app', 'globals.css'), 'utf8');
-    // The build surface must NOT zero out --app-bottom-chrome: the tab bar
-    // is visible there so h-page must account for it.
-    expect(css).not.toMatch(/:has\(\[data-surface="build"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
+    expect(css).toMatch(/:has\(\[data-surface="build"\]\)[^{]*\{[^}]*--app-bottom-chrome:\s*0px/);
   });
 
 });
