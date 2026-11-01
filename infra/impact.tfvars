@@ -35,6 +35,21 @@ domains = {
   staging = "marsyard.labs.ws"
 }
 
+# sapient.rocks moved to Cloudflare's proxy, so prod's classic certificate can
+# no longer renew (FAILED_NOT_VISIBLE, expires 18 Nov 2026). Prod gets a
+# DNS-validated one instead. Staging is not behind a proxy and stays as it is.
+#
+#   1. Apply with prod = false. The new certificate is created; HTTPS is
+#      unchanged.
+#   2. Add `terraform output certificate_dns_records` in Cloudflare, DNS only.
+#   3. Wait for ACTIVE:
+#      gcloud certificate-manager certificates describe mission-control-prod
+#   4. Set prod = true and apply. The load balancer switches to it and the old
+#      certificate is deleted.
+dns_validated_certificates = {
+  prod = false
+}
+
 # Prod's own database. Prod starts clean on `prod`; staging keeps (default),
 # which holds every mission since the pilot, test runs included. The missions
 # worth keeping are copied across by hand (docs/go-live.md), not migrated.

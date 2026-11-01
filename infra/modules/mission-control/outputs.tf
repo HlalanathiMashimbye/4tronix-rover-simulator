@@ -33,3 +33,14 @@ output "firestore_databases" {
     [for database in google_firestore_database.environment : database.name],
   ))
 }
+
+# The CNAME each DNS-validated certificate waits for. Add it as DNS only.
+output "certificate_dns_records" {
+  value = {
+    for env, auth in google_certificate_manager_dns_authorization.mission_control : env => {
+      name = auth.dns_resource_record[0].name
+      type = auth.dns_resource_record[0].type
+      data = auth.dns_resource_record[0].data
+    }
+  }
+}
