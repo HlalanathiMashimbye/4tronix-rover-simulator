@@ -25,13 +25,41 @@
 # or "this data was already wrong last month".
 
 # --- Where the exports land -----------------------------------------------
+#
+# One bucket per database, and every job exports to the bare bucket. That is
+# the only form for which Firestore generates a fresh timestamped prefix per
+# run. Given gs://bucket/path it writes to exactly that path, so the second
+# export into it fails with INVALID_ARGUMENT: prod's job did that every week
+# from 1 Nov 2026 after one export on 25 Oct, while it shared this bucket
+# under a `prod/` path. A Scheduler body is fixed text and cannot put a date
+# in the path, so a bucket of its own is how a database gets the bare-bucket
+# behaviour without a function in between.
+#
+# (default) keeps the name the bucket has always had, so its exports and the
+# restore instructions pointing at them do not move.
+locals {
+  bucket_names = {
+    for database in var.database_ids : database => (
+      database == "(default)"
+      ? "${var.project_id}-firestore-backup"
+      : "${var.project_id}-firestore-backup-${database}"
+    )
+  }
+}
+
+moved {
+  from = google_storage_bucket.exports
+  to   = google_storage_bucket.exports["(default)"]
+}
 
 resource "google_storage_bucket" "exports" {
-  name = "${var.project_id}-firestore-backup"
+  for_each = local.bucket_names
+
+  name = each.value
 
   # NOT the deployment's region. A managed export requires a bucket near the
   # database, and the database is immutably in europe-west1 (see the region
-  # note in infra/variables.tf). This is the one bucket that does not get to
+  # note in infra/variables.tf). These are the buckets that do not get to
   # follow the rest of the deployment to africa-south1.
   location = var.firestore_location
 
@@ -82,11 +110,18 @@ resource "google_project_iam_member" "exporter_import_export" {
   member  = "serviceAccount:${google_service_account.exporter.email}"
 }
 
-# Scoped to this bucket, not the project. Storage Admin is what the export
-# docs require of the calling account; on one bucket that is write plus the
-# bucket metadata read the API makes before it starts.
+# Scoped to the export buckets, not the project. Storage Admin is what the
+# export docs require of the calling account; on these buckets that is write
+# plus the bucket metadata read the API makes before it starts.
+moved {
+  from = google_storage_bucket_iam_member.exporter_bucket
+  to   = google_storage_bucket_iam_member.exporter_bucket["(default)"]
+}
+
 resource "google_storage_bucket_iam_member" "exporter_bucket" {
-  bucket = google_storage_bucket.exports.name
+  for_each = google_storage_bucket.exports
+
+  bucket = each.value.name
   role   = "roles/storage.admin"
   member = "serviceAccount:${google_service_account.exporter.email}"
 }
@@ -97,17 +132,11 @@ resource "google_storage_bucket_iam_member" "exporter_bucket" {
 
 # --- The schedule ----------------------------------------------------------
 
-# One job per database, into the one bucket. (default) keeps the name and the
-# bare-bucket prefix it has always had, so its job is not replaced and its
-# exports stay where any restore instructions already point. Every other
-# database writes under a prefix of its own name.
+# One job per database, each into its own bucket. (default) keeps the job
+# name it has always had, so its job is not replaced.
 locals {
   export_prefixes = {
-    for database in var.database_ids : database => (
-      database == "(default)"
-      ? "gs://${google_storage_bucket.exports.name}"
-      : "gs://${google_storage_bucket.exports.name}/${database}"
-    )
+    for database, bucket in google_storage_bucket.exports : database => "gs://${bucket.name}"
   }
 }
 
@@ -143,8 +172,9 @@ resource "google_cloud_scheduler_job" "export" {
     # a new collection is silently outside the backup until someone remembers
     # to add it, and forgetting is invisible until a restore.
     #
-    # outputUriPrefix names no timestamp, so Firestore generates its own
-    # prefix per run under it and no two exports can collide.
+    # outputUriPrefix is a bare bucket, so Firestore generates a timestamped
+    # prefix per run and no two exports can collide. Never add a path here:
+    # see the buckets above for what that did to prod.
     body = base64encode(jsonencode({
       outputUriPrefix = each.value
     }))

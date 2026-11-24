@@ -49,7 +49,7 @@ output "lb_ip_addresses" {
 # to run by hand when you want a copy before doing something destructive.
 output "firestore_backup" {
   value = {
-    bucket          = module.firestore_backup.bucket
+    buckets         = module.firestore_backup.buckets
     scheduler_jobs  = module.firestore_backup.job_names
     service_account = module.firestore_backup.service_account_email
   }

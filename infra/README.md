@@ -300,14 +300,19 @@ The app moves to Impact's Firebase world. In the Firebase console
   Changing `var.region` after the first apply is painful (registry and
   services are regional, and location is force-new), so settle it first.
 
-  **The one exception is the Firestore backup bucket**, which is in
+  **The one exception is the Firestore backup buckets**, which are in
   `europe-west1`. A managed export refuses a bucket that is not near its
-  database, so this bucket follows the data rather than the deployment.
+  database, so these buckets follow the data rather than the deployment.
 - **Firestore backups are the managed export, not a script.** `modules/`
-  `firestore-backup` is a Cloud Scheduler job that calls
-  `:exportDocuments` weekly, a bucket with a 90-day lifecycle, and a
+  `firestore-backup` is, per database, a Cloud Scheduler job that calls
+  `:exportDocuments` weekly and a bucket with a 90-day lifecycle, plus one
   `firestore-backup` service account holding `datastore.importExportAdmin`
-  plus Storage Admin on that one bucket. No function, no code, no key.
+  and Storage Admin on those buckets. No function, no code, no key.
+
+  A bucket per database, not a folder per database in one bucket: Firestore
+  only makes a fresh timestamped folder per run when it is given a bare
+  bucket. Prod's job once wrote to a `prod/` folder and failed every week
+  after its first export.
 
   A hand-rolled version was written first (a Cloud Function walking every
   collection to JSON and uploading a zip to Google Drive). It was declined on

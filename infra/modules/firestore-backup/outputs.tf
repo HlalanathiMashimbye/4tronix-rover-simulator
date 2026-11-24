@@ -1,6 +1,6 @@
-output "bucket" {
-  description = "Bucket the exports are written to. Restore reads from here."
-  value       = google_storage_bucket.exports.name
+output "buckets" {
+  description = "Bucket each database's exports are written to. Restore reads from here."
+  value       = { for database, bucket in google_storage_bucket.exports : database => bucket.name }
 }
 
 output "service_account_email" {

@@ -165,7 +165,7 @@ Not needed to go live, and each is its own change:
   can still send them mail. Redact them, or give staging a sandbox recipient,
   before anyone experiments there (docs/plans/prod-staging-split.md, Phase 2.6).
 - **Test a restore of prod's first export**, after its first Sunday:
-  `gcloud firestore import --database=<scratch> gs://bt-impact-academy-firestore-backup/prod/<export>`.
+  `gcloud firestore import --database=<scratch> gs://bt-impact-academy-firestore-backup-prod/<export>`.
   Werner's Phase 0.2, moved to the database that now matters.
 - **Delete `infra/imports.tf`**; after one apply it does nothing.
 - **A `Strict-Transport-Security` header**, now that port 80 only redirects.

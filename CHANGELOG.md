@@ -11,6 +11,15 @@ which is often longer than the diff.
 
 ## Unreleased
 
+- **Prod's weekly backup works again.** From 1 to 22 Nov the scheduled
+  export of the `prod` database failed every Sunday with `INVALID_ARGUMENT`,
+  leaving one export, from 25 Oct. It wrote to a `prod/` folder in the
+  staging backup bucket, and Firestore only makes a fresh timestamped folder
+  per run when the target is a bare bucket: given a path it reuses it, so the
+  second run collided with the first. Each database now exports to a bucket
+  of its own (`bt-impact-academy-firestore-backup-prod` for prod); staging's
+  bucket and job are unchanged. Needs Werner's apply.
+
 - **Send to Rover works from an iPhone, Safari and Firefox.** These browsers
   never let the https Mission Control read the http satellite, so the yard
   checks could not run and Send to Rover stayed locked; copy and paste was

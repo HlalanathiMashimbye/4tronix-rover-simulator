@@ -9,7 +9,7 @@ variable "firestore_location" {
 }
 
 variable "database_ids" {
-  description = "Firestore databases to export, each weekly into the same bucket. (default) is staging's; prod has its own."
+  description = "Firestore databases to export, each weekly into a bucket of its own. (default) is staging's; prod has its own."
   type        = list(string)
   default     = ["(default)"]
 }

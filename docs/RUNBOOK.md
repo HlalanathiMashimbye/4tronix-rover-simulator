@@ -358,10 +358,21 @@ Three separate things protect the data, and they cover different accidents:
 
 The export is a Cloud Scheduler job calling the Firestore admin API, defined in
 [`infra/modules/firestore-backup`](../infra/modules/firestore-backup). It runs
-Sunday 03:00 SAST and writes to `gs://bt-impact-academy-firestore-backup`,
-which is in `europe-west1` because a managed export will not write to a bucket
-away from its database. PITR and delete protection are set on the database
-itself, which is provisioned outside Terraform like the rest of Firebase.
+Sunday 03:00 SAST, one job per database, each into a bucket of its own:
+
+| Database | Job | Bucket |
+|---|---|---|
+| `(default)`, staging | `firestore-export-weekly` | `gs://bt-impact-academy-firestore-backup` |
+| `prod` | `firestore-export-weekly-prod` | `gs://bt-impact-academy-firestore-backup-prod` |
+
+Both are in `europe-west1` because a managed export will not write to a bucket
+away from its database. Each job exports to its bare bucket, so Firestore
+makes a timestamped folder per run. Given a path instead, it writes to
+exactly that path and the second run fails: prod's job did that from 1 to
+22 Nov 2026, so the only export of `prod` before the fix is the one from
+25 Oct, under `gs://bt-impact-academy-firestore-backup/prod` until the
+90-day rule deletes it. PITR and delete protection are set on the databases
+themselves; prod's by Terraform, `(default)` outside it.
 
 An export is a copy of a live database. It is not transactionally consistent
 across collections and may miss writes from the seconds around it. That is
@@ -370,7 +381,8 @@ fine for what it is for and is why PITR exists alongside it.
 ### Take a copy before doing something destructive
 
 ```bash
-gcloud scheduler jobs run firestore-export-weekly --location=europe-west1
+gcloud scheduler jobs run firestore-export-weekly --location=europe-west1       # staging
+gcloud scheduler jobs run firestore-export-weekly-prod --location=europe-west1  # prod
 ```
 
 `europe-west1` is the scheduler's own region (`var.cron_region`), not the
@@ -398,16 +410,17 @@ straight over live data:
 
 ```bash
 gcloud firestore databases create --database=restore-check --location=europe-west1
-gcloud firestore import gs://bt-impact-academy-firestore-backup/<PREFIX> \
+gcloud firestore import gs://<BUCKET>/<PREFIX> \
     --database=restore-check
 ```
 
-`<PREFIX>` is the timestamped folder Firestore generated for that run, and the
-import path is the folder that holds the `.overall_export_metadata` file. When
-it looks right:
+`<BUCKET>` is the database's bucket from the table above. `<PREFIX>` is the
+timestamped folder Firestore generated for that run, and the import path is
+the folder that holds the `.overall_export_metadata` file. When it looks
+right, import into the database it came from:
 
 ```bash
-gcloud firestore import gs://bt-impact-academy-firestore-backup/<PREFIX>
+gcloud firestore import gs://<BUCKET>/<PREFIX> --database=<prod or (default)>
 ```
 
 ### Recovering to a point in time inside the last 7 days
